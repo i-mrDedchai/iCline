@@ -9,6 +9,8 @@ export type {
 	ProviderProtocol,
 } from "./models";
 export {
+	CODEX_EFFECTIVE_CONTEXT_WINDOW_PERCENT,
+	fetchLiveProviderModels,
 	fetchModelsDevProviderModels,
 	filterOpenAICodexModels,
 	getAllProviders,
@@ -27,6 +29,7 @@ export {
 	registerProvider,
 	resetRegistry,
 	sortModelsByReleaseDate,
+	unregisterModel,
 	unregisterProvider,
 	VERCEL_OPENROUTER_MODEL_ID_ALIAS_RULES,
 } from "./models";
@@ -57,9 +60,13 @@ export {
 	BUILT_IN_PROVIDER,
 	BUILT_IN_PROVIDER_IDS,
 	ClineNotSubscribedError,
+	ClineOrgIndividualInferenceSubscriptionError,
+	ClinePassLimitError,
 	createHandler,
 	createHandlerAsync,
+	extractClinePassLimitMessage,
 	getClineNotSubscribedMessage,
+	getClineOrgIndividualInferenceSubscriptionMessage,
 	getClinePassSubscriptionUrl,
 	getRegisteredHandler,
 	getRegisteredHandlerAsync,
@@ -67,8 +74,13 @@ export {
 	isBuiltInProviderId,
 	isClineNotSubscribedError,
 	isClineNotSubscribedMessage,
+	isClineOrgIndividualInferenceSubscriptionError,
+	isClineOrgIndividualInferenceSubscriptionMessage,
+	isClinePassLimitError,
+	isClinePassLimitMessage,
 	isRegisteredHandlerAsync,
 	normalizeProviderId,
+	OLLAMA_DEFAULT_CONTEXT_WINDOW,
 	registerAsyncHandler,
 	registerHandler,
 } from "./providers";
@@ -80,4 +92,11 @@ export {
 export type * from "./providers/gateway";
 export { createGateway, DefaultGateway } from "./providers/gateway";
 export { resolveProviderModelCatalogKeys } from "./providers/provider-keys";
+export {
+	type OpenAICodexRequestHeaderContext,
+	type ProviderRequestHeaderClientContext,
+	type ProviderRequestHeaderLayers,
+	type ResolveProviderRequestHeadersInput,
+	resolveProviderRequestHeaders,
+} from "./providers/request-headers";
 export { disposeLangfuseTelemetry } from "./services/langfuse-telemetry";

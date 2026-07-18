@@ -78,10 +78,10 @@ export abstract class WebviewProvider {
 		// The JS file from the React build output
 		const scriptUrl = this.getExtensionUrl("webview-ui", "build", "assets", "index.js")
 
-		// The CSS file from the React build output
+		// The CSS file from the React build output. The webview's own index.css
+		// @imports @vscode/codicons, so the codicon @font-face + codicon.ttf are
+		// bundled into these build assets — no separate codicons <link> needed.
 		const stylesUrl = this.getExtensionUrl("webview-ui", "build", "assets", "index.css")
-
-		// Codicons are bundled into webview-ui/build/assets/index.css (vite inlines @font-face + codicon.ttf).
 
 		// Use a nonce to only allow a specific script to be run.
 		/*
@@ -156,7 +156,7 @@ export abstract class WebviewProvider {
 	 */
 	protected async getHMRHtmlContent(): Promise<string> {
 		const localPort = await this.getDevServerPort()
-		const localServerUrl = `localhost:${localPort}`
+		const localServerUrl = `127.0.0.1:${localPort}`
 
 		// Check if local dev server is running.
 		try {
@@ -167,7 +167,7 @@ export abstract class WebviewProvider {
 				HostProvider.window.showMessage({
 					type: ShowMessageType.ERROR,
 					message:
-						"Cline: Local webview dev server is not running, HMR will not work. Please run 'npm run dev:webview' before launching the extension to enable HMR. Using bundled assets.",
+						"Cline: Local webview dev server is not running, HMR will not work. Please run 'bun run dev:webview' before launching the extension to enable HMR. Using bundled assets.",
 				})
 			}
 
@@ -176,7 +176,6 @@ export abstract class WebviewProvider {
 
 		const nonce = getNonce()
 		const stylesUrl = this.getExtensionUrl("webview-ui", "build", "assets", "index.css")
-		const codiconsUrl = this.getExtensionUrl("node_modules", "@vscode", "codicons", "dist", "codicon.css")
 
 		const scriptEntrypoint = "src/main.tsx"
 		const scriptUrl = `http://${localServerUrl}/${scriptEntrypoint}`
@@ -204,12 +203,10 @@ export abstract class WebviewProvider {
 			<!DOCTYPE html>
 			<html lang="en">
 				<head>
-					${process.env.IS_DEV ? '<script src="http://localhost:8097"></script>' : ""}
 					<meta charset="utf-8">
 					<meta name="viewport" content="width=device-width,initial-scale=1,shrink-to-fit=no">
 					<meta http-equiv="Content-Security-Policy" content="${csp.join("; ")}">
 					<link rel="stylesheet" type="text/css" href="${stylesUrl}">
-					<link href="${codiconsUrl}" rel="stylesheet" />
 					<title>Cline</title>
 				</head>
 				<body>

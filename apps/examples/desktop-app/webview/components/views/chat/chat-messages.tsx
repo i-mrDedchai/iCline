@@ -1,45 +1,58 @@
 "use client";
 
 import {
+	Message as AgentMessage,
+	Conversation,
+	ConversationContent,
+	ConversationScrollButton,
+	ConversationViewport,
+	MessageAction,
+	MessageActions,
+	MessageContent,
+	Reasoning,
+	ReasoningContent,
+	ReasoningTrigger,
+	ToolActivity,
+	ToolActivityCode,
+	ToolActivityContent,
+	ToolActivityDetails,
+	ToolActivityTrigger,
+} from "@cline/ui/components/agent-chat";
+import {
 	AlertCircle,
 	Bot,
-	ChevronDown,
-	ChevronRight,
+	Check,
 	Clock3,
 	Copy,
 	FileEdit,
+	FileIcon,
 	FileSearch,
-	GitBranch,
 	Loader2,
 	MessagesSquare,
-	RotateCcw,
 	Search,
 	ShieldAlert,
-	Terminal,
+	SplitIcon,
+	SquareTerminalIcon,
+	UndoIcon,
 } from "lucide-react";
-import {
-	memo,
-	useCallback,
-	useEffect,
-	useLayoutEffect,
-	useRef,
-	useState,
-} from "react";
+import { memo, useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 import type { ChatMessage, ChatSessionStatus } from "@/lib/chat-schema";
+import { parseApplyPatchInput } from "@/lib/session-diff";
 import { cn } from "@/lib/utils";
 import { MemoizedMarkdown } from "../../ui/markdown";
-import { normalizeTitle } from "../../utils";
-import { WelcomeScreen } from "./welcome-chat";
+import { formatChatMessageContent } from "./message-content";
 
 type ChatMessagesProps = {
 	sessionId: string | null;
 	status: ChatSessionStatus;
-	chatTransportState?: "connecting" | "reconnecting" | "connected";
+	chatTransportState?:
+		| "connecting"
+		| "reconnecting"
+		| "connected"
+		| "unavailable";
 	isSessionSwitching?: boolean;
-	provider: string;
-	model: string;
 	messages: ChatMessage[];
 	error: string | null;
 	streamingMessageId?: string | null;
@@ -53,7 +66,6 @@ type ChatMessagesProps = {
 	) => void | Promise<void>;
 	onRestoreCheckpoint?: (runCount: number) => void | Promise<void>;
 	onForkSession?: () => void | Promise<void>;
-	onStartChat?: (prompt: string) => void;
 };
 
 type ToolApprovalRequestItem = {
@@ -81,16 +93,12 @@ type AskQuestionRequestItem = {
 };
 
 const IS_DEBUG = process.env.NODE_ENV === "test";
-const STICKY_BOTTOM_THRESHOLD_PX = 24;
-const SCROLL_TO_BOTTOM_BUTTON_THRESHOLD_PX = 120;
 
 function ChatMessagesImpl({
-	sessionId: _sessionId,
+	sessionId,
 	status,
 	chatTransportState = "connecting",
 	isSessionSwitching = false,
-	provider,
-	model,
 	messages,
 	error,
 	streamingMessageId = null,
@@ -101,10 +109,7 @@ function ChatMessagesImpl({
 	onAnswerAskQuestion,
 	onRestoreCheckpoint,
 	onForkSession,
-	onStartChat,
 }: ChatMessagesProps) {
-	const scrollAreaRef = useRef<HTMLDivElement | null>(null);
-	const shouldStickToBottomRef = useRef(true);
 	const hasMessages = messages.length > 0;
 	const lastErrorMessage = [...messages]
 		.reverse()
@@ -112,7 +117,6 @@ function ChatMessagesImpl({
 	const shouldShowErrorBanner =
 		Boolean(error) && (!lastErrorMessage || lastErrorMessage.content !== error);
 	const [showSwitchTransition, setShowSwitchTransition] = useState(false);
-	const [showScrollToBottom, setShowScrollToBottom] = useState(false);
 	const [toolApprovalActions, setToolApprovalActions] = useState<
 		Record<string, "approving" | "rejecting">
 	>({});
@@ -137,23 +141,6 @@ function ChatMessagesImpl({
 	const showIdleDetails =
 		!hasMessages && !isSessionSwitching && !showSwitchTransition;
 
-	const getViewport = useCallback(() => {
-		return scrollAreaRef.current;
-	}, []);
-
-	const scrollToBottom = useCallback(
-		(behavior: ScrollBehavior = "smooth") => {
-			const viewport = getViewport();
-			if (!viewport) {
-				return;
-			}
-			shouldStickToBottomRef.current = true;
-			viewport.scrollTo({ top: viewport.scrollHeight, behavior });
-			setShowScrollToBottom((prev) => (prev ? false : prev));
-		},
-		[getViewport],
-	);
-
 	useEffect(() => {
 		if (!isSessionSwitching) {
 			setShowSwitchTransition((prev) => (prev ? false : prev));
@@ -166,39 +153,6 @@ function ChatMessagesImpl({
 			window.clearTimeout(timer);
 		};
 	}, [isSessionSwitching]);
-
-	useEffect(() => {
-		const viewport = getViewport();
-		if (!viewport) {
-			return;
-		}
-
-		const updateScrollToBottomVisibility = () => {
-			const distanceFromBottom =
-				viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
-			shouldStickToBottomRef.current =
-				distanceFromBottom <= STICKY_BOTTOM_THRESHOLD_PX;
-			const shouldShow =
-				distanceFromBottom > SCROLL_TO_BOTTOM_BUTTON_THRESHOLD_PX;
-			setShowScrollToBottom((prev) =>
-				prev === shouldShow ? prev : shouldShow,
-			);
-		};
-
-		updateScrollToBottomVisibility();
-		viewport.addEventListener("scroll", updateScrollToBottomVisibility);
-
-		return () => {
-			viewport.removeEventListener("scroll", updateScrollToBottomVisibility);
-		};
-	}, [getViewport]);
-
-	useLayoutEffect(() => {
-		if (!shouldStickToBottomRef.current) {
-			return;
-		}
-		scrollToBottom("auto");
-	}, [scrollToBottom]);
 
 	useEffect(() => {
 		const activeRequestIds = new Set(
@@ -363,21 +317,22 @@ function ChatMessagesImpl({
 	);
 
 	return (
-		<div className="relative h-full min-h-0 min-w-0">
-			<div
-				className="h-full min-h-0 min-w-0 overflow-y-auto"
-				ref={scrollAreaRef}
+		<Conversation
+			className="h-full min-h-0 min-w-0"
+			key={sessionId ?? "new-chat"}
+		>
+			<ConversationViewport
+				aria-label="Agent conversation"
+				className="h-full min-h-0 min-w-0"
 			>
-				<div className="relative mx-auto w-full px-6 py-6">
-					{showIdleDetails ? (
-						<WelcomeScreen
-							provider={provider}
-							model={model}
-							onStartChat={onStartChat ?? (() => {})}
-							quickActions={[]}
-						/>
-					) : (
-						<div className="flex flex-col gap-2 w-full h-full">
+				<ConversationContent
+					className={cn(
+						"relative mx-auto min-h-full w-full min-w-0 max-w-full overflow-x-hidden",
+						showIdleDetails ? "p-0" : "px-6 py-6",
+					)}
+				>
+					{showIdleDetails ? null : (
+						<div className="flex min-h-full w-full min-w-0 flex-col gap-2 overflow-x-hidden">
 							{pendingToolApprovals.length > 0 ? (
 								<ToolApprovalPanel
 									items={pendingToolApprovals}
@@ -474,7 +429,9 @@ function ChatMessagesImpl({
 							<Loader2 className="h-3.5 w-3.5 animate-spin" />
 							{chatTransportState === "reconnecting"
 								? "Reconnecting chat..."
-								: "Connecting chat..."}
+								: chatTransportState === "unavailable"
+									? "Chat backend unavailable"
+									: "Connecting chat..."}
 						</div>
 					) : null}
 					{shouldShowErrorBanner ? (
@@ -482,21 +439,10 @@ function ChatMessagesImpl({
 							{error}
 						</div>
 					) : null}
-				</div>
-			</div>
-			{showScrollToBottom ? (
-				<Button
-					className="absolute bottom-4 right-4 z-20 size-9 rounded-full shadow-sm"
-					onClick={() => scrollToBottom("smooth")}
-					size="icon"
-					type="button"
-					variant="secondary"
-				>
-					<ChevronDown className="size-4" />
-					<span className="sr-only">Scroll to bottom</span>
-				</Button>
-			) : null}
-		</div>
+				</ConversationContent>
+			</ConversationViewport>
+			<ConversationScrollButton />
+		</Conversation>
 	);
 }
 
@@ -569,7 +515,7 @@ function ToolApprovalPanel({
 								Request {item.requestId}
 								{item.iteration != null ? ` · Iteration ${item.iteration}` : ""}
 							</div>
-							<pre className="mt-2 max-h-44 overflow-auto rounded-md border border-border/70 bg-background p-2 text-xs text-muted-foreground">
+							<pre className="mt-2 max-h-44 max-w-full overflow-x-hidden overflow-y-auto whitespace-pre-wrap wrap-break-word rounded-md border border-border/70 bg-background p-2 text-xs text-muted-foreground">
 								{formatApprovalInput(item.input)}
 							</pre>
 							{error ? (
@@ -722,149 +668,147 @@ function MessageBubble({
 	const isUser = message.role === "user";
 	const isError = message.role === "error";
 	const checkpoint = message.meta?.checkpoint;
+	const shouldRenderAssistantActions =
+		message.role === "assistant" &&
+		!isStreaming &&
+		!isError &&
+		Boolean(onCopyRawText || onForkSession);
+	const shouldRenderUserActions =
+		isUser && Boolean(onCopyRawText || checkpoint);
+	const keepUserActionsVisible = restorePending || Boolean(restoreError);
+	const keepAssistantActionsVisible = forkPending || Boolean(forkError);
 
 	if (message.role === "tool") {
 		return <ToolMessageBlock message={message} />;
 	}
 
-	const normalizedContent = normalizeTitle(message.content);
+	const displayContent = formatChatMessageContent(
+		message.role,
+		message.content,
+	);
 	const reasoningContent = message.reasoning?.trim() || "";
 
 	return (
-		<div
-			className={cn("flex", isUser ? "justify-end" : "justify-start w-full")}
-		>
-			<div
-				className={cn(
-					"space-y-2 pl-3 text-sm",
-					isUser && "bg-card text-foreground/80 max-w-[50%]",
-					!isUser && !isError && "text-foreground w-full",
-					isError &&
-						"bg-destructive/10 border border-destructive/40 text-destructive",
-				)}
-			>
-				{isStreaming && message.role === "assistant" ? (
-					<>
-						{reasoningContent || message.reasoningRedacted ? (
-							<ReasoningBlock
-								content={reasoningContent}
-								redacted={message.reasoningRedacted === true}
-							/>
-						) : null}
-						<div className="whitespace-pre-wrap">
-							{normalizedContent || " "}
-						</div>
-					</>
-				) : (
-					<>
-						{reasoningContent || message.reasoningRedacted ? (
-							<ReasoningBlock
-								content={reasoningContent}
-								redacted={message.reasoningRedacted === true}
-							/>
-						) : null}
-						<MemoizedMarkdown
-							content={normalizedContent || " "}
-							id={message.id}
-						/>
-					</>
-				)}
-				{isUser && checkpoint ? (
-					<div className="space-y-2 pt-1">
-						<div className="flex items-center justify-end gap-2">
-							<Button
-								className="h-7 px-2 text-xs"
+		<AgentMessage from={message.role}>
+			<MessageContent className="space-y-2 wrap-break-word">
+				{reasoningContent || message.reasoningRedacted ? (
+					<ReasoningBlock
+						content={reasoningContent}
+						redacted={message.reasoningRedacted === true}
+						streaming={isStreaming}
+					/>
+				) : null}
+
+				<div className="my-1 min-w-0 max-w-full wrap-break-word">
+					<MemoizedMarkdown
+						content={displayContent || " "}
+						streaming={isStreaming && message.role === "assistant"}
+					/>
+				</div>
+			</MessageContent>
+
+			{shouldRenderUserActions ? (
+				<>
+					<MessageActions visible={keepUserActionsVisible}>
+						{onCopyRawText ? (
+							<MessageAction
+								label={wasCopied ? "Copied user message" : "Copy user message"}
 								onClick={onCopyRawText}
-								size="sm"
-								type="button"
-								variant="outline"
+								title={wasCopied ? "Copied" : "Copy message"}
 							>
-								<Copy className="h-3.5 w-3.5" />
-								{wasCopied ? "Copied" : "Copy"}
-							</Button>
-							<Button
-								className="h-7 px-2 text-xs"
+								{wasCopied ? (
+									<Check className="h-3.5 w-3.5" />
+								) : (
+									<Copy className="h-3.5 w-3.5" />
+								)}
+							</MessageAction>
+						) : null}
+						{checkpoint ? (
+							<MessageAction
 								disabled={restoreDisabled || restorePending}
+								label="Restore checkpoint"
 								onClick={() => onRestoreCheckpoint?.(checkpoint.runCount)}
-								size="sm"
-								type="button"
-								variant="outline"
+								title="Restore checkpoint"
 							>
 								{restorePending ? (
 									<Loader2 className="h-3.5 w-3.5 animate-spin" />
 								) : (
-									<RotateCcw className="h-3.5 w-3.5" />
+									<UndoIcon className="h-3.5 w-3.5" />
 								)}
-								Undo
-							</Button>
-						</div>
-						{restoreError ? (
-							<div className="text-right text-xs text-destructive">
-								{restoreError}
-							</div>
+							</MessageAction>
 						) : null}
-					</div>
-				) : null}
-				{!isUser &&
-				!isError &&
-				!isStreaming &&
-				message.role === "assistant" &&
-				onForkSession ? (
-					<div className="mt-1 flex items-center gap-1">
-						<Button
-							className="h-6 gap-1.5 px-2 text-[11px] text-muted-foreground hover:text-foreground"
+					</MessageActions>
+					{restoreError ? (
+						<div className="text-right text-xs text-destructive">
+							{restoreError}
+						</div>
+					) : null}
+				</>
+			) : null}
+
+			{shouldRenderAssistantActions ? (
+				<MessageActions visible={keepAssistantActionsVisible}>
+					{onCopyRawText ? (
+						<MessageAction
+							label={
+								wasCopied
+									? "Copied assistant message"
+									: "Copy assistant message"
+							}
+							onClick={onCopyRawText}
+							title={wasCopied ? "Copied" : "Copy raw assistant output"}
+						>
+							{wasCopied ? (
+								<Check className="h-3 w-3" />
+							) : (
+								<Copy className="h-3 w-3" />
+							)}
+						</MessageAction>
+					) : null}
+					{onForkSession ? (
+						<MessageAction
 							disabled={forkPending}
+							label="Fork session"
 							onClick={onForkSession}
-							size="sm"
-							title="Fork session — copy full message history into a new session"
-							type="button"
-							variant="ghost"
+							title="Fork session - copy full message history into a new session"
 						>
 							{forkPending ? (
 								<Loader2 className="h-3 w-3 animate-spin" />
 							) : (
-								<GitBranch className="h-3 w-3" />
+								<SplitIcon className="h-3 w-3" />
 							)}
-						</Button>
-						{forkError ? (
-							<span className="text-[11px] text-destructive">{forkError}</span>
-						) : null}
-					</div>
-				) : null}
-			</div>
-		</div>
+						</MessageAction>
+					) : null}
+					{forkError ? (
+						<span className="text-[11px] text-destructive">{forkError}</span>
+					) : null}
+				</MessageActions>
+			) : null}
+		</AgentMessage>
 	);
 }
 
 function ReasoningBlock({
 	content,
 	redacted,
+	streaming = false,
 }: {
 	content: string;
 	redacted: boolean;
+	streaming?: boolean;
 }) {
-	const [expanded, setExpanded] = useState(false);
 	const displayContent = content || (redacted ? "[redacted]" : "");
 	if (!displayContent) {
 		return null;
 	}
 
 	return (
-		<div className="mb-2">
-			<Button
-				className="w-full justify-start gap-2 p-0 text-left font-medium text-foreground/70 hover:bg-transparent text-xs"
-				onClick={() => setExpanded((current) => !current)}
-				type="button"
-				variant="ghost"
-			>
-				Thinking
-			</Button>
-			{expanded ? (
-				<div className="mt-1 whitespace-pre-wrap rounded-lg border border-border/70 bg-muted/30 p-3 text-xs text-muted-foreground">
-					{displayContent}
-				</div>
-			) : null}
-		</div>
+		<Reasoning isStreaming={streaming}>
+			<ReasoningTrigger />
+			<ReasoningContent>
+				<MemoizedMarkdown content={displayContent} streaming={streaming} />
+			</ReasoningContent>
+		</Reasoning>
 	);
 }
 
@@ -878,6 +822,10 @@ type ToolPayload = {
 type ToolSummary = {
 	label: string;
 	details: string[];
+	diff?: {
+		additions: number;
+		deletions: number;
+	};
 };
 
 function pruneRequestMap<T extends string>(
@@ -966,7 +914,12 @@ function classifyTool(
 		].includes(normalized)
 	)
 		return "exploration";
-	if (["editor", "edit_file", "edit"].includes(normalized)) return "file-edit";
+	if (
+		["editor", "edit_file", "edit", "apply_patch", "apply-patch"].includes(
+			normalized,
+		)
+	)
+		return "file-edit";
 	if (["bash", "run_commands"].includes(normalized)) return "bash";
 	if (["spawn_agent", "spawn-agent", "spawn_agent_tool"].includes(normalized))
 		return "spawn";
@@ -983,6 +936,62 @@ function asStringArray(value: unknown): string[] {
 	return value.filter(
 		(item): item is string => typeof item === "string" && item.length > 0,
 	);
+}
+
+/**
+ * read_files accepts many input shapes: { files: [{ path }] }, { files: path },
+ * { file_paths: [...] }, { paths: [...] }, a bare request, an array, or a string.
+ */
+function extractReadFilePaths(input: unknown): string[] {
+	const out: string[] = [];
+	const push = (value: unknown) => {
+		if (typeof value === "string" && value.length > 0) {
+			out.push(value);
+			return;
+		}
+		const record = asRecord(value);
+		if (record && typeof record.path === "string" && record.path.length > 0) {
+			out.push(record.path);
+		}
+	};
+	const record = asRecord(input);
+	const candidates =
+		record?.files ?? record?.file_paths ?? record?.paths ?? record ?? input;
+	if (Array.isArray(candidates)) {
+		for (const candidate of candidates) {
+			push(candidate);
+		}
+	} else {
+		push(candidates);
+	}
+	return out;
+}
+
+/**
+ * run_commands entries can be shell strings or structured { command, args }.
+ */
+function extractCommands(input: unknown): string[] {
+	const inputObject = asRecord(input);
+	const raw = Array.isArray(inputObject?.commands)
+		? inputObject.commands
+		: typeof inputObject?.command === "string"
+			? [inputObject.command]
+			: typeof input === "string"
+				? [input]
+				: [];
+	const out: string[] = [];
+	for (const entry of raw) {
+		if (typeof entry === "string" && entry.length > 0) {
+			out.push(entry);
+			continue;
+		}
+		const record = asRecord(entry);
+		if (record && typeof record.command === "string") {
+			const args = asStringArray(record.args);
+			out.push([record.command, ...args].join(" "));
+		}
+	}
+	return out;
 }
 
 function toDisplayPath(path: string): string {
@@ -1025,10 +1034,10 @@ function buildToolSummary(
 	const inputObject = asRecord(input);
 
 	if (["read_files", "file_read", "file-read"].includes(normalized)) {
-		const files = asStringArray(inputObject?.file_paths);
+		const files = extractReadFilePaths(input);
 		if (files.length > 0) {
 			return {
-				label: `${inProgress ? "Exploring" : "Explored"} ${pluralize(files.length, "file")}`,
+				label: `${inProgress ? "Reading" : "Read"} ${pluralize(files.length, "file")}`,
 				details: files.map(
 					(file) => `${inProgress ? "Reading" : "Read"} ${toDisplayPath(file)}`,
 				),
@@ -1047,14 +1056,8 @@ function buildToolSummary(
 	}
 
 	if (["run_commands", "bash"].includes(normalized)) {
-		const commands = asStringArray(inputObject?.commands);
-		if (commands.length === 1) {
-			return {
-				label: `${inProgress ? "Running" : "Ran"} ${commands[0]}`,
-				details: [commands[0]],
-			};
-		}
-		if (commands.length > 1) {
+		const commands = extractCommands(input);
+		if (commands.length > 0) {
 			return {
 				label: `${inProgress ? "Running" : "Ran"} ${pluralize(commands.length, "command")}`,
 				details: commands.map((command) => command.trim()),
@@ -1084,9 +1087,44 @@ function buildToolSummary(
 		}
 	}
 
+	if (["apply_patch", "apply-patch"].includes(normalized)) {
+		const patchText =
+			typeof input === "string"
+				? input
+				: typeof inputObject?.input === "string"
+					? inputObject.input
+					: "";
+		const fileDiffs = patchText ? parseApplyPatchInput(patchText) : [];
+		if (fileDiffs.length > 0) {
+			const additions = fileDiffs.reduce((sum, d) => sum + d.additions, 0);
+			const deletions = fileDiffs.reduce((sum, d) => sum + d.deletions, 0);
+			return {
+				label: `${inProgress ? "Editing" : "Edited"} ${pluralize(fileDiffs.length, "file")}`,
+				diff: { additions, deletions },
+				details: fileDiffs.map(
+					(d) =>
+						`${inProgress ? "Editing" : "Edited"} ${toDisplayPath(d.path)} +${d.additions} -${d.deletions}`,
+				),
+			};
+		}
+		return {
+			label: inProgress ? "Applying patch" : "Applied patch",
+			details: [],
+		};
+	}
+
 	if (["editor", "edit_file", "edit"].includes(normalized)) {
+		// Current editor schema has no `command`; derive it from the input shape.
 		const command =
-			typeof inputObject?.command === "string" ? inputObject.command : "edit";
+			typeof inputObject?.command === "string"
+				? inputObject.command
+				: inputObject?.insert_line != null
+					? "insert"
+					: typeof inputObject?.old_text === "string"
+						? "str_replace"
+						: typeof inputObject?.new_text === "string"
+							? "create"
+							: "edit";
 		const path =
 			typeof inputObject?.path === "string"
 				? toDisplayPath(inputObject.path)
@@ -1107,14 +1145,12 @@ function buildToolSummary(
 					: command === "insert"
 						? "Inserted"
 						: "Edited";
+		// The label already carries all the information; no expandable details.
 		const detail = `${action} ${path}`;
 		if (diff) {
-			return {
-				label: `${detail} +${diff.additions} -${diff.deletions}`,
-				details: [detail],
-			};
+			return { label: detail, diff, details: [] };
 		}
-		return { label: detail, details: [detail] };
+		return { label: detail, details: [] };
 	}
 
 	const query =
@@ -1153,7 +1189,6 @@ function buildToolSummaryFromMeta(
 }
 
 function ToolMessageBlock({ message }: { message: ChatMessage }) {
-	const [expanded, setExpanded] = useState(false);
 	const payload = parseToolPayload(message.content);
 	const toolName = message.meta?.toolName || payload?.toolName || "tool";
 	const hookEventName = message.meta?.hookEventName;
@@ -1162,13 +1197,17 @@ function ToolMessageBlock({ message }: { message: ChatMessage }) {
 		hookEventName === "history_tool_use" ||
 		(Boolean(payload) && payload?.result == null && !payload?.isError);
 	const kind = classifyTool(toolName);
-	const Icon =
-		kind === "exploration"
+	const isFileRead = ["read_files", "file_read", "file-read"].includes(
+		toolName.toLowerCase(),
+	);
+	const Icon = isFileRead
+		? FileIcon
+		: kind === "exploration"
 			? Search
 			: kind === "file-edit"
 				? FileEdit
 				: kind === "bash"
-					? Terminal
+					? SquareTerminalIcon
 					: kind === "spawn"
 						? Bot
 						: FileSearch;
@@ -1180,70 +1219,51 @@ function ToolMessageBlock({ message }: { message: ChatMessage }) {
 		IS_DEBUG && payload ? formatToolValue(payload.input) : "";
 	const resultPreview = payload?.isError ? formatToolValue(payload.result) : "";
 	const hasExpandedSections =
-		details.length > 1 || Boolean(inputPreview || resultPreview);
+		details.length > 0 || Boolean(inputPreview || resultPreview);
 
 	return (
-		<div className="flex justify-start w-full">
-			<div className={cn("w-full rounded-xl text-xs")}>
-				<Button
-					className="w-full justify-start gap-2 p-0 text-left font-medium text-foreground/70 hover:bg-transparent text-xs"
-					onClick={() => setExpanded((current) => !current)}
-					type="button"
-					variant="ghost"
-				>
-					{payload?.isError ? (
-						<AlertCircle className="size-3 text-destructive/80" />
+		<ToolActivity expandable={hasExpandedSections}>
+			<ToolActivityTrigger
+				additions={summary.diff?.additions}
+				deletions={summary.diff?.deletions}
+				icon={
+					payload?.isError ? (
+						<AlertCircle className="size-4 text-destructive/80" />
 					) : (
-						<Icon className="size-3" />
-					)}
-					<span>{summary.label}</span>
-					{hasExpandedSections ? (
-						<span className="text-muted-foreground">
-							{expanded ? (
-								<ChevronDown className="size-3" />
-							) : (
-								<ChevronRight className="size-3" />
-							)}
-						</span>
-					) : null}
-				</Button>
-				{expanded ? (
-					<div className="pl-8 text-muted-foreground">
-						{hasExpandedSections ? (
-							<div className="space-y-1">
-								{details.map((detail) => (
-									<div className="text-xxs" key={`${message.id}_${detail}`}>
-										{detail}
-									</div>
-								))}
-							</div>
-						) : null}
-						{inputPreview ? (
-							<div className="space-y-1">
-								<div className="text-xxs uppercase tracking-wide text-muted-foreground/80">
-									Input
-								</div>
-								<pre className="max-h-52 overflow-auto rounded-md border border-border/70 bg-background/60 p-2 text-xxs leading-relaxed text-foreground whitespace-pre-wrap break-all">
-									{inputPreview}
-								</pre>
-							</div>
-						) : null}
-						{resultPreview ? (
-							payload?.isError ? (
-								<div className="mt-1">
-									<span className="text-destructive">{resultPreview}</span>
-								</div>
-							) : (
-								<div className="space-y-1">
-									<pre className="max-h-64 overflow-auto rounded-md border border-border/70 bg-background/60 p-2 text-xxs leading-relaxed text-foreground whitespace-pre-wrap break-all">
-										{resultPreview}
-									</pre>
-								</div>
-							)
-						) : null}
+						<Icon className="size-4" />
+					)
+				}
+				label={summary.label}
+				status={payload?.isError ? "error" : inProgress ? "running" : "success"}
+			/>
+			<ToolActivityContent>
+				{details.length > 0 ? (
+					<ToolActivityDetails>
+						{details.map((detail) => (
+							<div key={`${message.id}_${detail}`}>{detail}</div>
+						))}
+					</ToolActivityDetails>
+				) : null}
+				{inputPreview ? (
+					<div className="space-y-1">
+						<div className="text-[11px] uppercase tracking-wide text-muted-foreground/80">
+							Input
+						</div>
+						<ToolActivityCode className="text-sm">
+							{inputPreview}
+						</ToolActivityCode>
 					</div>
 				) : null}
-			</div>
-		</div>
+				{resultPreview ? (
+					payload?.isError ? (
+						<div className="mt-1 text-destructive">{resultPreview}</div>
+					) : (
+						<ToolActivityCode className="max-h-64 text-sm">
+							{resultPreview}
+						</ToolActivityCode>
+					)
+				) : null}
+			</ToolActivityContent>
+		</ToolActivity>
 	);
 }

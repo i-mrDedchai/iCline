@@ -3,7 +3,6 @@ import {
 	OpenAiCompatibleModelInfo,
 	OpenRouterModelInfo,
 	ModelsApiConfiguration as ProtoApiConfiguration,
-	ApiProvider as ProtoApiProvider,
 	OcaModelInfo as ProtoOcaModelInfo,
 	ThinkingConfig,
 } from "@shared/proto/cline/models"
@@ -15,9 +14,6 @@ import {
 	BedrockModelId,
 	ModelInfo,
 	OcaModelInfo,
-	SakanaApiProtocol,
-	SakanaBillingMode,
-	ZenmuxApiProtocol,
 } from "../../api"
 import { OpenaiReasoningEffort } from "../../storage/types"
 
@@ -244,204 +240,12 @@ function convertProtoToOpenAiCompatibleModelInfo(
 	}
 }
 
-// Convert application ApiProvider to proto ApiProvider
-function convertApiProviderToProto(provider: string | undefined): ProtoApiProvider {
-	switch (provider) {
-		case "anthropic":
-			return ProtoApiProvider.ANTHROPIC
-		case "openrouter":
-			return ProtoApiProvider.OPENROUTER
-		case "bedrock":
-			return ProtoApiProvider.BEDROCK
-		case "vertex":
-			return ProtoApiProvider.VERTEX
-		case "openai":
-			return ProtoApiProvider.OPENAI
-		case "ollama":
-			return ProtoApiProvider.OLLAMA
-		case "lmstudio":
-			return ProtoApiProvider.LMSTUDIO
-		case "gemini":
-			return ProtoApiProvider.GEMINI
-		case "openai-native":
-			return ProtoApiProvider.OPENAI_NATIVE
-		case "requesty":
-			return ProtoApiProvider.REQUESTY
-		case "together":
-			return ProtoApiProvider.TOGETHER
-		case "deepseek":
-			return ProtoApiProvider.DEEPSEEK
-		case "qwen":
-			return ProtoApiProvider.QWEN
-		case "qwen-code":
-			return ProtoApiProvider.QWEN_CODE
-		case "doubao":
-			return ProtoApiProvider.DOUBAO
-		case "mistral":
-			return ProtoApiProvider.MISTRAL
-		case "vscode-lm":
-			return ProtoApiProvider.VSCODE_LM
-		case "cline":
-			return ProtoApiProvider.CLINE
-		case "cline-pass":
-			return ProtoApiProvider.CLINE_PASS
-		case "litellm":
-			return ProtoApiProvider.LITELLM
-		case "moonshot":
-			return ProtoApiProvider.MOONSHOT
-		case "huggingface":
-			return ProtoApiProvider.HUGGINGFACE
-		case "nebius":
-			return ProtoApiProvider.NEBIUS
-		case "wandb":
-			return ProtoApiProvider.WANDB
-		case "fireworks":
-			return ProtoApiProvider.FIREWORKS
-		case "asksage":
-			return ProtoApiProvider.ASKSAGE
-		case "xai":
-			return ProtoApiProvider.XAI
-		case "sambanova":
-			return ProtoApiProvider.SAMBANOVA
-		case "cerebras":
-			return ProtoApiProvider.CEREBRAS
-		case "groq":
-			return ProtoApiProvider.GROQ
-		case "baseten":
-			return ProtoApiProvider.BASETEN
-		case "sapaicore":
-			return ProtoApiProvider.SAPAICORE
-		case "claude-code":
-			return ProtoApiProvider.CLAUDE_CODE
-		case "huawei-cloud-maas":
-			return ProtoApiProvider.HUAWEI_CLOUD_MAAS
-		case "vercel-ai-gateway":
-			return ProtoApiProvider.VERCEL_AI_GATEWAY
-		case "zai":
-			return ProtoApiProvider.ZAI
-		case "dify":
-			return ProtoApiProvider.DIFY
-		case "oca":
-			return ProtoApiProvider.OCA
-		case "aihubmix":
-			return ProtoApiProvider.AIHUBMIX
-		case "minimax":
-			return ProtoApiProvider.MINIMAX
-		case "hicap":
-			return ProtoApiProvider.HICAP
-		case "zenmux":
-			return ProtoApiProvider.ZENMUX
-		case "sakana":
-			return ProtoApiProvider.SAKANA
-		case "jan":
-			return ProtoApiProvider.JAN
-		case "nousResearch":
-			return ProtoApiProvider.NOUSRESEARCH
-		case "openai-codex":
-			return ProtoApiProvider.OPENAI_CODEX
-		default:
-			return ProtoApiProvider.ANTHROPIC
-	}
-}
-
-// Convert proto ApiProvider to application ApiProvider
-export function convertProtoToApiProvider(provider: ProtoApiProvider): ApiProvider {
-	switch (provider) {
-		case ProtoApiProvider.ANTHROPIC:
-			return "anthropic"
-		case ProtoApiProvider.OPENROUTER:
-			return "openrouter"
-		case ProtoApiProvider.BEDROCK:
-			return "bedrock"
-		case ProtoApiProvider.VERTEX:
-			return "vertex"
-		case ProtoApiProvider.OPENAI:
-			return "openai"
-		case ProtoApiProvider.OLLAMA:
-			return "ollama"
-		case ProtoApiProvider.LMSTUDIO:
-			return "lmstudio"
-		case ProtoApiProvider.GEMINI:
-			return "gemini"
-		case ProtoApiProvider.OPENAI_NATIVE:
-			return "openai-native"
-		case ProtoApiProvider.REQUESTY:
-			return "requesty"
-		case ProtoApiProvider.TOGETHER:
-			return "together"
-		case ProtoApiProvider.DEEPSEEK:
-			return "deepseek"
-		case ProtoApiProvider.QWEN:
-			return "qwen"
-		case ProtoApiProvider.QWEN_CODE:
-			return "qwen-code"
-		case ProtoApiProvider.DOUBAO:
-			return "doubao"
-		case ProtoApiProvider.MISTRAL:
-			return "mistral"
-		case ProtoApiProvider.VSCODE_LM:
-			return "vscode-lm"
-		case ProtoApiProvider.CLINE:
-			return "cline"
-		case ProtoApiProvider.CLINE_PASS:
-			return "cline-pass"
-		case ProtoApiProvider.LITELLM:
-			return "litellm"
-		case ProtoApiProvider.MOONSHOT:
-			return "moonshot"
-		case ProtoApiProvider.HUGGINGFACE:
-			return "huggingface"
-		case ProtoApiProvider.NEBIUS:
-			return "nebius"
-		case ProtoApiProvider.WANDB:
-			return "wandb"
-		case ProtoApiProvider.FIREWORKS:
-			return "fireworks"
-		case ProtoApiProvider.ASKSAGE:
-			return "asksage"
-		case ProtoApiProvider.XAI:
-			return "xai"
-		case ProtoApiProvider.SAMBANOVA:
-			return "sambanova"
-		case ProtoApiProvider.CEREBRAS:
-			return "cerebras"
-		case ProtoApiProvider.GROQ:
-			return "groq"
-		case ProtoApiProvider.BASETEN:
-			return "baseten"
-		case ProtoApiProvider.SAPAICORE:
-			return "sapaicore"
-		case ProtoApiProvider.CLAUDE_CODE:
-			return "claude-code"
-		case ProtoApiProvider.HUAWEI_CLOUD_MAAS:
-			return "huawei-cloud-maas"
-		case ProtoApiProvider.VERCEL_AI_GATEWAY:
-			return "vercel-ai-gateway"
-		case ProtoApiProvider.ZAI:
-			return "zai"
-		case ProtoApiProvider.HICAP:
-			return "hicap"
-		case ProtoApiProvider.ZENMUX:
-			return "zenmux"
-		case ProtoApiProvider.SAKANA:
-			return "sakana"
-		case ProtoApiProvider.JAN:
-			return "jan"
-		case ProtoApiProvider.DIFY:
-			return "dify"
-		case ProtoApiProvider.OCA:
-			return "oca"
-		case ProtoApiProvider.AIHUBMIX:
-			return "aihubmix"
-		case ProtoApiProvider.MINIMAX:
-			return "minimax"
-		case ProtoApiProvider.NOUSRESEARCH:
-			return "nousResearch"
-		case ProtoApiProvider.OPENAI_CODEX:
-			return "openai-codex"
-		default:
-			return "anthropic"
-	}
+// Provider ids travel over the wire as plain strings (matching the `ApiProvider`
+// union in `@shared/api`), so no enum mapping is needed in either direction.
+// This thin helper just supplies the default and the single cast boundary for
+// callers reading a provider id off a proto message.
+export function convertProtoToApiProvider(provider: string | undefined): ApiProvider {
+	return (provider || "anthropic") as ApiProvider
 }
 
 // Converts application ApiConfiguration to proto ApiConfiguration
@@ -480,8 +284,6 @@ export function convertApiConfigurationToProto(config: ApiConfiguration): ProtoA
 		ollamaApiOptionsCtxNum: config.ollamaApiOptionsCtxNum,
 		lmStudioBaseUrl: config.lmStudioBaseUrl,
 		lmStudioMaxTokens: config.lmStudioMaxTokens,
-		janBaseUrl: config.janBaseUrl,
-		janApiKey: config.janApiKey,
 		geminiApiKey: config.geminiApiKey,
 		geminiBaseUrl: config.geminiBaseUrl,
 		openAiNativeApiKey: config.openAiNativeApiKey,
@@ -535,16 +337,9 @@ export function convertApiConfigurationToProto(config: ApiConfiguration): ProtoA
 		aihubmixAppCode: config.aihubmixAppCode,
 		hicapApiKey: config.hicapApiKey,
 		hicapModelId: config.hicapModelId,
-		zenmuxApiKey: config.zenmuxApiKey,
-		zenmuxManagementApiKey: config.zenmuxManagementApiKey,
-		zenmuxApiProtocol: config.zenmuxApiProtocol,
-		zenmuxProviderRouting: config.zenmuxProviderRouting,
-		sakanaApiKey: config.sakanaApiKey,
-		sakanaBillingMode: config.sakanaBillingMode,
-		sakanaApiProtocol: config.sakanaApiProtocol,
 
 		// Plan mode configurations
-		planModeApiProvider: config.planModeApiProvider ? convertApiProviderToProto(config.planModeApiProvider) : undefined,
+		planModeApiProvider: config.planModeApiProvider,
 		planModeApiModelId: config.planModeApiModelId,
 		planModeThinkingBudgetTokens: config.planModeThinkingBudgetTokens,
 		geminiPlanModeThinkingLevel: config.geminiPlanModeThinkingLevel,
@@ -562,7 +357,6 @@ export function convertApiConfigurationToProto(config: ApiConfiguration): ProtoA
 		planModeOpenAiModelInfo: convertOpenAiCompatibleModelInfoToProto(config.planModeOpenAiModelInfo),
 		planModeOllamaModelId: config.planModeOllamaModelId,
 		planModeLmStudioModelId: config.planModeLmStudioModelId,
-		planModeJanModelId: config.planModeJanModelId,
 		planModeLiteLlmModelId: config.planModeLiteLlmModelId,
 		planModeLiteLlmModelInfo: convertLiteLLMModelInfoToProto(config.planModeLiteLlmModelInfo),
 		planModeRequestyModelId: config.planModeRequestyModelId,
@@ -589,13 +383,9 @@ export function convertApiConfigurationToProto(config: ApiConfiguration): ProtoA
 		planModeNousResearchModelId: config.planModeNousResearchModelId,
 		planModeVercelAiGatewayModelId: config.planModeVercelAiGatewayModelId,
 		planModeVercelAiGatewayModelInfo: convertModelInfoToProtoOpenRouter(config.planModeVercelAiGatewayModelInfo),
-		planModeZenmuxModelId: config.planModeZenmuxModelId,
-		planModeZenmuxModelInfo: convertModelInfoToProtoOpenRouter(config.planModeZenmuxModelInfo),
-		planModeSakanaModelId: config.planModeSakanaModelId,
-		planModeSakanaModelInfo: convertModelInfoToProtoOpenRouter(config.planModeSakanaModelInfo),
 
 		// Act mode configurations
-		actModeApiProvider: config.actModeApiProvider ? convertApiProviderToProto(config.actModeApiProvider) : undefined,
+		actModeApiProvider: config.actModeApiProvider,
 		actModeApiModelId: config.actModeApiModelId,
 		actModeThinkingBudgetTokens: config.actModeThinkingBudgetTokens,
 		geminiActModeThinkingLevel: config.geminiActModeThinkingLevel,
@@ -613,7 +403,6 @@ export function convertApiConfigurationToProto(config: ApiConfiguration): ProtoA
 		actModeOpenAiModelInfo: convertOpenAiCompatibleModelInfoToProto(config.actModeOpenAiModelInfo),
 		actModeOllamaModelId: config.actModeOllamaModelId,
 		actModeLmStudioModelId: config.actModeLmStudioModelId,
-		actModeJanModelId: config.actModeJanModelId,
 		actModeLiteLlmModelId: config.actModeLiteLlmModelId,
 		actModeLiteLlmModelInfo: convertLiteLLMModelInfoToProto(config.actModeLiteLlmModelInfo),
 		actModeRequestyModelId: config.actModeRequestyModelId,
@@ -640,10 +429,6 @@ export function convertApiConfigurationToProto(config: ApiConfiguration): ProtoA
 		actModeNousResearchModelId: config.actModeNousResearchModelId,
 		actModeVercelAiGatewayModelId: config.actModeVercelAiGatewayModelId,
 		actModeVercelAiGatewayModelInfo: convertModelInfoToProtoOpenRouter(config.actModeVercelAiGatewayModelInfo),
-		actModeZenmuxModelId: config.actModeZenmuxModelId,
-		actModeZenmuxModelInfo: convertModelInfoToProtoOpenRouter(config.actModeZenmuxModelInfo),
-		actModeSakanaModelId: config.actModeSakanaModelId,
-		actModeSakanaModelInfo: convertModelInfoToProtoOpenRouter(config.actModeSakanaModelInfo),
 	}
 }
 
@@ -683,8 +468,6 @@ export function convertProtoToApiConfiguration(protoConfig: ProtoApiConfiguratio
 		ollamaApiOptionsCtxNum: protoConfig.ollamaApiOptionsCtxNum,
 		lmStudioBaseUrl: protoConfig.lmStudioBaseUrl,
 		lmStudioMaxTokens: protoConfig.lmStudioMaxTokens,
-		janBaseUrl: protoConfig.janBaseUrl,
-		janApiKey: protoConfig.janApiKey,
 		geminiApiKey: protoConfig.geminiApiKey,
 		geminiBaseUrl: protoConfig.geminiBaseUrl,
 		openAiNativeApiKey: protoConfig.openAiNativeApiKey,
@@ -736,13 +519,6 @@ export function convertProtoToApiConfiguration(protoConfig: ProtoApiConfiguratio
 		minimaxApiLine: protoConfig.minimaxApiLine,
 		hicapApiKey: protoConfig.hicapApiKey,
 		hicapModelId: protoConfig.hicapModelId,
-		zenmuxApiKey: protoConfig.zenmuxApiKey,
-		zenmuxManagementApiKey: protoConfig.zenmuxManagementApiKey,
-		zenmuxApiProtocol: protoConfig.zenmuxApiProtocol as ZenmuxApiProtocol | undefined,
-		zenmuxProviderRouting: protoConfig.zenmuxProviderRouting,
-		sakanaApiKey: protoConfig.sakanaApiKey,
-		sakanaBillingMode: protoConfig.sakanaBillingMode as SakanaBillingMode | undefined,
-		sakanaApiProtocol: protoConfig.sakanaApiProtocol as SakanaApiProtocol | undefined,
 		nousResearchApiKey: protoConfig.nousResearchApiKey,
 		clineApiKey: protoConfig.clineApiKey,
 
@@ -768,7 +544,6 @@ export function convertProtoToApiConfiguration(protoConfig: ProtoApiConfiguratio
 		planModeOpenAiModelInfo: convertProtoToOpenAiCompatibleModelInfo(protoConfig.planModeOpenAiModelInfo),
 		planModeOllamaModelId: protoConfig.planModeOllamaModelId,
 		planModeLmStudioModelId: protoConfig.planModeLmStudioModelId,
-		planModeJanModelId: protoConfig.planModeJanModelId,
 		planModeLiteLlmModelId: protoConfig.planModeLiteLlmModelId,
 		planModeLiteLlmModelInfo: convertProtoToLiteLLMModelInfo(protoConfig.planModeLiteLlmModelInfo),
 		planModeRequestyModelId: protoConfig.planModeRequestyModelId,
@@ -795,10 +570,6 @@ export function convertProtoToApiConfiguration(protoConfig: ProtoApiConfiguratio
 		planModeNousResearchModelId: protoConfig.planModeNousResearchModelId,
 		planModeVercelAiGatewayModelId: protoConfig.planModeVercelAiGatewayModelId,
 		planModeVercelAiGatewayModelInfo: convertProtoToModelInfo(protoConfig.planModeVercelAiGatewayModelInfo),
-		planModeZenmuxModelId: protoConfig.planModeZenmuxModelId,
-		planModeZenmuxModelInfo: convertProtoToModelInfo(protoConfig.planModeZenmuxModelInfo),
-		planModeSakanaModelId: protoConfig.planModeSakanaModelId,
-		planModeSakanaModelInfo: convertProtoToModelInfo(protoConfig.planModeSakanaModelInfo),
 
 		// Act mode configurations
 		actModeApiProvider:
@@ -820,7 +591,6 @@ export function convertProtoToApiConfiguration(protoConfig: ProtoApiConfiguratio
 		actModeOpenAiModelInfo: convertProtoToOpenAiCompatibleModelInfo(protoConfig.actModeOpenAiModelInfo),
 		actModeOllamaModelId: protoConfig.actModeOllamaModelId,
 		actModeLmStudioModelId: protoConfig.actModeLmStudioModelId,
-		actModeJanModelId: protoConfig.actModeJanModelId,
 		actModeLiteLlmModelId: protoConfig.actModeLiteLlmModelId,
 		actModeLiteLlmModelInfo: convertProtoToLiteLLMModelInfo(protoConfig.actModeLiteLlmModelInfo),
 		actModeRequestyModelId: protoConfig.actModeRequestyModelId,
@@ -847,9 +617,5 @@ export function convertProtoToApiConfiguration(protoConfig: ProtoApiConfiguratio
 		actModeNousResearchModelId: protoConfig.actModeNousResearchModelId,
 		actModeVercelAiGatewayModelId: protoConfig.actModeVercelAiGatewayModelId,
 		actModeVercelAiGatewayModelInfo: convertProtoToModelInfo(protoConfig.actModeVercelAiGatewayModelInfo),
-		actModeZenmuxModelId: protoConfig.actModeZenmuxModelId,
-		actModeZenmuxModelInfo: convertProtoToModelInfo(protoConfig.actModeZenmuxModelInfo),
-		actModeSakanaModelId: protoConfig.actModeSakanaModelId,
-		actModeSakanaModelInfo: convertProtoToModelInfo(protoConfig.actModeSakanaModelInfo),
 	}
 }

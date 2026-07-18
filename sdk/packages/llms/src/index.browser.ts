@@ -7,6 +7,7 @@ export type {
 	ProviderInfo,
 } from "./models";
 export {
+	CODEX_EFFECTIVE_CONTEXT_WINDOW_PERCENT,
 	filterOpenAICodexModels,
 	getAllProviders,
 	getGeneratedModelsForProvider,
@@ -30,15 +31,29 @@ export {
 	resolveProviderUsageCostDisplay,
 	shouldShowProviderUsageCost,
 } from "./providers/billing";
+export {
+	type OpenAICodexRequestHeaderContext,
+	type ProviderRequestHeaderClientContext,
+	type ProviderRequestHeaderLayers,
+	type ResolveProviderRequestHeadersInput,
+	resolveProviderRequestHeaders,
+} from "./providers/request-headers";
 export type {
 	ProviderCapability,
 	ProviderId,
 } from "./providers.browser";
 export {
 	ClineNotSubscribedError,
+	ClineOrgIndividualInferenceSubscriptionError,
+	ClinePassLimitError,
 	getClineNotSubscribedMessage,
+	getClineOrgIndividualInferenceSubscriptionMessage,
 	getClinePassSubscriptionUrl,
 	isClineNotSubscribedError,
 	isClineNotSubscribedMessage,
+	isClineOrgIndividualInferenceSubscriptionError,
+	isClineOrgIndividualInferenceSubscriptionMessage,
+	isClinePassLimitError,
+	isClinePassLimitMessage,
 	normalizeProviderId,
 } from "./providers.browser";

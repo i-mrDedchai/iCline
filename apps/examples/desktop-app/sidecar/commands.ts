@@ -1,11 +1,10 @@
 import { execFileSync, spawn } from "node:child_process";
 import {
 	existsSync,
-	mkdirSync,
 	readdirSync,
 	readFileSync,
 	rmSync,
-	writeFileSync,
+	statSync,
 } from "node:fs";
 import { basename, dirname, extname, join } from "node:path";
 import type {
@@ -32,6 +31,7 @@ import {
 	listLocalProviders,
 	listPluginTools,
 	loginAndSaveLocalProviderOAuthCredentials,
+	markLocalProviderEnabled,
 	normalizeOAuthProvider,
 	ProviderSettingsManager,
 	readGlobalSettings,
@@ -42,12 +42,27 @@ import {
 	SqliteSessionStore,
 	saveLocalProviderSettings,
 	sendHubCommand,
+	setAutoUpdateEnabledGlobally,
 	setDisabledPlugin,
 	setDisabledTools,
+	setTelemetryOptOutGlobally,
 	toggleDisabledTool,
+	updateMcpSettingsFileSync,
 } from "@cline/core";
 import { getClineEnvironmentConfig } from "@cline/shared";
+import { readFileSyncStrippingUtf8Bom } from "@cline/shared/node";
+import {
+	connectorChannelsPayload,
+	startConnectorChannel,
+	stopConnectorChannel,
+} from "./connectors";
 import { broadcastEvent, resolveSidecarAskQuestion } from "./context";
+import {
+	installMarketplaceEntryForDesktopCommand,
+	listMarketplaceInstalledEntries,
+	uninstallLocalPrimitive,
+	uninstallMarketplaceEntryForDesktopCommand,
+} from "./marketplace";
 import {
 	findArtifactUnderDir,
 	readSessionManifest,
@@ -143,9 +158,9 @@ function readMcpServersResponse(): JsonRecord {
 }
 
 function writeMcpServersMap(servers: JsonRecord): void {
-	const path = resolveMcpSettingsPath();
-	mkdirSync(dirname(path), { recursive: true });
-	writeFileSync(path, `${JSON.stringify({ mcpServers: servers }, null, 2)}\n`);
+	updateMcpSettingsFileSync(resolveMcpSettingsPath(), (settings) => {
+		settings.mcpServers = servers;
+	});
 }
 
 function ensureMcpSettingsFile(): string {
@@ -544,7 +559,7 @@ async function listUserInstructionConfigs(
 					const ext = extname(entry.name).toLowerCase();
 					if (ext !== ".yml" && ext !== ".yaml") continue;
 					const filePath = join(directory, entry.name);
-					const raw = readFileSync(filePath, "utf8");
+					const raw = readFileSyncStrippingUtf8Bom(filePath);
 					const fmMatch = raw.match(/^---\r?\n([\s\S]*?)\r?\n---/);
 					const fm = fmMatch?.[1] ?? "";
 					const nameMatch = fm.match(/^\s*name:\s*(.+?)\s*$/m);
@@ -951,7 +966,7 @@ export async function handleCommand(
 	if (command === "list_provider_catalog") {
 		const manager = new ProviderSettingsManager();
 		await ensureCustomProvidersLoaded(manager);
-		return await listLocalProviders(manager);
+		return await listLocalProviders(manager, { isClinePassEnabled: true });
 	}
 	if (command === "list_provider_models") {
 		const manager = new ProviderSettingsManager();
@@ -1031,10 +1046,43 @@ export async function handleCommand(
 				spawned.unref();
 			},
 		);
+		if (saved.provider !== providerId) {
+			markLocalProviderEnabled(manager, providerId, { tokenSource: "oauth" });
+		}
 		return {
 			provider: providerId,
 			accessToken: saved.auth?.accessToken ?? saved.apiKey ?? "",
 		};
+	}
+
+	// ── Global settings ────────────────────────────────────────────────
+	if (command === "get_global_settings") {
+		return readGlobalSettings();
+	}
+	if (command === "set_telemetry_opt_out") {
+		if (typeof args?.telemetry_opt_out !== "boolean") {
+			throw new Error("telemetry_opt_out must be a boolean");
+		}
+		setTelemetryOptOutGlobally(args.telemetry_opt_out);
+		return readGlobalSettings();
+	}
+	if (command === "set_auto_update_enabled") {
+		if (typeof args?.auto_update_enabled !== "boolean") {
+			throw new Error("auto_update_enabled must be a boolean");
+		}
+		setAutoUpdateEnabledGlobally(args.auto_update_enabled);
+		return readGlobalSettings();
+	}
+
+	// ── Connector channels ─────────────────────────────────────────────
+	if (command === "list_connector_channels") {
+		return connectorChannelsPayload();
+	}
+	if (command === "start_connector_channel") {
+		return await startConnectorChannel(ctx.workspaceRoot, args);
+	}
+	if (command === "stop_connector_channel") {
+		return await stopConnectorChannel(ctx.workspaceRoot, args);
 	}
 
 	// ── MCP server management ─────────────────────────────────────────
@@ -1043,18 +1091,20 @@ export async function handleCommand(
 	}
 	if (command === "set_mcp_server_disabled") {
 		const path = ensureMcpSettingsFile();
-		const parsed = JSON.parse(readFileSync(path, "utf8")) as JsonRecord;
-		const servers = (parsed.mcpServers as JsonRecord | undefined) ?? {};
-		const name = String(args?.name ?? "").trim();
-		const current = servers[name];
-		if (!current || typeof current !== "object") {
-			throw new Error(`unknown MCP server: ${name}`);
-		}
-		servers[name] = {
-			...(current as JsonRecord),
-			disabled: Boolean(args?.disabled),
-		};
-		writeMcpServersMap(servers);
+		updateMcpSettingsFileSync(path, (settings) => {
+			const servers = ((settings.mcpServers as JsonRecord | undefined) ??
+				{}) as JsonRecord;
+			const name = String(args?.name ?? "").trim();
+			const current = servers[name];
+			if (!current || typeof current !== "object") {
+				throw new Error(`unknown MCP server: ${name}`);
+			}
+			servers[name] = {
+				...(current as JsonRecord),
+				disabled: Boolean(args?.disabled),
+			};
+			settings.mcpServers = servers;
+		});
 		return readMcpServersResponse();
 	}
 	if (command === "upsert_mcp_server") {
@@ -1093,21 +1143,25 @@ export async function handleCommand(
 						metadata: input.metadata,
 					};
 		const path = ensureMcpSettingsFile();
-		const parsed = JSON.parse(readFileSync(path, "utf8")) as JsonRecord;
-		const servers = (parsed.mcpServers as JsonRecord | undefined) ?? {};
-		if (previousName && previousName !== name) {
-			delete servers[previousName];
-		}
-		servers[name] = next;
-		writeMcpServersMap(servers);
+		updateMcpSettingsFileSync(path, (settings) => {
+			const servers = ((settings.mcpServers as JsonRecord | undefined) ??
+				{}) as JsonRecord;
+			if (previousName && previousName !== name) {
+				delete servers[previousName];
+			}
+			servers[name] = next;
+			settings.mcpServers = servers;
+		});
 		return readMcpServersResponse();
 	}
 	if (command === "delete_mcp_server") {
 		const path = ensureMcpSettingsFile();
-		const parsed = JSON.parse(readFileSync(path, "utf8")) as JsonRecord;
-		const servers = (parsed.mcpServers as JsonRecord | undefined) ?? {};
-		delete servers[String(args?.name ?? "")];
-		writeMcpServersMap(servers);
+		updateMcpSettingsFileSync(path, (settings) => {
+			const servers = ((settings.mcpServers as JsonRecord | undefined) ??
+				{}) as JsonRecord;
+			delete servers[String(args?.name ?? "")];
+			settings.mcpServers = servers;
+		});
 		return readMcpServersResponse();
 	}
 	if (command === "ensure_mcp_settings_file") {
@@ -1116,10 +1170,13 @@ export async function handleCommand(
 
 	// ── Git operations ─────────────────────────────────────────────────
 	if (command === "get_git_branch") {
-		const branches = listGitBranches(
-			ctx,
-			typeof args?.cwd === "string" ? args.cwd : undefined,
-		);
+		const cwd =
+			typeof args?.cwd === "string" && args.cwd.trim()
+				? args.cwd.trim()
+				: ctx.workspaceRoot;
+		const branches = listGitBranches(ctx, cwd);
+		const { prewarmWorkspaceMetadata } = await import("./chat-session");
+		prewarmWorkspaceMetadata(cwd);
 		return { branch: branches.current };
 	}
 	if (command === "list_git_branches") {
@@ -1132,11 +1189,14 @@ export async function handleCommand(
 		const cwd = typeof args?.cwd === "string" ? args.cwd : undefined;
 		const branch = String(args?.branch ?? "").trim();
 		if (!branch) throw new Error("branch is required");
+		const targetCwd = cwd?.trim() || ctx.workspaceRoot;
 		execFileSync("git", ["checkout", branch], {
-			cwd: cwd?.trim() || ctx.workspaceRoot,
+			cwd: targetCwd,
 			encoding: "utf8",
 			stdio: ["ignore", "pipe", "pipe"],
 		});
+		const { refreshWorkspaceMetadata } = await import("./chat-session");
+		refreshWorkspaceMetadata(targetCwd);
 		return { branch };
 	}
 
@@ -1155,6 +1215,26 @@ export async function handleCommand(
 	// ── User instruction configs ──────────────────────────────────────
 	if (command === "list_user_instruction_configs") {
 		return await listUserInstructionConfigs(ctx.workspaceRoot);
+	}
+	if (command === "list_marketplace_installed_entries") {
+		return listMarketplaceInstalledEntries(
+			args,
+			await listUserInstructionConfigs(ctx.workspaceRoot),
+		);
+	}
+	if (command === "install_marketplace_entry") {
+		const result = await installMarketplaceEntryForDesktopCommand(args);
+		return result;
+	}
+	if (command === "uninstall_marketplace_entry") {
+		const result = await uninstallMarketplaceEntryForDesktopCommand(args);
+		return result;
+	}
+	if (command === "uninstall_local_primitive") {
+		const result = await uninstallLocalPrimitive(args, {
+			workspaceRoot: ctx.workspaceRoot,
+		});
+		return result;
 	}
 	if (command === "toggle_disabled_plugin_tool") {
 		const toolName = String(args?.name ?? "").trim();
@@ -1185,6 +1265,15 @@ export async function handleCommand(
 	}
 
 	// ── Native OS commands ────────────────────────────────────────────
+	if (command === "validate_workspace_directory") {
+		const workspacePath = String(args?.path ?? "").trim();
+		if (!workspacePath) return { valid: false };
+		try {
+			return { valid: statSync(workspacePath).isDirectory() };
+		} catch {
+			return { valid: false };
+		}
+	}
 	if (command === "pick_workspace_directory") {
 		return pickWorkspaceDirectory();
 	}

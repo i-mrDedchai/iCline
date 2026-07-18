@@ -2,6 +2,8 @@ import {
 	type ClineAccountBalance,
 	type ClineAccountOrganization,
 	type ClineAccountOrganizationBalance,
+	type ClineSubscriptionPlan,
+	type UserCurrentPlan,
 	ClineAccountService,
 	type ClineAccountUser,
 	formatProviderOAuthApiKey,
@@ -124,8 +126,10 @@ export async function createClineAccountService(input: {
 	config: ClineAccountConfig;
 	clineApiBaseUrl?: string;
 	clineProviderSettings?: ProviderSettings;
+	providerSettingsManager?: ProviderSettingsManager;
 }): Promise<ClineAccountService | undefined> {
-	const manager = new ProviderSettingsManager();
+	const manager =
+		input.providerSettingsManager ?? new ProviderSettingsManager();
 	const settings =
 		manager.getProviderSettings("cline") ?? input.clineProviderSettings;
 	const apiBaseUrl = resolveAccountApiBaseUrl({
@@ -145,6 +149,38 @@ export async function createClineAccountService(input: {
 		apiBaseUrl,
 		getAuthToken: async () => authToken,
 	});
+}
+
+/**
+ * Persist the active organization so headless runs and the hub daemon can
+ * attach it to telemetry identity. Personal account clears stale org fields.
+ */
+function persistClineOrganizationContext(
+	activeOrganization: ClineAccountOrganization | null,
+	userId: string,
+): void {
+	try {
+		const manager = new ProviderSettingsManager();
+		const persisted = manager.getProviderSettings("cline");
+		if (!persisted) {
+			return;
+		}
+		manager.saveProviderSettings(
+			{
+				...persisted,
+				auth: {
+					...persisted.auth,
+					accountId: persisted.auth?.accountId ?? userId,
+					organizationId: activeOrganization?.organizationId,
+					organizationName: activeOrganization?.name,
+					memberId: activeOrganization?.memberId,
+				},
+			},
+			{ setLastUsed: false },
+		);
+	} catch {
+		// Best-effort only.
+	}
 }
 
 export async function loadClineAccountSnapshot(input: {
@@ -179,6 +215,7 @@ export async function loadClineAccountSnapshot(input: {
 		memberId: activeOrganization?.memberId,
 	};
 	identifyTelemetryAccount(accountContext, input.config.logger);
+	persistClineOrganizationContext(activeOrganization, user.id);
 
 	return {
 		user,
@@ -201,6 +238,60 @@ export async function switchClineAccount(input: {
 		throw new Error("No Cline account auth token found");
 	}
 	await service.switchAccount(input.organizationId);
+}
+
+export async function loadIndividualSubscriptionPlans(input: {
+	config: ClineAccountConfig;
+	clineApiBaseUrl?: string;
+	clineProviderSettings?: ProviderSettings;
+}): Promise<ClineSubscriptionPlan[]> {
+	const service = await createClineAccountService(input);
+	if (!service) {
+		throw new Error("No Cline account auth token found");
+	}
+	return service.fetchAvailableSubscriptionPlans({ type: "individual" });
+}
+
+export async function loadCurrentUserPlan(input: {
+	config: ClineAccountConfig;
+	clineApiBaseUrl?: string;
+	clineProviderSettings?: ProviderSettings;
+}): Promise<UserCurrentPlan | undefined> {
+	const service = await createClineAccountService(input);
+	if (!service) {
+		throw new Error("No Cline account auth token found");
+	}
+	return service.fetchCurrentUserPlan();
+}
+
+export async function loadCurrentUserPlanFromProviderSettings(input: {
+	providerSettingsManager: ProviderSettingsManager;
+	clineApiBaseUrl?: string;
+}): Promise<UserCurrentPlan | undefined> {
+	const service = await createClineAccountService({
+		config: { apiKey: "", logger: undefined, providerId: "cline" },
+		clineApiBaseUrl: input.clineApiBaseUrl,
+		providerSettingsManager: input.providerSettingsManager,
+	});
+	if (!service) {
+		throw new Error("No Cline account auth token found");
+	}
+	return service.fetchCurrentUserPlan();
+}
+
+export async function loadIndividualSubscriptionPlansFromProviderSettings(input: {
+	providerSettingsManager: ProviderSettingsManager;
+	clineApiBaseUrl?: string;
+}): Promise<ClineSubscriptionPlan[]> {
+	const service = await createClineAccountService({
+		config: { apiKey: "", logger: undefined, providerId: "cline" },
+		clineApiBaseUrl: input.clineApiBaseUrl,
+		providerSettingsManager: input.providerSettingsManager,
+	});
+	if (!service) {
+		throw new Error("No Cline account auth token found");
+	}
+	return service.fetchAvailableSubscriptionPlans({ type: "individual" });
 }
 
 async function onChangeToClinePass(config: ClineAccountConfig) {

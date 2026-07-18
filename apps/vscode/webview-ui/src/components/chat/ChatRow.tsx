@@ -5,7 +5,6 @@ import {
 	ClineAskUseMcpServer,
 	ClineMessage,
 	ClinePlanModeResponse,
-	ClineSayGenerateExplanation,
 	ClineSayTool,
 	COMPLETION_RESULT_CHANGES_FLAG,
 } from "@shared/ExtensionMessage"
@@ -13,12 +12,9 @@ import { BooleanRequest, StringRequest } from "@shared/proto/cline/common"
 import { Mode } from "@shared/storage/types"
 import deepEqual from "fast-deep-equal"
 import {
-	ArrowRightIcon,
 	BellIcon,
-	CheckIcon,
 	ChevronDownIcon,
 	ChevronRightIcon,
-	CircleSlashIcon,
 	CircleXIcon,
 	FileCode2Icon,
 	FilePlus2Icon,
@@ -38,17 +34,16 @@ import {
 } from "lucide-react"
 import { MouseEvent, memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useSize } from "react-use"
+import { canRestoreWorkspaceFromMessage } from "@/components/chat/chat-view/utils/messageUtils"
 import { OptionsButtons } from "@/components/chat/OptionsButtons"
-import { CheckmarkControl } from "@/components/common/CheckmarkControl"
 import { WithCopyButton } from "@/components/common/CopyButton"
 import McpResponseDisplay from "@/components/mcp/chat-display/McpResponseDisplay"
 import McpResourceRow from "@/components/mcp/configuration/tabs/installed/server-row/McpResourceRow"
 import McpToolRow from "@/components/mcp/configuration/tabs/installed/server-row/McpToolRow"
 import { useExtensionState } from "@/context/ExtensionStateContext"
-import { AGENT_DISPLAY_NAME } from "@/icline/agent-display-name"
 import { cn } from "@/lib/utils"
 import { FileServiceClient, UiServiceClient } from "@/services/grpc-client"
-import { findMatchingResourceOrTemplate, getMcpServerDisplayName } from "@/utils/mcp"
+import { findMatchingResourceOrTemplate } from "@/utils/mcp"
 import CodeAccordian, { cleanPathPrefix } from "../common/CodeAccordian"
 import { CommandOutputContent, CommandOutputRow } from "./CommandOutputRow"
 import { CompletionOutputRow } from "./CompletionOutputRow"
@@ -72,10 +67,11 @@ const HEADER_CLASSNAMES = "flex items-center gap-2.5 mb-3"
 interface ChatRowProps {
 	message: ClineMessage
 	isExpanded: boolean
-	onToggleExpand: (ts: number) => void
+	onToggleExpand: (ts: number, options?: { preserveAutoScroll?: boolean }) => void
 	lastModifiedMessage?: ClineMessage
 	isLast: boolean
 	onHeightChange: (isTaller: boolean) => void
+	onLastRowContentChange: () => void
 	inputValue?: string
 	sendMessageFromChatRow?: (text: string, images: string[], files: string[]) => void
 	onSetQuote: (text: string) => void
@@ -93,7 +89,9 @@ export interface QuoteButtonState {
 	selectedText: string
 }
 
-interface ChatRowContentProps extends Omit<ChatRowProps, "onHeightChange"> {}
+interface ChatRowContentProps extends Omit<ChatRowProps, "onHeightChange" | "onLastRowContentChange"> {
+	onLastRowContentChange?: () => void
+}
 
 export const ProgressIndicator = () => <LoaderCircleIcon className="size-2 mr-2 animate-spin" />
 const InvisibleSpacer = () => <div aria-hidden className="h-px" />
@@ -144,22 +142,14 @@ export const ChatRowContent = memo(
 		sendMessageFromChatRow,
 		onSetQuote,
 		onCancelCommand,
+		onLastRowContentChange,
 		mode,
 		isRequestInProgress,
 		reasoningContent,
 		responseStarted,
 	}: ChatRowContentProps) => {
-		const {
-			backgroundEditEnabled,
-			mcpServers,
-			mcpMarketplaceCatalog,
-			onRelinquishControl,
-			vscodeTerminalExecutionMode,
-			clineMessages,
-			showFeatureTips,
-		} = useExtensionState()
-		const [seeNewChangesDisabled, setSeeNewChangesDisabled] = useState(false)
-		const [explainChangesDisabled, setExplainChangesDisabled] = useState(false)
+		const { backgroundEditEnabled, mcpServers, vscodeTerminalExecutionMode, clineMessages, showFeatureTips } =
+			useExtensionState()
 		const [quoteButtonState, setQuoteButtonState] = useState<QuoteButtonState>({
 			visible: false,
 			top: 0,
@@ -231,14 +221,6 @@ export const ChatRowContent = memo(
 		const handleToggle = useCallback(() => {
 			onToggleExpand(message.ts)
 		}, [onToggleExpand, message.ts])
-
-		// Use the onRelinquishControl hook instead of message event
-		useEffect(() => {
-			return onRelinquishControl(() => {
-				setSeeNewChangesDisabled(false)
-				setExplainChangesDisabled(false)
-			})
-		}, [onRelinquishControl])
 
 		// --- Quote Button Logic ---
 		// MOVE handleQuoteClick INSIDE ChatRowContent
@@ -321,12 +303,12 @@ export const ChatRowContent = memo(
 				case "mistake_limit_reached":
 					return [
 						<CircleXIcon className="text-error size-2" />,
-						<span className="text-error font-bold">{AGENT_DISPLAY_NAME}{" "}is having trouble...</span>,
+						<span className="text-error font-bold">Cline is having trouble...</span>,
 					]
 				case "command":
 					return [
 						<TerminalIcon className="text-foreground size-2" />,
-						<span className="font-bold text-foreground">{AGENT_DISPLAY_NAME}{" "}wants to execute this command:</span>,
+						<span className="font-bold text-foreground">Cline wants to execute this command:</span>,
 					]
 				case "use_mcp_server":
 					const mcpServerUse = JSON.parse(message.text || "{}") as ClineAskUseMcpServer
@@ -337,11 +319,8 @@ export const ChatRowContent = memo(
 							<span className="codicon codicon-server text-foreground mb-[-1.5px]" />
 						),
 						<span className="ph-no-capture font-bold text-foreground break-words">
-							{AGENT_DISPLAY_NAME}{" "}wants to {mcpServerUse.type === "use_mcp_tool" ? "use a tool" : "access a resource"} on the{" "}
-							<code className="break-all">
-								{getMcpServerDisplayName(mcpServerUse.serverName, mcpMarketplaceCatalog)}
-							</code>{" "}
-							MCP server:
+							Cline wants to {mcpServerUse.type === "use_mcp_tool" ? "use a tool" : "access a resource"} on the{" "}
+							<code className="break-all">{mcpServerUse.serverName}</code> MCP server:
 						</span>,
 					]
 				case "completion_result":
@@ -356,7 +335,7 @@ export const ChatRowContent = memo(
 				case "followup":
 					return [
 						<span className="codicon codicon-question text-foreground mb-[-1.5px]" />,
-						<span className="font-bold text-foreground">{AGENT_DISPLAY_NAME}{" "}has a question:</span>,
+						<span className="font-bold text-foreground">Cline has a question:</span>,
 					]
 				default:
 					return [null, null]
@@ -434,8 +413,8 @@ export const ChatRowContent = memo(
 					const content = tool?.content || ""
 					const isApplyingPatch = content?.startsWith("%%bash") && !content.endsWith("*** End Patch\nEOF")
 					const editToolTitle = isApplyingPatch
-						? `${AGENT_DISPLAY_NAME} is creating patches to edit this file:`
-						: `${AGENT_DISPLAY_NAME} wants to edit this file:`
+						? "Cline is creating patches to edit this file:"
+						: "Cline wants to edit this file:"
 					return (
 						<div>
 							<div className={HEADER_CLASSNAMES}>
@@ -444,10 +423,10 @@ export const ChatRowContent = memo(
 									toolIcon("sign-out", "yellow", -90, "This file is outside of your workspace")}
 								<span style={{ fontWeight: "bold" }}>{editToolTitle}</span>
 							</div>
-							{backgroundEditEnabled && tool.path && tool.content ? (
+							{backgroundEditEnabled && tool.path && (tool.diff || tool.content) ? (
 								<DiffEditRow
 									isLoading={message.partial}
-									patch={tool.content}
+									patch={tool.diff || tool.content!}
 									path={tool.path}
 									startLineNumbers={tool.startLineNumbers}
 								/>
@@ -469,7 +448,7 @@ export const ChatRowContent = memo(
 								<SquareMinusIcon className="size-2" />
 								{tool.operationIsLocatedInWorkspace === false &&
 									toolIcon("sign-out", "yellow", -90, "This file is outside of your workspace")}
-								<span style={{ fontWeight: "bold" }}>{AGENT_DISPLAY_NAME}{" "}wants to delete this file:</span>
+								<span style={{ fontWeight: "bold" }}>Cline wants to delete this file:</span>
 							</div>
 							<CodeAccordian
 								// isLoading={message.partial}
@@ -487,7 +466,7 @@ export const ChatRowContent = memo(
 								<FilePlus2Icon className="size-2" />
 								{tool.operationIsLocatedInWorkspace === false &&
 									toolIcon("sign-out", "yellow", -90, "This file is outside of your workspace")}
-								<span className="font-bold">{AGENT_DISPLAY_NAME}{" "}wants to create a new file:</span>
+								<span className="font-bold">Cline wants to create a new file:</span>
 							</div>
 							{backgroundEditEnabled && tool.path && tool.content ? (
 								<DiffEditRow patch={tool.content} path={tool.path} startLineNumbers={tool.startLineNumbers} />
@@ -510,7 +489,7 @@ export const ChatRowContent = memo(
 								{isImage ? <ImageUpIcon className="size-2" /> : <FileCode2Icon className="size-2" />}
 								{tool.operationIsLocatedInWorkspace === false &&
 									toolIcon("sign-out", "yellow", -90, "This file is outside of your workspace")}
-								<span className="font-bold">{AGENT_DISPLAY_NAME}{" "}wants to read this file:</span>
+								<span className="font-bold">Cline wants to read this file:</span>
 							</div>
 							<div className="bg-code rounded-sm overflow-hidden border border-editor-group-border">
 								<div
@@ -528,10 +507,11 @@ export const ChatRowContent = memo(
 									{tool.path && !tool.path.startsWith(".") && <span>/</span>}
 									<span className="ph-no-capture whitespace-nowrap overflow-hidden text-ellipsis mr-2 text-left [direction: rtl]">
 										{cleanPathPrefix(tool.path ?? "") + "\u200E"}
-										{tool.readLineStart != null && tool.readLineEnd != null ? (
+										{tool.readLineStart != null ? (
 											<span className="opacity-80">
 												{" "}
-												({tool.readLineStart}-{tool.readLineEnd})
+												({tool.readLineStart}
+												{tool.readLineEnd != null ? `-${tool.readLineEnd}` : "+"})
 											</span>
 										) : null}
 									</span>
@@ -550,8 +530,8 @@ export const ChatRowContent = memo(
 									toolIcon("sign-out", "yellow", -90, "This is outside of your workspace")}
 								<span style={{ fontWeight: "bold" }}>
 									{message.type === "ask"
-										? `${AGENT_DISPLAY_NAME} wants to view the top level files in this directory:`
-										: `${AGENT_DISPLAY_NAME} viewed the top level files in this directory:`}
+										? "Cline wants to view the top level files in this directory:"
+										: "Cline viewed the top level files in this directory:"}
 								</span>
 							</div>
 							<CodeAccordian
@@ -572,8 +552,8 @@ export const ChatRowContent = memo(
 									toolIcon("sign-out", "yellow", -90, "This is outside of your workspace")}
 								<span style={{ fontWeight: "bold" }}>
 									{message.type === "ask"
-										? `${AGENT_DISPLAY_NAME} wants to recursively view all files in this directory:`
-										: `${AGENT_DISPLAY_NAME} recursively viewed all files in this directory:`}
+										? "Cline wants to recursively view all files in this directory:"
+										: "Cline recursively viewed all files in this directory:"}
 								</span>
 							</div>
 							<CodeAccordian
@@ -594,8 +574,8 @@ export const ChatRowContent = memo(
 									toolIcon("sign-out", "yellow", -90, "This file is outside of your workspace")}
 								<span style={{ fontWeight: "bold" }}>
 									{message.type === "ask"
-										? `${AGENT_DISPLAY_NAME} wants to view source code definition names used in this directory:`
-										: `${AGENT_DISPLAY_NAME} viewed source code definition names used in this directory:`}
+										? "Cline wants to view source code definition names used in this directory:"
+										: "Cline viewed source code definition names used in this directory:"}
 								</span>
 							</div>
 							<CodeAccordian
@@ -614,7 +594,7 @@ export const ChatRowContent = memo(
 								{tool.operationIsLocatedInWorkspace === false &&
 									toolIcon("sign-out", "yellow", -90, "This is outside of your workspace")}
 								<span className="font-bold">
-									{AGENT_DISPLAY_NAME}{" "}wants to search this directory for <code className="break-all">{tool.regex}</code>:
+									Cline wants to search this directory for <code className="break-all">{tool.regex}</code>:
 								</span>
 							</div>
 							<SearchResultsDisplay
@@ -631,7 +611,7 @@ export const ChatRowContent = memo(
 						<div>
 							<div className={HEADER_CLASSNAMES}>
 								<FoldVerticalIcon className="size-2" />
-								<span className="font-bold">{AGENT_DISPLAY_NAME}{" "}is condensing the conversation:</span>
+								<span className="font-bold">Cline is condensing the conversation:</span>
 							</div>
 							<div className="bg-code overflow-hidden border border-editor-group-border rounded-[3px]">
 								<div
@@ -676,8 +656,8 @@ export const ChatRowContent = memo(
 									toolIcon("sign-out", "yellow", -90, "This URL is external")}
 								<span className="font-bold">
 									{message.type === "ask"
-										? `${AGENT_DISPLAY_NAME} wants to fetch content from this URL:`
-										: `${AGENT_DISPLAY_NAME} fetched content from this URL:`}
+										? "Cline wants to fetch content from this URL:"
+										: "Cline fetched content from this URL:"}
 								</span>
 							</div>
 							<div
@@ -705,8 +685,8 @@ export const ChatRowContent = memo(
 									toolIcon("sign-out", "yellow", -90, "This search is external")}
 								<span className="font-bold">
 									{message.type === "ask"
-										? `${AGENT_DISPLAY_NAME} wants to search the web for:`
-										: `${AGENT_DISPLAY_NAME} searched the web for:`}
+										? "Cline wants to search the web for:"
+										: "Cline searched the web for:"}
 								</span>
 							</div>
 							<div className="bg-code border border-editor-group-border overflow-hidden rounded-xs select-text py-[9px] px-2.5">
@@ -721,7 +701,7 @@ export const ChatRowContent = memo(
 						<div>
 							<div className={HEADER_CLASSNAMES}>
 								<LightbulbIcon className="size-2" />
-								<span className="font-bold">{AGENT_DISPLAY_NAME}{" "}loaded the skill:</span>
+								<span className="font-bold">Cline loaded the skill:</span>
 							</div>
 							<div className="bg-code border border-editor-group-border overflow-hidden rounded-xs py-[9px] px-2.5">
 								<span className="ph-no-capture font-medium">{tool.path}</span>
@@ -750,7 +730,7 @@ export const ChatRowContent = memo(
 				// Wait 500ms before auto-expanding to avoid animating fast commands
 				const timer = setTimeout(() => {
 					// Expand after 500ms
-					onToggleExpand(message.ts)
+					onToggleExpand(message.ts, { preserveAutoScroll: true })
 				}, 500)
 
 				return () => clearTimeout(timer)
@@ -768,6 +748,7 @@ export const ChatRowContent = memo(
 					isOutputFullyExpanded={isOutputFullyExpanded}
 					message={message}
 					onCancelCommand={onCancelCommand}
+					onOutputChange={onLastRowContentChange}
 					setIsOutputFullyExpanded={setIsOutputFullyExpanded}
 					title={title}
 				/>
@@ -918,6 +899,7 @@ export const ChatRowContent = memo(
 					case "user_feedback":
 						return (
 							<UserMessage
+								canRestoreWorkspace={canRestoreWorkspaceFromMessage(clineMessages, message.ts)}
 								files={message.files}
 								images={message.images}
 								messageTs={message.ts}
@@ -943,8 +925,6 @@ export const ChatRowContent = memo(
 						return <ErrorRow errorType="diff_error" message={message} />
 					case "clineignore_error":
 						return <ErrorRow errorType="clineignore_error" message={message} />
-					case "checkpoint_created":
-						return <CheckmarkControl isCheckpointCheckedOut={message.isCheckpointCheckedOut} messageTs={message.ts} />
 					case "load_mcp_documentation":
 						return (
 							<div className="text-foreground flex items-center opacity-70 text-[12px] py-1 px-0">
@@ -952,89 +932,15 @@ export const ChatRowContent = memo(
 								Loading MCP documentation
 							</div>
 						)
-					case "generate_explanation": {
-						let explanationInfo: ClineSayGenerateExplanation = {
-							title: "code changes",
-							fromRef: "",
-							toRef: "",
-							status: "generating",
-						}
-						try {
-							if (message.text) {
-								explanationInfo = JSON.parse(message.text)
-							}
-						} catch {
-							// Use defaults if parsing fails
-						}
-						// Check if generation was interrupted:
-						// 1. If status is "generating" but this isn't the last message, it was interrupted
-						// 2. If status is "generating" and lastModifiedMessage is a resume ask, task was just cancelled
-						const wasCancelled =
-							explanationInfo.status === "generating" &&
-							(!isLast ||
-								lastModifiedMessage?.ask === "resume_task" ||
-								lastModifiedMessage?.ask === "resume_completed_task")
-						const isGenerating = explanationInfo.status === "generating" && !wasCancelled
-						const isError = explanationInfo.status === "error"
-						return (
-							<div className="bg-code flex flex-col border border-editor-group-border rounded-sm py-2.5 px-3">
-								<div className="flex items-center">
-									{isGenerating ? (
-										<ProgressIndicator />
-									) : isError ? (
-										<CircleXIcon className="size-2 mr-2 text-error" />
-									) : wasCancelled ? (
-										<CircleSlashIcon className="size-2 mr-2" />
-									) : (
-										<CheckIcon className="size-2 mr-2 text-success" />
-									)}
-									<span className="font-semibold">
-										{isGenerating
-											? "Generating explanation"
-											: isError
-												? "Failed to generate explanation"
-												: wasCancelled
-													? "Explanation cancelled"
-													: "Generated explanation"}
-									</span>
-								</div>
-								{isError && explanationInfo.error && (
-									<div className="opacity-80 ml-6 mt-1.5 text-error break-words">{explanationInfo.error}</div>
-								)}
-								{!isError && (explanationInfo.title || explanationInfo.fromRef) && (
-									<div className="opacity-80 ml-6 mt-1.5">
-										<div>{explanationInfo.title}</div>
-										{explanationInfo.fromRef && (
-											<div className="opacity-70 mt-1.5 break-all text-xs">
-												<code className="bg-quote rounded-sm py-0.5 pr-1.5">
-													{explanationInfo.fromRef}
-												</code>
-												<ArrowRightIcon className="inline size-2 mx-1" />
-												<code className="bg-quote rounded-sm py-0.5 px-1.5">
-													{explanationInfo.toRef || "working directory"}
-												</code>
-											</div>
-										)}
-									</div>
-								)}
-							</div>
-						)
-					}
 					case "completion_result":
 						const hasChanges = message.text?.endsWith(COMPLETION_RESULT_CHANGES_FLAG) ?? false
 						const text = hasChanges ? message.text?.slice(0, -COMPLETION_RESULT_CHANGES_FLAG.length) : message.text
 
 						return (
 							<CompletionOutputRow
-								explainChangesDisabled={explainChangesDisabled}
 								handleQuoteClick={handleQuoteClick}
 								headClassNames={HEADER_CLASSNAMES}
-								messageTs={message.ts}
 								quoteButtonState={quoteButtonState}
-								seeNewChangesDisabled={seeNewChangesDisabled}
-								setExplainChangesDisabled={setExplainChangesDisabled}
-								setSeeNewChangesDisabled={setSeeNewChangesDisabled}
-								showActionRow={message.partial !== true && hasChanges}
 								text={text || ""}
 							/>
 						)
@@ -1046,7 +952,7 @@ export const ChatRowContent = memo(
 									<span className="font-medium text-foreground">Shell Integration Unavailable</span>
 								</div>
 								<div className="text-foreground opacity-80">
-									{AGENT_DISPLAY_NAME}{" "}may have trouble viewing the command's output. Please update VSCode (
+									Cline may have trouble viewing the command's output. Please update VSCode (
 									<code>CMD/CTRL + Shift + P</code> → "Update") and make sure you're using a supported shell:
 									zsh, bash, fish, or PowerShell (<code>CMD/CTRL + Shift + P</code> → "Terminal: Select Default
 									Profile").
@@ -1173,15 +1079,9 @@ export const ChatRowContent = memo(
 							const text = hasChanges ? message.text.slice(0, -COMPLETION_RESULT_CHANGES_FLAG.length) : message.text
 							return (
 								<CompletionOutputRow
-									explainChangesDisabled={explainChangesDisabled}
 									handleQuoteClick={handleQuoteClick}
 									headClassNames={HEADER_CLASSNAMES}
-									messageTs={message.ts}
 									quoteButtonState={quoteButtonState}
-									seeNewChangesDisabled={seeNewChangesDisabled}
-									setExplainChangesDisabled={setExplainChangesDisabled}
-									setSeeNewChangesDisabled={setSeeNewChangesDisabled}
-									showActionRow={message.partial !== true && hasChanges}
 									text={text || ""}
 								/>
 							)
@@ -1245,7 +1145,7 @@ export const ChatRowContent = memo(
 							<div>
 								<div className={HEADER_CLASSNAMES}>
 									<FilePlus2Icon className="size-2" />
-									<span className="text-foreground font-bold">{AGENT_DISPLAY_NAME}{" "}wants to start a new task:</span>
+									<span className="text-foreground font-bold">Cline wants to start a new task:</span>
 								</div>
 								<NewTaskPreview context={message.text || ""} />
 							</div>
@@ -1255,7 +1155,7 @@ export const ChatRowContent = memo(
 							<div>
 								<div className={HEADER_CLASSNAMES}>
 									<FilePlus2Icon className="size-2" />
-									<span className="text-foreground font-bold">{AGENT_DISPLAY_NAME}{" "}wants to condense your conversation:</span>
+									<span className="text-foreground font-bold">Cline wants to condense your conversation:</span>
 								</div>
 								<NewTaskPreview context={message.text || ""} />
 							</div>
@@ -1265,7 +1165,7 @@ export const ChatRowContent = memo(
 							<div>
 								<div className={HEADER_CLASSNAMES}>
 									<FilePlus2Icon className="size-2" />
-									<span className="text-foreground font-bold">{AGENT_DISPLAY_NAME}{" "}wants to create a Github issue:</span>
+									<span className="text-foreground font-bold">Cline wants to create a Github issue:</span>
 								</div>
 								<ReportBugPreview data={message.text || ""} />
 							</div>

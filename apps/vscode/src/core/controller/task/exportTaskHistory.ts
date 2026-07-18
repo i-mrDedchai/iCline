@@ -4,10 +4,7 @@ import { exportTaskHistoryArchive } from "@/icline/task-history/TaskHistoryTrans
 import { Logger } from "@/shared/services/Logger"
 import { Controller } from ".."
 
-export async function exportTaskHistory(
-	controller: Controller,
-	request: StringArrayRequest,
-): Promise<TaskHistoryTransferResult> {
+export async function exportTaskHistory(controller: Controller, request: StringArrayRequest): Promise<TaskHistoryTransferResult> {
 	try {
 		const result = await exportTaskHistoryArchive(controller, request.value ?? [])
 		return TaskHistoryTransferResult.create({

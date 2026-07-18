@@ -384,6 +384,9 @@ export type HubCommandName =
 	| "session.restore"
 	| "session.delete"
 	| "session.update"
+	| "session.update_connection"
+	| "session.compaction.get"
+	| "session.compaction.update"
 	| "session.pending_prompts"
 	| "session.update_pending_prompt"
 	| "session.remove_pending_prompt"
@@ -418,6 +421,9 @@ export type HubCommandName =
 	| "settings.get"
 	| "settings.patch"
 	| "settings.toggle"
+	| "connector.channels"
+	| "connector.configure"
+	| "connector.delete_config"
 	| "cron.event.ingest"
 	| "cron.event.list"
 	| "cron.event.get"
@@ -489,6 +495,7 @@ export type HubEventName =
 	| "iteration.finished"
 	| "assistant.delta"
 	| "assistant.finished"
+	| "session.notice"
 	| "reasoning.delta"
 	| "reasoning.finished"
 	| "agent.done"
@@ -660,6 +667,7 @@ export interface HubSessionRuntimeOptions {
 	timeoutSeconds?: number;
 	thinking?: boolean;
 	reasoningEffort?: ReasoningEffort;
+	thinkingBudgetTokens?: number;
 	checkpointEnabled?: boolean;
 	enableTools?: boolean;
 	enableSpawn?: boolean;
