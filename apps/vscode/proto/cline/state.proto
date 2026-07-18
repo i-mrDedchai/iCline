@@ -112,6 +112,7 @@ message Secrets {
   optional string zenmux_management_api_key = 52;
   optional string sakana_api_key = 53;
   optional string xai_oauth_credentials = 54;
+  optional string jan_api_key = 55;
 }
 
 // NOTE: Add new fields under API_HANDLER_SETTINGS_FIELDS or USER_SETTINGS_FIELDS
@@ -309,6 +310,9 @@ message Settings {
   optional OpenRouterModelInfo act_mode_zenmux_model_info = 197;
   optional string act_mode_sakana_model_id = 198;
   optional OpenRouterModelInfo act_mode_sakana_model_info = 199;
+  optional string jan_base_url = 200;
+  optional string plan_mode_jan_model_id = 201;
+  optional string act_mode_jan_model_id = 202;
 }
 
 message State {
