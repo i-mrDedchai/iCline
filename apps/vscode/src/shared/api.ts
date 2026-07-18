@@ -46,8 +46,13 @@ export type ApiProvider =
 	| "nousResearch"
 	| "wandb"
 	| "zenmux"
+	| "sakana"
+	| "jan"
 
 export const DEFAULT_API_PROVIDER = "openrouter" as ApiProvider
+
+/** Jan Local API Server — https://www.jan.ai/docs/desktop/api-server */
+export const JAN_DEFAULT_BASE_URL = "http://127.0.0.1:1337"
 
 /** ZenMux API protocol — see https://docs.zenmux.ai/guide/quickstart */
 export type ZenmuxApiProtocol = "openai" | "anthropic" | "openai-responses" | "gemini"
@@ -58,6 +63,13 @@ export const ZENMUX_API_BASE_URLS: Record<ZenmuxApiProtocol, string> = {
 	"openai-responses": "https://zenmux.ai/api/v1",
 	gemini: "https://zenmux.ai/api/vertex-ai",
 }
+
+/** Sakana Fugu API — https://console.sakana.ai/get-started */
+export const SAKANA_API_BASE_URL = "https://api.sakana.ai/v1"
+
+export type SakanaBillingMode = "pay_as_you_go" | "subscription"
+
+export type SakanaApiProtocol = "chat_completions" | "responses"
 
 export interface ApiHandlerOptions extends Partial<ApiHandlerSettings> {
 	ulid?: string // Used to identify the task in API requests
@@ -1026,6 +1038,47 @@ export const openRouterDefaultModelInfo: ModelInfo = {
 // ZenMux — https://zenmux.ai/models
 export const zenmuxDefaultModelId = "anthropic/claude-sonnet-4.5"
 export const zenmuxDefaultModelInfo: ModelInfo = openRouterDefaultModelInfo
+
+// Sakana Fugu — https://console.sakana.ai/models
+const sakanaFuguUltraModelInfo: ModelInfo = {
+	name: "Fugu Ultra",
+	maxTokens: 32_768,
+	contextWindow: 1_000_000,
+	supportsImages: true,
+	supportsPromptCache: true,
+	supportsReasoning: true,
+	inputPrice: 5,
+	outputPrice: 30,
+	cacheReadsPrice: 0.5,
+	description:
+		"Fugu Ultra coordinates expert agents for hard, high-stakes problems. Higher cost, maximum quality. See https://console.sakana.ai/pricing",
+}
+
+export const sakanaModels = {
+	fugu: {
+		name: "Fugu",
+		maxTokens: 32_768,
+		contextWindow: 1_000_000,
+		supportsImages: true,
+		supportsPromptCache: true,
+		supportsReasoning: true,
+		inputPrice: 5,
+		outputPrice: 30,
+		description:
+			"Default Fugu model — routes to the best agent for the task. Balanced performance and latency. See https://console.sakana.ai/models",
+	},
+	"fugu-ultra": sakanaFuguUltraModelInfo,
+	"fugu-ultra-20260615": {
+		...sakanaFuguUltraModelInfo,
+		name: "Fugu Ultra (2026-06-15)",
+		description: "Dated alias pinning a specific Fugu Ultra version.",
+	},
+} as const satisfies Record<string, ModelInfo>
+
+export type SakanaModelId = keyof typeof sakanaModels
+
+export const sakanaDefaultModelId: SakanaModelId = "fugu"
+export const sakanaDefaultModelInfo: ModelInfo = sakanaModels[sakanaDefaultModelId]
 
 // Cline custom model - Devstral
 export const clineDevstralModelInfo: ModelInfo = {

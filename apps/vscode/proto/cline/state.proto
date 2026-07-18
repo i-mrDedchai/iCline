@@ -37,6 +37,8 @@ service StateService {
   rpc refreshRemoteConfig(EmptyRequest) returns (Empty);
   rpc testOtelConnection(EmptyRequest) returns (TestConnectionResult);
   rpc testPromptUploading(EmptyRequest) returns (TestConnectionResult);
+  rpc refreshIclineUpdates(EmptyRequest) returns (Empty);
+  rpc dismissIclineUpdate(StringRequest) returns (Empty);
 }
 
 message AutoApprovalActions {
@@ -106,6 +108,10 @@ message Secrets {
   optional string cline_api_key = 44;
   optional string openai_codex_oauth_credentials = 48;
   optional string wandb_api_key = 50;
+  optional string zenmux_api_key = 51;
+  optional string zenmux_management_api_key = 52;
+  optional string sakana_api_key = 53;
+  optional string xai_oauth_credentials = 54;
 }
 
 // NOTE: Add new fields under API_HANDLER_SETTINGS_FIELDS or USER_SETTINGS_FIELDS
@@ -287,6 +293,22 @@ message Settings {
   optional OpenRouterModelInfo act_mode_cline_model_info = 181;
   optional bool show_feature_tips = 182;
   optional bool lazy_teammate_mode_enabled = 183;
+  optional string zenmux_api_protocol = 184;
+  optional string zenmux_provider_routing = 185;
+  optional string sakana_billing_mode = 186;
+  optional string sakana_api_protocol = 187;
+  optional string plan_mode_cline_pass_model_id = 188;
+  optional OpenRouterModelInfo plan_mode_cline_pass_model_info = 189;
+  optional string plan_mode_zenmux_model_id = 190;
+  optional OpenRouterModelInfo plan_mode_zenmux_model_info = 191;
+  optional string plan_mode_sakana_model_id = 192;
+  optional OpenRouterModelInfo plan_mode_sakana_model_info = 193;
+  optional string act_mode_cline_pass_model_id = 194;
+  optional OpenRouterModelInfo act_mode_cline_pass_model_info = 195;
+  optional string act_mode_zenmux_model_id = 196;
+  optional OpenRouterModelInfo act_mode_zenmux_model_info = 197;
+  optional string act_mode_sakana_model_id = 198;
+  optional OpenRouterModelInfo act_mode_sakana_model_info = 199;
 }
 
 message State {

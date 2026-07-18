@@ -15,6 +15,8 @@ import {
 	BedrockModelId,
 	ModelInfo,
 	OcaModelInfo,
+	SakanaApiProtocol,
+	SakanaBillingMode,
 	ZenmuxApiProtocol,
 } from "../../api"
 import { OpenaiReasoningEffort } from "../../storage/types"
@@ -329,6 +331,10 @@ function convertApiProviderToProto(provider: string | undefined): ProtoApiProvid
 			return ProtoApiProvider.HICAP
 		case "zenmux":
 			return ProtoApiProvider.ZENMUX
+		case "sakana":
+			return ProtoApiProvider.SAKANA
+		case "jan":
+			return ProtoApiProvider.JAN
 		case "nousResearch":
 			return ProtoApiProvider.NOUSRESEARCH
 		case "openai-codex":
@@ -417,6 +423,10 @@ export function convertProtoToApiProvider(provider: ProtoApiProvider): ApiProvid
 			return "hicap"
 		case ProtoApiProvider.ZENMUX:
 			return "zenmux"
+		case ProtoApiProvider.SAKANA:
+			return "sakana"
+		case ProtoApiProvider.JAN:
+			return "jan"
 		case ProtoApiProvider.DIFY:
 			return "dify"
 		case ProtoApiProvider.OCA:
@@ -470,6 +480,8 @@ export function convertApiConfigurationToProto(config: ApiConfiguration): ProtoA
 		ollamaApiOptionsCtxNum: config.ollamaApiOptionsCtxNum,
 		lmStudioBaseUrl: config.lmStudioBaseUrl,
 		lmStudioMaxTokens: config.lmStudioMaxTokens,
+		janBaseUrl: config.janBaseUrl,
+		janApiKey: config.janApiKey,
 		geminiApiKey: config.geminiApiKey,
 		geminiBaseUrl: config.geminiBaseUrl,
 		openAiNativeApiKey: config.openAiNativeApiKey,
@@ -527,6 +539,9 @@ export function convertApiConfigurationToProto(config: ApiConfiguration): ProtoA
 		zenmuxManagementApiKey: config.zenmuxManagementApiKey,
 		zenmuxApiProtocol: config.zenmuxApiProtocol,
 		zenmuxProviderRouting: config.zenmuxProviderRouting,
+		sakanaApiKey: config.sakanaApiKey,
+		sakanaBillingMode: config.sakanaBillingMode,
+		sakanaApiProtocol: config.sakanaApiProtocol,
 
 		// Plan mode configurations
 		planModeApiProvider: config.planModeApiProvider ? convertApiProviderToProto(config.planModeApiProvider) : undefined,
@@ -547,6 +562,7 @@ export function convertApiConfigurationToProto(config: ApiConfiguration): ProtoA
 		planModeOpenAiModelInfo: convertOpenAiCompatibleModelInfoToProto(config.planModeOpenAiModelInfo),
 		planModeOllamaModelId: config.planModeOllamaModelId,
 		planModeLmStudioModelId: config.planModeLmStudioModelId,
+		planModeJanModelId: config.planModeJanModelId,
 		planModeLiteLlmModelId: config.planModeLiteLlmModelId,
 		planModeLiteLlmModelInfo: convertLiteLLMModelInfoToProto(config.planModeLiteLlmModelInfo),
 		planModeRequestyModelId: config.planModeRequestyModelId,
@@ -575,6 +591,8 @@ export function convertApiConfigurationToProto(config: ApiConfiguration): ProtoA
 		planModeVercelAiGatewayModelInfo: convertModelInfoToProtoOpenRouter(config.planModeVercelAiGatewayModelInfo),
 		planModeZenmuxModelId: config.planModeZenmuxModelId,
 		planModeZenmuxModelInfo: convertModelInfoToProtoOpenRouter(config.planModeZenmuxModelInfo),
+		planModeSakanaModelId: config.planModeSakanaModelId,
+		planModeSakanaModelInfo: convertModelInfoToProtoOpenRouter(config.planModeSakanaModelInfo),
 
 		// Act mode configurations
 		actModeApiProvider: config.actModeApiProvider ? convertApiProviderToProto(config.actModeApiProvider) : undefined,
@@ -595,6 +613,7 @@ export function convertApiConfigurationToProto(config: ApiConfiguration): ProtoA
 		actModeOpenAiModelInfo: convertOpenAiCompatibleModelInfoToProto(config.actModeOpenAiModelInfo),
 		actModeOllamaModelId: config.actModeOllamaModelId,
 		actModeLmStudioModelId: config.actModeLmStudioModelId,
+		actModeJanModelId: config.actModeJanModelId,
 		actModeLiteLlmModelId: config.actModeLiteLlmModelId,
 		actModeLiteLlmModelInfo: convertLiteLLMModelInfoToProto(config.actModeLiteLlmModelInfo),
 		actModeRequestyModelId: config.actModeRequestyModelId,
@@ -623,6 +642,8 @@ export function convertApiConfigurationToProto(config: ApiConfiguration): ProtoA
 		actModeVercelAiGatewayModelInfo: convertModelInfoToProtoOpenRouter(config.actModeVercelAiGatewayModelInfo),
 		actModeZenmuxModelId: config.actModeZenmuxModelId,
 		actModeZenmuxModelInfo: convertModelInfoToProtoOpenRouter(config.actModeZenmuxModelInfo),
+		actModeSakanaModelId: config.actModeSakanaModelId,
+		actModeSakanaModelInfo: convertModelInfoToProtoOpenRouter(config.actModeSakanaModelInfo),
 	}
 }
 
@@ -662,6 +683,8 @@ export function convertProtoToApiConfiguration(protoConfig: ProtoApiConfiguratio
 		ollamaApiOptionsCtxNum: protoConfig.ollamaApiOptionsCtxNum,
 		lmStudioBaseUrl: protoConfig.lmStudioBaseUrl,
 		lmStudioMaxTokens: protoConfig.lmStudioMaxTokens,
+		janBaseUrl: protoConfig.janBaseUrl,
+		janApiKey: protoConfig.janApiKey,
 		geminiApiKey: protoConfig.geminiApiKey,
 		geminiBaseUrl: protoConfig.geminiBaseUrl,
 		openAiNativeApiKey: protoConfig.openAiNativeApiKey,
@@ -717,6 +740,9 @@ export function convertProtoToApiConfiguration(protoConfig: ProtoApiConfiguratio
 		zenmuxManagementApiKey: protoConfig.zenmuxManagementApiKey,
 		zenmuxApiProtocol: protoConfig.zenmuxApiProtocol as ZenmuxApiProtocol | undefined,
 		zenmuxProviderRouting: protoConfig.zenmuxProviderRouting,
+		sakanaApiKey: protoConfig.sakanaApiKey,
+		sakanaBillingMode: protoConfig.sakanaBillingMode as SakanaBillingMode | undefined,
+		sakanaApiProtocol: protoConfig.sakanaApiProtocol as SakanaApiProtocol | undefined,
 		nousResearchApiKey: protoConfig.nousResearchApiKey,
 		clineApiKey: protoConfig.clineApiKey,
 
@@ -742,6 +768,7 @@ export function convertProtoToApiConfiguration(protoConfig: ProtoApiConfiguratio
 		planModeOpenAiModelInfo: convertProtoToOpenAiCompatibleModelInfo(protoConfig.planModeOpenAiModelInfo),
 		planModeOllamaModelId: protoConfig.planModeOllamaModelId,
 		planModeLmStudioModelId: protoConfig.planModeLmStudioModelId,
+		planModeJanModelId: protoConfig.planModeJanModelId,
 		planModeLiteLlmModelId: protoConfig.planModeLiteLlmModelId,
 		planModeLiteLlmModelInfo: convertProtoToLiteLLMModelInfo(protoConfig.planModeLiteLlmModelInfo),
 		planModeRequestyModelId: protoConfig.planModeRequestyModelId,
@@ -770,6 +797,8 @@ export function convertProtoToApiConfiguration(protoConfig: ProtoApiConfiguratio
 		planModeVercelAiGatewayModelInfo: convertProtoToModelInfo(protoConfig.planModeVercelAiGatewayModelInfo),
 		planModeZenmuxModelId: protoConfig.planModeZenmuxModelId,
 		planModeZenmuxModelInfo: convertProtoToModelInfo(protoConfig.planModeZenmuxModelInfo),
+		planModeSakanaModelId: protoConfig.planModeSakanaModelId,
+		planModeSakanaModelInfo: convertProtoToModelInfo(protoConfig.planModeSakanaModelInfo),
 
 		// Act mode configurations
 		actModeApiProvider:
@@ -791,6 +820,7 @@ export function convertProtoToApiConfiguration(protoConfig: ProtoApiConfiguratio
 		actModeOpenAiModelInfo: convertProtoToOpenAiCompatibleModelInfo(protoConfig.actModeOpenAiModelInfo),
 		actModeOllamaModelId: protoConfig.actModeOllamaModelId,
 		actModeLmStudioModelId: protoConfig.actModeLmStudioModelId,
+		actModeJanModelId: protoConfig.actModeJanModelId,
 		actModeLiteLlmModelId: protoConfig.actModeLiteLlmModelId,
 		actModeLiteLlmModelInfo: convertProtoToLiteLLMModelInfo(protoConfig.actModeLiteLlmModelInfo),
 		actModeRequestyModelId: protoConfig.actModeRequestyModelId,
@@ -819,5 +849,7 @@ export function convertProtoToApiConfiguration(protoConfig: ProtoApiConfiguratio
 		actModeVercelAiGatewayModelInfo: convertProtoToModelInfo(protoConfig.actModeVercelAiGatewayModelInfo),
 		actModeZenmuxModelId: protoConfig.actModeZenmuxModelId,
 		actModeZenmuxModelInfo: convertProtoToModelInfo(protoConfig.actModeZenmuxModelInfo),
+		actModeSakanaModelId: protoConfig.actModeSakanaModelId,
+		actModeSakanaModelInfo: convertProtoToModelInfo(protoConfig.actModeSakanaModelInfo),
 	}
 }

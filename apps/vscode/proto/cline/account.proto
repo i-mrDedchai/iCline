@@ -47,6 +47,9 @@ service AccountService {
   // Opens ZenMux console pages (login, payg, subscription, management)
   rpc zenmuxAuthClicked(StringRequest) returns (Empty);
 
+  // Opens Sakana console pages (login, api keys, pricing, subscription)
+  rpc sakanaAuthClicked(StringRequest) returns (Empty);
+
   // Returns a link the webview can use to redirect back to the user's IDE.
   rpc getRedirectUrl(EmptyRequest) returns (String);
 

@@ -49,6 +49,10 @@
 			"label": "ZenMux"
 		},
 		{
+			"value": "sakana",
+			"label": "Sakana.ai"
+		},
+		{
 			"value": "ollama",
 			"label": "Ollama"
 		},
@@ -119,6 +123,10 @@
 		{
 			"value": "lmstudio",
 			"label": "LM Studio"
+		},
+		{
+			"value": "jan",
+			"label": "Jan"
 		},
 		{
 			"value": "moonshot",

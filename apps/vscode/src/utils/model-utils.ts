@@ -226,7 +226,7 @@ export function isNextGenModelFamily(id: string): boolean {
 }
 
 export function isLocalModel(providerInfo: ApiProviderInfo): boolean {
-	const localProviders = ["lmstudio", "ollama"]
+	const localProviders = ["lmstudio", "ollama", "jan"]
 	return localProviders.includes(normalize(providerInfo.providerId))
 }
 

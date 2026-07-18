@@ -6,6 +6,8 @@ import {
 	ModelInfo,
 	type OcaModelInfo,
 	OpenAiCompatibleModelInfo,
+	type SakanaApiProtocol,
+	type SakanaBillingMode,
 	type ZenmuxApiProtocol,
 } from "@shared/api"
 import { BrowserSettings, DEFAULT_BROWSER_SETTINGS } from "@shared/BrowserSettings"
@@ -106,6 +108,8 @@ const API_HANDLER_SETTINGS_FIELDS = {
 	openRouterProviderSorting: { default: undefined as string | undefined },
 	zenmuxApiProtocol: { default: "openai" as ZenmuxApiProtocol },
 	zenmuxProviderRouting: { default: undefined as string | undefined },
+	sakanaBillingMode: { default: "pay_as_you_go" as SakanaBillingMode },
+	sakanaApiProtocol: { default: "responses" as SakanaApiProtocol },
 	awsRegion: { default: undefined as string | undefined },
 	awsUseCrossRegionInference: { default: undefined as boolean | undefined },
 	awsUseGlobalInference: { default: undefined as boolean | undefined },
@@ -122,6 +126,7 @@ const API_HANDLER_SETTINGS_FIELDS = {
 	ollamaApiOptionsCtxNum: { default: undefined as string | undefined },
 	lmStudioBaseUrl: { default: undefined as string | undefined },
 	lmStudioMaxTokens: { default: undefined as string | undefined },
+	janBaseUrl: { default: undefined as string | undefined },
 	geminiBaseUrl: { default: undefined as string | undefined },
 	requestyBaseUrl: { default: undefined as string | undefined },
 	fireworksModelMaxCompletionTokens: { default: undefined as number | undefined },
@@ -165,6 +170,7 @@ const API_HANDLER_SETTINGS_FIELDS = {
 	planModeOpenAiModelInfo: { default: undefined as OpenAiCompatibleModelInfo | undefined },
 	planModeOllamaModelId: { default: undefined as string | undefined },
 	planModeLmStudioModelId: { default: undefined as string | undefined },
+	planModeJanModelId: { default: undefined as string | undefined },
 	planModeLiteLlmModelId: { default: undefined as string | undefined },
 	planModeLiteLlmModelInfo: { default: undefined as LiteLLMModelInfo | undefined },
 	planModeRequestyModelId: { default: undefined as string | undefined },
@@ -193,6 +199,8 @@ const API_HANDLER_SETTINGS_FIELDS = {
 	planModeVercelAiGatewayModelInfo: { default: undefined as ModelInfo | undefined },
 	planModeZenmuxModelId: { default: undefined as string | undefined },
 	planModeZenmuxModelInfo: { default: undefined as ModelInfo | undefined },
+	planModeSakanaModelId: { default: undefined as string | undefined },
+	planModeSakanaModelInfo: { default: undefined as ModelInfo | undefined },
 
 	// Act mode configurations
 	actModeApiModelId: { default: undefined as string | undefined },
@@ -213,6 +221,7 @@ const API_HANDLER_SETTINGS_FIELDS = {
 	actModeOpenAiModelInfo: { default: undefined as OpenAiCompatibleModelInfo | undefined },
 	actModeOllamaModelId: { default: undefined as string | undefined },
 	actModeLmStudioModelId: { default: undefined as string | undefined },
+	actModeJanModelId: { default: undefined as string | undefined },
 	actModeLiteLlmModelId: { default: undefined as string | undefined },
 	actModeLiteLlmModelInfo: { default: undefined as LiteLLMModelInfo | undefined },
 	actModeRequestyModelId: { default: undefined as string | undefined },
@@ -241,6 +250,8 @@ const API_HANDLER_SETTINGS_FIELDS = {
 	actModeVercelAiGatewayModelInfo: { default: undefined as ModelInfo | undefined },
 	actModeZenmuxModelId: { default: undefined as string | undefined },
 	actModeZenmuxModelInfo: { default: undefined as ModelInfo | undefined },
+	actModeSakanaModelId: { default: undefined as string | undefined },
+	actModeSakanaModelInfo: { default: undefined as ModelInfo | undefined },
 
 	// Model-specific settings
 	planModeApiProvider: { default: DEFAULT_API_PROVIDER as ApiProvider },
@@ -355,6 +366,8 @@ const SECRETS_KEYS = [
 	"hicapApiKey",
 	"zenmuxApiKey",
 	"zenmuxManagementApiKey",
+	"sakanaApiKey",
+	"janApiKey",
 	"aihubmixApiKey",
 	"nousResearchApiKey",
 	"remoteLiteLlmApiKey",

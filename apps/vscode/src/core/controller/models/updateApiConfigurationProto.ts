@@ -7,7 +7,7 @@ import {
 	fromProtobufOcaModelInfo,
 	fromProtobufOpenAiCompatibleModelInfo,
 } from "@shared/proto-conversions/models/typeConversion";
-import type { ZenmuxApiProtocol } from "@shared/api";
+import type { SakanaApiProtocol, SakanaBillingMode, ZenmuxApiProtocol } from "@shared/api";
 import type { OpenaiReasoningEffort } from "@shared/storage/types";
 import { buildApiHandler } from "@/core/api";
 import { Logger } from "@/shared/services/Logger";
@@ -181,6 +181,12 @@ export async function updateApiConfigurationProto(
 				| undefined,
 			zenmuxApiProtocol: protoApiConfiguration.zenmuxApiProtocol as
 				| ZenmuxApiProtocol
+				| undefined,
+			sakanaBillingMode: protoApiConfiguration.sakanaBillingMode as
+				| SakanaBillingMode
+				| undefined,
+			sakanaApiProtocol: protoApiConfiguration.sakanaApiProtocol as
+				| SakanaApiProtocol
 				| undefined,
 		};
 

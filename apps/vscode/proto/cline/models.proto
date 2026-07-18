@@ -15,6 +15,8 @@ service ModelsService {
   rpc getOllamaModels(StringRequest) returns (StringArray);
   // Fetches available models from LM Studio
   rpc getLmStudioModels(StringRequest) returns (StringArray);
+  // Fetches available models from Jan Local API Server
+  rpc getJanModels(OpenAiModelsRequest) returns (StringArray);
   // Fetches available models from VS Code LM API
   rpc getVsCodeLmModels(EmptyRequest) returns (VsCodeLmModelsArray);
   // Refreshes and returns OpenRouter models
@@ -204,6 +206,7 @@ message ModelsApiSecrets {
   optional string oca_refresh_token = 37;
   optional string minimax_api_key = 38;
   optional string aihubmix_api_key = 39;
+  optional string jan_api_key = 40;
 }
 
 // API configuration options (non-secret settings)
@@ -255,6 +258,9 @@ message ModelsApiOptions {
   optional bool azure_identity = 44;
   optional string zenmux_api_protocol = 45;
   optional string zenmux_provider_routing = 46;
+  optional string sakana_billing_mode = 47;
+  optional string sakana_api_protocol = 48;
+  optional string jan_base_url = 49;
 
   // Plan mode configurations
   optional ApiProvider plan_mode_api_provider = 100;
@@ -298,6 +304,7 @@ message ModelsApiOptions {
   optional OpenRouterModelInfo plan_mode_cline_pass_model_info = 138;
   optional string plan_mode_zenmux_model_id = 139;
   optional OpenRouterModelInfo plan_mode_zenmux_model_info = 140;
+  optional string plan_mode_jan_model_id = 141;
 
   // Act mode configurations
   optional ApiProvider act_mode_api_provider = 200;
@@ -341,6 +348,7 @@ message ModelsApiOptions {
   optional OpenRouterModelInfo act_mode_cline_pass_model_info = 238;
   optional string act_mode_zenmux_model_id = 239;
   optional OpenRouterModelInfo act_mode_zenmux_model_info = 240;
+  optional string act_mode_jan_model_id = 241;
 }
 
 // Request for updating API configuration (legacy - uses combined configuration)
@@ -478,6 +486,8 @@ enum ApiProvider {
   WANDB = 41;
   CLINE_PASS = 42;
   ZENMUX = 43;
+  SAKANA = 44;
+  JAN = 45;
 }
 
 enum ApiFormat {
@@ -621,6 +631,11 @@ message ModelsApiConfiguration {
   optional string zenmux_management_api_key = 89;
   optional string zenmux_api_protocol = 90;
   optional string zenmux_provider_routing = 91;
+  optional string sakana_api_key = 92;
+  optional string sakana_billing_mode = 93;
+  optional string sakana_api_protocol = 94;
+  optional string jan_api_key = 95;
+  optional string jan_base_url = 96;
 
   // Plan mode configurations
   optional ApiProvider plan_mode_api_provider = 100;
@@ -669,6 +684,9 @@ message ModelsApiConfiguration {
   optional OpenRouterModelInfo plan_mode_cline_pass_model_info = 143;
   optional string plan_mode_zenmux_model_id = 144;
   optional OpenRouterModelInfo plan_mode_zenmux_model_info = 145;
+  optional string plan_mode_sakana_model_id = 146;
+  optional OpenRouterModelInfo plan_mode_sakana_model_info = 147;
+  optional string plan_mode_jan_model_id = 148;
 
   // Act mode configurations
   optional ApiProvider act_mode_api_provider = 200;
@@ -717,4 +735,7 @@ message ModelsApiConfiguration {
   optional OpenRouterModelInfo act_mode_cline_pass_model_info = 243;
   optional string act_mode_zenmux_model_id = 244;
   optional OpenRouterModelInfo act_mode_zenmux_model_info = 245;
+  optional string act_mode_sakana_model_id = 246;
+  optional OpenRouterModelInfo act_mode_sakana_model_info = 247;
+  optional string act_mode_jan_model_id = 248;
 }
