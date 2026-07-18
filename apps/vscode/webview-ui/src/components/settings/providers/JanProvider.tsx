@@ -5,6 +5,7 @@ import { useInterval } from "react-use"
 import UseCustomPromptCheckbox from "@/components/settings/UseCustomPromptCheckbox"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { ModelsServiceClient } from "@/services/grpc-client"
+import { OpenAiModelsRequest } from "@shared/proto/cline/models"
 import { ApiKeyField } from "../common/ApiKeyField"
 import { BaseUrlField } from "../common/BaseUrlField"
 import { DebouncedTextField } from "../common/DebouncedTextField"
@@ -27,10 +28,12 @@ export const JanProvider = ({ currentMode }: JanProviderProps) => {
 
 	const requestJanModels = useCallback(async () => {
 		try {
-			const response = await ModelsServiceClient.getJanModels({
-				baseUrl: apiConfiguration?.janBaseUrl || "http://127.0.0.1:1337",
-				apiKey: apiConfiguration?.janApiKey || "",
-			})
+			const response = await ModelsServiceClient.getJanModels(
+				OpenAiModelsRequest.create({
+					baseUrl: apiConfiguration?.janBaseUrl || "http://127.0.0.1:1337",
+					apiKey: apiConfiguration?.janApiKey || "",
+				}),
+			)
 			if (response?.values) {
 				setJanModels(response.values)
 			}

@@ -1,6 +1,6 @@
 import "should"
 import sinon from "sinon"
-import { JanHandler, JAN_DEFAULT_BASE_URL, getJanApiBaseUrl } from "../jan"
+import { JanHandler, getJanApiBaseUrl } from "../jan"
 
 describe("JanHandler", () => {
 	afterEach(() => {
