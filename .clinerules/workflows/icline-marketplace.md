@@ -40,8 +40,20 @@ npm run publish:marketplace:prerelease   # beta
 
 `scripts/publish-marketplace.mjs`:
 - Swaps `README.marketplace.md` for publishing
+- `package-vsix.mjs` → VSIX with README images rewritten to GitHub (`--baseImagesUrl`)
+- `ovsx publish` → Open VSX (same VSIX)
 - `vsce publish` → VS Marketplace
-- `ovsx publish` → Open VSX (optional; failure is non-fatal)
+
+### README screenshots baseline (required every release)
+
+| Step | Rule |
+|------|------|
+| Source | `README.marketplace.md` uses relative `assets/docs/*.jpg` |
+| Package | **Always** `vsce package` with `--baseImagesUrl` + `--githubBranch main` (`scripts/marketplace-images.mjs`) |
+| Never | `--no-rewrite-relative-links` for store publishes — breaks Open VSX listing images |
+| Verify | `tar -xOf dist/*.vsix extension/readme.md` must show `github.com/.../raw/main/apps/vscode/assets/docs/` |
+
+Investigation: `บันทึกแชท/2026-06/2026-06-23_01_openvsx-readme-images-root-cause.md`
 
 ## How auto-update works after Marketplace publish
 

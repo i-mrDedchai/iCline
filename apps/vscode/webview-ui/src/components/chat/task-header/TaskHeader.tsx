@@ -101,6 +101,7 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 		(modeFields.apiProvider !== "vscode-lm" &&
 			modeFields.apiProvider !== "ollama" &&
 			modeFields.apiProvider !== "lmstudio" &&
+			modeFields.apiProvider !== "jan" &&
 			modeFields.apiProvider !== "openai-codex") // Subscription-based, no per-token costs
 
 	// Event handlers

@@ -84,6 +84,10 @@ function Push-SyncedReadmeDocs {
             return
         }
         git commit -m "docs(icline): sync README version badges to v$Version"
+        $branch = git rev-parse --abbrev-ref HEAD
+        if ($branch -ne "main") {
+            throw "Push refused: current branch is '$branch', expected 'main'. Switch to main before releasing."
+        }
         git push origin main
         Write-Host "Pushed synced README/docs to GitHub." -ForegroundColor Green
     } finally {
@@ -277,6 +281,9 @@ if ($MaintainerApproval.Trim()) {
 Write-Host "==> Syncing docs..."
 Push-Location $ExtRoot
 node $SyncScript
+if ($LASTEXITCODE -ne 0) {
+    throw "sync-icline-docs.mjs failed (exit $LASTEXITCODE). Fix docs before releasing."
+}
 if (-not $SkipBuild) {
     $vsixOut = "dist\i-mrdedchai.iCline-$ver.vsix"
     Write-Host "==> Building VSIX -> $vsixOut"
@@ -304,6 +311,10 @@ if (-not $SkipPush) {
     $status = git status --porcelain
     if ($status) {
         git commit -m "release(icline): v$ver - $Channel channel"
+        $branch = git rev-parse --abbrev-ref HEAD
+        if ($branch -ne "main") {
+            throw "Push refused: current branch is '$branch', expected 'main'. Switch to main before releasing."
+        }
         git push origin main
     } else {
         Write-Host "Nothing to commit."

@@ -1096,6 +1096,7 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 				requestyModelId,
 				vercelAiGatewayModelId,
 				zenmuxModelId,
+				sakanaModelId,
 			} = getModeSpecificFields(apiConfiguration, mode)
 			const unknownModel = "unknown"
 
@@ -1123,6 +1124,8 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 					return `${selectedProvider}:${vercelAiGatewayModelId || selectedModelId}`
 				case "zenmux":
 					return `${selectedProvider}:${zenmuxModelId || selectedModelId}`
+				case "sakana":
+					return `${selectedProvider}:${sakanaModelId || selectedModelId}`
 				case "anthropic":
 				case "openrouter":
 				default:

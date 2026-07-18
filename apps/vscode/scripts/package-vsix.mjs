@@ -4,6 +4,7 @@ import fs from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { restore, swapIn } from "./marketplace-readme.mjs"
+import { getVsceImageRewriteArgs } from "./marketplace-images.mjs"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const extRoot = path.join(__dirname, "..")
@@ -17,7 +18,7 @@ let exitCode = 1
 try {
 	const result = spawnSync(
 		"npx",
-		["vsce", "package", "--no-dependencies", "--no-rewrite-relative-links", "--out", out],
+		["vsce", "package", "--no-dependencies", ...getVsceImageRewriteArgs(manifest), "--out", out],
 		{
 		stdio: "inherit",
 		shell: process.platform === "win32",

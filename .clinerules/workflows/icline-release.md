@@ -80,6 +80,8 @@ Beta/Stable releases run this automatically unless `-SkipSmokeCheck`.
 - [ ] Fix/feature complete
 - [ ] Add bullets under `## [x.y.z] - Unreleased` in `apps/vscode/CHANGELOG.md` during dev (never `## [x.y.z-dev.N]` sections)
 - [ ] On Stable: `release-icline.ps1` finalizes Unreleased → dated release, blocks leftover dev sections, seeds next Unreleased
+- [ ] **If touching a provider adapter** — `*.test.ts` must exist with at minimum a happy-path stream test and a non-Error throw regression test
+- [ ] **Doc audit before Stable** — verify `ICLINE.md`, `ICLINE-WORKFLOW.md`, `releases/STABLE.md` match `package.json` version and current state
 
 ### 2. Sync docs
 
@@ -137,6 +139,7 @@ Script handles: commit, push, **GitHub Release (บังคับก่อน s
 ## Agent session bootstrap
 
 1. Read this file + `icline-marketplace.md`
-2. Check `package.json` version vs `releases/STABLE.md` vs `release-parity.mjs verify`
-3. Dev build first; Beta/Stable only after smoke passes
-4. **Never** `publish-marketplace.mjs` alone for Stable — always `release-icline.ps1`
+2. Read `บันทึกแชท/RECENT.md` or last 7 days of decision logs (`.grok/iCline/บันทึกแชท/YYYY-MM/`) to avoid re-deciding past agreements
+3. Check `package.json` version vs `releases/STABLE.md` vs `release-parity.mjs verify`
+4. Dev build first; Beta/Stable only after smoke passes
+5. **Never** `publish-marketplace.mjs` alone for Stable — always `release-icline.ps1`

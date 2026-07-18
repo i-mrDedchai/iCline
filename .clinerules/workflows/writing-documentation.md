@@ -313,9 +313,12 @@ Cut the corporate speak. Instead of "utilize," say "use." Instead of "in order t
 
 Don't over-explain obvious things. If users are reading documentation, they probably understand basic concepts. Respect their intelligence.
 
-## Never use em dashes or emojis
+## Em dashes and emojis — use sparingly
 
-That's pretty much it. Never use them. Only AI writes with em dashes or emojis.
+Em dash (—) or emoji (🎯🐛📝): fine in moderation to avoid being too stiff. Don't put them in every sentence or use them as a substitute for substance. The content matters more than the decoration.
+
+Bad: "This fix is 🔥 — blazingly fast — revolutionary!"
+Good: "Found the root cause 🐛 — jan.ts crash on non-Error throws."
 
 # Anthropomorphizing Cline
 

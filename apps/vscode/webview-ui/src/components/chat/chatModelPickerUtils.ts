@@ -8,6 +8,9 @@ import {
 	openRouterDefaultModelInfo,
 	requestyDefaultModelId,
 	requestyDefaultModelInfo,
+	sakanaDefaultModelId,
+	sakanaDefaultModelInfo,
+	sakanaModels,
 	zenmuxDefaultModelId,
 	zenmuxDefaultModelInfo,
 } from "@shared/api"
@@ -59,7 +62,7 @@ export interface ChatModelPickerContext {
 	liteLlmModels: Record<string, ModelInfo>
 }
 
-const ICLINE_PRIORITY_PROVIDERS: ApiProvider[] = ["xai", "zenmux"]
+const ICLINE_PRIORITY_PROVIDERS: ApiProvider[] = ["xai", "zenmux", "sakana"]
 
 const DYNAMIC_MODEL_PROVIDERS = new Set<ApiProvider>([
 	"openrouter",
@@ -127,12 +130,16 @@ function getStoredModelIdForProvider(provider: ApiProvider, ctx: ChatModelPicker
 			return fields.requestyModelId
 		case "zenmux":
 			return fields.zenmuxModelId
+		case "sakana":
+			return fields.sakanaModelId
 		case "openai":
 			return fields.openAiModelId
 		case "ollama":
 			return fields.ollamaModelId
 		case "lmstudio":
 			return fields.lmStudioModelId
+		case "jan":
+			return fields.janModelId
 		case "litellm":
 			return fields.liteLlmModelId
 		case "groq":
@@ -194,6 +201,8 @@ function getModelsForProviderInPicker(
 				models: Object.keys(ctx.zenmuxModels).length > 0 ? ctx.zenmuxModels : undefined,
 				isLoading: Object.keys(ctx.zenmuxModels).length === 0,
 			}
+		case "sakana":
+			return { models: sakanaModels, isLoading: false }
 		case "requesty":
 			return {
 				models: Object.keys(ctx.requestyModels).length > 0 ? ctx.requestyModels : undefined,
@@ -550,6 +559,17 @@ export function buildChatModelSelectionUpdates(
 				separateModels,
 			)
 			break
+		case "sakana":
+			setModeFields(updates, "planModeSakanaModelId", "actModeSakanaModelId", modelId, mode, separateModels)
+			setModeFields(
+				updates,
+				"planModeSakanaModelInfo",
+				"actModeSakanaModelInfo",
+				modelInfo ?? sakanaDefaultModelInfo,
+				mode,
+				separateModels,
+			)
+			break
 		case "openai":
 			setModeFields(updates, "planModeOpenAiModelId", "actModeOpenAiModelId", modelId, mode, separateModels)
 			if (modelInfo) {
@@ -561,6 +581,9 @@ export function buildChatModelSelectionUpdates(
 			break
 		case "lmstudio":
 			setModeFields(updates, "planModeLmStudioModelId", "actModeLmStudioModelId", modelId, mode, separateModels)
+			break
+		case "jan":
+			setModeFields(updates, "planModeJanModelId", "actModeJanModelId", modelId, mode, separateModels)
 			break
 		case "litellm":
 			setModeFields(updates, "planModeLiteLlmModelId", "actModeLiteLlmModelId", modelId, mode, separateModels)
@@ -684,6 +707,9 @@ export function buildChatModelSelectionUpdates(
 	}
 	if (provider === "zenmux" && !modelId) {
 		setModeFields(updates, "planModeZenmuxModelId", "actModeZenmuxModelId", zenmuxDefaultModelId, mode, separateModels)
+	}
+	if (provider === "sakana" && !modelId) {
+		setModeFields(updates, "planModeSakanaModelId", "actModeSakanaModelId", sakanaDefaultModelId, mode, separateModels)
 	}
 	if (provider === "requesty" && !modelId) {
 		setModeFields(updates, "planModeRequestyModelId", "actModeRequestyModelId", requestyDefaultModelId, mode, separateModels)

@@ -14,7 +14,7 @@ Standalone Cline fork for VS Code — no official Cline required. Supports Grok,
 
 <!-- icline:version -->
 <p align="center">
-  <strong>Version</strong> <code>0.1.17</code> ·
+  <strong>Version</strong> <code>0.1.18-dev.4</code> ·
   <a href="https://github.com/i-mrDedchai/iCline/releases">Releases</a> ·
   <a href="https://github.com/i-mrDedchai/iCline/blob/main/apps/vscode/CHANGELOG.md">Changelog</a> ·
   Extension ID <code>i-mrdedchai.iCline</code>
@@ -27,6 +27,7 @@ Standalone Cline fork for VS Code — no official Cline required. Supports Grok,
 
 - **Open VSX namespace claimed** — publisher `i-mrdedchai` verified ([Eclipse Foundation #11300](https://github.com/EclipseFdn/open-vsx.org/issues/11300) closed as completed)
 - **Open VSX traction** — **116+ installs** within ~12 hours of listing (and growing)
+- **v0.1.17 Stable** — marketplace icon/screenshot fixes, store comparison table cleanup
 - **v0.1.16 Stable** — welcome home, editable quick starts, history export/import, iCline chat branding
 
 ## Quick start
@@ -41,7 +42,7 @@ Then open iCline from the Activity Bar → Settings → sign in to **xAI · Grok
 **Or install from VSIX:**
 
 1. Download the latest `.vsix` from [Releases](https://github.com/i-mrDedchai/iCline/releases)
-2. `code --install-extension i-mrdedchai.iCline-0.1.17.vsix --force`
+2. `code --install-extension i-mrdedchai.iCline-<version>.vsix --force` (ใช้ชื่อไฟล์ `.vsix` ที่ดาวน์โหลด)
 3. **Developer: Reload Window**
 
 Full extension docs: **[apps/vscode/README.md](apps/vscode/README.md)** · Thai: **[apps/vscode/README.th.md](apps/vscode/README.th.md)**
@@ -52,7 +53,7 @@ Full extension docs: **[apps/vscode/README.md](apps/vscode/README.md)** · Thai:
 cd apps/vscode
 npm install
 npm run package:vsix
-code --install-extension dist/i-mrdedchai.iCline-0.1.17.vsix --force
+code --install-extension dist/i-mrdedchai.iCline-<version>.vsix --force
 ```
 
 ## iCline vs Cline official

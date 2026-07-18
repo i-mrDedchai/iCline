@@ -2,7 +2,7 @@
 	"name": "iCline",
 	"displayName": "%extension.displayName%",
 	"description": "Standalone Cline fork for VS Code — no official Cline required. Supports Grok, ZenMux, OpenRouter, and other providers.",
-	"version": "0.1.17",
+	"version": "0.1.18-dev.4",
 	"icon": "assets/icons/icon.png",
 	"engines": {
 		"vscode": "^1.84.0"
@@ -38,6 +38,8 @@
 		"grok",
 		"xai",
 		"zenmux",
+		"sakana",
+		"fugu",
 		"composer",
 		"composer-2.5-fast",
 		"grok-build",

@@ -49,7 +49,7 @@ import { VscodeTerminalManager } from "./hosts/vscode/terminal/VscodeTerminalMan
 import { VscodeDiffViewProvider } from "./hosts/vscode/VscodeDiffViewProvider"
 import { VscodeWebviewProvider } from "./hosts/vscode/VscodeWebviewProvider"
 import { exportVSCodeStorageToSharedFiles } from "./hosts/vscode/vscode-to-file-migration"
-import { UpdateService } from "./icline/updates/UpdateService"
+import { initializeUpdateService } from "./icline/updates/UpdateService"
 import { ExtensionContextKeys, ExtensionRegistryInfo, getProductName, isIclineBuild } from "./registry"
 import { AuthService } from "./services/auth/AuthService"
 import { LogoutReason } from "./services/auth/types"
@@ -190,10 +190,10 @@ export async function activate(context: vscode.ExtensionContext) {
 			.then((module) => {
 				const devTaskCommands = module.registerTaskCommands(webview.controller)
 				context.subscriptions.push(...devTaskCommands)
-				Logger.log("[Cline Dev] Dev mode activated & dev commands registered")
+				Logger.log(`[${getProductName()} Dev] Dev mode activated & dev commands registered`)
 			})
 			.catch((error) => {
-				Logger.log("[Cline Dev] Failed to register dev commands: " + error)
+				Logger.log(`[${getProductName()} Dev] Failed to register dev commands: ` + error)
 			})
 	}
 
@@ -545,11 +545,15 @@ ${ctx.cellJson || "{}"}
 	})
 	context.subscriptions.push({ dispose: unsubSecrets })
 
-	const updateService = new UpdateService(context)
+	const updateService = initializeUpdateService(context)
 	context.subscriptions.push(
 		vscode.commands.registerCommand(commands.CheckForUpdates, () => updateService.showUpdateStatus()),
 	)
 	if (isIclineBuild()) {
+		void updateService.checkForUpdates().then(() => {
+			const activeWebview = WebviewProvider.getVisibleInstance()
+			void activeWebview?.controller.postStateToWebview()
+		})
 		void updateService.maybeNotify()
 	}
 
@@ -607,7 +611,7 @@ async function showJupyterPromptInput(title: string, placeholder: string): Promi
 
 function setupHostProvider(context: ExtensionContext) {
 	const outputChannel = registerClineOutputChannel(context)
-	outputChannel.appendLine("[Cline] Setting up VS Code host...")
+	outputChannel.appendLine(`[${getProductName()}] Setting up VS Code host...`)
 
 	const createWebview = () => new VscodeWebviewProvider(context)
 	const createDiffView = () => new VscodeDiffViewProvider()
@@ -665,7 +669,7 @@ async function openClineSidebarForTaskUri(): Promise<void> {
 		await new Promise((resolve) => setTimeout(resolve, sidebarWaitIntervalMs))
 	}
 
-	Logger.warn("Task URI handling timed out waiting for Cline sidebar visibility")
+	Logger.warn(`Task URI handling timed out waiting for ${getProductName()} sidebar visibility`)
 }
 
 async function getBinaryLocation(name: string): Promise<string> {

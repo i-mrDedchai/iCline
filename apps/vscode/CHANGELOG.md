@@ -2,6 +2,20 @@
 
 ## [0.1.18] - Unreleased
 
+### Added
+- 🐟 **Sakana.ai provider** — Fugu / Fugu Ultra via OpenAI-compatible API (`https://api.sakana.ai/v1`); Pay-as-you-go and Subscription plan modes; Responses API (default) and Chat Completions; models `fugu`, `fugu-ultra`, `fugu-ultra-20260615`
+- 🔔 **Welcome update bar (Phase 2)** — dismissible in-webview notices on the welcome home for new iCline releases and optional upstream Cline ahead signals (reuses `iCline.updates.*` settings and dismiss state)
+
+### Fixed
+- 📸 **Open VSX README screenshots** — package VSIX with `vsce --baseImagesUrl` so README images use GitHub absolute URLs on Open VSX and VS Marketplace (corrects v0.1.17 assumption that relative `assets/docs/` paths work on Open VSX)
+- 🏷️ **Residual Cline branding** — VS Code LM justification, standalone terminal names, AI Review comment controller, worktree tooltip, and onboarding welcome heading use **iCline** / `getProductName()` (official Cline upstream references unchanged)
+- 🔧 **Jan provider hardening** — default model ID fallback, retry policy, error classification, and sanitized error logging (no credentials in user-facing messages)
+- 🐟 **Sakana provider error safety** — sanitized error logging removes API keys from error output
+- 🐟 **Sakana provider validation** — require an API key in onboarding/settings, include Sakana in configured-provider discovery, and handle Responses API function-call done events without emitting nameless tool calls
+
+### Changed
+- 📦 **Publish baseline** — shared README image rewrite in `scripts/marketplace-images.mjs`; documented in `icline-marketplace.md` (never use `--no-rewrite-relative-links` for store publishes)
+
 ## [0.1.17] - 2026-06-22
 
 ### Fixed

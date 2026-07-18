@@ -122,8 +122,10 @@ function patchReadme(readme, { version, manifest, releasesUrl, vsixName, isThai 
 	return patchVsixInstallCommands(next, vsixName)
 }
 
-/** Packaged README must use relative asset paths — VS Marketplace and Open VSX resolve
- *  images from the VSIX. Open VSX blocks external URLs (eclipse/openvsx#1182). */
+/** README.marketplace.md keeps relative assets/docs/ paths so vsce can rewrite them to
+ *  GitHub absolute URLs at package time (--baseImagesUrl). Do not ship relative paths
+ *  in the VSIX for store listings — Open VSX cannot serve them (see บันทึกแชท
+ *  2026-06/2026-06-23_01_openvsx-readme-images-root-cause.md). */
 function ensurePackagedReadmeImages(readme, manifest) {
 	const base = `${manifest.github.url}/raw/main/apps/vscode`
 	const escapedBase = base.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
@@ -183,6 +185,9 @@ function patchProviders(providers, manifest) {
 		}
 		if (p.value === "zenmux" && manifest.providers.zenmux) {
 			return { ...p, label: manifest.providers.zenmux }
+		}
+		if (p.value === "sakana" && manifest.providers.sakana) {
+			return { ...p, label: manifest.providers.sakana }
 		}
 		return p
 	})
