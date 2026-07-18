@@ -83,14 +83,16 @@
 													"provider-config/aws-bedrock/cli-profile"
 												]
 											},
-											"provider-config/deepseek",
-											"provider-config/google-gemini",
-											"provider-config/minimax",
-											"provider-config/openai",
-											"provider-config/openai-compatible",
-											"provider-config/openrouter",
-											"provider-config/zai",
-											"provider-config/other-30-plus-providers"
+										"provider-config/deepseek",
+										"provider-config/google-gemini",
+										"provider-config/jan",
+										"provider-config/minimax",
+										"provider-config/openai",
+										"provider-config/openai-compatible",
+										"provider-config/openrouter",
+										"provider-config/sakana",
+										"provider-config/zai",
+										"provider-config/other-30-plus-providers"
 										]
 									}
 								]

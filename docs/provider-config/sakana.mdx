@@ -1,0 +1,68 @@
+---
+title: "Sakana.ai (Fugu)"
+description: "Configure iCline to use Sakana.ai Fugu models via the OpenAI-compatible Responses API."
+---
+
+**Website:** [https://sakana.ai/](https://sakana.ai/)
+**Console:** [https://console.sakana.ai/](https://console.sakana.ai/)
+
+Sakana.ai provides the **Fugu** family of models, designed for agentic coding workflows. Fugu coordinates specialized expert agents to handle complex software engineering tasks. iCline integrates with Sakana.ai through an OpenAI-compatible API at `https://api.sakana.ai/v1`.
+
+### Get API Credentials
+
+1.  **Sign In:** Go to the [Sakana console](https://console.sakana.ai/). Sign in with Google or GitHub.
+2.  **Choose a Plan:** Open [Pricing](https://console.sakana.ai/pricing) and pick a plan:
+    -   **Pay-as-you-go** — consumption billing (charges per token)
+    -   **Subscription** — Standard / Pro / Max tiers with included monthly quota
+3.  **Create an API Key:** In the console, navigate to **API Keys** → **Create new key**. Give it a descriptive name (e.g., `iCline`).
+4.  **Copy the Key:** Copy the key immediately — you will not be able to view it again. Store it securely.
+
+### Configuration in iCline
+
+> See [Authorization & Model Selection](/getting-started/authorizing-with-cline#menu) for the general auth flow.
+
+1.  **Open iCline Settings:** Click the ⚙️ icon in the iCline panel.
+2.  **Select Provider:** Choose **Sakana.ai** from the **API Provider** dropdown.
+3.  **Authenticate:** Click **Sign in with Sakana** to open the console, or paste your API key directly into the **Sakana API Key** field.
+4.  **Choose Billing Mode:** Select the billing mode matching your Sakana account:
+    -   `pay_as_you_go` (default) — consumption billing
+    -   `subscription` — Standard / Pro / Max plan
+5.  **Choose API Protocol:**
+    -   `responses` (default) — Sakana's Responses API. Required for native tool calling, reasoning, and parallel tool use.
+    -   `chat_completions` — standard OpenAI Chat Completions fallback
+6.  **Select Model:** Choose a model from the dropdown:
+    -   `fugu` (default) — balanced routing to the best agent for the task
+    -   `fugu-ultra` — multi-agent coordination for high-stakes problems
+    -   `fugu-ultra-20260615` — dated alias pinning a specific Fugu Ultra version
+
+### Models
+
+| Model ID | Context | Max Output | Supports Images | Supports Reasoning | Input Price | Output Price |
+|----------|---------|------------|-----------------|--------------------|-------------|--------------|
+| `fugu` | 1,000,000 | 32,768 | ✅ | ✅ | \$5 / M | \$30 / M |
+| `fugu-ultra` | 1,000,000 | 32,768 | ✅ | ✅ | \$5 / M | \$30 / M |
+| `fugu-ultra-20260615` | 1,000,000 | 32,768 | ✅ | ✅ | \$5 / M | \$30 / M |
+
+> Prices are per million tokens. See [Sakana pricing](https://console.sakana.ai/pricing) for current rates and subscription quotas.
+
+### Tips and Notes
+
+-   **Responses API is required for tool use.** If you select `chat_completions` protocol, iCline will not be able to invoke tools (file edits, terminal commands, browser actions). The handler throws a configuration error if you attempt to use tools without the Responses API.
+-   **Reasoning effort** — Sakana Fugu supports reasoning effort hints. Use the reasoning effort selector in iCline to control how much reasoning the model emits before answering.
+-   **Parallel tool calling** — enabled by default with the Responses API. Toggle it off in iCline settings if your workflow requires sequential tool calls.
+-   **Subscription plans** — if you hit a quota cap, iCline will surface the error from Sakana. Switch to `pay_as_you_go` mode or upgrade your plan.
+-   **API key safety** — iCline stores your Sakana API key in VS Code Secret Storage. Error messages are sanitized so the key never appears in logs or the UI.
+
+### Troubleshooting
+
+-   **"Sakana API key is required"** — paste your key in the Sakana API Key field.
+-   **"Responses API requires at least one tool"** — switch protocol to `responses` and ensure your task uses tools (the default).
+-   **401 / 403 from Sakana** — verify your API key is valid and your billing mode matches your account plan.
+-   **429 rate limit** — check your plan quota in the Sakana console; consider switching to a higher subscription tier or `pay_as_you_go`.
+-   **Connection errors** — confirm `https://api.sakana.ai/v1` is reachable from your network (no proxy/firewall blocks).
+
+### References
+
+-   [Sakana Get Started](https://console.sakana.ai/get-started)
+-   [Sakana Pricing](https://console.sakana.ai/pricing)
+-   [Sakana Models](https://console.sakana.ai/models)
