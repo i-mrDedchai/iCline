@@ -26,7 +26,8 @@ import * as path from "path"
 import { ClineEnv } from "@/config"
 import type { FolderLockWithRetryResult } from "@/core/locks/types"
 import { HostProvider } from "@/hosts/host-provider"
-import { ExtensionRegistryInfo } from "@/registry"
+import { getUpdateService } from "@/icline/updates/UpdateService"
+import { ExtensionRegistryInfo, isIclineBuild } from "@/registry"
 import { AuthService } from "@/services/auth/AuthService"
 import { OcaAuthService } from "@/services/auth/oca/OcaAuthService"
 import { LogoutReason } from "@/services/auth/types"
@@ -1017,6 +1018,7 @@ export class Controller {
 			openAiCodexIsAuthenticated,
 			xaiOAuthIsAuthenticated,
 			xaiGrokCliIsAuthenticated,
+			iclineUpdateStatus: isIclineBuild() ? getUpdateService()?.getWebviewStatus() : undefined,
 		}
 	}
 

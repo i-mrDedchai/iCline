@@ -1,5 +1,6 @@
 import * as vscode from "vscode"
 import { ExtensionRegistryInfo } from "@/registry"
+import type { IclineUpdateBarStatus } from "@/shared/ExtensionMessage"
 import { fetch } from "@/shared/net"
 import { Logger } from "@/shared/services/Logger"
 
@@ -93,7 +94,20 @@ async function fetchLatestRelease(url: string): Promise<{ tag_name: string; html
 	}
 }
 
+let updateServiceInstance: UpdateService | undefined
+
+export function initializeUpdateService(context: vscode.ExtensionContext): UpdateService {
+	updateServiceInstance = new UpdateService(context)
+	return updateServiceInstance
+}
+
+export function getUpdateService(): UpdateService | undefined {
+	return updateServiceInstance
+}
+
 export class UpdateService {
+	private cachedResult?: UpdateCheckResult
+
 	constructor(private readonly context: vscode.ExtensionContext) {}
 
 	get currentVersion(): string {
@@ -150,7 +164,60 @@ export class UpdateService {
 			result.upstreamAhead = isNewerVersion(this.currentVersion, upstreamRelease.tag_name)
 		}
 
+		this.cachedResult = result
 		return result
+	}
+
+	getWebviewStatus(): IclineUpdateBarStatus | undefined {
+		const config = vscode.workspace.getConfiguration("iCline")
+		const updatesEnabled = config.get<boolean>("updates.enabled", true)
+		const notifyUpstreamCline = config.get<boolean>("updates.notifyUpstreamCline", true)
+		const dismissedIcline = this.context.globalState.get<string>(DISMISSED_ICLINE_VERSION_KEY)
+		const dismissedUpstream = this.context.globalState.get<string>(DISMISSED_UPSTREAM_TAG_KEY)
+		const result = this.cachedResult
+
+		const status: IclineUpdateBarStatus = {
+			currentVersion: this.currentVersion,
+			updatesEnabled,
+			notifyUpstreamCline,
+		}
+
+		if (result?.icline) {
+			const showBar =
+				updatesEnabled && result.iclineUpdateAvailable && dismissedIcline !== result.icline.tag_name
+			status.icline = {
+				tagName: result.icline.tag_name,
+				name: result.icline.name,
+				htmlUrl: result.icline.html_url,
+				updateAvailable: result.iclineUpdateAvailable,
+				showBar,
+			}
+		}
+
+		if (result?.upstreamCline) {
+			const showBar =
+				updatesEnabled &&
+				notifyUpstreamCline &&
+				result.upstreamAhead &&
+				dismissedUpstream !== result.upstreamCline.tag_name
+			status.upstreamCline = {
+				tagName: result.upstreamCline.tag_name,
+				htmlUrl: result.upstreamCline.html_url,
+				ahead: result.upstreamAhead,
+				showBar,
+			}
+		}
+
+		return status
+	}
+
+	async dismissUpdate(channel: "icline" | "upstream"): Promise<void> {
+		const result = this.cachedResult ?? (await this.checkForUpdates({ force: true }))
+		if (channel === "icline" && result.icline) {
+			await this.context.globalState.update(DISMISSED_ICLINE_VERSION_KEY, result.icline.tag_name)
+		} else if (channel === "upstream" && result.upstreamCline) {
+			await this.context.globalState.update(DISMISSED_UPSTREAM_TAG_KEY, result.upstreamCline.tag_name)
+		}
 	}
 
 	async maybeNotify(): Promise<void> {

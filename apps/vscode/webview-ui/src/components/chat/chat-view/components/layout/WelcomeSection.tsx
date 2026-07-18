@@ -10,6 +10,7 @@ import HistoryPreview from "@/components/history/HistoryPreview"
 import { useApiConfigurationHandlers } from "@/components/settings/utils/useApiConfigurationHandlers"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import HomeHeader from "@/components/welcome/HomeHeader"
+import UpdateBar from "@/components/welcome/icline/UpdateBar"
 import { shouldShowHistoryPreview } from "@/components/welcome/icline/quickStartMode"
 import { SuggestedTasks } from "@/components/welcome/SuggestedTasks"
 import CreateWorktreeModal from "@/components/worktrees/CreateWorktreeModal"
@@ -67,6 +68,7 @@ export const WelcomeSection: React.FC<WelcomeSectionProps> = ({
 		worktreesEnabled,
 		banners,
 		welcomeBanners,
+		iclineUpdateStatus,
 	} = useExtensionState()
 	const { handleFieldsChange } = useApiConfigurationHandlers()
 
@@ -264,6 +266,7 @@ export const WelcomeSection: React.FC<WelcomeSectionProps> = ({
 				<HomeHeader quickStartMode={quickStartMode} />
 				{!showWhatsNewModal && (
 					<>
+						{iclineUpdateStatus && <UpdateBar status={iclineUpdateStatus} />}
 						<BannerCarousel banners={activeBanners} />
 						{shouldShowHistoryPreview(quickStartMode, taskHistory.length) && (
 							<HistoryPreview showHistoryView={showHistoryView} />
@@ -308,7 +311,7 @@ export const WelcomeSection: React.FC<WelcomeSectionProps> = ({
 											</button>
 										</TooltipTrigger>
 										<TooltipContent side="bottom">
-											View and manage git worktrees. Great for running parallel Cline tasks.
+											View and manage git worktrees. Great for running parallel iCline tasks.
 										</TooltipContent>
 									</Tooltip>
 								)}
