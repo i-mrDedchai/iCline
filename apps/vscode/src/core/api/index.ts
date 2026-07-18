@@ -47,6 +47,8 @@ import { VsCodeLmHandler } from "./providers/vscode-lm"
 import { WandbHandler } from "./providers/wandb"
 import { XAIHandler } from "./providers/xai"
 import { ZAiHandler } from "./providers/zai"
+import { JanHandler } from "./providers/jan"
+import { SakanaHandler } from "./providers/sakana"
 import { ZenmuxHandler } from "./providers/zenmux"
 import { ApiStream, ApiStreamUsageChunk } from "./transform/stream"
 
@@ -171,6 +173,13 @@ function createHandlerForProvider(
 				lmStudioBaseUrl: options.lmStudioBaseUrl,
 				lmStudioModelId: mode === "plan" ? options.planModeLmStudioModelId : options.actModeLmStudioModelId,
 				lmStudioMaxTokens: options.lmStudioMaxTokens,
+			})
+		case "jan":
+			return new JanHandler({
+				onRetryAttempt: options.onRetryAttempt,
+				janBaseUrl: options.janBaseUrl,
+				janApiKey: options.janApiKey,
+				janModelId: mode === "plan" ? options.planModeJanModelId : options.actModeJanModelId,
 			})
 		case "gemini":
 			return new GeminiHandler({
@@ -491,6 +500,16 @@ function createHandlerForProvider(
 				reasoningEffort: mode === "plan" ? options.planModeReasoningEffort : options.actModeReasoningEffort,
 				thinkingBudgetTokens:
 					mode === "plan" ? options.planModeThinkingBudgetTokens : options.actModeThinkingBudgetTokens,
+				enableParallelToolCalling: options.enableParallelToolCalling,
+			})
+		case "sakana":
+			return new SakanaHandler({
+				onRetryAttempt: options.onRetryAttempt,
+				sakanaApiKey: options.sakanaApiKey,
+				sakanaApiProtocol: options.sakanaApiProtocol,
+				sakanaModelId: mode === "plan" ? options.planModeSakanaModelId : options.actModeSakanaModelId,
+				sakanaModelInfo: mode === "plan" ? options.planModeSakanaModelInfo : options.actModeSakanaModelInfo,
+				reasoningEffort: mode === "plan" ? options.planModeReasoningEffort : options.actModeReasoningEffort,
 				enableParallelToolCalling: options.enableParallelToolCalling,
 			})
 		case "nousResearch":

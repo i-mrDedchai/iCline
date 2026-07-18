@@ -72,6 +72,9 @@ import {
 	wandbModels,
 	xaiDefaultModelId,
 	xaiModels,
+	sakanaDefaultModelInfo,
+	sakanaDefaultModelId,
+	sakanaModels,
 	zenmuxDefaultModelInfo,
 } from "@shared/api";
 import type { Mode } from "@shared/storage/types";
@@ -160,6 +163,8 @@ export function getModelsForProvider(
 			return huggingFaceModels;
 		case "nousResearch":
 			return nousResearchModels;
+		case "sakana":
+			return sakanaModels;
 		case "litellm":
 			return dynamicModels?.liteLlmModels;
 		// Providers with dynamic models - return undefined
@@ -168,6 +173,7 @@ export function getModelsForProvider(
 		case "openai":
 		case "ollama":
 		case "lmstudio":
+		case "jan":
 		case "vscode-lm":
 		case "requesty":
 		case "hicap":
@@ -431,6 +437,20 @@ export function normalizeApiConfiguration(
 				},
 			};
 		}
+		case "jan": {
+			const janModelId =
+				currentMode === "plan"
+					? apiConfiguration?.planModeJanModelId
+					: apiConfiguration?.actModeJanModelId;
+			return {
+				selectedProvider: provider,
+				selectedModelId: janModelId || "",
+				selectedModelInfo: {
+					...openAiModelInfoSaneDefaults,
+					contextWindow: 32768,
+				},
+			};
+		}
 		case "vscode-lm": {
 			const vsCodeLmModelSelector =
 				currentMode === "plan"
@@ -592,6 +612,21 @@ export function normalizeApiConfiguration(
 				selectedModelInfo: zenmuxModelInfo || zenmuxDefaultModelInfo,
 			};
 		}
+		case "sakana": {
+			const sakanaModelId =
+				currentMode === "plan"
+					? apiConfiguration?.planModeSakanaModelId
+					: apiConfiguration?.actModeSakanaModelId;
+			const sakanaModelInfo =
+				currentMode === "plan"
+					? apiConfiguration?.planModeSakanaModelInfo
+					: apiConfiguration?.actModeSakanaModelInfo;
+			return {
+				selectedProvider: provider,
+				selectedModelId: sakanaModelId || sakanaDefaultModelId,
+				selectedModelInfo: sakanaModelInfo || sakanaDefaultModelInfo,
+			};
+		}
 		case "zai": {
 			const zaiModels =
 				apiConfiguration?.zaiApiLine === "china"
@@ -690,6 +725,7 @@ export function getModeSpecificFields(
 			togetherModelId: undefined,
 			fireworksModelId: undefined,
 			lmStudioModelId: undefined,
+			janModelId: undefined,
 			ollamaModelId: undefined,
 			liteLlmModelId: undefined,
 			requestyModelId: undefined,
@@ -706,6 +742,7 @@ export function getModeSpecificFields(
 			nousResearchModelId: undefined,
 			vercelAiGatewayModelId: undefined,
 			zenmuxModelId: undefined,
+			sakanaModelId: undefined,
 
 			// Model info objects
 			openAiModelInfo: undefined,
@@ -784,6 +821,10 @@ export function getModeSpecificFields(
 			mode === "plan"
 				? apiConfiguration.planModeLmStudioModelId
 				: apiConfiguration.actModeLmStudioModelId,
+		janModelId:
+			mode === "plan"
+				? apiConfiguration.planModeJanModelId
+				: apiConfiguration.actModeJanModelId,
 		ollamaModelId:
 			mode === "plan"
 				? apiConfiguration.planModeOllamaModelId
@@ -843,6 +884,10 @@ export function getModeSpecificFields(
 			mode === "plan"
 				? apiConfiguration.planModeZenmuxModelId
 				: apiConfiguration.actModeZenmuxModelId,
+		sakanaModelId:
+			mode === "plan"
+				? apiConfiguration.planModeSakanaModelId
+				: apiConfiguration.actModeSakanaModelId,
 
 		// Model info objects
 		openAiModelInfo:
@@ -892,6 +937,10 @@ export function getModeSpecificFields(
 			mode === "plan"
 				? apiConfiguration.planModeZenmuxModelInfo
 				: apiConfiguration.actModeZenmuxModelInfo,
+		sakanaModelInfo:
+			mode === "plan"
+				? apiConfiguration.planModeSakanaModelInfo
+				: apiConfiguration.actModeSakanaModelInfo,
 
 		// AWS Bedrock fields
 		awsBedrockCustomSelected:
@@ -1004,6 +1053,11 @@ export async function syncModeConfigurations(
 			updates.actModeLmStudioModelId = sourceFields.lmStudioModelId;
 			break;
 
+		case "jan":
+			updates.planModeJanModelId = sourceFields.janModelId;
+			updates.actModeJanModelId = sourceFields.janModelId;
+			break;
+
 		case "vscode-lm":
 			updates.planModeVsCodeLmModelSelector =
 				sourceFields.vsCodeLmModelSelector;
@@ -1102,6 +1156,12 @@ export async function syncModeConfigurations(
 			updates.planModeZenmuxModelInfo = sourceFields.zenmuxModelInfo;
 			updates.actModeZenmuxModelInfo = sourceFields.zenmuxModelInfo;
 			break;
+		case "sakana":
+			updates.planModeSakanaModelId = sourceFields.sakanaModelId;
+			updates.actModeSakanaModelId = sourceFields.sakanaModelId;
+			updates.planModeSakanaModelInfo = sourceFields.sakanaModelInfo;
+			updates.actModeSakanaModelInfo = sourceFields.sakanaModelInfo;
+			break;
 		case "oca":
 			updates.planModeOcaModelId = sourceFields.ocaModelId;
 			updates.actModeOcaModelId = sourceFields.ocaModelId;
@@ -1176,6 +1236,15 @@ export const getProviderInfo = (
 						: apiConfiguration.actModeLmStudioModelId,
 				baseUrl: apiConfiguration.lmStudioBaseUrl,
 				helpText: "Start LM Studio and load a model to begin",
+			};
+		case "jan":
+			return {
+				modelId:
+					effectiveMode === "plan"
+						? apiConfiguration.planModeJanModelId
+						: apiConfiguration.actModeJanModelId,
+				baseUrl: apiConfiguration.janBaseUrl,
+				helpText: "Start Jan Local API Server and load a model to begin",
 			};
 		case "ollama":
 			return {

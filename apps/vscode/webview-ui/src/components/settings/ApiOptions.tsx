@@ -33,6 +33,7 @@ import { HicapProvider } from "./providers/HicapProvider"
 import { HuaweiCloudMaasProvider } from "./providers/HuaweiCloudMaasProvider"
 import { HuggingFaceProvider } from "./providers/HuggingFaceProvider"
 import { LiteLlmProvider } from "./providers/LiteLlmProvider"
+import { JanProvider } from "./providers/JanProvider"
 import { LMStudioProvider } from "./providers/LMStudioProvider"
 import { MinimaxProvider } from "./providers/MiniMaxProvider"
 import { MistralProvider } from "./providers/MistralProvider"
@@ -56,6 +57,7 @@ import { VertexProvider } from "./providers/VertexProvider"
 import { VSCodeLmProvider } from "./providers/VSCodeLmProvider"
 import { WandbProvider } from "./providers/WandbProvider"
 import { XaiProvider } from "./providers/XaiProvider"
+import { SakanaProvider } from "./providers/SakanaProvider"
 import { ZenmuxProvider } from "./providers/ZenmuxProvider"
 import { ZAiProvider } from "./providers/ZAiProvider"
 import { useApiConfigurationHandlers } from "./utils/useApiConfigurationHandlers"
@@ -441,6 +443,10 @@ const ApiOptions = ({
 				<ZenmuxProvider currentMode={currentMode} isPopup={isPopup} showModelOptions={showModelOptions} />
 			)}
 
+			{apiConfiguration && selectedProvider === "sakana" && (
+				<SakanaProvider currentMode={currentMode} isPopup={isPopup} showModelOptions={showModelOptions} />
+			)}
+
 			{apiConfiguration && selectedProvider === "sambanova" && (
 				<SambanovaProvider currentMode={currentMode} isPopup={isPopup} showModelOptions={showModelOptions} />
 			)}
@@ -479,6 +485,10 @@ const ApiOptions = ({
 
 			{apiConfiguration && selectedProvider === "lmstudio" && (
 				<LMStudioProvider currentMode={currentMode} isPopup={isPopup} showModelOptions={showModelOptions} />
+			)}
+
+			{apiConfiguration && selectedProvider === "jan" && (
+				<JanProvider currentMode={currentMode} isPopup={isPopup} showModelOptions={showModelOptions} />
 			)}
 
 			{apiConfiguration && selectedProvider === "ollama" && (

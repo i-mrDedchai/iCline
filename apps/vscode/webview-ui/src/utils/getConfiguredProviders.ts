@@ -179,6 +179,11 @@ export function getConfiguredProviders(
 		configured.push("zenmux")
 	}
 
+	// Sakana - requires API key
+	if (apiConfiguration.sakanaApiKey) {
+		configured.push("sakana")
+	}
+
 	// AIHubMix - requires API key
 	if (apiConfiguration.aihubmixApiKey) {
 		configured.push("aihubmix")
@@ -206,6 +211,11 @@ export function getConfiguredProviders(
 	// LM Studio - local provider, check base URL OR model configured
 	if (apiConfiguration.lmStudioBaseUrl || apiConfiguration.planModeLmStudioModelId || apiConfiguration.actModeLmStudioModelId) {
 		configured.push("lmstudio")
+	}
+
+	// Jan - local provider, check base URL OR model configured
+	if (apiConfiguration.janBaseUrl || apiConfiguration.planModeJanModelId || apiConfiguration.actModeJanModelId) {
+		configured.push("jan")
 	}
 
 	// LiteLLM - check base URL, API key OR model configured

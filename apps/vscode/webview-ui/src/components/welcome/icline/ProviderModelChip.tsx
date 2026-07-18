@@ -5,12 +5,14 @@ import { normalizeApiConfiguration } from "@/components/settings/utils/providerU
 const PROVIDER_LABELS: Record<string, string> = {
 	xai: "Grok",
 	zenmux: "ZenMux",
+	sakana: "Sakana.ai",
 	openrouter: "OpenRouter",
 	anthropic: "Anthropic",
 	openai: "OpenAI",
 	gemini: "Gemini",
 	ollama: "Ollama",
 	lmstudio: "LM Studio",
+	jan: "Jan",
 	cline: "Cline",
 	"cline-pass": "Cline Pass",
 }
