@@ -5,6 +5,8 @@
 ### Added
 - 🐟 **Sakana.ai provider** — Fugu / Fugu Ultra via OpenAI-compatible API (`https://api.sakana.ai/v1`); Pay-as-you-go and Subscription plan modes; Responses API (default) and Chat Completions; models `fugu`, `fugu-ultra`, `fugu-ultra-20260615`
 - 🔔 **Welcome update bar (Phase 2)** — dismissible in-webview notices on the welcome home for new iCline releases and optional upstream Cline ahead signals (reuses `iCline.updates.*` settings and dismiss state)
+- 📚 **Provider docs** — `docs/provider-config/sakana.mdx` and `docs/provider-config/jan.mdx` added to the docs site navigation
+- 📋 **Upstream sync plan** — `docs/icline/upstream-sync-plan.md` documents the v3.89.2 → upstream/main (post-v4.0.0) merge strategy with 7 phases and 124-file conflict analysis
 
 ### Fixed
 - 📸 **Open VSX README screenshots** — package VSIX with `vsce --baseImagesUrl` so README images use GitHub absolute URLs on Open VSX and VS Marketplace (corrects v0.1.17 assumption that relative `assets/docs/` paths work on Open VSX)
@@ -12,6 +14,8 @@
 - 🔧 **Jan provider hardening** — default model ID fallback, retry policy, error classification, and sanitized error logging (no credentials in user-facing messages)
 - 🐟 **Sakana provider error safety** — sanitized error logging removes API keys from error output
 - 🐟 **Sakana provider validation** — require an API key in onboarding/settings, include Sakana in configured-provider discovery, and handle Responses API function-call done events without emitting nameless tool calls
+- 🔧 **Jan provider RPC type** — wrap `getJanModels` args in `OpenAiModelsRequest.create({ baseUrl, apiKey })` so the `metadata` proto field is auto-filled (fixes TS2345 and the webview build)
+- 📦 **History export/import** — use archiver's vending function `archiver("zip", options)` instead of `new ZipArchive(...)` which had no runtime equivalent; previously exports produced a 0 KB zip and imports failed with "Archive is missing manifest.json"
 
 ### Changed
 - 📦 **Publish baseline** — shared README image rewrite in `scripts/marketplace-images.mjs`; documented in `icline-marketplace.md` (never use `--no-rewrite-relative-links` for store publishes)
