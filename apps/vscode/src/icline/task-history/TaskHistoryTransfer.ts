@@ -1,5 +1,10 @@
 import { execa } from "@packages/execa"
-import { ZipArchive } from "archiver"
+// archiver's runtime exports a vending function (`archiver(format, options)`),
+// but @types/archiver@8 only ships class declarations (Archiver/ZipArchive).
+// Import as `* as` to grab the callable vending function at runtime, then
+// cast to the typed Archiver instance after construction.
+import * as archiverNS from "archiver"
+import type { Archiver } from "archiver"
 import type { HistoryItem } from "@shared/HistoryItem"
 import { fileExistsAtPath, isDirectory } from "@utils/fs"
 import { createWriteStream } from "node:fs"
@@ -41,7 +46,13 @@ async function zipDirectoryEntries(
 	await fs.mkdir(path.dirname(outputPath), { recursive: true })
 
 	const output = createWriteStream(outputPath)
-	const archive = new ZipArchive({ zlib: { level: 9 } })
+	// archiver's runtime is a vending function; call it with ("zip", options) to
+	// get a typed Archiver stream. Cast via `as` because @types/archiver@8
+	// declares the module as namespace-only (no default/callable export).
+	const archive = (archiverNS as unknown as (format: string, options?: Record<string, unknown>) => Archiver)(
+		"zip",
+		{ zlib: { level: 9 } },
+	)
 
 	archive.pipe(output)
 	archive.append(JSON.stringify(manifest, null, 2), { name: MANIFEST_FILE })
