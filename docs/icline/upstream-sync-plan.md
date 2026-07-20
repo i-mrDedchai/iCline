@@ -151,14 +151,19 @@ Categories:
 
 ## 3. Recommended sync strategy
 
-### Phase 0 — Preparation (before merge)
-1. **Branch:** create `sync/upstream-v4.0.0` from `main` (don't merge directly into `main`)
-2. **Backup tag:** `git tag pre-upstream-sync-0.1.18-dev.4`
-3. **Clean tree:** ensure no uncommitted changes (✅ currently clean)
-4. **Read upstream SDK provider docs:** `sdk/packages/llms/src/providers/README.md`, `builtins.ts`, `factory-registry.ts`
-5. **Run tests on current main** as a baseline: `cd apps/vscode && npm test`
+### Phase 0 — Preparation (before merge) ✅ DONE
+1. **Branch:** create `sync/upstream-v4.0.0` from `main` (don't merge directly into `main`) ✅
+2. **Backup tag:** `git tag pre-upstream-sync-0.1.18-dev.4` ✅
+3. **Clean tree:** ensure no uncommitted changes ✅
+4. **Read upstream SDK provider docs:** `sdk/packages/llms/src/providers/README.md`, `builtins.ts`, `factory-registry.ts` ✅
+5. **Run tests on current main** as a baseline ✅
 
-### Phase 1 — Merge + auto-resolve easy conflicts
+### Phase 1 — Merge + auto-resolve easy conflicts ✅ DONE
+Commit `a7993a802` — `Merge upstream/main into iCline (v4.0.0 SDK migration + 50 post-v4.0.0 commits)`.
+- All 87 legacy deletions accepted (ToolExecutor, task handlers, ContextManager, notifications, terminal executors, vscode-lm/xai providers, providers.json, getConfiguredProviders, legacy snapshots, lockfiles).
+- Legacy Sakana/Jan/zenmux handlers archived under `docs/icline/legacy-providers/`.
+- Content merges for the 32 conflict files were resolved as part of this merge commit (proto schemas, shared wiring, controller, webview UI, branding, package.json, docs) — equivalent to plan Phase 3, performed inline during conflict resolution.
+
 ```powershell
 git checkout -b sync/upstream-v4.0.0
 git merge upstream/main --no-edit
@@ -191,26 +196,35 @@ git rm apps/vscode/package-lock.json
 git rm apps/vscode/webview-ui/package-lock.json
 ```
 
-### Phase 2 — Relocate iCline providers (file-location conflicts)
-1. Read `sdk/packages/llms/src/providers/builtins.ts` to learn the new provider registration API
-2. Move `sakana.ts`, `jan.ts`, `zenmux.ts` into the new SDK provider location (or keep as adapter shims if SDK supports external providers)
-3. Move corresponding `__tests__` files alongside
-4. If SDK doesn't yet support custom external providers, open an issue and temporarily keep the files in a new `apps/vscode/src/icline/providers/` namespace
+### Phase 2 — Relocate iCline providers (file-location conflicts) ✅ DONE
+1. Read `sdk/packages/llms/src/providers/builtins.ts` — SDK supports builtin spec registration ✅
+2. Registered Sakana/Jan/zenmux as `OPENAI_COMPATIBLE_SPECS` entries (family: `openai-compatible`) instead of moving the legacy handler files — the SDK owns provider wiring now, so the legacy handlers were archived under `docs/icline/legacy-providers/` rather than relocated.
+3. Follow-up additions on commit `d491a388c`:
+   - Sakana `protocol: "openai-responses"` added to its builtin spec
+   - Sakana/Jan/zenmux added to `providerSettingsRegistry.ts` GENERIC_PROVIDER_PRESENTATION_OVERRIDES (generic settings UI)
 
-### Phase 3 — Manual content merges (32 files)
-Work through the 32 content conflicts in this order (lowest risk first):
+### Phase 3 — Manual content merges (32 files) ✅ DONE (folded into Phase 1 merge)
+All 32 content conflicts were resolved during the Phase 1 merge commit `a7993a802`, in this order:
+1. ✅ **Proto schemas** (`models.proto`, `state.proto`, `task.proto`) — kept Sakana/Jan fields (88–99, 150/151), added upstream's new fields; `bun run protos` regenerated cleanly.
+2. ✅ **Shared provider wiring** (`api.ts`, `provider-keys.ts`, `model-utils.ts`, `api-configuration-conversion.ts`) — adopted upstream's SDK provider model, re-added Sakana/Jan/zenmux enum entries.
+3. ✅ **Controller wiring** (`controller/index.ts`, `core/api/index.ts`, `updateApiConfigurationProto.ts`) — kept `sakanaAuthClicked` handler, adopted SDK dispatch.
+4. ✅ **Webview UI** (`ApiOptions.tsx`, `providerUtils.ts`, `validate.ts`, provider components) — adopted upstream's generic settings components, re-added Jan/Sakana provider tabs.
+5. ✅ **Branding** (`extension.ts`, `common.ts`, `WebviewProvider.ts`, chat components, welcome, history) — adopted upstream code, re-applied iCline branding.
+6. ✅ **Build / packaging** (`package.json`, `publish-marketplace.mjs`) — adopted upstream scripts, kept iCline publisher ID and version.
+7. ✅ **Docs** (`README.md`, `CONTRIBUTING.md`, `README.marketplace.md`) — kept iCline content, adopted upstream structural changes.
 
-1. **Proto schemas** (`models.proto`, `state.proto`, `task.proto`) — keep our Sakana/Jan fields, add upstream's new fields. Run `npm run protos` to regenerate.
-2. **Shared provider wiring** (`api.ts`, `provider-keys.ts`, `model-utils.ts`, `api-configuration-conversion.ts`) — adopt upstream's SDK provider model, re-add Sakana/Jan/zenmux enum entries
-3. **Controller wiring** (`controller/index.ts`, `core/api/index.ts`, `updateApiConfigurationProto.ts`) — keep `sakanaAuthClicked` handler, adopt SDK dispatch
-4. **Webview UI** (`ApiOptions.tsx`, `providerUtils.ts`, `validate.ts`, provider components) — adopt upstream's generic settings components, re-add Jan/Sakana provider tabs
-5. **Branding** (`extension.ts`, `common.ts`, `WebviewProvider.ts`, chat components, welcome, history) — adopt upstream code, re-apply iCline branding (`AGENT_DISPLAY_NAME`, `getProductName()`)
-6. **Build / packaging** (`package.json`, `publish-marketplace.mjs`) — adopt upstream scripts, keep iCline publisher ID and version
-7. **Docs** (`README.md`, `CONTRIBUTING.md`, `README.marketplace.md`) — keep iCline content, adopt upstream structural changes
+Verified post-merge: `bun run protos` ✅, `tsc --noEmit` 0 errors ✅.
 
 ### Phase 4 — Re-apply iCline guardrails in new SDK locations ✅ DONE
-- ✅ `verifyWrittenFile` from `@/icline/harness/guardrails` — re-injected in `apps/vscode/src/sdk/hooks-adapter.ts` `afterTool` (SDK runtime applies `AgentAfterToolResult.result` back to the tool result the model sees). Verifies `editor` and `apply_patch` targets; failure replaces the result with an error, mirroring the legacy `WriteToFileToolHandler` behavior. Covered by `hooks-adapter.test.ts` (10 tests).
-- ✅ `getIclineHarnessOverlay` — re-injected in `apps/vscode/src/sdk/cline-session-factory.ts` via the `rules` slot of `buildClineSystemPrompt()` (upstream moved system-prompt assembly into `sdk/packages/shared/src/prompt/cline.ts`).
+- ✅ `verifyWrittenFile` from `@/icline/harness/guardrails` — re-injected in `apps/vscode/src/sdk/hooks-adapter.ts` `afterTool` (commit `25a17b9b6`). SDK runtime applies `AgentAfterToolResult.result` back to the tool result the model sees (`agent-runtime.ts:1396`). Verifies `editor` and `apply_patch` targets; failure replaces the result with an error, mirroring the legacy `WriteToFileToolHandler` behavior. Covered by `hooks-adapter.test.ts` (10 tests).
+- ✅ `getIclineHarnessOverlay` — re-injected in `apps/vscode/src/sdk/cline-session-factory.ts` via the `rules` slot of `buildClineSystemPrompt()` (commit `d491a388c`). Upstream moved system-prompt assembly into `sdk/packages/shared/src/prompt/cline.ts`.
+
+### Work done outside the original plan (carryover fixes)
+
+These were not in the original sync plan but addressed root causes discovered during the sync:
+
+- ✅ **History export/import archiver fix** (commit `3766b1a6b`) — the dev.4 fix used `import * as archiverNS` then called `archiverNS(...)`, which throws "archiverNS is not a function" at runtime under esbuild/bun (namespace objects are non-callable). Reached the callable via `archiverNS.default` instead. Added `TaskHistoryTransfer.test.ts` (3 real-archiver round-trip tests) and registered it in `vitest.config.ts`.
+- ✅ **zenmux dynamic model list** (commit `fdbb4f422`) — added `modelsSourceUrl: "https://zenmux.ai/api/v1/models"` to the zenmux builtin spec so the SDK's generic `resolveProviderModels` RPC fetches the live model list. Sakana uses a static `modelsFactory` (Fugu models are fairly stable) and Jan already had `modelsSourceUrl` set. This supersedes the orphaned `refreshZenmuxModels.ts`/`getJanModels.ts` handlers that were never wired into the new SDK RPC routing.
 
 ### Phase 5 — Verify
 ```powershell
