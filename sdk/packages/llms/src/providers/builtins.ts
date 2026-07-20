@@ -1049,6 +1049,10 @@ const OPENAI_COMPATIBLE_SPECS: BuiltinSpec[] = [
 		apiKeyEnv: ["ZENMUX_API_KEY"],
 		docsUrl: "https://docs.zenmux.ai/guide/quickstart",
 		defaults: { baseUrl: "https://zenmux.ai/api/v1" },
+		// Live model list from ZenMux's OpenAI-compatible /models endpoint.
+		// Supersedes the orphaned refreshZenmuxModels.ts handler (no longer
+		// wired into the new SDK RPC routing).
+		modelsSourceUrl: "https://zenmux.ai/api/v1/models",
 	},
 ];
 
