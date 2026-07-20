@@ -37,6 +37,10 @@ service StateService {
   rpc refreshRemoteConfig(EmptyRequest) returns (Empty);
   rpc testOtelConnection(EmptyRequest) returns (TestConnectionResult);
   rpc testPromptUploading(EmptyRequest) returns (TestConnectionResult);
+  // iCline: fetch the latest iCline + upstream-Cline release notifications.
+  rpc refreshIclineUpdates(EmptyRequest) returns (Empty);
+  // iCline: dismiss a surfaced update notice (value: "icline" | "upstream").
+  rpc dismissIclineUpdate(StringRequest) returns (Empty);
 }
 
 message AutoApprovalActions {

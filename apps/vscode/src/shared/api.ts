@@ -77,6 +77,47 @@ export type SakanaBillingMode = "pay_as_you_go" | "subscription"
 
 export type SakanaApiProtocol = "chat_completions" | "responses"
 
+// Sakana Fugu — https://console.sakana.ai/models
+const sakanaFuguUltraModelInfo: ModelInfo = {
+	name: "Fugu Ultra",
+	maxTokens: 32_768,
+	contextWindow: 1_000_000,
+	supportsImages: true,
+	supportsPromptCache: true,
+	supportsReasoning: true,
+	inputPrice: 5,
+	outputPrice: 30,
+	cacheReadsPrice: 0.5,
+	description:
+		"Fugu Ultra coordinates expert agents for hard, high-stakes problems. Higher cost, maximum quality. See https://console.sakana.ai/pricing",
+}
+
+export const sakanaModels = {
+	fugu: {
+		name: "Fugu",
+		maxTokens: 32_768,
+		contextWindow: 1_000_000,
+		supportsImages: true,
+		supportsPromptCache: true,
+		supportsReasoning: true,
+		inputPrice: 5,
+		outputPrice: 30,
+		description:
+			"Default Fugu model — routes to the best agent for the task. Balanced performance and latency. See https://console.sakana.ai/models",
+	},
+	"fugu-ultra": sakanaFuguUltraModelInfo,
+	"fugu-ultra-20260615": {
+		...sakanaFuguUltraModelInfo,
+		name: "Fugu Ultra (2026-06-15)",
+		description: "Dated alias pinning a specific Fugu Ultra version.",
+	},
+} as const satisfies Record<string, ModelInfo>
+
+export type SakanaModelId = keyof typeof sakanaModels
+
+export const sakanaDefaultModelId: SakanaModelId = "fugu"
+export const sakanaDefaultModelInfo: ModelInfo = sakanaModels[sakanaDefaultModelId]
+
 export interface ApiHandlerOptions extends Partial<ApiHandlerSettings> {
 	ulid?: string // Used to identify the task in API requests
 	onRetryAttempt?: (attempt: number, maxRetries: number, delay: number, error: any) => void // Callback function
@@ -165,6 +206,10 @@ export const openRouterDefaultModelInfo: ModelInfo = {
 	description:
 		"Claude Sonnet 4.5 is an Anthropic model for coding, agentic search, and AI agent workflows. It supports planning and implementation tasks across the software development lifecycle.\n\nRead more in the [blog post here](https://www.anthropic.com/claude/sonnet)",
 }
+
+// ZenMux — https://zenmux.ai/models
+export const zenmuxDefaultModelId = "anthropic/claude-sonnet-4"
+export const zenmuxDefaultModelInfo: ModelInfo = openRouterDefaultModelInfo
 
 export const clinePassDefaultModelId = "cline-pass/glm-5.2"
 export const clinePassModelInfoSaneDefaults: ModelInfo = {

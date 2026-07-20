@@ -3,12 +3,14 @@ import ClineLogoSanta from "@/assets/ClineLogoSanta"
 import ClineLogoVariable from "@/assets/ClineLogoVariable"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { UiServiceClient } from "@/services/grpc-client"
+import type { QuickStartMode } from "@/components/welcome/icline/quickStartMode"
 
 interface HomeHeaderProps {
 	shouldShowQuickWins?: boolean
+	quickStartMode?: QuickStartMode
 }
 
-const HomeHeader = ({ shouldShowQuickWins = false }: HomeHeaderProps) => {
+const HomeHeader = ({ shouldShowQuickWins = false, quickStartMode }: HomeHeaderProps) => {
 	const { environment } = useExtensionState()
 
 	const handleTakeATour = async () => {

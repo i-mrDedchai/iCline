@@ -43,6 +43,9 @@ interface ChatViewProps {
 const MAX_IMAGES_AND_FILES_PER_MESSAGE = CHAT_CONSTANTS.MAX_IMAGES_AND_FILES_PER_MESSAGE
 const QUICK_WINS_HISTORY_THRESHOLD = 3
 
+// iCline quick-start mode resolution (kept visible alongside task history)
+import { resolveQuickStartMode as resolveQuickStartModeIcline, QUICK_START_HISTORY_THRESHOLD } from "@/components/welcome/icline/quickStartMode"
+
 const sameUserMessage = (left: ClineMessage, right: ClineMessage) => {
 	const leftImages = left.images ?? []
 	const rightImages = right.images ?? []
@@ -77,6 +80,7 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 	} = useExtensionState()
 	const isProdHostedApp = userInfo?.apiBaseUrl === "https://app.cline.bot"
 	const shouldShowQuickWins = isProdHostedApp && (!taskHistory || taskHistory.length < QUICK_WINS_HISTORY_THRESHOLD)
+	const quickStartMode = resolveQuickStartModeIcline(isProdHostedApp, taskHistory?.length ?? 0, QUICK_START_HISTORY_THRESHOLD)
 
 	// Use custom hooks for state management
 	const chatState = useChatState(messages)
@@ -382,15 +386,16 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 						task={task}
 					/>
 				) : (
-					<WelcomeSection
-						hideAnnouncement={hideAnnouncement}
-						shouldShowQuickWins={shouldShowQuickWins}
-						showAnnouncement={showAnnouncement}
-						showHistoryView={showHistoryView}
-						taskHistory={taskHistory}
-						telemetrySetting={telemetrySetting}
-						version={version}
-					/>
+				<WelcomeSection
+					hideAnnouncement={hideAnnouncement}
+					quickStartMode={quickStartMode}
+					shouldShowQuickWins={shouldShowQuickWins}
+					showAnnouncement={showAnnouncement}
+					showHistoryView={showHistoryView}
+					taskHistory={taskHistory}
+					telemetrySetting={telemetrySetting}
+					version={version}
+				/>
 				)}
 				{task && (
 					<MessagesArea

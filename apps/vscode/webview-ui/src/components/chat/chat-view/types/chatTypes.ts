@@ -101,4 +101,5 @@ export interface WelcomeSectionProps {
 	version: string
 	taskHistory: any[]
 	quickStartMode: QuickStartMode
+	shouldShowQuickWins?: boolean
 }

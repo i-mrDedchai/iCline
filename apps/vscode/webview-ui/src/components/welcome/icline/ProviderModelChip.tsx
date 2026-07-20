@@ -1,6 +1,6 @@
 import type { Mode } from "@shared/storage/types"
+import type { ApiConfiguration } from "@shared/api"
 import { useExtensionState } from "@/context/ExtensionStateContext"
-import { normalizeApiConfiguration } from "@/components/settings/utils/providerUtils"
 
 const PROVIDER_LABELS: Record<string, string> = {
 	xai: "Grok",
@@ -37,14 +37,24 @@ interface ProviderModelChipProps {
 
 const ProviderModelChip = ({ mode }: ProviderModelChipProps) => {
 	const { apiConfiguration } = useExtensionState()
-	const normalized = normalizeApiConfiguration(apiConfiguration, mode)
-	const providerLabel = formatProviderLabel(normalized.selectedProvider)
-	const modelLabel = normalized.selectedModelId ? shortenModelId(normalized.selectedModelId) : "default model"
+	// upstream removed normalizeApiConfiguration from providerUtils; read the
+	// mode-specific provider + model id directly (the only fields this chip
+	// needs) instead of restoring the full provider-switch normalizer.
+	const selectedProvider =
+		(mode === "plan"
+			? apiConfiguration?.planModeApiProvider
+			: apiConfiguration?.actModeApiProvider) || "anthropic"
+	const selectedModelId =
+		mode === "plan"
+			? apiConfiguration?.planModeApiModelId
+			: apiConfiguration?.actModeApiModelId
+	const providerLabel = formatProviderLabel(selectedProvider)
+	const modelLabel = selectedModelId ? shortenModelId(selectedModelId) : "default model"
 
 	return (
 		<div
 			className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-(--vscode-panel-border) bg-white/2 text-xs text-(--vscode-descriptionForeground)"
-			title={`${providerLabel} · ${normalized.selectedModelId ?? "default"}`}>
+			title={`${providerLabel} · ${selectedModelId ?? "default"}`}>
 			<span className="codicon codicon-sparkle text-(--vscode-symbolIcon-classForeground)" />
 			<span className="font-medium text-(--vscode-editor-foreground)">{providerLabel}</span>
 			<span className="opacity-60">·</span>

@@ -65,6 +65,12 @@ service ModelsService {
   rpc writeProviderConfig(WriteProviderConfigRequest) returns (ProviderConfigResponse);
   // Commits a mode-specific model ID with optional user-authored metadata overrides
   rpc commitModelSelection(CommitModelSelectionRequest) returns (Empty);
+  // iCline: refresh ZenMux live model catalog (cached provider models).
+  rpc refreshZenmuxModelsRpc(EmptyRequest) returns (OpenRouterCompatibleModelInfo);
+  // iCline: refresh xAI subscription (Grok) live model catalog.
+  rpc refreshXaiSubscriptionModelsRpc(EmptyRequest) returns (OpenRouterCompatibleModelInfo);
+  // iCline: fetch Jan Local API Server model list (OpenAI-compatible /v1/models).
+  rpc getJanModels(OpenAiModelsRequest) returns (StringArray);
 }
 
 // List of VS Code LM models

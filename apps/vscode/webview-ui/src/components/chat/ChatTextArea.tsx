@@ -43,9 +43,6 @@ import {
 	validateSlashCommand,
 } from "@/utils/slash-commands"
 import ClineRulesToggleModal from "../cline-rules/ClineRulesToggleModal"
-import ChatModelPicker from "./ChatModelPicker"
-import { getModelThinkingStatus } from "./chatModelPickerUtils"
-import { ModelThinkingStatusIcons } from "./ModelThinkingStatusIcons"
 import ServersToggleModal from "./ServersToggleModal"
 
 const { MAX_IMAGES_AND_FILES_PER_MESSAGE } = CHAT_CONSTANTS
@@ -217,16 +214,17 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 		ref,
 	) => {
 		const {
-			mode,
-			apiConfiguration,
-			openRouterModels,
-			platform,
-			localWorkflowToggles,
-			globalWorkflowToggles,
-			remoteWorkflowToggles,
-			remoteConfigSettings,
-			mcpServers,
-		} = useExtensionState()
+		mode,
+		apiConfiguration,
+		openRouterModels,
+		platform,
+		localWorkflowToggles,
+		globalWorkflowToggles,
+		remoteWorkflowToggles,
+		remoteConfigSettings,
+		mcpServers,
+		navigateToSettingsModelPicker,
+	} = useExtensionState()
 		const [isTextAreaFocused, setIsTextAreaFocused] = useState(false)
 		const [isDraggingOver, setIsDraggingOver] = useState(false)
 		const [gitCommits, setGitCommits] = useState<GitCommit[]>([])
@@ -261,7 +259,7 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 		const [fileSearchResults, setFileSearchResults] = useState<SearchResult[]>([])
 		const [searchLoading, setSearchLoading] = useState(false)
 		const [, metaKeyChar] = useMetaKeyDetection(platform)
-		const { selectedProvider, selectedModelId } = useNormalizedApiConfiguration(mode)
+		const { selectedProvider, selectedModelId, selectedModelInfo } = useNormalizedApiConfiguration(mode)
 
 		// Fetch git commits when Git is selected or when typing a hash
 		useEffect(() => {
@@ -1093,11 +1091,21 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 					selectionStart: inputValue.length + 2,
 				},
 			} as React.ChangeEvent<HTMLTextAreaElement>
-			handleInputChange(event)
-			updateHighlights()
-		}, [inputValue, handleInputChange, updateHighlights])
+		handleInputChange(event)
+		updateHighlights()
+	}, [inputValue, handleInputChange, updateHighlights])
 
-		// Get model display name
+	// iCline: model button navigates to the settings model picker (upstream
+	// pattern). The dev.4 inline ChatModelPicker dropdown used the legacy
+	// model-catalog APIs that were removed in the v4.0.0 SDK migration; the
+	// upstream ClineModelPicker in settings uses the new SDK hooks
+	// (useProviderModels, useDynamicProviderSelection) and supports all
+	// providers including Sakana/Jan/zenmux.
+	const handleModelButtonClick = useCallback(() => {
+		navigateToSettingsModelPicker?.({ targetSection: "api-config" })
+	}, [navigateToSettingsModelPicker])
+
+	// Get model display name
 		const modelDisplayName = useMemo(() => {
 			const {
 				vsCodeLmModelSelector,
@@ -1151,27 +1159,8 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			}
 		}, [apiConfiguration, mode, selectedProvider, selectedModelId])
 
-		const activeThinkingStatus = useMemo(() => {
-			const { selectedProvider, selectedModelId, selectedModelInfo } = normalizeApiConfiguration(
-				apiConfiguration,
-				mode,
-			)
-			const { reasoningEffort, thinkingBudgetTokens } = getModeSpecificFields(apiConfiguration, mode)
-			if (!selectedModelId) {
-				return null
-			}
-			return getModelThinkingStatus(
-				selectedProvider,
-				selectedModelId,
-				selectedModelInfo,
-				true,
-				reasoningEffort,
-				thinkingBudgetTokens,
-			)
-		}, [apiConfiguration, mode])
-
-		// Function to show error message for unsupported files for drag and drop
-		const showUnsupportedFileErrorMessage = () => {
+	// Function to show error message for unsupported files for drag and drop
+	const showUnsupportedFileErrorMessage = () => {
 			// Show error message for unsupported files
 			setShowUnsupportedFileError(true)
 
@@ -1636,24 +1625,20 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 
 							<ClineRulesToggleModal />
 
-							<ModelContainer>
-								<ModelButtonWrapper>
-									<ChatModelPicker modelDisplayName={modelDisplayName}>
-										<ModelDisplayButton
-											disabled={false}
-											role="button"
-											tabIndex={0}
-											title="Select model">
-											<ModelButtonContent className="text-xs">
-												<span className="truncate min-w-0 flex-1">{modelDisplayName}</span>
-												{activeThinkingStatus ? (
-													<ModelThinkingStatusIcons status={activeThinkingStatus} />
-												) : null}
-											</ModelButtonContent>
-										</ModelDisplayButton>
-									</ChatModelPicker>
-								</ModelButtonWrapper>
-							</ModelContainer>
+						<ModelContainer>
+							<ModelButtonWrapper>
+								<ModelDisplayButton
+									disabled={false}
+									onClick={handleModelButtonClick}
+									role="button"
+									tabIndex={0}
+									title="Open API Settings">
+								<ModelButtonContent className="text-xs">
+									<span className="truncate min-w-0 flex-1">{modelDisplayName}</span>
+								</ModelButtonContent>
+								</ModelDisplayButton>
+							</ModelButtonWrapper>
+						</ModelContainer>
 						</ButtonGroup>
 					</div>
 					{/* Tooltip for Plan/Act toggle remains outside the conditional rendering */}
