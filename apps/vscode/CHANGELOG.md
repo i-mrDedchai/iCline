@@ -15,7 +15,7 @@
 - 🐟 **Sakana provider error safety** — sanitized error logging removes API keys from error output
 - 🐟 **Sakana provider validation** — require an API key in onboarding/settings, include Sakana in configured-provider discovery, and handle Responses API function-call done events without emitting nameless tool calls
 - 🔧 **Jan provider RPC type** — wrap `getJanModels` args in `OpenAiModelsRequest.create({ baseUrl, apiKey })` so the `metadata` proto field is auto-filled (fixes TS2345 and the webview build)
-- 📦 **History export/import** — use archiver's vending function `archiver("zip", options)` instead of `new ZipArchive(...)` which had no runtime equivalent; previously exports produced a 0 KB zip and imports failed with "Archive is missing manifest.json"
+- 📦 **History export/import** — use archiver's vending function `archiver("zip", options)` instead of `new ZipArchive(...)` which had no runtime equivalent; previously exports produced a 0 KB zip and imports failed with "Archive is missing manifest.json". Corrected the dev.4 fix: `import * as archiverNS` produces a **non-callable namespace** under esbuild/bun, so the vending function is reached via `archiverNS.default` (the dev.4 cast `archiverNS(...)` threw "archiverNS is not a function" at runtime). Added a real-archiver round-trip test to guard against regression.
 
 ### Changed
 - 📦 **Publish baseline** — shared README image rewrite in `scripts/marketplace-images.mjs`; documented in `icline-marketplace.md` (never use `--no-rewrite-relative-links` for store publishes)

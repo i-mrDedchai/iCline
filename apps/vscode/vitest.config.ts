@@ -8,6 +8,7 @@ export default defineConfig({
 	test: {
 		include: [
 			"src/sdk/**/*.test.ts",
+			"src/icline/task-history/TaskHistoryTransfer.test.ts",
 			"src/shared/vsCodeSelectorUtils.test.ts",
 			"src/shared/proto-conversions/models/**/*.test.ts",
 			"src/core/storage/remote-config/**/*.test.ts",

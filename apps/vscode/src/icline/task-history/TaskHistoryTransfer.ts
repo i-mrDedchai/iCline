@@ -1,8 +1,12 @@
 import { execa } from "@packages/execa"
-// archiver's runtime exports a vending function (`archiver(format, options)`),
-// but @types/archiver@8 only ships class declarations (Archiver/ZipArchive).
-// Import as `* as` to grab the callable vending function at runtime, then
-// cast to the typed Archiver instance after construction.
+// archiver@7 ships as CommonJS whose module.exports is a vending function
+// `archiver(format, options)`. `@types/archiver@8` declares the module as
+// namespace-only (no vending function, no default export), so the callable
+// is reached through `archiverNS.default` at runtime. `import * as` is used
+// (not a default import) because the types have no default export; the cast
+// through `unknown` bridges the type/runtime gap. Calling `archiverNS(...)`
+// directly does NOT work — the namespace object is non-callable under
+// esbuild/bun (this was the dev.4 regression).
 import * as archiverNS from "archiver"
 import type { Archiver } from "archiver"
 import type { HistoryItem } from "@shared/HistoryItem"
@@ -46,13 +50,12 @@ async function zipDirectoryEntries(
 	await fs.mkdir(path.dirname(outputPath), { recursive: true })
 
 	const output = createWriteStream(outputPath)
-	// archiver's runtime is a vending function; call it with ("zip", options) to
-	// get a typed Archiver stream. Cast via `as` because @types/archiver@8
-	// declares the module as namespace-only (no default/callable export).
-	const archive = (archiverNS as unknown as (format: string, options?: Record<string, unknown>) => Archiver)(
-		"zip",
-		{ zlib: { level: 9 } },
-	)
+	// `archiver` is the vending function recovered from `archiverNS.default`;
+	// calling it with ("zip", options) returns a typed Archiver stream.
+	const archiver = (archiverNS as unknown as {
+		default: (format: string, options?: Record<string, unknown>) => Archiver
+	}).default
+	const archive: Archiver = archiver("zip", { zlib: { level: 9 } })
 
 	archive.pipe(output)
 	archive.append(JSON.stringify(manifest, null, 2), { name: MANIFEST_FILE })
