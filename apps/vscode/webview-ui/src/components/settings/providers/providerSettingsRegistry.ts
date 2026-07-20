@@ -101,6 +101,19 @@ const GENERIC_PROVIDER_PRESENTATION_OVERRIDES: Record<string, GenericProviderPre
 		signupUrl: "https://cloud.tencent.com/document/product/1823/130050",
 	},
 	"zai-coding-plan": {},
+	// iCline-specific providers
+	sakana: {
+		signupUrl: "https://console.sakana.ai/get-started",
+	},
+	jan: {
+		baseUrlField: {
+			label: "Base URL",
+			placeholder: "http://127.0.0.1:1337",
+		},
+	},
+	zenmux: {
+		signupUrl: "https://docs.zenmux.ai/guide/quickstart",
+	},
 }
 
 const GENERIC_PROVIDER_PROTOCOLS = new Set(["anthropic", "gemini", "openai-chat", "openai-responses"])

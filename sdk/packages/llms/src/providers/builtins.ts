@@ -986,6 +986,7 @@ const OPENAI_COMPATIBLE_SPECS: BuiltinSpec[] = [
 		name: "Sakana.ai",
 		description: "Sakana Fugu agentic coding models",
 		family: "openai-compatible",
+		protocol: "openai-responses",
 		capabilities: ["tools", "reasoning"],
 		defaultModelId: "fugu",
 		apiKeyEnv: ["SAKANA_API_KEY"],

@@ -26,6 +26,7 @@ import {
 } from "@cline/llms"
 import { buildClineSystemPrompt } from "@cline/shared"
 import type { ApiConfiguration } from "@shared/api"
+import { getIclineHarnessOverlay } from "@/icline/harness/guardrails"
 import { ClineClient } from "@shared/cline"
 import type { HistoryItem } from "@shared/HistoryItem"
 import { DEFAULT_LANGUAGE_SETTINGS, getLanguageKey, type LanguageDisplay } from "@shared/Languages"
@@ -789,6 +790,11 @@ export async function buildSessionConfig(input: SessionConfigInput): Promise<Cor
 			mode: mode === "plan" ? "plan" : "act",
 			providerId,
 			platform: process.platform,
+			// iCline harness guardrails: behavioral overlay (verify-before-claim,
+			// epistemic discipline, tool-use in ACT MODE, etc.) injected via the
+			// shared prompt builder's rules slot so it rides with every session
+			// without forking the SDK prompt assembly.
+			rules: getIclineHarnessOverlay(),
 		})
 		Logger.log(`[SessionFactory] Built system prompt: ${systemPrompt.length} chars`)
 	} catch (error) {
