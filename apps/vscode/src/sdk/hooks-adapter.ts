@@ -11,8 +11,10 @@
 // Deferred hooks (NOT wired here): TaskResume, TaskError, SessionShutdown,
 // PreCompact, Notification.
 
+import * as path from "node:path"
 import type {
 	AgentAfterToolContext,
+	AgentAfterToolResult,
 	AgentBeforeToolContext,
 	AgentHooks,
 	AgentRunLifecycleContext,
@@ -23,6 +25,9 @@ import { Logger } from "@shared/services/Logger"
 import { HookFactory } from "@/core/hooks/hook-factory"
 import { getHooksEnabledSafe } from "@/core/hooks/hooks-utils"
 import type { StateManager } from "@/core/storage/StateManager"
+import { HostProvider } from "@/hosts/host-provider"
+import { verifyWrittenFile } from "@/icline/harness/guardrails"
+import { isIclineBuild } from "@/registry"
 
 export type HookMessageEmitter = (message: ClineMessage) => void
 
@@ -148,7 +153,17 @@ export function buildAgentHooks(stateManager: StateManager, emitHookMessage?: Ho
 			}
 		},
 
-		async afterTool(ctx: AgentAfterToolContext): Promise<undefined> {
+		async afterTool(ctx: AgentAfterToolContext): Promise<AgentAfterToolResult | undefined> {
+			// iCline harness guardrail: post-write verification. Runs independently of
+			// the user-configured hooks (hooksEnabled) because it is a build-level
+			// guardrail, mirroring the legacy WriteToFileToolHandler integration.
+			// A failure short-circuits and replaces the tool result so the model
+			// sees the verification error instead of a false success.
+			const guardrailResult = await runIclinePostWriteVerification(ctx)
+			if (guardrailResult) {
+				return guardrailResult
+			}
+
 			let runningTs: number | undefined
 			try {
 				if (!hooksEnabled()) {
@@ -357,4 +372,142 @@ async function runUserPromptSubmit(
 		Logger.error("[HooksAdapter] beforeRun (UserPromptSubmit) hook failed:", error)
 		return undefined
 	}
+}
+
+// ---------------------------------------------------------------------------
+// iCline harness guardrail: post-write verification
+// ---------------------------------------------------------------------------
+//
+// Re-applies the legacy WriteToFileToolHandler guardrail in the SDK hook
+// architecture. After a successful `editor` / `apply_patch` tool call, the
+// written file(s) are checked against filesystem reality (exists, non-empty
+// when content was expected). On mismatch the tool result is replaced with an
+// error so the model cannot claim a write that did not land.
+
+const WRITE_TOOL_NAMES = new Set(["editor", "apply_patch"])
+
+interface WriteTarget {
+	absolutePath: string
+	expectedMinBytes: number
+}
+
+async function runIclinePostWriteVerification(ctx: AgentAfterToolContext): Promise<AgentAfterToolResult | undefined> {
+	try {
+		if (!isIclineBuild()) {
+			return undefined
+		}
+		const toolName = ctx.toolCall.toolName
+		if (!WRITE_TOOL_NAMES.has(toolName)) {
+			return undefined
+		}
+		if (ctx.result.isError) {
+			// The write already failed — nothing to verify, and replacing the
+			// error would hide the real failure from the model.
+			return undefined
+		}
+
+		const targets = await extractWriteTargets(toolName, ctx.input)
+		for (const target of targets) {
+			const verification = await verifyWrittenFile(target)
+			if (!verification.ok) {
+				Logger.warn(`[HooksAdapter] iCline post-write verification failed: ${verification.message}`)
+				return {
+					result: {
+						output: verification.message,
+						isError: true,
+					},
+				}
+			}
+		}
+		return undefined
+	} catch (error) {
+		// Never block a successful tool call on a verifier bug.
+		Logger.warn("[HooksAdapter] iCline post-write verification error:", error)
+		return undefined
+	}
+}
+
+async function extractWriteTargets(toolName: string, input: unknown): Promise<WriteTarget[]> {
+	if (toolName === "editor") {
+		const editorInput = input as { path?: unknown; new_text?: unknown } | undefined
+		if (typeof editorInput?.path !== "string" || editorInput.path.length === 0) {
+			return []
+		}
+		const newText = typeof editorInput.new_text === "string" ? editorInput.new_text : ""
+		return [
+			{
+				absolutePath: await resolveMaybeRelative(editorInput.path),
+				expectedMinBytes: newText.trim().length > 0 ? 1 : 0,
+			},
+		]
+	}
+
+	// apply_patch: best-effort target extraction from the canonical patch grammar.
+	const patchText = (input as { input?: unknown } | undefined)?.input
+	if (typeof patchText !== "string" || patchText.length === 0) {
+		return []
+	}
+	return extractPatchTargets(patchText)
+}
+
+/**
+ * Extracts Add/Update File targets from a canonical apply_patch payload.
+ * Add File targets expect non-empty content when the patch carries visible
+ * content lines; Update File targets only assert existence (an update may
+ * legitimately shrink a file). Delete File targets are skipped.
+ */
+async function extractPatchTargets(patchText: string): Promise<WriteTarget[]> {
+	const targets: WriteTarget[] = []
+	const lines = patchText.split("\n")
+	let pendingAdd: { path: string; hasContent: boolean } | undefined
+
+	const flushPendingAdd = async () => {
+		if (pendingAdd) {
+			targets.push({
+				absolutePath: await resolveMaybeRelative(pendingAdd.path),
+				expectedMinBytes: pendingAdd.hasContent ? 1 : 0,
+			})
+			pendingAdd = undefined
+		}
+	}
+
+	for (const line of lines) {
+		const header = line.match(/^\*\*\* (Add|Update|Delete) File: (.+)$/)
+		if (header) {
+			await flushPendingAdd()
+			const [, action, rawPath] = header
+			const filePath = rawPath.trim()
+			if (action === "Add") {
+				pendingAdd = { path: filePath, hasContent: false }
+			} else if (action === "Update") {
+				targets.push({ absolutePath: await resolveMaybeRelative(filePath), expectedMinBytes: 0 })
+			}
+			continue
+		}
+		if (line.startsWith("***")) {
+			await flushPendingAdd()
+			continue
+		}
+		if (pendingAdd && line.startsWith("+") && line.slice(1).trim().length > 0) {
+			pendingAdd.hasContent = true
+		}
+	}
+	await flushPendingAdd()
+	return targets
+}
+
+async function resolveMaybeRelative(filePath: string): Promise<string> {
+	if (path.isAbsolute(filePath)) {
+		return filePath
+	}
+	try {
+		const { paths } = await HostProvider.workspace.getWorkspacePaths({})
+		const root = paths?.[0]
+		if (root) {
+			return path.resolve(root, filePath)
+		}
+	} catch (error) {
+		Logger.warn("[HooksAdapter] Failed to resolve workspace root for post-write verification:", error)
+	}
+	return path.resolve(filePath)
 }

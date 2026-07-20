@@ -208,9 +208,9 @@ Work through the 32 content conflicts in this order (lowest risk first):
 6. **Build / packaging** (`package.json`, `publish-marketplace.mjs`) — adopt upstream scripts, keep iCline publisher ID and version
 7. **Docs** (`README.md`, `CONTRIBUTING.md`, `README.marketplace.md`) — keep iCline content, adopt upstream structural changes
 
-### Phase 4 — Re-apply iCline guardrails in new SDK locations
-- `verifyWrittenFile` from `@/icline/harness/guardrails` was wired into `WriteToFileToolHandler.ts` (deleted by upstream). Find the new SDK tool handler location and re-inject the guardrail.
-- `getIclineHarnessOverlay` in `agent_role.ts` (deleted) — find new system prompt assembly location and re-inject.
+### Phase 4 — Re-apply iCline guardrails in new SDK locations ✅ DONE
+- ✅ `verifyWrittenFile` from `@/icline/harness/guardrails` — re-injected in `apps/vscode/src/sdk/hooks-adapter.ts` `afterTool` (SDK runtime applies `AgentAfterToolResult.result` back to the tool result the model sees). Verifies `editor` and `apply_patch` targets; failure replaces the result with an error, mirroring the legacy `WriteToFileToolHandler` behavior. Covered by `hooks-adapter.test.ts` (10 tests).
+- ✅ `getIclineHarnessOverlay` — re-injected in `apps/vscode/src/sdk/cline-session-factory.ts` via the `rules` slot of `buildClineSystemPrompt()` (upstream moved system-prompt assembly into `sdk/packages/shared/src/prompt/cline.ts`).
 
 ### Phase 5 — Verify
 ```powershell
