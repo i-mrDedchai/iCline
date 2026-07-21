@@ -14,6 +14,9 @@ import {
 	BedrockModelId,
 	ModelInfo,
 	OcaModelInfo,
+	SakanaApiProtocol,
+	SakanaBillingMode,
+	ZenmuxApiProtocol,
 } from "../../api"
 import { OpenaiReasoningEffort } from "../../storage/types"
 
@@ -338,6 +341,19 @@ export function convertApiConfigurationToProto(config: ApiConfiguration): ProtoA
 		hicapApiKey: config.hicapApiKey,
 		hicapModelId: config.hicapModelId,
 
+		// iCline-specific providers — without these mappings the webview's
+		// `handleFieldChange("janBaseUrl", …)` etc. silently drop the value
+		// before it reaches StateManager, so the settings never persist
+		// (C5) and downstream model fetches fall back to defaults (C3).
+		sakanaApiKey: config.sakanaApiKey,
+		janApiKey: config.janApiKey,
+		janBaseUrl: config.janBaseUrl,
+		zenmuxApiKey: config.zenmuxApiKey,
+		zenmuxApiProtocol: config.zenmuxApiProtocol,
+		zenmuxProviderRouting: config.zenmuxProviderRouting,
+		sakanaBillingMode: config.sakanaBillingMode,
+		sakanaApiProtocol: config.sakanaApiProtocol,
+
 		// Plan mode configurations
 		planModeApiProvider: config.planModeApiProvider,
 		planModeApiModelId: config.planModeApiModelId,
@@ -384,6 +400,11 @@ export function convertApiConfigurationToProto(config: ApiConfiguration): ProtoA
 		planModeVercelAiGatewayModelId: config.planModeVercelAiGatewayModelId,
 		planModeVercelAiGatewayModelInfo: convertModelInfoToProtoOpenRouter(config.planModeVercelAiGatewayModelInfo),
 
+		// iCline-specific providers — plan mode model IDs
+		planModeSakanaModelId: config.planModeSakanaModelId,
+		planModeJanModelId: config.planModeJanModelId,
+		planModeZenmuxModelId: config.planModeZenmuxModelId,
+
 		// Act mode configurations
 		actModeApiProvider: config.actModeApiProvider,
 		actModeApiModelId: config.actModeApiModelId,
@@ -429,6 +450,11 @@ export function convertApiConfigurationToProto(config: ApiConfiguration): ProtoA
 		actModeNousResearchModelId: config.actModeNousResearchModelId,
 		actModeVercelAiGatewayModelId: config.actModeVercelAiGatewayModelId,
 		actModeVercelAiGatewayModelInfo: convertModelInfoToProtoOpenRouter(config.actModeVercelAiGatewayModelInfo),
+
+		// iCline-specific providers — act mode model IDs
+		actModeSakanaModelId: config.actModeSakanaModelId,
+		actModeJanModelId: config.actModeJanModelId,
+		actModeZenmuxModelId: config.actModeZenmuxModelId,
 	}
 }
 
@@ -522,6 +548,17 @@ export function convertProtoToApiConfiguration(protoConfig: ProtoApiConfiguratio
 		nousResearchApiKey: protoConfig.nousResearchApiKey,
 		clineApiKey: protoConfig.clineApiKey,
 
+		// iCline-specific providers — proto → app side. Must mirror the
+		// forward mapping or saved values vanish on next state refresh.
+		sakanaApiKey: protoConfig.sakanaApiKey,
+		janApiKey: protoConfig.janApiKey,
+		janBaseUrl: protoConfig.janBaseUrl,
+		zenmuxApiKey: protoConfig.zenmuxApiKey,
+		zenmuxApiProtocol: protoConfig.zenmuxApiProtocol as ZenmuxApiProtocol | undefined,
+		zenmuxProviderRouting: protoConfig.zenmuxProviderRouting,
+		sakanaBillingMode: protoConfig.sakanaBillingMode as SakanaBillingMode | undefined,
+		sakanaApiProtocol: protoConfig.sakanaApiProtocol as SakanaApiProtocol | undefined,
+
 		// Plan mode configurations
 		planModeApiProvider:
 			protoConfig.planModeApiProvider !== undefined
@@ -571,6 +608,11 @@ export function convertProtoToApiConfiguration(protoConfig: ProtoApiConfiguratio
 		planModeVercelAiGatewayModelId: protoConfig.planModeVercelAiGatewayModelId,
 		planModeVercelAiGatewayModelInfo: convertProtoToModelInfo(protoConfig.planModeVercelAiGatewayModelInfo),
 
+		// iCline-specific providers — plan mode model IDs (proto → app)
+		planModeSakanaModelId: protoConfig.planModeSakanaModelId,
+		planModeJanModelId: protoConfig.planModeJanModelId,
+		planModeZenmuxModelId: protoConfig.planModeZenmuxModelId,
+
 		// Act mode configurations
 		actModeApiProvider:
 			protoConfig.actModeApiProvider !== undefined ? convertProtoToApiProvider(protoConfig.actModeApiProvider) : undefined,
@@ -617,5 +659,10 @@ export function convertProtoToApiConfiguration(protoConfig: ProtoApiConfiguratio
 		actModeNousResearchModelId: protoConfig.actModeNousResearchModelId,
 		actModeVercelAiGatewayModelId: protoConfig.actModeVercelAiGatewayModelId,
 		actModeVercelAiGatewayModelInfo: convertProtoToModelInfo(protoConfig.actModeVercelAiGatewayModelInfo),
+
+		// iCline-specific providers — act mode model IDs (proto → app)
+		actModeSakanaModelId: protoConfig.actModeSakanaModelId,
+		actModeJanModelId: protoConfig.actModeJanModelId,
+		actModeZenmuxModelId: protoConfig.actModeZenmuxModelId,
 	}
 }
