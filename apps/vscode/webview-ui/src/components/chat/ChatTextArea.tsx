@@ -12,6 +12,7 @@ import DynamicTextArea from "react-textarea-autosize"
 import styled from "styled-components"
 import ContextMenu from "@/components/chat/ContextMenu"
 import { CHAT_CONSTANTS } from "@/components/chat/chat-view/constants"
+import { QuickModelPicker } from "@/components/chat/QuickModelPicker"
 import SlashCommandMenu from "@/components/chat/SlashCommandMenu"
 import Thumbnails from "@/components/common/Thumbnails"
 import { getModeSpecificFields } from "@/components/settings/utils/providerUtils"
@@ -1095,15 +1096,21 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 		updateHighlights()
 	}, [inputValue, handleInputChange, updateHighlights])
 
-	// iCline: model button navigates to the settings model picker (upstream
-	// pattern). The dev.4 inline ChatModelPicker dropdown used the legacy
-	// model-catalog APIs that were removed in the v4.0.0 SDK migration; the
-	// upstream ClineModelPicker in settings uses the new SDK hooks
-	// (useProviderModels, useDynamicProviderSelection) and supports all
-	// providers including Sakana/Jan/zenmux.
+	// iCline: QuickModelPicker replaces the navigate-to-settings model button.
+	// The picker is an inline popover that uses the v4.0.0 SDK hooks
+	// (useProviderListings + useProviderModels + commitModelSelection RPC)
+	// so it supports every provider including Sakana/Jan/zenmux. Falls back
+	// to the upstream "open settings" flow if the picker is unavailable.
 	const handleModelButtonClick = useCallback(() => {
 		navigateToSettingsModelPicker?.({ targetSection: "api-config" })
 	}, [navigateToSettingsModelPicker])
+
+	// Listen for "Edit in Settings…" from QuickModelPicker footer
+	useEffect(() => {
+		const handler = () => handleModelButtonClick()
+		window.addEventListener("icline:navigate-to-settings-model-picker", handler)
+		return () => window.removeEventListener("icline:navigate-to-settings-model-picker", handler)
+	}, [handleModelButtonClick])
 
 	// Get model display name
 		const modelDisplayName = useMemo(() => {
@@ -1627,16 +1634,7 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 
 						<ModelContainer>
 							<ModelButtonWrapper>
-								<ModelDisplayButton
-									disabled={false}
-									onClick={handleModelButtonClick}
-									role="button"
-									tabIndex={0}
-									title="Open API Settings">
-								<ModelButtonContent className="text-xs">
-									<span className="truncate min-w-0 flex-1">{modelDisplayName}</span>
-								</ModelButtonContent>
-								</ModelDisplayButton>
+								<QuickModelPicker modelDisplayName={modelDisplayName} disabled={false} />
 							</ModelButtonWrapper>
 						</ModelContainer>
 						</ButtonGroup>
