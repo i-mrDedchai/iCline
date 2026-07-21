@@ -50,6 +50,17 @@ const DEFAULT_MODEL_CATALOG_CONFIG: ModelCatalogConfig = {
 }
 
 /**
+ * iCline host-side overrides for SDK provider labels. Upstream SDK builtins
+ * hard-code brand names (e.g. `name: "xAI"` for the `xai` provider); iCline
+ * ships the user-facing brand (Grok) for the settings heading, welcome home
+ * provider chip, and chat picker. Map by SDK provider id so upstream syncs
+ * don't conflict with this label.
+ */
+const HOST_PROVIDER_LABELS: Readonly<Record<string, string>> = {
+	xai: "Grok",
+}
+
+/**
  * Normalize the SDK's usage-cost-display answer (string union) into the
  * extension's {@link UsageCostDisplay} type. The SDK function takes a
  * provider id (not metadata) and consults its own registry; we forward
@@ -171,9 +182,16 @@ function optionalNonEmpty(value: string | undefined): string | undefined {
 }
 
 function toProviderListing(provider: ProviderListItem): ProviderListing {
+	// iCline host-side provider label overrides. Upstream SDK builtins.ts
+	// hard-codes `name: "xAI"` for the xai provider; iCline ships Grok as
+	// the user-facing brand (settings heading, welcome home provider chip,
+	// chat picker). Override the label here rather than patching the SDK
+	// so upstream syncs stay conflict-free. Remove if/when upstream adopts
+	// the Grok label or exposes a host-side label hook.
+	const hostLabelOverride = HOST_PROVIDER_LABELS[provider.id]
 	return {
 		id: parseProviderId(provider.id),
-		name: provider.name,
+		name: hostLabelOverride ?? provider.name,
 		defaultModelId: optionalNonEmpty(provider.defaultModelId),
 		protocol: provider.protocol,
 		// ProviderListing intentionally does not include full model-list data.

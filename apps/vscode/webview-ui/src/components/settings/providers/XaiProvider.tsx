@@ -1,13 +1,16 @@
 import { openAiModelInfoSafeDefaults } from "@shared/api"
 import { Mode } from "@shared/storage/types"
+import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
 import { VSCodeCheckbox, VSCodeDropdown, VSCodeOption } from "@vscode/webview-ui-toolkit/react"
 import { useState } from "react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useProviderConfig } from "@/hooks/useProviderConfig"
 import { useProviderModelSelection } from "@/hooks/useProviderModelSelection"
 import { useStaticProviderSelection } from "@/hooks/useStaticProviderSelection"
+import { AccountServiceClient } from "@/services/grpc-client"
 import { DROPDOWN_Z_INDEX } from "../ApiOptions"
 import { ApiKeyField } from "../common/ApiKeyField"
+import { AuthConnectionBadge } from "../common/AuthConnectionBadge"
 import { ModelInfoView } from "../common/ModelInfoView"
 import { DropdownContainer, ModelSelector } from "../common/ModelSelector"
 import { getModeSpecificFields } from "../utils/providerUtils"
@@ -37,7 +40,12 @@ interface XaiProviderProps {
 }
 
 export const XaiProvider = ({ showModelOptions, isPopup, currentMode }: XaiProviderProps) => {
-	const { apiConfiguration } = useExtensionState()
+	const {
+		apiConfiguration,
+		xaiOAuthIsAuthenticated,
+		xaiGrokCliIsAuthenticated,
+		refreshXaiSubscriptionModels,
+	} = useExtensionState()
 	const { handleModeFieldChange } = useApiConfigurationHandlers()
 	const { config, write, commitSelection } = useProviderConfig(PROVIDER_ID)
 
@@ -63,9 +71,14 @@ export const XaiProvider = ({ showModelOptions, isPopup, currentMode }: XaiProvi
 	const [reasoningEffortSelected, setReasoningEffortSelected] = useState(!!modeFields.reasoningEffort)
 	const { savedApiKeyMask, handleApiKeyChange } = useProviderApiKeyField({
 		apiKeyLength: config?.apiKeyLength,
-		providerName: "X AI",
+		providerName: "Grok",
 		write,
 	})
+
+	const hasApiKey = !!apiConfiguration?.xaiApiKey?.trim()
+	const oauthConnected = !!xaiOAuthIsAuthenticated
+	const cliOnlyConnected = !!xaiGrokCliIsAuthenticated && !oauthConnected
+	const subscriptionAuthenticated = oauthConnected || !!xaiGrokCliIsAuthenticated
 
 	const handleModelChange = (modelId: string) => {
 		if (!modelId) {
@@ -78,30 +91,102 @@ export const XaiProvider = ({ showModelOptions, isPopup, currentMode }: XaiProvi
 		void commitModelSelection({
 			modelId,
 			modelInfo,
-		}).catch((err) => console.error("Failed to commit X AI model selection:", err))
+		}).catch((err) => console.error("Failed to commit Grok model selection:", err))
 	}
 
 	const handleReasoningEffortChange = (effort: string) => {
 		void write({ reasoning: { enabled: true, effort } }).catch((err) =>
-			console.error("Failed to update X AI reasoning effort:", err),
+			console.error("Failed to update Grok reasoning effort:", err),
 		)
 		handleModeFieldChange({ plan: "planModeReasoningEffort", act: "actModeReasoningEffort" }, effort, currentMode)
 	}
 
 	const handleReasoningEffortDisabled = () => {
 		void write({ reasoning: { enabled: false, effort: "none" } }).catch((err) =>
-			console.error("Failed to disable X AI reasoning effort:", err),
+			console.error("Failed to disable Grok reasoning effort:", err),
 		)
 		handleModeFieldChange({ plan: "planModeReasoningEffort", act: "actModeReasoningEffort" }, "", currentMode)
 	}
 
+	const handleSignIn = async () => {
+		try {
+			await AccountServiceClient.xaiOauthSignIn({})
+		} catch (error) {
+			console.error("Failed to sign in to Grok:", error)
+		}
+	}
+
+	const handleSignOut = async () => {
+		try {
+			await AccountServiceClient.xaiOauthSignOut({})
+		} catch (error) {
+			console.error("Failed to sign out of Grok:", error)
+		}
+	}
+
+	const connectionVariant = oauthConnected ? "oauth" : cliOnlyConnected ? "cli" : "disconnected"
+	const connectionLabel = oauthConnected
+		? "Connected — Grok (OAuth & Subscription)"
+		: cliOnlyConnected
+			? "Connected — Grok CLI auth only"
+			: "Not connected"
+	const connectionDetail = oauthConnected
+		? `${Object.keys(models).length} models (CLI + subscription)`
+		: cliOnlyConnected
+			? "OAuth signed out. Session from ~/.grok/auth.json is still active."
+			: hasApiKey
+				? "Pay-as-you-go API key — console.x.ai models"
+				: undefined
+
 	return (
 		<div>
+			<div style={{ marginBottom: "15px" }}>
+				{oauthConnected ? (
+					<div>
+						<AuthConnectionBadge detail={connectionDetail} label={connectionLabel} variant={connectionVariant} />
+						<div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
+							<VSCodeButton appearance="secondary" onClick={handleSignOut}>
+								Sign Out OAuth
+							</VSCodeButton>
+						</div>
+					</div>
+				) : cliOnlyConnected ? (
+					<div>
+						<AuthConnectionBadge detail={connectionDetail} label={connectionLabel} variant={connectionVariant} />
+						<p
+							style={{
+								fontSize: 12,
+								color: "var(--vscode-descriptionForeground)",
+								marginTop: 8,
+							}}>
+							⚠️ OAuth was signed out, but Grok CLI login at <code>~/.grok/auth.json</code> is still detected.
+							Sign out of Grok CLI separately to fully disconnect.
+						</p>
+						<VSCodeButton onClick={handleSignIn}>Sign in to Grok (OAuth)</VSCodeButton>
+					</div>
+				) : (
+					<div>
+						<AuthConnectionBadge label="Not connected to Grok" variant="disconnected" />
+						<p
+							style={{
+								fontSize: "12px",
+								color: "var(--vscode-descriptionForeground)",
+								marginBottom: "10px",
+								marginTop: 10,
+							}}>
+							🔐 Sign in with SuperGrok or X Premium for Composer 2.5 Fast, Grok Build, Grok 4.3 and more. Add an
+							API key for extra pay-as-you-go models.
+						</p>
+						<VSCodeButton onClick={handleSignIn}>Sign in to Grok (OAuth)</VSCodeButton>
+					</div>
+				)}
+			</div>
+
 			<div>
 				<ApiKeyField
 					initialValue={savedApiKeyMask || apiConfiguration?.xaiApiKey || ""}
 					onChange={handleApiKeyChange}
-					providerName="X AI"
+					providerName="Grok"
 					signupUrl="https://x.ai"
 				/>
 				<p
@@ -110,10 +195,7 @@ export const XaiProvider = ({ showModelOptions, isPopup, currentMode }: XaiProvi
 						marginTop: -10,
 						color: "var(--vscode-descriptionForeground)",
 					}}>
-					<span style={{ color: "var(--vscode-errorForeground)" }}>
-						(<span style={{ fontWeight: 500 }}>Note:</span> Cline uses complex prompts, so behavior can vary across
-						models. Less capable models may not work as expected.)
-					</span>
+					Optional: pay-as-you-go API key from console.x.ai for additional models beyond your subscription.
 				</p>
 			</div>
 

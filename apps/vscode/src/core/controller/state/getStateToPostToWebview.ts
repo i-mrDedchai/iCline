@@ -109,6 +109,22 @@ export async function getStateToPostToWebview(controller: {
 		// Codex OAuth not available
 	}
 
+	// Check xAI Grok OAuth / Grok CLI auth status (iCline-specific). When the
+	// upstream merge replaced XaiProvider.tsx with the SDK-only version, these
+	// state fields disappeared from getStateToPostToWebview, so the webview
+	// could never see a connected state and the Sign In / Sign Out buttons in
+	// the restored XaiProvider never rendered.
+	let xaiOAuthIsAuthenticated = false
+	let xaiGrokCliIsAuthenticated = false
+	try {
+		const { xaiOAuthManager } = await import("@/integrations/xai/oauth")
+		xaiOAuthIsAuthenticated = await xaiOAuthManager.isAuthenticated()
+		const { readGrokCliToken } = await import("@/integrations/xai/grok-cli-auth")
+		xaiGrokCliIsAuthenticated = !!readGrokCliToken()?.accessToken
+	} catch {
+		// xAI OAuth / Grok CLI integration not available
+	}
+
 	return {
 		version,
 		apiConfiguration,
@@ -182,5 +198,7 @@ export async function getStateToPostToWebview(controller: {
 		banners,
 		welcomeBanners,
 		openAiCodexIsAuthenticated,
+		xaiOAuthIsAuthenticated,
+		xaiGrokCliIsAuthenticated,
 	} as ExtensionState
 }
