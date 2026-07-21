@@ -1,9 +1,16 @@
 import {
 	AGENT_UNEXPECTED_REASONING_TOKENS_EVENT,
 	type CaptureAgentUnexpectedReasoningTokensInput,
+	type CaptureTaskLifecycleEventInput,
 	captureAgentUnexpectedReasoningTokens,
+	captureTaskLifecycleEvent,
 	type ITelemetryService,
 	SDK_ERROR_TELEMETRY_EVENT,
+	TASK_CANCELLED_EVENT,
+	TASK_FIRST_CHUNK_RECEIVED_EVENT,
+	TASK_PROVIDER_REQUEST_STARTED_EVENT,
+	TASK_PROVIDER_STREAM_FAILED_EVENT,
+	TASK_PROVIDER_STREAM_STARTED_EVENT,
 	type TelemetryProperties,
 } from "@cline/shared";
 import type {
@@ -49,6 +56,7 @@ export const CORE_TELEMETRY_EVENTS = {
 		AUTH_FAILED: "user.auth_failed",
 		AUTH_LOGGED_OUT: "user.auth_logged_out",
 		AUTH_REFRESH_SOFT_FAILURE: "user.auth_refresh_soft_failure",
+		AUTH_RUN_RETRY: "user.auth_run_retry",
 		PROVIDER_CONFIGURED: "user.provider_configured",
 		TELEMETRY_OPT_OUT: "user.opt_out",
 	},
@@ -64,6 +72,11 @@ export const CORE_TELEMETRY_EVENTS = {
 		DIFF_EDIT_FAILED: "task.diff_edit_failed",
 		PROVIDER_API_ERROR: "task.provider_api_error",
 		MISTAKE_LIMIT_REACHED: "task.mistake_limit_reached",
+		PROVIDER_REQUEST_STARTED: TASK_PROVIDER_REQUEST_STARTED_EVENT,
+		PROVIDER_STREAM_STARTED: TASK_PROVIDER_STREAM_STARTED_EVENT,
+		FIRST_CHUNK_RECEIVED: TASK_FIRST_CHUNK_RECEIVED_EVENT,
+		PROVIDER_STREAM_FAILED: TASK_PROVIDER_STREAM_FAILED_EVENT,
+		CANCELLED: TASK_CANCELLED_EVENT,
 		MENTION_USED: "task.mention_used",
 		MENTION_FAILED: "task.mention_failed",
 		MENTION_SEARCH_RESULTS: "task.mention_search_results",
@@ -111,7 +124,9 @@ export interface RunCommandsTimeoutTelemetryProperties {
 
 export {
 	captureAgentUnexpectedReasoningTokens,
+	captureTaskLifecycleEvent,
 	type CaptureAgentUnexpectedReasoningTokensInput,
+	type CaptureTaskLifecycleEventInput,
 };
 
 export interface WorkspaceInitializedProperties {
@@ -288,6 +303,23 @@ export function captureAuthRefreshSoftFailure(
 		errorCode: details?.errorCode,
 		errorName: details?.errorName,
 		tokenExpired: details?.tokenExpired,
+	});
+}
+
+/**
+ * Fires when a run failed with an auth-like error, credentials were
+ * refreshed, and the run was retried once. `recovered: true` means the retry
+ * completed — a run that would previously have surfaced a raw provider 401
+ * (e.g. a teammate stranded on a spawn-time token snapshot past its TTL).
+ */
+export function captureAuthRunRetry(
+	telemetry: ITelemetryService | undefined,
+	provider?: string,
+	details?: { recovered?: boolean },
+): void {
+	emit(telemetry, CORE_TELEMETRY_EVENTS.USER.AUTH_RUN_RETRY, {
+		provider,
+		recovered: details?.recovered,
 	});
 }
 
