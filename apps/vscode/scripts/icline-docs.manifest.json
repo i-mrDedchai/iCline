@@ -30,6 +30,7 @@
 	"descriptionTh": "Fork ของ Cline สำหรับ VS Code — ใช้ iCline อย่างเดียวได้ ไม่ต้องติดตั้ง Cline official. รองรับ Grok, ZenMux, OpenRouter และ provider อื่นๆ",
 	"keywords": [
 		"icline",
+		"iCline",
 		"cline",
 		"cline-fork",
 		"claude-dev",
@@ -63,19 +64,22 @@
 		"sakana": "Sakana.ai"
 	},
 	"upstreamCline": {
-		"syncedVersion": "3.89.2",
-		"syncedAt": "2026-06-21",
+		"syncedVersion": "v4.0.0 SDK (main@402b9994d)",
+		"syncedAt": "2026-07-21",
 		"repo": "https://github.com/cline/cline"
 	},
 	"featureHighlights": [
 		"🏠 Welcome Quick Starts — 12 templates with editable prompts",
+		"⚡ Quick Provider & Model picker — switch providers/models right from chat",
 		"📦 History export / import — portable .zip archives",
 		"🏷️ iCline branding in agent chat during tasks",
 		"🔐 xAI Grok — OAuth (SuperGrok / X Premium) + API key + Grok CLI auth",
 		"⚡ Composer 2.5 Fast & Grok Build models",
-		"🌐 ZenMux — 100+ models, multi-protocol, PAYG & Subscription keys",
+		"🌐 ZenMux — 100+ models, live catalog fetch, PAYG & Subscription keys",
 		"🐟 Sakana.ai Fugu — PAYG & Subscription, Responses + Chat Completions API",
+		"🏠 Jan — local API server with live model discovery",
 		"🛡️ Agent harness — verify-before-claim, post-write verification",
-		"🔄 Dual-channel updates — iCline releases + Cline upstream notifications"
+		"🔄 Dual-channel updates — iCline releases + Cline upstream notifications",
+		"🆕 Upstream v4.0.0 SDK — Claude Sonnet 5, GPT-5.6, ClinePass, DeepSeek reasoning, Kimi K3"
 	]
 }

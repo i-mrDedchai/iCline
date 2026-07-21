@@ -283,8 +283,13 @@ function sync() {
 	}
 	writeJson(PACKAGE_PATH, pkg)
 
-	const providers = readJson(PROVIDERS_PATH)
-	writeJson(PROVIDERS_PATH, patchProviders(providers, manifest))
+	// providers.json was removed upstream (commit 83339c3c5 — refactor: extension
+	// to use sdk provider list). The label overrides below are preserved for any
+	// future restore of the file; if absent we simply skip without erroring.
+	if (fs.existsSync(PROVIDERS_PATH)) {
+		const providers = readJson(PROVIDERS_PATH)
+		writeJson(PROVIDERS_PATH, patchProviders(providers, manifest))
+	}
 
 	const readmeCtx = { version, manifest, releasesUrl, vsixName }
 	for (const readmePath of [README_PATH, README_MARKETPLACE_PATH, README_TH_PATH, ROOT_README_PATH, ROOT_README_TH_PATH]) {

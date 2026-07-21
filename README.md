@@ -14,7 +14,7 @@ Standalone Cline fork for VS Code — no official Cline required. Supports Grok,
 
 <!-- icline:version -->
 <p align="center">
-  <strong>Version</strong> <code>0.1.18-dev.4</code> ·
+  <strong>Version</strong> <code>0.1.18-dev.5</code> ·
   <a href="https://github.com/i-mrDedchai/iCline/releases">Releases</a> ·
   <a href="https://github.com/i-mrDedchai/iCline/blob/main/apps/vscode/CHANGELOG.md">Changelog</a> ·
   Extension ID <code>i-mrdedchai.iCline</code>
