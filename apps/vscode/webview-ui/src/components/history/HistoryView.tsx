@@ -2,7 +2,7 @@ import { EmptyRequest, StringArrayRequest } from "@shared/proto/cline/common"
 import { GetTaskHistoryRequest, TaskFavoriteRequest, type TaskItem } from "@shared/proto/cline/task"
 import { VSCodeTextField } from "@vscode/webview-ui-toolkit/react"
 import Fuse, { FuseResult } from "fuse.js"
-import { FunnelIcon } from "lucide-react"
+import { DownloadIcon, FunnelIcon, UploadIcon } from "lucide-react"
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { GroupedVirtuoso } from "react-virtuoso"
 import { Button } from "@/components/ui/button"
@@ -45,6 +45,9 @@ const HistoryView = ({ onDone }: HistoryViewProps) => {
 	const [lastNonRelevantSort, setLastNonRelevantSort] = useState<SortOption | null>("newest")
 	const [deleteAllDisabled, setDeleteAllDisabled] = useState(false)
 	const [selectedItems, setSelectedItems] = useState<string[]>([])
+	// iCline: task history export/import (RPCs restored in the upstream sync)
+	const [isExporting, setIsExporting] = useState(false)
+	const [isImporting, setIsImporting] = useState(false)
 	const [showFavoritesOnly, setShowFavoritesOnly] = useState(false)
 	const [showCurrentWorkspaceOnly, setShowCurrentWorkspaceOnly] = useState(false)
 
@@ -255,6 +258,36 @@ const HistoryView = ({ onDone }: HistoryViewProps) => {
 		},
 		[fetchTotalTasksSize, loadTaskHistory],
 	)
+
+	// iCline: export selected (or all) task history to a zip archive
+	const handleExportHistory = useCallback(async () => {
+		setIsExporting(true)
+		try {
+			await TaskServiceClient.exportTaskHistory(
+				StringArrayRequest.create({ value: selectedItems.length > 0 ? selectedItems : [] }),
+			)
+		} catch (error) {
+			console.error("Error exporting task history:", error)
+		} finally {
+			setIsExporting(false)
+		}
+	}, [selectedItems])
+
+	// iCline: import task history from a zip archive
+	const handleImportHistory = useCallback(async () => {
+		setIsImporting(true)
+		try {
+			const result = await TaskServiceClient.importTaskHistory(EmptyRequest.create({}))
+			if (result.count > 0) {
+				await loadTaskHistory()
+				setSelectedItems([])
+			}
+		} catch (error) {
+			console.error("Error importing task history:", error)
+		} finally {
+			setIsImporting(false)
+		}
+	}, [loadTaskHistory])
 
 	const handleDeleteAllHistory = useCallback(() => {
 		setDeleteAllDisabled(true)
@@ -518,6 +551,27 @@ const HistoryView = ({ onDone }: HistoryViewProps) => {
 					</Button>
 					<Button className="flex-1" onClick={() => handleBatchHistorySelect(false)} variant="secondary">
 						Select None
+					</Button>
+				</div>
+				{/* iCline: task history export/import */}
+				<div className="flex gap-2.5 mb-2.5">
+					<Button
+						aria-label={selectedItems.length > 0 ? "Export selected tasks" : "Export all tasks"}
+						className="flex-1"
+						disabled={isExporting || isImporting || taskHistory.length === 0}
+						onClick={handleExportHistory}
+						variant="secondary">
+						<DownloadIcon className="size-3.5" />
+						{isExporting ? "Exporting…" : selectedItems.length > 0 ? `Export (${selectedItems.length})` : "Export"}
+					</Button>
+					<Button
+						aria-label="Import tasks from archive"
+						className="flex-1"
+						disabled={isExporting || isImporting}
+						onClick={handleImportHistory}
+						variant="secondary">
+						<UploadIcon className="size-3.5" />
+						{isImporting ? "Importing…" : "Import"}
 					</Button>
 				</div>
 				{selectedItems.length > 0 ? (
