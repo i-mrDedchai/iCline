@@ -135,7 +135,10 @@
 			"!!**/generated",
 			"!!**/proto",
 			"!!**/tests/specs",
-			"!!assets/icons/*.svg"
+			"!!assets/icons/*.svg",
+			// Archived dev.4 legacy code — not linted (kept for reference only)
+			"!!**/docs/icline/legacy-providers/**",
+			"!!**/docs/icline/legacy-chat-model-picker/**"
 		]
 	},
 	"plugins": [

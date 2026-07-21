@@ -1,5 +1,4 @@
 import type { Mode } from "@shared/storage/types"
-import type { ApiConfiguration } from "@shared/api"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 
 const PROVIDER_LABELS: Record<string, string> = {
