@@ -1,6 +1,34 @@
 # Changelog
 
-## [0.1.18] - Unreleased
+## [0.1.18-dev.5] - Unreleased
+
+Upstream sync round 1+2: merged `upstream/main` (@ `402b9994d`, post-v4.0.0 SDK migration + 16 post-sync commits) into iCline. This is the first release on the new v4.0.0 SDK architecture. dev.4 carryover issues (history export/import, auto-fetch model list) are resolved as root-cause fixes.
+
+### Added
+- 🔄 **Upstream sync (v4.0.0 SDK migration)** — merged 124-file conflict resolution + 16 post-sync commits from `upstream/main`. iCline now runs on the new SDK architecture (`@cline/shared`, `@cline/llms`, `@cline/agents`, `@cline/core`). Sakana/Jan/zenmux providers registered as SDK `BuiltinSpecs` with the `openai-compatible` family.
+- 🛡️ **Guardrails re-injection** — `getIclineHarnessOverlay` re-injected via the SDK `buildClineSystemPrompt()` `rules` slot; `verifyWrittenFile` re-injected via the SDK `afterTool` hook (verifies `editor` + `apply_patch` targets; failure replaces the tool result so the model cannot claim a write that did not land). Covered by 10 tests.
+- 📡 **zenmux dynamic model list** — `modelsSourceUrl` added to the zenmux builtin spec so the SDK's generic `resolveProviderModels` RPC fetches the live model list (supersedes the orphaned `refreshZenmuxModels.ts` handler).
+- 🆕 **Upstream features ported to main** — Claude Sonnet 5, GPT-5.6 ChatGPT, ClinePass full enable, DeepSeek reasoning `xhigh`, Vertex models, Kimi K3 ClinePass fallback, task lifecycle telemetry, Claude Code/Codex optional peer deps, SDK OAuth retry + teammate run fixes.
+- 📋 **Upstream sync plan** — `docs/icline/upstream-sync-plan.md` documents the v3.89.2 → upstream/main merge strategy with 7 phases.
+
+### Fixed
+- 📦 **History export/import (dev.4 root-cause)** — the dev.4 fix used `import * as archiverNS` then called `archiverNS(...)`, which throws "archiverNS is not a function" at runtime under esbuild/bun (namespace objects are non-callable). Reached the callable via `archiverNS.default` instead. Added a real-archiver round-trip test (3 tests).
+- 🔌 **Proto RPCs restored** — 5 iCline RPCs lost in the upstream merge are restored (handlers already existed): `refreshIclineUpdates`, `dismissIclineUpdate` (UpdateService); `refreshZenmuxModelsRpc`, `refreshXaiSubscriptionModelsRpc`, `getJanModels` (model fetching).
+- 📦 **api.ts exports restored** — `sakanaModels`, `sakanaDefaultModelId`, `SakanaModelId`, `zenmuxDefaultModelId`, `zenmuxDefaultModelInfo` (lost in the upstream merge).
+- 🖼️ **ClineCompactIcon restored** — iCline compact logo asset (deleted by upstream) used by `IclineWelcomeBrand`.
+- 🧭 **ChatTextArea migration** — dev.4 inline `ChatModelPicker` dropdown → upstream settings-navigation pattern (`navigateToSettingsModelPicker`). The upstream `ClineModelPicker` in settings uses the new SDK hooks and supports all providers including Sakana/Jan/zenmux.
+- 🏷️ **Welcome home props restored** — `quickStartMode` + `shouldShowQuickWins` props that dev.4 added to `WelcomeSection`/`HomeHeader`/`ChatView` (lost in the upstream merge).
+- 🧹 **Lint hygiene** — `biome.jsonc` ignores archived legacy code under `docs/icline/legacy-*/`; `model-utils.test.ts` converted from UTF-16 LE to UTF-8.
+
+### Changed
+- 🗄️ **Legacy code archived** — dev.4 `ChatModelPicker.tsx`, `chatModelPickerUtils.ts`, `ModelThinkingStatusIcons.tsx` moved to `docs/icline/legacy-chat-model-picker/` (depended on removed APIs). ModelThinkingStatusIcons UX is temporarily dropped — to be re-implemented on the new SDK hooks later.
+- 🧰 **SDK workspace** — `bun install` now manages the whole monorepo; `build:sdk` rebuilds the 6 SDK packages before running bun unit tests.
+
+### Known Limitations
+- ModelThinkingStatusIcons (reasoning effort indicators in chat textarea) temporarily removed — will be re-implemented on the new SDK hooks.
+- Mistake-limit telemetry (upstream v4.0.10) not ported — it is a legacy/stable-only feature not present in `upstream/main`; `consecutiveMistakeCount` handling already exists in `sdk-interaction-coordinator.ts`.
+
+## [0.1.18-dev.4] - 2026-06-22
 
 ### Added
 - 🐟 **Sakana.ai provider** — Fugu / Fugu Ultra via OpenAI-compatible API (`https://api.sakana.ai/v1`); Pay-as-you-go and Subscription plan modes; Responses API (default) and Chat Completions; models `fugu`, `fugu-ultra`, `fugu-ultra-20260615`
@@ -15,7 +43,6 @@
 - 🐟 **Sakana provider error safety** — sanitized error logging removes API keys from error output
 - 🐟 **Sakana provider validation** — require an API key in onboarding/settings, include Sakana in configured-provider discovery, and handle Responses API function-call done events without emitting nameless tool calls
 - 🔧 **Jan provider RPC type** — wrap `getJanModels` args in `OpenAiModelsRequest.create({ baseUrl, apiKey })` so the `metadata` proto field is auto-filled (fixes TS2345 and the webview build)
-- 📦 **History export/import** — use archiver's vending function `archiver("zip", options)` instead of `new ZipArchive(...)` which had no runtime equivalent; previously exports produced a 0 KB zip and imports failed with "Archive is missing manifest.json". Corrected the dev.4 fix: `import * as archiverNS` produces a **non-callable namespace** under esbuild/bun, so the vending function is reached via `archiverNS.default` (the dev.4 cast `archiverNS(...)` threw "archiverNS is not a function" at runtime). Added a real-archiver round-trip test to guard against regression.
 
 ### Changed
 - 📦 **Publish baseline** — shared README image rewrite in `scripts/marketplace-images.mjs`; documented in `icline-marketplace.md` (never use `--no-rewrite-relative-links` for store publishes)
