@@ -1,131 +1,159 @@
+import { openAiModelInfoSafeDefaults } from "@shared/api"
 import type { Mode } from "@shared/storage/types"
-import { VSCodeDropdown, VSCodeLink, VSCodeOption } from "@vscode/webview-ui-toolkit/react"
-import { useCallback, useEffect, useState } from "react"
-import { useInterval } from "react-use"
+import { VSCodeLink } from "@vscode/webview-ui-toolkit/react"
+import { useProviderConfig } from "@/hooks/useProviderConfig"
+import { useProviderModelSelection } from "@/hooks/useProviderModelSelection"
+import { useStaticProviderSelection } from "@/hooks/useStaticProviderSelection"
 import UseCustomPromptCheckbox from "@/components/settings/UseCustomPromptCheckbox"
-import { useExtensionState } from "@/context/ExtensionStateContext"
-import { ModelsServiceClient } from "@/services/grpc-client"
-import { OpenAiModelsRequest } from "@shared/proto/cline/models"
 import { ApiKeyField } from "../common/ApiKeyField"
 import { BaseUrlField } from "../common/BaseUrlField"
-import { DebouncedTextField } from "../common/DebouncedTextField"
-import { DropdownContainer } from "../common/ModelSelector"
+import { ModelInfoView } from "../common/ModelInfoView"
+import { DropdownContainer, ModelSelector } from "../common/ModelSelector"
 import { getModeSpecificFields } from "../utils/providerUtils"
 import { useApiConfigurationHandlers } from "../utils/useApiConfigurationHandlers"
+import { useProviderApiKeyField } from "../utils/useProviderApiKeyField"
 
+const PROVIDER_ID = "jan"
+
+/**
+ * Props for the JanProvider component
+ */
 interface JanProviderProps {
 	showModelOptions: boolean
 	isPopup?: boolean
 	currentMode: Mode
 }
 
-export const JanProvider = ({ currentMode }: JanProviderProps) => {
-	const { apiConfiguration } = useExtensionState()
-	const { handleFieldChange, handleModeFieldChange } = useApiConfigurationHandlers()
+/**
+ * Jan provider settings — migrated to the v4.0.0 SDK hooks so that the
+ * model list, base URL, and API key all flow through the unified SDK
+ * provider config store (the same store the Quick picker reads from).
+ *
+ * Previously JanProvider used the old `apiConfiguration.janBaseUrl` +
+ * `getJanModels` RPC polling, which created a duplicate Base URL field
+ * (the SDK also rendered its own via GenericProviderSettings) and meant
+ * models fetched here never appeared in the Quick picker.
+ */
+export const JanProvider = ({ showModelOptions, isPopup, currentMode }: JanProviderProps) => {
+	const { handleModeFieldChange } = useApiConfigurationHandlers()
+	const { config, write, commitSelection } = useProviderConfig(PROVIDER_ID)
 
-	const { janModelId } = getModeSpecificFields(apiConfiguration, currentMode)
-	const [janModels, setJanModels] = useState<string[]>([])
+	const modeFields = getModeSpecificFields(config as any, currentMode)
 
-	const requestJanModels = useCallback(async () => {
-		try {
-			const response = await ModelsServiceClient.getJanModels(
-				OpenAiModelsRequest.create({
-					baseUrl: apiConfiguration?.janBaseUrl || "http://127.0.0.1:1337",
-					apiKey: apiConfiguration?.janApiKey || "",
-				}),
-			)
-			if (response?.values) {
-				setJanModels(response.values)
-			}
-		} catch (error) {
-			console.error("Failed to fetch Jan models:", error)
-			setJanModels([])
+	// Get the normalized configuration from the SDK catalog
+	const {
+		models,
+		defaultModelId,
+		selectedModelId: legacySelectedModelId,
+		selectedModelInfo: legacySelectedModelInfo,
+		hideUsageCost,
+	} = useStaticProviderSelection(PROVIDER_ID, config as any, currentMode)
+	const { selectedModelId, selectedModelInfo, commitModelSelection } = useProviderModelSelection(
+		PROVIDER_ID,
+		currentMode,
+		{
+			models,
+			defaultModelId: legacySelectedModelId,
+			config,
+			commitSelection,
+			fallbackModelInfo: legacySelectedModelInfo,
+		},
+	)
+
+	const { savedApiKeyMask, handleApiKeyChange } = useProviderApiKeyField({
+		apiKeyLength: config?.apiKeyLength,
+		providerName: "Jan",
+		write,
+	})
+
+	const handleModelChange = (modelId: string) => {
+		if (!modelId) {
+			return
 		}
-	}, [apiConfiguration?.janBaseUrl, apiConfiguration?.janApiKey])
 
-	useEffect(() => {
-		requestJanModels()
-	}, [requestJanModels])
+		const fallbackModelId = defaultModelId || Object.keys(models)[0] || modelId
+		const modelInfo = models[modelId] ?? models[fallbackModelId] ?? selectedModelInfo ?? openAiModelInfoSafeDefaults
 
-	useInterval(requestJanModels, 6000)
+		void commitModelSelection({
+			modelId,
+			modelInfo,
+		}).catch((err) => console.error("Failed to commit Jan model selection:", err))
+	}
+
+	const handleBaseUrlChange = (value: string) => {
+		void write({ baseUrl: value }).catch((err) =>
+			console.error("Failed to update Jan base URL:", err),
+		)
+		// Also sync to old apiConfiguration so the session factory picks it up
+		handleModeFieldChange(
+			{ plan: "planModeJanModelId", act: "actModeJanModelId" },
+			modeFields.janModelId || "",
+			currentMode,
+		)
+	}
 
 	return (
 		<div className="flex flex-col gap-2">
 			<BaseUrlField
-				initialValue={apiConfiguration?.janBaseUrl}
+				initialValue={config?.baseUrl}
 				label="Jan Local API Server URL"
-				onChange={(value) => handleFieldChange("janBaseUrl", value)}
+				onChange={handleBaseUrlChange}
 				placeholder="Default: http://127.0.0.1:1337"
 			/>
 
 			<ApiKeyField
 				helpText="Optional API key if configured in Jan → Settings → Local API Server → Configuration."
-				initialValue={apiConfiguration?.janApiKey || ""}
-				onChange={(value) => handleFieldChange("janApiKey", value)}
+				initialValue={savedApiKeyMask || ""}
+				onChange={handleApiKeyChange}
 				placeholder="Enter API Key (optional)..."
 				providerName="Jan"
 			/>
 
-			<div className="font-semibold">Model</div>
-			{janModels.length > 0 ? (
-				<DropdownContainer className="dropdown-container" zIndex={10}>
-					<VSCodeDropdown
-						className="w-full mb-3"
-						onChange={(e: any) => {
-							const value = e?.target?.value
-							handleModeFieldChange(
-								{
-									plan: "planModeJanModelId",
-									act: "actModeJanModelId",
-								},
-								value,
-								currentMode,
-							)
-						}}
-						value={janModelId}>
-						{janModels.map((model) => (
-							<VSCodeOption className="w-full" key={model} value={model}>
-								{model}
-							</VSCodeOption>
-						))}
-					</VSCodeDropdown>
-				</DropdownContainer>
-			) : (
-				<DebouncedTextField
-					initialValue={janModelId || ""}
-					onChange={(value) =>
-						handleModeFieldChange(
-							{
-								plan: "planModeJanModelId",
-								act: "actModeJanModelId",
-							},
-							value,
-							currentMode,
-						)
-					}
-					placeholder={"e.g. janhq\\Jan-code-4b-Q4_K_M"}
-					style={{ width: "100%" }}
-				/>
-			)}
+			{showModelOptions && (
+				<>
+					<div className="font-semibold">Model</div>
+					{Object.keys(models).length > 0 ? (
+						<DropdownContainer className="dropdown-container" zIndex={10}>
+							<ModelSelector
+								label=""
+								models={models}
+								onChange={(event: Event) => {
+									const target = event.target
+									const value = target && "value" in target ? (target as any).value : ""
+									handleModelChange(value)
+								}}
+								selectedModelId={selectedModelId}
+							/>
+						</DropdownContainer>
+					) : (
+						<p className="text-sm mt-1 text-description italic">
+							Unable to fetch models from Jan. Start the Local API Server in Jan (Settings →
+							Local API Server → Start Server) and verify the URL, port, and API key.
+						</p>
+					)}
 
-			{janModels.length === 0 && (
-				<p className="text-sm mt-1 text-description italic">
-					Unable to fetch models from Jan. Start the Local API Server in Jan (Settings → Local API Server → Start
-					Server) and verify the URL, port, and API key.
-				</p>
+					<ModelInfoView
+						hideUsageCost={hideUsageCost}
+						isPopup={isPopup}
+						modelInfo={selectedModelInfo}
+						selectedModelId={selectedModelId}
+					/>
+				</>
 			)}
 
 			<UseCustomPromptCheckbox providerId="jan" />
 
 			<div className="text-xs text-description">
 				Jan runs models locally via llama.cpp and exposes an OpenAI-compatible API. See the{" "}
-				<VSCodeLink href="https://www.jan.ai/docs/desktop/api-server" style={{ display: "inline", fontSize: "inherit" }}>
+				<VSCodeLink
+					href="https://www.jan.ai/docs/desktop/api-server"
+					style={{ display: "inline", fontSize: "inherit" }}>
 					Local API Server guide
 				</VSCodeLink>
 				. If you changed the default port (1337), set the matching URL above.
 				<div className="text-error">
-					<span className="font-semibold">Note:</span> Cline uses complex prompts and works best with capable models.
-					Smaller local models may not follow tool-use instructions reliably.
+					<span className="font-semibold">Note:</span> Cline uses complex prompts and works best with capable
+					models. Smaller local models may not follow tool-use instructions reliably.
 				</div>
 			</div>
 		</div>
