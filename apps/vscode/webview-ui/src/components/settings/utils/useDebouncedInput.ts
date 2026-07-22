@@ -21,17 +21,31 @@ export function useDebouncedInput<T>(
 	// Track previous initialValue to detect external changes
 	const prevInitialValueRef = useRef<T>(initialValue)
 
+	// Skip the first debounce fire on mount — the initial value is already
+	// in storage, so calling onChange("") (or whatever the initial value is)
+	// before config has loaded would overwrite the stored value.
+	// This is critical for async-loaded configs (useProviderConfig RPC)
+	// where the component mounts with initialValue=undefined and the real
+	// value arrives later via a prop update.
+	const skipNextFireRef = useRef(true)
+
 	// Sync local state when initialValue changes externally (e.g., when switching Plan/Act tabs)
 	useEffect(() => {
 		if (prevInitialValueRef.current !== initialValue) {
 			setLocalValue(initialValue)
 			prevInitialValueRef.current = initialValue
+			// External sync — don't write back to storage
+			skipNextFireRef.current = true
 		}
 	}, [initialValue])
 
 	// Debounced backend save - saves after user stops changing value
 	useDebounceEffect(
 		() => {
+			if (skipNextFireRef.current) {
+				skipNextFireRef.current = false
+				return
+			}
 			onChange(localValue)
 		},
 		debounceMs,

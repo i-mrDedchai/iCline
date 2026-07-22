@@ -1,5 +1,5 @@
 import { VSCodeCheckbox, VSCodeTextField } from "@vscode/webview-ui-toolkit/react"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useDebouncedInput } from "../utils/useDebouncedInput"
 
 /**
@@ -16,7 +16,13 @@ interface BaseUrlFieldProps {
 }
 
 /**
- * A reusable component for toggling and entering custom base URLs
+ * A reusable component for toggling and entering custom base URLs.
+ *
+ * The checkbox state (enabled/disabled) syncs with `initialValue` when it
+ * arrives asynchronously (e.g. from `useProviderConfig` RPC). Without the
+ * `useEffect`, `useState(!!initialValue)` would only read the value on
+ * mount, when config is still `undefined`, so the checkbox would never
+ * appear checked even when a URL is stored.
  */
 export const BaseUrlField = ({
 	initialValue,
@@ -28,6 +34,12 @@ export const BaseUrlField = ({
 }: BaseUrlFieldProps) => {
 	const [isEnabled, setIsEnabled] = useState(!!initialValue)
 	const [localValue, setLocalValue] = useDebouncedInput(initialValue || "", onChange)
+
+	// Sync checkbox state when initialValue arrives/changes asynchronously
+	// (e.g. useProviderConfig RPC returns after mount).
+	useEffect(() => {
+		setIsEnabled(!!initialValue)
+	}, [initialValue])
 
 	const handleToggle = (e: any) => {
 		const checked = e.target.checked === true
