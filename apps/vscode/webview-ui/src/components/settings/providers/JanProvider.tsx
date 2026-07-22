@@ -1,16 +1,16 @@
 import { openAiModelInfoSafeDefaults } from "@shared/api"
 import type { Mode } from "@shared/storage/types"
 import { VSCodeLink } from "@vscode/webview-ui-toolkit/react"
+import UseCustomPromptCheckbox from "@/components/settings/UseCustomPromptCheckbox"
+import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useProviderConfig } from "@/hooks/useProviderConfig"
 import { useProviderModelSelection } from "@/hooks/useProviderModelSelection"
 import { useStaticProviderSelection } from "@/hooks/useStaticProviderSelection"
-import UseCustomPromptCheckbox from "@/components/settings/UseCustomPromptCheckbox"
 import { ApiKeyField } from "../common/ApiKeyField"
 import { BaseUrlField } from "../common/BaseUrlField"
 import { ModelInfoView } from "../common/ModelInfoView"
 import { DropdownContainer, ModelSelector } from "../common/ModelSelector"
 import { getModeSpecificFields } from "../utils/providerUtils"
-import { useApiConfigurationHandlers } from "../utils/useApiConfigurationHandlers"
 import { useProviderApiKeyField } from "../utils/useProviderApiKeyField"
 
 const PROVIDER_ID = "jan"
@@ -35,19 +35,22 @@ interface JanProviderProps {
  * models fetched here never appeared in the Quick picker.
  */
 export const JanProvider = ({ showModelOptions, isPopup, currentMode }: JanProviderProps) => {
-	const { handleModeFieldChange } = useApiConfigurationHandlers()
+	const { apiConfiguration } = useExtensionState()
 	const { config, write, commitSelection } = useProviderConfig(PROVIDER_ID)
 
-	const modeFields = getModeSpecificFields(config as any, currentMode)
+	const modeFields = getModeSpecificFields(apiConfiguration, currentMode)
 
-	// Get the normalized configuration from the SDK catalog
+	// Get the normalized configuration from the SDK catalog. Pass the real
+	// apiConfiguration (from ExtensionState) — not the SDK ProviderConfigResponse —
+	// so that useStaticProviderSelection can read planModeJanModelId /
+	// actModeJanModelId to determine the saved model id.
 	const {
 		models,
 		defaultModelId,
 		selectedModelId: legacySelectedModelId,
 		selectedModelInfo: legacySelectedModelInfo,
 		hideUsageCost,
-	} = useStaticProviderSelection(PROVIDER_ID, config as any, currentMode)
+	} = useStaticProviderSelection(PROVIDER_ID, apiConfiguration, currentMode)
 	const { selectedModelId, selectedModelInfo, commitModelSelection } = useProviderModelSelection(
 		PROVIDER_ID,
 		currentMode,
@@ -83,12 +86,6 @@ export const JanProvider = ({ showModelOptions, isPopup, currentMode }: JanProvi
 	const handleBaseUrlChange = (value: string) => {
 		void write({ baseUrl: value }).catch((err) =>
 			console.error("Failed to update Jan base URL:", err),
-		)
-		// Also sync to old apiConfiguration so the session factory picks it up
-		handleModeFieldChange(
-			{ plan: "planModeJanModelId", act: "actModeJanModelId" },
-			modeFields.janModelId || "",
-			currentMode,
 		)
 	}
 
