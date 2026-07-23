@@ -1,12 +1,16 @@
 # Upstream Sync Plan — v3.89.2 → upstream/main (post-v4.0.0)
 
-**Last updated:** 2026-07-18
-**Sync target:** `upstream/main` @ `557d72569` (2026-07-18)
+**Last updated:** 2026-07-23
+**Sync target:** `upstream/main` @ `402b9994d` (post-v4.0.0 SDK migration + 16 post-sync commits)
 **Last synced:** `v3.89.2` (2026-06-21)
 **Gap:** 100 commits (50 to v4.0.0 + 50 since v4.0.0)
 
-> ⚠️ **Status: PLANNING ONLY — do NOT run `scripts/sync-upstream.ps1` yet.**
-> This is a major upstream release (4.0.0 SDK migration). Manual conflict resolution required.
+> ✅ **Status: SYNC COMPLETE — Phase 0-7 DONE**
+> - Round 1 merge: commit `a7993a802`
+> - Round 2 merge (16 post-sync commits): commit `292c501a3`
+> - Smoke test restoration: commits `6d529eac8` → `b54b34265`
+> - Tag: `v0.1.18-dev.5`
+> - See `smoke-test-tracker.md` for remaining smoke test issues
 
 ---
 
