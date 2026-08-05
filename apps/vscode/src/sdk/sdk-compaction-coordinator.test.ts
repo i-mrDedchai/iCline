@@ -127,9 +127,11 @@ describe("SdkCompactionCoordinator", () => {
 	it("does not append compaction status to a different active session", async () => {
 		const activeSession = makeActiveSession()
 		const { coordinator, options } = makeCoordinator({ activeSession })
+		// compactTask reads active once; post-compact helpers may read again —
+		// any later read must still see a different session so status is skipped.
 		options.sessions.getActiveSession
 			.mockReturnValueOnce(activeSession)
-			.mockReturnValueOnce(makeActiveSession({ sessionId: "other-session" }))
+			.mockReturnValue(makeActiveSession({ sessionId: "other-session" }))
 		mockCreateContextCompactionPrepareTurn.mockReturnValueOnce(
 			vi.fn().mockResolvedValue({ messages: [{ role: "user", content: "summary" }] }),
 		)
@@ -201,6 +203,7 @@ function makeCoordinator(input: Partial<MakeCoordinatorInput> = {}) {
 		},
 		messages: {
 			appendAndEmit: vi.fn(),
+			getClineMessages: vi.fn(() => []),
 		},
 		sessionConfigBuilder: {
 			build: vi.fn().mockResolvedValue(config),

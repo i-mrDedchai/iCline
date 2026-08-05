@@ -1,8 +1,7 @@
-import { openAiModelInfoSafeDefaults } from "@shared/api"
+import { getXaiModelsForAuth, type ModelInfo, openAiModelInfoSafeDefaults, xaiDefaultModelId } from "@shared/api"
 import { Mode } from "@shared/storage/types"
-import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
-import { VSCodeCheckbox, VSCodeDropdown, VSCodeOption } from "@vscode/webview-ui-toolkit/react"
-import { useState } from "react"
+import { VSCodeButton, VSCodeCheckbox, VSCodeDropdown, VSCodeOption } from "@vscode/webview-ui-toolkit/react"
+import { useMemo, useState } from "react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useProviderConfig } from "@/hooks/useProviderConfig"
 import { useProviderModelSelection } from "@/hooks/useProviderModelSelection"
@@ -18,6 +17,18 @@ import { useApiConfigurationHandlers } from "../utils/useApiConfigurationHandler
 import { useProviderApiKeyField } from "../utils/useProviderApiKeyField"
 
 const PROVIDER_ID = "xai"
+
+/**
+ * Prefer the iCline default (Composer 2.5 Fast) when present in the auth-aware
+ * catalog; otherwise first available id. Used when no legacy selection exists.
+ */
+function xaiDefaultFromCatalog(models: Record<string, ModelInfo>): string {
+	if (xaiDefaultModelId in models) {
+		return xaiDefaultModelId
+	}
+	const ids = Object.keys(models)
+	return ids[0] || xaiDefaultModelId
+}
 
 // VSCodeDropdown's onChange supplies `Event | React.FormEvent<HTMLElement>`,
 // so accept the same union here. We only read `target.value`, which is present
@@ -40,32 +51,59 @@ interface XaiProviderProps {
 }
 
 export const XaiProvider = ({ showModelOptions, isPopup, currentMode }: XaiProviderProps) => {
-	const {
-		apiConfiguration,
-		xaiOAuthIsAuthenticated,
-		xaiGrokCliIsAuthenticated,
-		refreshXaiSubscriptionModels,
-	} = useExtensionState()
+	const { apiConfiguration, xaiOAuthIsAuthenticated, xaiGrokCliIsAuthenticated, xaiSubscriptionModels } = useExtensionState()
+
 	const { handleModeFieldChange } = useApiConfigurationHandlers()
 	const { config, write, commitSelection } = useProviderConfig(PROVIDER_ID)
 
 	const modeFields = getModeSpecificFields(apiConfiguration, currentMode)
 
-	// Get the normalized configuration
+	// SDK catalog alone only has PAYG models. Merge iCline auth-aware list
+	// (CLI subscription models + live subscription fetch + API key models).
 	const {
-		models,
+		models: sdkModels,
 		defaultModelId,
 		selectedModelId: legacySelectedModelId,
 		selectedModelInfo: legacySelectedModelInfo,
 		hideUsageCost,
 	} = useStaticProviderSelection(PROVIDER_ID, apiConfiguration, currentMode)
-	const { selectedModelId, selectedModelInfo, commitModelSelection } = useProviderModelSelection(PROVIDER_ID, currentMode, {
-		models,
-		defaultModelId: legacySelectedModelId,
+
+	const hasApiKey = !!apiConfiguration?.xaiApiKey?.trim()
+	const oauthConnected = !!xaiOAuthIsAuthenticated
+	const cliOnlyConnected = !!xaiGrokCliIsAuthenticated && !oauthConnected
+	const subscriptionAuthenticated = oauthConnected || !!xaiGrokCliIsAuthenticated
+
+	const models = useMemo(
+		() =>
+			getXaiModelsForAuth({
+				subscriptionAuthenticated,
+				hasApiKey,
+				xaiSubscriptionModels,
+			}),
+		[subscriptionAuthenticated, hasApiKey, xaiSubscriptionModels],
+	)
+
+	// Prefer auth-aware catalog; fall back to SDK models if auth list is empty.
+	const effectiveModels = Object.keys(models).length > 0 ? models : sdkModels
+
+	// When on OAuth/CLI subscription, prefer catalog model info (correct context +
+	// included pricing) over any stale committed selection that may still carry
+	// PAYG prices or the generic 128K safe-default.
+	const catalogSelectedInfo = (id: string | undefined) => (id ? effectiveModels[id] : undefined)
+
+	const {
+		selectedModelId,
+		selectedModelInfo: rawSelectedModelInfo,
+		commitModelSelection,
+	} = useProviderModelSelection(PROVIDER_ID, currentMode, {
+		models: effectiveModels,
+		defaultModelId: legacySelectedModelId || xaiDefaultFromCatalog(effectiveModels),
 		config,
 		commitSelection,
-		fallbackModelInfo: legacySelectedModelInfo,
+		fallbackModelInfo: catalogSelectedInfo(legacySelectedModelId) ?? legacySelectedModelInfo,
 	})
+
+	const selectedModelInfo = catalogSelectedInfo(selectedModelId) ?? rawSelectedModelInfo
 
 	// Local state for reasoning effort toggle
 	const [reasoningEffortSelected, setReasoningEffortSelected] = useState(!!modeFields.reasoningEffort)
@@ -75,18 +113,14 @@ export const XaiProvider = ({ showModelOptions, isPopup, currentMode }: XaiProvi
 		write,
 	})
 
-	const hasApiKey = !!apiConfiguration?.xaiApiKey?.trim()
-	const oauthConnected = !!xaiOAuthIsAuthenticated
-	const cliOnlyConnected = !!xaiGrokCliIsAuthenticated && !oauthConnected
-	const subscriptionAuthenticated = oauthConnected || !!xaiGrokCliIsAuthenticated
-
 	const handleModelChange = (modelId: string) => {
 		if (!modelId) {
 			return
 		}
 
-		const fallbackModelId = defaultModelId || Object.keys(models)[0] || modelId
-		const modelInfo = models[modelId] ?? models[fallbackModelId] ?? selectedModelInfo ?? openAiModelInfoSafeDefaults
+		const fallbackModelId = defaultModelId || Object.keys(effectiveModels)[0] || modelId
+		const modelInfo =
+			effectiveModels[modelId] ?? effectiveModels[fallbackModelId] ?? selectedModelInfo ?? openAiModelInfoSafeDefaults
 
 		void commitModelSelection({
 			modelId,
@@ -131,7 +165,7 @@ export const XaiProvider = ({ showModelOptions, isPopup, currentMode }: XaiProvi
 			? "Connected — Grok CLI auth only"
 			: "Not connected"
 	const connectionDetail = oauthConnected
-		? `${Object.keys(models).length} models (CLI + subscription)`
+		? `${Object.keys(effectiveModels).length} models (CLI + subscription)`
 		: cliOnlyConnected
 			? "OAuth signed out. Session from ~/.grok/auth.json is still active."
 			: hasApiKey
@@ -159,8 +193,8 @@ export const XaiProvider = ({ showModelOptions, isPopup, currentMode }: XaiProvi
 								color: "var(--vscode-descriptionForeground)",
 								marginTop: 8,
 							}}>
-							⚠️ OAuth was signed out, but Grok CLI login at <code>~/.grok/auth.json</code> is still detected.
-							Sign out of Grok CLI separately to fully disconnect.
+							⚠️ OAuth was signed out, but Grok CLI login at <code>~/.grok/auth.json</code> is still detected. Sign
+							out of Grok CLI separately to fully disconnect.
 						</p>
 						<VSCodeButton onClick={handleSignIn}>Sign in to Grok (OAuth)</VSCodeButton>
 					</div>
@@ -203,7 +237,7 @@ export const XaiProvider = ({ showModelOptions, isPopup, currentMode }: XaiProvi
 				<>
 					<ModelSelector
 						label="Model"
-						models={models}
+						models={effectiveModels}
 						onChange={(event: Event) => handleModelChange(getEventValue(event))}
 						selectedModelId={selectedModelId}
 					/>

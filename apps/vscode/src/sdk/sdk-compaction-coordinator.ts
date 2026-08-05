@@ -129,10 +129,76 @@ export class SdkCompactionCoordinator {
 			throw new Error("Compaction sidecar could not be persisted.")
 		}
 
+		// Refresh the context-window progress bar immediately. The bar reads
+		// `getLastApiReqTotalTokens` from the last `api_req_started` usage
+		// snapshot — which still reflects pre-compact size until the next
+		// live turn. Scale the previous usage by the message-count ratio so
+		// the UI no longer stays stuck at 100%+/400k after a successful compact.
+		this.emitPostCompactUsageEstimate(sessionId, messagesBefore, result.messages.length)
+
 		this.emitInfo(this.formatCompactionStatus(messagesBefore, result.messages.length), sessionId)
 		await this.options.postStateToWebview()
 
 		Logger.log(`[SdkController] Compacted session ${sessionId}: ${messagesBefore} -> ${result.messages.length} messages`)
+	}
+
+	/**
+	 * Emit a synthetic api_req_started usage row so ContextWindow.tsx updates
+	 * before the next model turn. Prefer scaling the last real usage; if none
+	 * exists, leave the bar alone (emit nothing with total 0).
+	 */
+	private emitPostCompactUsageEstimate(sessionId: string, messagesBefore: number, messagesAfter: number): void {
+		const activeSessionId = this.options.sessions.getActiveSession()?.sessionId
+		if (activeSessionId !== sessionId) {
+			return
+		}
+		const clineMessages = this.readClineMessages()
+		const lastTotal = this.readLastApiReqTotalTokens(clineMessages)
+		if (lastTotal <= 0) {
+			return
+		}
+		const ratio = messagesBefore > 0 ? Math.min(1, Math.max(0.05, messagesAfter / messagesBefore)) : 0.5
+		// Keep a small floor so the bar doesn't jump to empty when counts are close.
+		const estimated = Math.max(1, Math.round(lastTotal * ratio))
+		const usageMessage: ClineMessage = {
+			ts: Date.now(),
+			type: "say",
+			say: "api_req_started",
+			text: JSON.stringify({
+				tokensIn: estimated,
+				tokensOut: 0,
+				cacheWrites: 0,
+				cacheReads: 0,
+				cost: 0,
+			}),
+			partial: false,
+		}
+		this.options.messages.appendAndEmit([usageMessage], {
+			type: "status",
+			payload: { sessionId, status: "running" },
+		})
+	}
+
+	private readClineMessages(): ClineMessage[] {
+		return this.options.messages.getClineMessages()
+	}
+
+	private readLastApiReqTotalTokens(messages: ClineMessage[]): number {
+		for (let i = messages.length - 1; i >= 0; i--) {
+			const msg = messages[i]
+			if (msg.type === "say" && msg.say === "api_req_started" && msg.text) {
+				try {
+					const { tokensIn, tokensOut, cacheWrites, cacheReads } = JSON.parse(msg.text)
+					const total = (tokensIn || 0) + (tokensOut || 0) + (cacheWrites || 0) + (cacheReads || 0)
+					if (total > 0) {
+						return total
+					}
+				} catch {
+					// continue
+				}
+			}
+		}
+		return 0
 	}
 
 	private getCurrentMode(): Mode {

@@ -31,7 +31,6 @@ import { JanProvider } from "./providers/JanProvider"
 import { LiteLlmProvider } from "./providers/LiteLlmProvider"
 import { LMStudioProvider } from "./providers/LMStudioProvider"
 import { MoonshotProvider } from "./providers/MoonshotProvider"
-import { SakanaProvider } from "./providers/SakanaProvider"
 import { OcaProvider } from "./providers/OcaProvider"
 import { OllamaProvider } from "./providers/OllamaProvider"
 import { OpenAICompatibleProvider } from "./providers/OpenAICompatible"
@@ -47,6 +46,7 @@ import {
 import { QwenCodeProvider } from "./providers/QwenCodeProvider"
 import { QwenProvider } from "./providers/QwenProvider"
 import { RequestyProvider } from "./providers/RequestyProvider"
+import { SakanaProvider } from "./providers/SakanaProvider"
 import { SapAiCoreProvider } from "./providers/SapAiCoreProvider"
 import { VercelAIGatewayProvider } from "./providers/VercelAIGatewayProvider"
 import { VertexProvider } from "./providers/VertexProvider"
@@ -179,6 +179,9 @@ const ApiOptions = ({
 		if (remoteProviders.length > 0) {
 			providers = providers.filter((option) => remoteProviders.includes(option.value))
 		}
+
+		// Alphabetical by display label (same order as QuickModelPicker).
+		providers = providers.slice().sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }))
 
 		return providers
 	}, [catalogProviderListings, isClinePassEnabled, remoteConfigSettings])

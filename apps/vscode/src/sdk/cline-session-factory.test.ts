@@ -33,6 +33,11 @@ const mocks = vi.hoisted(() => {
 		getDistinctId: vi.fn(() => "test-distinct-id"),
 		getProviderSettingsManager: vi.fn(() => providerSettingsManager),
 		providerSettingsManager,
+		resolveXaiAuth: vi.fn(async (_apiKey?: string): Promise<{ mode: "subscription" | "api_key"; token: string }> => {
+			throw new Error("xAI auth not configured in test")
+		}),
+		assertXaiModelMatchesAuth: vi.fn((_mode?: string, _modelId?: string) => undefined),
+
 		stateManager: {
 			getApiConfiguration: vi.fn(() => ({
 				actModeApiProvider: "anthropic",
@@ -73,6 +78,12 @@ vi.mock("@shared/services/Logger", () => ({
 		warn: vi.fn(),
 		error: vi.fn(),
 	},
+}))
+
+vi.mock("@/integrations/xai/auth-mode", () => ({
+	resolveXaiAuth: mocks.resolveXaiAuth,
+	assertXaiModelMatchesAuth: mocks.assertXaiModelMatchesAuth,
+	resolveXaiAccessToken: async () => null,
 }))
 
 // ---------------------------------------------------------------------------
@@ -396,6 +407,66 @@ describe("buildSessionConfig", () => {
 			modelId: "gpt-5.4",
 			apiKey: "codex-oauth-token",
 		})
+	})
+
+	it("resolves xAI OAuth/CLI token when no PAYG API key is set", async () => {
+		mocks.resolveXaiAuth.mockResolvedValue({ mode: "subscription", token: "xai-oauth-token" })
+
+		mocks.stateManager.getApiConfiguration.mockReturnValue({
+			actModeApiProvider: "xai",
+			actModeApiModelId: "grok-4.3",
+			// no xaiApiKey — must use OAuth/CLI
+		} as any)
+
+		const config = await buildSessionConfig({ cwd: "/tmp/workspace" })
+
+		expect(mocks.resolveXaiAuth).toHaveBeenCalled()
+		expect(mocks.assertXaiModelMatchesAuth).toHaveBeenCalledWith("subscription", "grok-4.3")
+		expect(config.providerId).toBe("xai")
+		expect(config.modelId).toBe("grok-4.3")
+		expect(config.apiKey).toBe("xai-oauth-token")
+		expect(config.baseUrl).toBe("https://api.x.ai/v1")
+		expect(config.providerConfig).toMatchObject({
+			providerId: "xai",
+			modelId: "grok-4.3",
+			apiKey: "xai-oauth-token",
+			baseUrl: "https://api.x.ai/v1",
+		})
+	})
+
+	it("routes xAI CLI models through the Grok CLI proxy with headers", async () => {
+		mocks.resolveXaiAuth.mockResolvedValue({ mode: "subscription", token: "xai-cli-token" })
+
+		mocks.stateManager.getApiConfiguration.mockReturnValue({
+			actModeApiProvider: "xai",
+			actModeApiModelId: "grok-composer-2.5-fast",
+		} as any)
+
+		const config = await buildSessionConfig({ cwd: "/tmp/workspace" })
+
+		expect(config.apiKey).toBe("xai-cli-token")
+		expect(config.baseUrl).toBe("https://cli-chat-proxy.grok.com/v1")
+		expect(config.providerConfig).toMatchObject({
+			baseUrl: "https://cli-chat-proxy.grok.com/v1",
+			apiKey: "xai-cli-token",
+		})
+		expect((config.providerConfig as any).headers).toMatchObject({
+			"x-xai-token-auth": "xai-grok-cli",
+			"x-grok-model-override": "grok-composer-2.5-fast",
+			"x-grok-client-identifier": "icline",
+		})
+	})
+
+	it("rewrites system prompt identity from Cline to iCline", async () => {
+		mocks.stateManager.getApiConfiguration.mockReturnValue({
+			actModeApiProvider: "anthropic",
+			actModeApiModelId: "claude-sonnet-4-6",
+			apiKey: "anthropic-key",
+		} as any)
+
+		const config = await buildSessionConfig({ cwd: "/tmp/workspace" })
+		expect(config.systemPrompt).toMatch(/You are iCline/)
+		expect(config.systemPrompt).not.toMatch(/You are Cline/)
 	})
 
 	it("resolves SDK-backed provider API keys from provider-specific settings", async () => {

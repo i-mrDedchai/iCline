@@ -1,7 +1,9 @@
 import { listLocalProviders, type ModelCatalogConfig, resolveProviderConfig } from "@cline/core"
 import { type ProviderConfig, resolveProviderUsageCostDisplay } from "@cline/llms"
 import { type ProviderListItem } from "@cline/shared"
+import { StateManager } from "@/core/storage/StateManager"
 import { getFeatureFlagsService } from "@/services/feature-flags"
+import { getXaiModelsForAuth, type ModelInfo, xaiDefaultModelId } from "@/shared/api"
 import { FeatureFlag } from "@/shared/services/feature-flags/feature-flags"
 import { getProviderSettingsManager } from "../provider-migration"
 import type {
@@ -57,7 +59,8 @@ const DEFAULT_MODEL_CATALOG_CONFIG: ModelCatalogConfig = {
  * don't conflict with this label.
  */
 const HOST_PROVIDER_LABELS: Readonly<Record<string, string>> = {
-	xai: "Grok",
+	// Match pre-upstream dev.4 branding (user-facing settings + chips).
+	xai: "xAI Grok (OAuth & Subscription)",
 }
 
 /**
@@ -214,7 +217,64 @@ async function listSdkProviderListings(): Promise<ReadonlyArray<ProviderListing>
 	const { providers } = await listLocalProviders(manager, {
 		isClinePassEnabled: featureFlags.getBooleanFlagEnabled(FeatureFlag.CLINE_PASS),
 	})
-	return providers.map(toProviderListing)
+	// Alphabetical by display name so API Configuration + Quick picker match.
+	return providers
+		.map(toProviderListing)
+		.slice()
+		.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }))
+}
+
+/**
+ * iCline xAI: merge CLI subscription models + live subscription cache + PAYG
+ * so QuickModelPicker (resolveProviderModels) matches XaiProvider settings UI.
+ */
+async function resolveXaiAuthAwareModels(
+	providerId: ProviderId,
+	fingerprint: Fingerprint,
+	now: () => number,
+): Promise<ProviderModelsRecord> {
+	let subscriptionAuthenticated = false
+	let hasApiKey = false
+	let xaiSubscriptionModels: Record<string, ModelInfo> = {}
+
+	try {
+		const { xaiOAuthManager } = await import("@/integrations/xai/oauth")
+		const { readGrokCliToken } = await import("@/integrations/xai/grok-cli-auth")
+		subscriptionAuthenticated = (await xaiOAuthManager.isAuthenticated()) || !!readGrokCliToken()?.accessToken
+	} catch {
+		// OAuth/CLI modules unavailable in some test hosts
+	}
+
+	try {
+		const apiConfig = StateManager.get().getApiConfiguration()
+		hasApiKey = !!apiConfig.xaiApiKey?.trim()
+		const cache = StateManager.get().getModelsCache("xaiSubscription")
+		if (cache && Object.keys(cache).length > 0) {
+			xaiSubscriptionModels = cache
+		}
+	} catch {
+		// StateManager unavailable
+	}
+
+	const authModels = getXaiModelsForAuth({
+		subscriptionAuthenticated,
+		hasApiKey,
+		xaiSubscriptionModels,
+	})
+
+	const models = new Map(
+		Object.entries(authModels).map(([modelId, info]) => [modelId, applyHostModelInfoOverrides(providerId, modelId, info)]),
+	)
+
+	return {
+		ok: true,
+		providerId,
+		configFingerprint: fingerprint,
+		models,
+		defaultModelId: chooseDefaultModelId(xaiDefaultModelId, models),
+		source: "sdk-dynamic",
+		fetchedAt: now(),
+	}
 }
 
 async function resolveSdkModels(
@@ -224,6 +284,11 @@ async function resolveSdkModels(
 	selection: ModelSelection | undefined,
 	now: () => number,
 ): Promise<ProviderModelsRecord> {
+	// Host-owned auth-aware catalog for xAI (CLI + subscription + API key).
+	if (providerId === "xai") {
+		return resolveXaiAuthAwareModels(providerId, fingerprint, now)
+	}
+
 	const sdkProviderId = toSdkProviderId(providerId)
 	const resolved = await resolveProviderConfig(
 		sdkProviderId,

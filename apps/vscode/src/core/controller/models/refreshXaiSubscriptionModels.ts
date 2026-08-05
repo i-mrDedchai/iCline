@@ -1,10 +1,10 @@
 import { ensureCacheDirectoryExists, GlobalFileNames } from "@core/storage/disk"
-import { StateManager } from "@/core/storage/StateManager"
 import { ModelInfo, xaiModels } from "@shared/api"
 import { fileExistsAtPath } from "@utils/fs"
 import axios from "axios"
 import fs from "fs/promises"
 import path from "path"
+import { StateManager } from "@/core/storage/StateManager"
 import { resolveXaiAuth } from "@/integrations/xai/auth-mode"
 import { isXaiCliModel, XAI_DEFAULT_BASE_URL } from "@/integrations/xai/constants"
 import { getAxiosSettings } from "@/shared/net"
@@ -14,6 +14,7 @@ import { Controller } from ".."
 
 /** Known subscription chat models when the live API list is unavailable. */
 export const XAI_SUBSCRIPTION_API_FALLBACK_IDS = [
+	"grok-4.5",
 	"grok-build-0.1",
 	"grok-4.3",
 	"grok-4.20-0309-reasoning",

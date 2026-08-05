@@ -226,22 +226,45 @@ export const ModelInfoView = ({
 						<InfoValue>{formatCompactContext(modelInfo.contextWindow)}</InfoValue>
 					</InfoItem>
 				)}
-				{!hideUsageCost && modelInfo.inputPrice !== undefined && (
-					<InfoItem>
-						<InfoLabel>Input: </InfoLabel>
-						<InfoValue>{formatCompactPrice(modelInfo.inputPrice)}</InfoValue>
-					</InfoItem>
-				)}
-				{!hideUsageCost && modelInfo.outputPrice !== undefined && (
-					<InfoItem>
-						<InfoLabel>Output: </InfoLabel>
-						<InfoValue>
-							{hasThinkingConfig && modelInfo.thinkingConfig?.outputPrice !== undefined
-								? formatCompactPrice(modelInfo.thinkingConfig.outputPrice)
-								: formatCompactPrice(modelInfo.outputPrice)}
-						</InfoValue>
-					</InfoItem>
-				)}
+				{/* Subscription-included models (price 0 + description mentions subscription)
+				    show the stable 0.1.17 label instead of "Free" / PAYG rates. */}
+				{!hideUsageCost &&
+					(modelInfo.inputPrice === 0 || modelInfo.outputPrice === 0) &&
+					(modelInfo.description?.toLowerCase().includes("subscription") ||
+						modelInfo.description?.toLowerCase().includes("included")) && (
+						<InfoItem>
+							<InfoLabel>Pricing: </InfoLabel>
+							<InfoValue style={{ color: "var(--vscode-terminal-ansiGreen)" }}>Included in subscription</InfoValue>
+						</InfoItem>
+					)}
+				{!hideUsageCost &&
+					!(
+						(modelInfo.inputPrice === 0 || modelInfo.outputPrice === 0) &&
+						(modelInfo.description?.toLowerCase().includes("subscription") ||
+							modelInfo.description?.toLowerCase().includes("included"))
+					) &&
+					modelInfo.inputPrice !== undefined && (
+						<InfoItem>
+							<InfoLabel>Input: </InfoLabel>
+							<InfoValue>{formatCompactPrice(modelInfo.inputPrice)}</InfoValue>
+						</InfoItem>
+					)}
+				{!hideUsageCost &&
+					!(
+						(modelInfo.inputPrice === 0 || modelInfo.outputPrice === 0) &&
+						(modelInfo.description?.toLowerCase().includes("subscription") ||
+							modelInfo.description?.toLowerCase().includes("included"))
+					) &&
+					modelInfo.outputPrice !== undefined && (
+						<InfoItem>
+							<InfoLabel>Output: </InfoLabel>
+							<InfoValue>
+								{hasThinkingConfig && modelInfo.thinkingConfig?.outputPrice !== undefined
+									? formatCompactPrice(modelInfo.thinkingConfig.outputPrice)
+									: formatCompactPrice(modelInfo.outputPrice)}
+							</InfoValue>
+						</InfoItem>
+					)}
 			</InfoRow>
 
 			{/* Collapsible Advanced Section */}

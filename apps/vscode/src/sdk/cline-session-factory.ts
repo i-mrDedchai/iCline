@@ -26,7 +26,6 @@ import {
 } from "@cline/llms"
 import { buildClineSystemPrompt } from "@cline/shared"
 import type { ApiConfiguration } from "@shared/api"
-import { getIclineHarnessOverlay } from "@/icline/harness/guardrails"
 import { ClineClient } from "@shared/cline"
 import type { HistoryItem } from "@shared/HistoryItem"
 import { DEFAULT_LANGUAGE_SETTINGS, getLanguageKey, type LanguageDisplay } from "@shared/Languages"
@@ -36,6 +35,9 @@ import type { Mode } from "@shared/storage/types"
 import { stringifyVsCodeLmModelSelector } from "@shared/vsCodeSelectorUtils"
 import { StateManager } from "@/core/storage/StateManager"
 import { HostProvider } from "@/hosts/host-provider"
+import { applyIclineAgentIdentity, getIclineHarnessOverlay } from "@/icline/harness/guardrails"
+import { assertXaiModelMatchesAuth, resolveXaiAuth } from "@/integrations/xai/auth-mode"
+import { isXaiCliModel, XAI_CLI_PROXY_BASE_URL, XAI_DEFAULT_BASE_URL, XAI_GROK_CLI_VERSION } from "@/integrations/xai/constants"
 import { ExtensionRegistryInfo } from "@/registry"
 import { getFeatureFlagsService } from "@/services/feature-flags"
 import { getDistinctId } from "@/services/logging/distinctId"
@@ -425,6 +427,11 @@ export function getDefaultModelIdForProvider(providerId: string): string | undef
  *
  * For SDK-managed OAuth providers, reads the OAuth token from providers.json
  * via ProviderSettingsManager (the single source of truth for credentials).
+ *
+ * iCline xAI/Grok is special: credentials may be OAuth (SuperGrok / X Premium),
+ * Grok CLI auth (`~/.grok/auth.json`), or a pay-as-you-go API key. Prefer the
+ * configured API key when present (user intent for PAYG), otherwise resolve
+ * subscription tokens via {@link resolveXaiAuth}.
  */
 export function resolveApiKey(providerId: string, config: ApiConfiguration): string | undefined {
 	const authHandler = getProviderAuthHandler(providerId)
@@ -476,6 +483,39 @@ export function resolveApiKey(providerId: string, config: ApiConfiguration): str
 	}
 
 	return undefined
+}
+
+/**
+ * Async credential resolution for providers that need host-side OAuth/CLI
+ * lookup beyond the synchronous ApiConfiguration / providers.json path.
+ * Currently iCline xAI/Grok only.
+ */
+export async function resolveApiKeyAsync(providerId: string, config: ApiConfiguration): Promise<string | undefined> {
+	// Prefer explicit API key first (same priority as legacy XAIHandler).
+	const syncKey = resolveApiKey(providerId, config)
+	if (providerId !== "xai") {
+		return syncKey
+	}
+	if (syncKey?.trim()) {
+		return syncKey.trim()
+	}
+	try {
+		const auth = await resolveXaiAuth(undefined)
+		return auth.token
+	} catch (error) {
+		Logger.warn("[SessionFactory] xAI OAuth/CLI credential resolution failed:", error)
+		return undefined
+	}
+}
+
+function buildXaiCliHeaders(modelId: string, sessionId: string): Record<string, string> {
+	return {
+		"x-grok-client-identifier": "icline",
+		"x-grok-client-version": XAI_GROK_CLI_VERSION,
+		"x-xai-token-auth": "xai-grok-cli",
+		"x-grok-model-override": modelId,
+		"x-grok-conv-id": sessionId,
+	}
 }
 
 /**
@@ -672,6 +712,7 @@ export async function buildSessionConfig(input: SessionConfigInput): Promise<Cor
 	let vertexProviderConfig: Pick<ProviderSettings, "gcp" | "region"> | undefined
 	let sapProviderConfig: SapProviderConfig | undefined
 	let ollamaProviderConfig: ReturnType<typeof resolveOllamaProviderConfig> | undefined
+	let xaiHeaders: Record<string, string> | undefined
 
 	try {
 		const stateManager = StateManager.get()
@@ -682,8 +723,8 @@ export async function buildSessionConfig(input: SessionConfigInput): Promise<Cor
 		providerId = modeProvider
 
 		if (providerId) {
-			// Resolve API key
-			apiKey = resolveApiKey(providerId, apiConfig)
+			// Resolve API key (async path covers iCline xAI OAuth / Grok CLI)
+			apiKey = await resolveApiKeyAsync(providerId, apiConfig)
 
 			// Resolve model ID
 			modelId = resolveModelId(providerId, mode, apiConfig)
@@ -762,10 +803,33 @@ export async function buildSessionConfig(input: SessionConfigInput): Promise<Cor
 		modelId = modelId ?? getDefaultModelIdForProvider(providerId) ?? getDefaultModelIdForProvider(DEFAULT_PROVIDER_ID) ?? ""
 	}
 	if (!apiKey && apiConfig) {
-		apiKey = resolveApiKey(providerId, apiConfig)
+		apiKey = await resolveApiKeyAsync(providerId, apiConfig)
 	}
 	apiKey = apiKey ?? ""
+
+	// iCline xAI: restore pre-SDK auth routing (OAuth/CLI token + CLI proxy headers).
+	// Without this, subscription-only users get empty apiKey → "No credentials presented".
+	if (providerId === "xai" && modelId) {
+		try {
+			const auth = await resolveXaiAuth(apiConfig?.xaiApiKey)
+			assertXaiModelMatchesAuth(auth.mode, modelId)
+			apiKey = auth.token
+			if (isXaiCliModel(modelId)) {
+				baseUrl = XAI_CLI_PROXY_BASE_URL
+				xaiHeaders = buildXaiCliHeaders(modelId, crypto.randomUUID())
+			} else if (!baseUrl) {
+				baseUrl = XAI_DEFAULT_BASE_URL
+			}
+			Logger.log(
+				`[SessionFactory] xAI auth resolved: mode=${auth.mode}, model=${modelId}, cliProxy=${isXaiCliModel(modelId)}`,
+			)
+		} catch (error) {
+			Logger.warn("[SessionFactory] xAI auth resolution failed:", error)
+		}
+	}
+
 	const committedRuntimeModel = resolveCommittedRuntimeModel(providerId, mode, modelId)
+
 	const overriddenMaxTokens = committedRuntimeModel?.overrides?.maxTokens
 	const maxTokensPerTurn =
 		positiveFiniteNumber(overriddenMaxTokens) ??
@@ -783,23 +847,25 @@ export async function buildSessionConfig(input: SessionConfigInput): Promise<Cor
 	let systemPrompt = ""
 	try {
 		const workspaceName = resolveWorkspaceName(cwd)
-		systemPrompt = buildClineSystemPrompt({
-			ide: "VS Code",
-			workspaceRoot,
-			workspaceName,
-			mode: mode === "plan" ? "plan" : "act",
-			providerId,
-			platform: process.platform,
-			// iCline harness guardrails: behavioral overlay (verify-before-claim,
-			// epistemic discipline, tool-use in ACT MODE, etc.) injected via the
-			// shared prompt builder's rules slot so it rides with every session
-			// without forking the SDK prompt assembly.
-			rules: getIclineHarnessOverlay(),
-		})
+		systemPrompt = applyIclineAgentIdentity(
+			buildClineSystemPrompt({
+				ide: "VS Code",
+				workspaceRoot,
+				workspaceName,
+				mode: mode === "plan" ? "plan" : "act",
+				providerId,
+				platform: process.platform,
+				// iCline harness guardrails: behavioral overlay (verify-before-claim,
+				// epistemic discipline, tool-use in ACT MODE, etc.) injected via the
+				// shared prompt builder's rules slot so it rides with every session
+				// without forking the SDK prompt assembly.
+				rules: getIclineHarnessOverlay(),
+			}),
+		)
 		Logger.log(`[SessionFactory] Built system prompt: ${systemPrompt.length} chars`)
 	} catch (error) {
 		Logger.warn("[SessionFactory] Failed to build system prompt, using minimal fallback:", error)
-		systemPrompt = "You are Cline, a highly skilled software engineer. Help the user with their request."
+		systemPrompt = "You are iCline, a highly skilled software engineer. Help the user with their request."
 	}
 
 	// Inject preferred language instructions when a non-default language is selected.
@@ -812,6 +878,12 @@ export async function buildSessionConfig(input: SessionConfigInput): Promise<Cor
 		}
 	} catch (error) {
 		Logger.warn("[SessionFactory] Failed to inject preferredLanguage instructions:", error)
+	}
+
+	// Always surface the active provider/model so the agent can answer
+	// "which model am I using?" without guessing from disk caches / other apps.
+	if (providerId || modelId) {
+		systemPrompt = `${systemPrompt}\n\n# Active Session\n\n- Provider: \`${providerId || "unknown"}\`\n- Model: \`${modelId || "unknown"}\`\n- When asked which model or provider you are connected to, report these values exactly.`
 	}
 
 	const stateManager = StateManager.get()
@@ -862,6 +934,7 @@ export async function buildSessionConfig(input: SessionConfigInput): Promise<Cor
 		modelId,
 		...(apiKey ? { apiKey } : {}),
 		...(baseUrl !== undefined ? { baseUrl } : {}),
+		...(xaiHeaders ? { headers: xaiHeaders } : {}),
 		...(knownModels && Object.keys(knownModels).length > 0 ? { knownModels } : {}),
 		fetch,
 	}

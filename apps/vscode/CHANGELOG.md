@@ -1,52 +1,33 @@
 # Changelog
 
-## [0.1.18-dev.5] - 2026-07-22
+## [0.1.18] - Unreleased
 
-Upstream sync round 1+2: merged `upstream/main` (@ `402b9994d`, post-v4.0.0 SDK migration + 16 post-sync commits) into iCline. This is the first release on the new v4.0.0 SDK architecture. dev.4 carryover issues (history export/import, auto-fetch model list) are resolved as root-cause fixes. Smoke-test restoration pass: Jan settings persistence (C3+C5), xAI → Grok branding + OAuth UI, and Quick Provider & Model picker are all restored on the new SDK hooks.
+Upstream sync + smoke-test restoration on the v4.0.0 SDK architecture (dev builds use VSIX labels only; notes accumulate here until Stable).
 
 ### Added
-- 🔄 **Upstream sync (v4.0.0 SDK migration)** — merged 124-file conflict resolution + 16 post-sync commits from `upstream/main`. iCline now runs on the new SDK architecture (`@cline/shared`, `@cline/llms`, `@cline/agents`, `@cline/core`). Sakana/Jan/zenmux providers registered as SDK `BuiltinSpecs` with the `openai-compatible` family.
+- 🔄 **Upstream sync (v4.0.0 SDK migration)** — merged 124-file conflict resolution + 16 post-sync commits from `upstream/main` (@ `402b9994d`). iCline now runs on the new SDK architecture (`@cline/shared`, `@cline/llms`, `@cline/agents`, `@cline/core`). Sakana/Jan/zenmux providers registered as SDK `BuiltinSpecs` with the `openai-compatible` family.
 - 🛡️ **Guardrails re-injection** — `getIclineHarnessOverlay` re-injected via the SDK `buildClineSystemPrompt()` `rules` slot; `verifyWrittenFile` re-injected via the SDK `afterTool` hook (verifies `editor` + `apply_patch` targets; failure replaces the tool result so the model cannot claim a write that did not land). Covered by 10 tests.
 - 📡 **zenmux dynamic model list** — `modelsSourceUrl` added to the zenmux builtin spec so the SDK's generic `resolveProviderModels` RPC fetches the live model list (supersedes the orphaned `refreshZenmuxModels.ts` handler).
 - 🆕 **Upstream features ported to main** — Claude Sonnet 5, GPT-5.6 ChatGPT, ClinePass full enable, DeepSeek reasoning `xhigh`, Vertex models, Kimi K3 ClinePass fallback, task lifecycle telemetry, Claude Code/Codex optional peer deps, SDK OAuth retry + teammate run fixes.
 - 📋 **Upstream sync plan** — `docs/icline/upstream-sync-plan.md` documents the v3.89.2 → upstream/main merge strategy with 7 phases.
+- 🐟 **Sakana.ai provider** — Fugu / Fugu Ultra via OpenAI-compatible API (`https://api.sakana.ai/v1`); Pay-as-you-go and Subscription plan modes; Responses API (default) and Chat Completions; models `fugu`, `fugu-ultra`, `fugu-ultra-20260615`
+- 🔔 **Welcome update bar (Phase 2)** — dismissible in-webview notices on the welcome home for new iCline releases and optional upstream Cline ahead signals (reuses `iCline.updates.*` settings and dismiss state)
+- 📚 **Provider docs** — `docs/provider-config/sakana.mdx` and `docs/provider-config/jan.mdx` added to the docs site navigation
 
 ### Fixed
-- 📦 **History export/import (dev.4 root-cause)** — the dev.4 fix used `import * as archiverNS` then called `archiverNS(...)`, which throws "archiverNS is not a function" at runtime under esbuild/bun (namespace objects are non-callable). Reached the callable via `archiverNS.default` instead. Added a real-archiver round-trip test (3 tests).
+- 📦 **History export/import (root-cause)** — the prior fix used `import * as archiverNS` then called `archiverNS(...)`, which throws "archiverNS is not a function" at runtime under esbuild/bun (namespace objects are non-callable). Reached the callable via `archiverNS.default` instead. Added a real-archiver round-trip test (3 tests).
 - 🔌 **Proto RPCs restored** — 5 iCline RPCs lost in the upstream merge are restored (handlers already existed): `refreshIclineUpdates`, `dismissIclineUpdate` (UpdateService); `refreshZenmuxModelsRpc`, `refreshXaiSubscriptionModelsRpc`, `getJanModels` (model fetching).
 - 📦 **api.ts exports restored** — `sakanaModels`, `sakanaDefaultModelId`, `SakanaModelId`, `zenmuxDefaultModelId`, `zenmuxDefaultModelInfo` (lost in the upstream merge).
 - 🖼️ **ClineCompactIcon restored** — iCline compact logo asset (deleted by upstream) used by `IclineWelcomeBrand`.
-- 🧭 **ChatTextArea migration** — dev.4 inline `ChatModelPicker` dropdown → upstream settings-navigation pattern (`navigateToSettingsModelPicker`). The upstream `ClineModelPicker` in settings uses the new SDK hooks and supports all providers including Sakana/Jan/zenmux.
-- 🏷️ **Welcome home props restored** — `quickStartMode` + `shouldShowQuickWins` props that dev.4 added to `WelcomeSection`/`HomeHeader`/`ChatView` (lost in the upstream merge).
+- 🧭 **ChatTextArea migration** — prior inline `ChatModelPicker` dropdown → upstream settings-navigation pattern (`navigateToSettingsModelPicker`). The upstream `ClineModelPicker` in settings uses the new SDK hooks and supports all providers including Sakana/Jan/zenmux.
+- 🏷️ **Welcome home props restored** — `quickStartMode` + `shouldShowQuickWins` props added to `WelcomeSection`/`HomeHeader`/`ChatView` (lost in the upstream merge).
 - 🧹 **Lint hygiene** — `biome.jsonc` ignores archived legacy code under `docs/icline/legacy-*/`; `model-utils.test.ts` converted from UTF-16 LE to UTF-8.
 - 🏷️ **agent-display-name restored** — 26 `AGENT_DISPLAY_NAME` references in `ChatRow.tsx` user-facing strings (lost in the upstream merge).
 - 📦 **HistoryView export/import restored** — Export/Import buttons in `HistoryView` + iCline welcome header (`IclineWelcomeBrand` + `ProviderModelChip`).
 - 📄 **sync:docs script** — `patchProviders` made conditional (providers.json removed upstream in `83339c3c5`); `build-metadata.ts` regenerated with v4.0.0 SDK synced version.
-
-### Fixed (smoke-test restoration pass)
 - 🔧 **Jan settings not saving (C5) + model list not loading (C3)** — root cause: `convertApiConfigurationToProto` / `convertProtoToApiConfiguration` were missing mappings for all iCline-specific provider fields (`janBaseUrl`, `janApiKey`, `sakanaApiKey`, `zenmuxApiKey`, `zenmuxApiProtocol`, `sakanaBillingMode`, `sakanaApiProtocol`, `plan/actModeJanModelId`, `plan/actModeSakanaModelId`, `plan/actModeZenmuxModelId`). When the webview called `handleFieldChange("janBaseUrl", …)`, the value was silently dropped before reaching `StateManager`, so the settings never persisted and Jan model fetch always fell back to the default port. Added the missing mappings in both directions. Affects Jan, Sakana, and ZenMux providers.
 - 🔐 **xAI → Grok branding + OAuth UI** — three pieces restored: (1) `HOST_PROVIDER_LABELS` host-side override in `catalog.ts` displays "Grok" instead of "xAI" in the provider dropdown (no SDK patch, upstream-sync-safe); (2) `XaiProvider.tsx` restored the OAuth Sign In/Out buttons, `AuthConnectionBadge`, and CLI-auth-only branch on top of the new SDK hooks (`useProviderConfig` + `useProviderModelSelection`); (3) `getStateToPostToWebview` re-populates `xaiOAuthIsAuthenticated` / `xaiGrokCliIsAuthenticated` so the Sign In button can flip to Connected.
-- ⚡ **Quick Provider & Model picker** — new `QuickModelPicker` component built on the v4.0.0 SDK hooks (`useProviderListings` + `useProviderModels` + `commitModelSelection` RPC) replaces the upstream "click to open settings" fallback in `ChatTextArea`. Supports all providers including Sakana/Jan/zenmux/Grok. Preserves the dev.4 inline popover UX (provider list, expandable models, search, refresh, "Edit in Settings…" footer).
-
-### Changed
-- 🗄️ **Legacy code archived** — dev.4 `ChatModelPicker.tsx`, `chatModelPickerUtils.ts`, `ModelThinkingStatusIcons.tsx` moved to `docs/icline/legacy-chat-model-picker/` (depended on removed APIs). ModelThinkingStatusIcons UX is temporarily dropped — to be re-implemented on the new SDK hooks later.
-- 🧰 **SDK workspace** — `bun install` now manages the whole monorepo; `build:sdk` rebuilds the 6 SDK packages before running bun unit tests.
-
-### Known Limitations
-- ModelThinkingStatusIcons (reasoning effort indicators in chat textarea) temporarily removed — to be re-implemented on the new SDK hooks.
-- QuickModelPicker is read-only for model selection (no reasoning-effort / thinking-budget controls in the popover yet — open Settings for those).
-- Mistake-limit telemetry (upstream v4.0.10) not ported — it is a legacy/stable-only feature not present in `upstream/main`; `consecutiveMistakeCount` handling already exists in `sdk-interaction-coordinator.ts`.
-- Jan C3+C5 fix verified by typecheck + code reading; runtime test with a real Jan server pending user smoke test.
-
-## [0.1.18-dev.4] - 2026-06-22
-
-### Added
-- 🐟 **Sakana.ai provider** — Fugu / Fugu Ultra via OpenAI-compatible API (`https://api.sakana.ai/v1`); Pay-as-you-go and Subscription plan modes; Responses API (default) and Chat Completions; models `fugu`, `fugu-ultra`, `fugu-ultra-20260615`
-- 🔔 **Welcome update bar (Phase 2)** — dismissible in-webview notices on the welcome home for new iCline releases and optional upstream Cline ahead signals (reuses `iCline.updates.*` settings and dismiss state)
-- 📚 **Provider docs** — `docs/provider-config/sakana.mdx` and `docs/provider-config/jan.mdx` added to the docs site navigation
-- 📋 **Upstream sync plan** — `docs/icline/upstream-sync-plan.md` documents the v3.89.2 → upstream/main (post-v4.0.0) merge strategy with 7 phases and 124-file conflict analysis
-
-### Fixed
+- ⚡ **Quick Provider & Model picker** — new `QuickModelPicker` component built on the v4.0.0 SDK hooks (`useProviderListings` + `useProviderModels` + `commitModelSelection` RPC) replaces the upstream "click to open settings" fallback in `ChatTextArea`. Supports all providers including Sakana/Jan/zenmux/Grok. Preserves the prior inline popover UX (provider list, expandable models, search, refresh, "Edit in Settings…" footer).
 - 📸 **Open VSX README screenshots** — package VSIX with `vsce --baseImagesUrl` so README images use GitHub absolute URLs on Open VSX and VS Marketplace (corrects v0.1.17 assumption that relative `assets/docs/` paths work on Open VSX)
 - 🏷️ **Residual Cline branding** — VS Code LM justification, standalone terminal names, AI Review comment controller, worktree tooltip, and onboarding welcome heading use **iCline** / `getProductName()` (official Cline upstream references unchanged)
 - 🔧 **Jan provider hardening** — default model ID fallback, retry policy, error classification, and sanitized error logging (no credentials in user-facing messages)
@@ -55,7 +36,15 @@ Upstream sync round 1+2: merged `upstream/main` (@ `402b9994d`, post-v4.0.0 SDK 
 - 🔧 **Jan provider RPC type** — wrap `getJanModels` args in `OpenAiModelsRequest.create({ baseUrl, apiKey })` so the `metadata` proto field is auto-filled (fixes TS2345 and the webview build)
 
 ### Changed
+- 🗄️ **Legacy code archived** — prior `ChatModelPicker.tsx`, `chatModelPickerUtils.ts`, `ModelThinkingStatusIcons.tsx` moved to `docs/icline/legacy-chat-model-picker/` (depended on removed APIs). ModelThinkingStatusIcons UX is temporarily dropped — to be re-implemented on the new SDK hooks later.
+- 🧰 **SDK workspace** — `bun install` now manages the whole monorepo; `build:sdk` rebuilds the 6 SDK packages before running bun unit tests.
 - 📦 **Publish baseline** — shared README image rewrite in `scripts/marketplace-images.mjs`; documented in `icline-marketplace.md` (never use `--no-rewrite-relative-links` for store publishes)
+
+### Known Limitations
+- ModelThinkingStatusIcons (reasoning effort indicators in chat textarea) temporarily removed — to be re-implemented on the new SDK hooks.
+- QuickModelPicker is read-only for model selection (no reasoning-effort / thinking-budget controls in the popover yet — open Settings for those).
+- Mistake-limit telemetry (upstream v4.0.10) not ported — it is a legacy/stable-only feature not present in `upstream/main`; `consecutiveMistakeCount` handling already exists in `sdk-interaction-coordinator.ts`.
+- Jan C3+C5 fix verified by typecheck + code reading; runtime test with a real Jan server pending user smoke test.
 
 ## [0.1.17] - 2026-06-22
 

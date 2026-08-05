@@ -100,6 +100,12 @@ export class SdkMessageCoordinator {
 		this.emitSessionEvents(messages, event)
 	}
 
+	/** Current UI transcript for the active task (empty when no task). */
+	getClineMessages(): ClineMessage[] {
+		const task = this.options.getTask()
+		return task?.messageStateHandler?.getClineMessages() ?? []
+	}
+
 	emitHookMessage(message: ClineMessage): void {
 		this.appendMessages([message])
 		pushMessageToWebview(message).catch(() => {})

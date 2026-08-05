@@ -299,26 +299,47 @@ export type XAIModelId = keyof typeof xaiModels
 export const xaiDefaultModelId: XAIModelId = "grok-composer-2.5-fast"
 export const xaiModels = {
 	"grok-composer-2.5-fast": {
+		name: "Composer 2.5 Fast",
 		maxTokens: 30_000,
 		contextWindow: 200_000,
 		supportsImages: true,
 		supportsPromptCache: false,
 		inputPrice: 0,
 		outputPrice: 0,
-		description: "Composer 2.5 Fast ??? agentic coding model via Grok Build CLI (OAuth).",
+		cacheReadsPrice: 0,
+		cacheWritesPrice: 0,
+		description: "Composer 2.5 Fast — agentic coding model via Grok Build CLI (OAuth / subscription).",
 		apiFormat: ApiFormat.OPENAI_RESPONSES,
 	},
 	"grok-build": {
+		name: "Grok Build",
 		maxTokens: 30_000,
 		contextWindow: 512_000,
 		supportsImages: true,
 		supportsPromptCache: false,
 		inputPrice: 0,
 		outputPrice: 0,
-		description: "Grok Build ??? latest xAI coding model via Grok Build CLI (OAuth).",
+		cacheReadsPrice: 0,
+		cacheWritesPrice: 0,
+		description: "Grok Build — latest xAI coding model via Grok Build CLI (OAuth / subscription).",
+		apiFormat: ApiFormat.OPENAI_RESPONSES,
+	},
+	// Live SuperGrok / Grok CLI proxy model (observed 2026-08). Keep CLI defaults above for
+	// users who still have Composer/Grok Build available on their account.
+	"grok-4.5": {
+		name: "Grok 4.5",
+		maxTokens: 32_768,
+		contextWindow: 500_000,
+		supportsImages: true,
+		supportsPromptCache: true,
+		supportsReasoning: true,
+		inputPrice: 2.0,
+		outputPrice: 6.0,
+		description: "Grok 4.5 — SpaceXAI frontier model (subscription via OAuth / CLI; PAYG when using API key).",
 		apiFormat: ApiFormat.OPENAI_RESPONSES,
 	},
 	"grok-4.3": {
+		name: "Grok 4.3",
 		maxTokens: 32_768,
 		contextWindow: 1_000_000,
 		supportsImages: true,
@@ -555,7 +576,7 @@ export const xaiModels = {
 	},
 } as const satisfies Record<string, ModelInfo>
 
-/** Grok Build CLI proxy models (Composer / Grok Build). */
+/** Grok Build CLI proxy models (Composer / Grok Build). Always free via OAuth/CLI. */
 export const xaiCliModelIds = ["grok-composer-2.5-fast", "grok-build"] as const
 
 export function isXaiCliModelId(modelId: string): boolean {
@@ -567,12 +588,52 @@ export function isXaiSubscriptionModel(modelId: string): boolean {
 	return isXaiCliModelId(modelId)
 }
 
+/**
+ * Zero out per-token pricing for subscription-included models so the UI shows
+ * "Included in subscription" instead of PAYG rates (e.g. Grok 4.5 $2/$6).
+ */
+export function asXaiSubscriptionIncludedModelInfo(modelId: string, info: ModelInfo): ModelInfo {
+	const base = modelId in xaiModels ? (xaiModels[modelId as keyof typeof xaiModels] as ModelInfo) : undefined
+	const description =
+		info.description?.includes("subscription") || info.description?.includes("Included")
+			? info.description
+			: info.description
+				? `${info.description} (included in subscription)`
+				: base?.description
+					? `${base.description} (included in subscription)`
+					: `${modelId} — included in SuperGrok / X Premium subscription`
+
+	return {
+		...info,
+		name: info.name ?? base?.name ?? modelId,
+		// Prefer known catalog context over generic SDK/safe defaults (128K).
+		contextWindow:
+			info.contextWindow && info.contextWindow !== 128_000
+				? info.contextWindow
+				: (base?.contextWindow ?? info.contextWindow),
+		maxTokens: info.maxTokens && info.maxTokens > 0 ? info.maxTokens : (base?.maxTokens ?? info.maxTokens),
+		inputPrice: 0,
+		outputPrice: 0,
+		cacheReadsPrice: 0,
+		cacheWritesPrice: 0,
+		description,
+	}
+}
+
 function getXaiCliModels(): Record<string, ModelInfo> {
-	return Object.fromEntries(Object.entries(xaiModels).filter(([id]) => isXaiCliModelId(id)))
+	return Object.fromEntries(
+		Object.entries(xaiModels)
+			.filter(([id]) => isXaiCliModelId(id))
+			.map(([id, info]) => [id, asXaiSubscriptionIncludedModelInfo(id, info as ModelInfo)]),
+	)
 }
 
 function getXaiApiKeyModels(): Record<string, ModelInfo> {
 	return Object.fromEntries(Object.entries(xaiModels).filter(([id]) => !isXaiCliModelId(id)))
+}
+
+function normalizeSubscriptionModels(models: Record<string, ModelInfo>): Record<string, ModelInfo> {
+	return Object.fromEntries(Object.entries(models).map(([id, info]) => [id, asXaiSubscriptionIncludedModelInfo(id, info)]))
 }
 
 /** Filter xAI models by active credentials (subscription OAuth/CLI vs API key). */
@@ -583,18 +644,20 @@ export function getXaiModelsForAuth(options: {
 }): Record<string, ModelInfo> {
 	const { subscriptionAuthenticated, hasApiKey, xaiSubscriptionModels = {} } = options
 	const cliModels = getXaiCliModels()
+	// Always force subscription-included pricing on the live subscription fetch,
+	// even if the cache was written with PAYG prices from an older build.
+	const subscriptionModels = normalizeSubscriptionModels(xaiSubscriptionModels)
 	const apiKeyModels = getXaiApiKeyModels()
 
 	if (subscriptionAuthenticated && hasApiKey) {
-		return { ...cliModels, ...xaiSubscriptionModels, ...apiKeyModels }
+		// Subscription pricing wins for shared ids; API-key-only models keep PAYG.
+		return { ...apiKeyModels, ...cliModels, ...subscriptionModels }
 	}
 	if (subscriptionAuthenticated) {
-		return { ...cliModels, ...xaiSubscriptionModels }
+		return { ...cliModels, ...subscriptionModels }
 	}
 	if (hasApiKey) {
 		return apiKeyModels
 	}
 	return cliModels
 }
-
-
