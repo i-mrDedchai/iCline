@@ -7,8 +7,13 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createDefaultMcpServerClientFactory } from "./client";
+import { HUB_DEFAULT_COMMAND_TIMEOUT_MS } from "@cline/shared";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import {
+	createDefaultMcpServerClientFactory,
+	DEFAULT_MCP_CONNECT_TIMEOUT_MS,
+	probeMcpServerConnection,
+} from "./client";
 import { resolveMcpServerRegistrations } from "./config-loader";
 import type { McpServerRegistration } from "./types";
 
@@ -253,14 +258,33 @@ describe("mcp client request timeout", () => {
 		}
 	}, 30_000);
 
-	it("connects a slow-starting server without a configured timeout", async () => {
+	it("connects a moderately slow server without a configured timeout", async () => {
 		const factory = createDefaultMcpServerClientFactory();
-		// Regression test for https://github.com/cline/cline/issues/13035:
-		// JVM-based servers (e.g. Oracle SQLcl's `sql -mcp`) need several
-		// seconds to start. The old 1.5s initialize probe killed them before
-		// they could answer, so they never loaded without a `timeout` field.
+		// The old 1.5s initialize probe killed servers that needed ~2s to answer
+		// (https://github.com/cline/cline/issues/13035), so the default budget
+		// must cover them. It deliberately stays small beyond that: initialize
+		// runs on the session.create critical path, so genuinely slow starters
+		// (e.g. JVM-based Oracle SQLcl) opt into patience with an explicit
+		// `timeout` instead of the default stalling every session.
 		const client = await factory(
-			fakeServerRegistration({ delayMs: 0, initDelayMs: 3_000 }),
+			fakeServerRegistration({ delayMs: 0, initDelayMs: 2_000 }),
+		);
+		try {
+			await client.connect();
+			expect(await client.listTools()).toEqual([]);
+		} finally {
+			await client.disconnect();
+		}
+	}, 30_000);
+
+	it("connects a slow-starting server when a timeout is configured", async () => {
+		const factory = createDefaultMcpServerClientFactory();
+		const client = await factory(
+			fakeServerRegistration({
+				timeoutSeconds: 15,
+				delayMs: 0,
+				initDelayMs: 4_000,
+			}),
 		);
 		try {
 			await client.connect();
@@ -279,7 +303,7 @@ describe("mcp client request timeout", () => {
 					"fake-server": {
 						transport: fakeServerRegistration({
 							delayMs: 0,
-							initDelayMs: 3_000,
+							initDelayMs: 2_000,
 						}).transport,
 						timeout: "60",
 					},
@@ -421,4 +445,107 @@ describe("mcp client request timeout", () => {
 			await client.disconnect();
 		}
 	}, 30_000);
+});
+
+describe("remote MCP OAuth connection", () => {
+	it("reports authorization required without starting an interactive OAuth flow", async () => {
+		const settingsPath = join(tempRoot, "remote-oauth-settings.json");
+		writeFileSync(
+			settingsPath,
+			JSON.stringify({
+				mcpServers: {
+					github: {
+						transport: {
+							type: "streamableHttp",
+							url: "https://api.githubcopilot.com/mcp/",
+						},
+					},
+				},
+			}),
+			"utf8",
+		);
+		const fetchMock = vi.fn(async () =>
+			Promise.resolve(
+				new Response(null, {
+					status: 401,
+					headers: { "www-authenticate": "Bearer" },
+				}),
+			),
+		);
+		const result = await probeMcpServerConnection({
+			serverName: "github",
+			filePath: settingsPath,
+			fetch: fetchMock,
+		});
+
+		expect(result).toMatchObject({
+			serverName: "github",
+			connected: false,
+			authorizationRequired: true,
+			error: expect.stringMatching(
+				/MCP server "github" requires OAuth authorization/,
+			),
+		});
+
+		const written = JSON.parse(readFileSync(settingsPath, "utf8"));
+		expect(written.mcpServers.github.oauth).toMatchObject({
+			authorizationRequired: true,
+		});
+		expect(written.mcpServers.github.oauth).not.toHaveProperty("codeVerifier");
+		expect(written.mcpServers.github.oauth).not.toHaveProperty(
+			"discoveryState",
+		);
+		expect(fetchMock).toHaveBeenCalledOnce();
+	});
+
+	it("surfaces a rejected static Authorization header as a connection error", async () => {
+		const settingsPath = join(tempRoot, "remote-static-auth-settings.json");
+		writeFileSync(
+			settingsPath,
+			JSON.stringify({
+				mcpServers: {
+					notion: {
+						transport: {
+							type: "streamableHttp",
+							url: "https://mcp.notion.com/mcp",
+							headers: { Authorization: "Bearer token" },
+						},
+					},
+				},
+			}),
+			"utf8",
+		);
+
+		const result = await probeMcpServerConnection({
+			serverName: "notion",
+			filePath: settingsPath,
+			fetch: async () =>
+				new Response(null, {
+					status: 401,
+					headers: { "www-authenticate": "Bearer" },
+				}),
+		});
+
+		expect(result).toEqual({
+			serverName: "notion",
+			connected: false,
+			authorizationRequired: false,
+			error:
+				'MCP server "notion" rejected its configured Authorization header. Update or remove that header before connecting with OAuth.',
+		});
+	});
+});
+
+describe("default connect budget", () => {
+	it("keeps the doubled initialize budget well under the hub command timeout", () => {
+		// MCP initialize runs on the session.create critical path, and connect()
+		// can spend the budget twice (newline then Content-Length framing). If
+		// the doubled total approaches HUB_DEFAULT_COMMAND_TIMEOUT_MS, a server
+		// that never initializes stalls session.create past the hub deadline and
+		// the whole session is torn down (a hung server used to kill the CLI
+		// this way). Keep headroom for the rest of session creation.
+		expect(DEFAULT_MCP_CONNECT_TIMEOUT_MS * 2).toBeLessThanOrEqual(
+			HUB_DEFAULT_COMMAND_TIMEOUT_MS / 2,
+		);
+	});
 });
