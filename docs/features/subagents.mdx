@@ -24,7 +24,9 @@ Subagent costs (tokens and API spend) are tracked separately per subagent and ro
 
 ## Enabling Subagents
 
-Subagents are enabled by default. Cline decides when parallel research is worth the overhead — you don't need to opt in or call them out in your prompt. To turn subagents off, disable the `use_subagents` tool in Settings → Features → Agent.
+> **iCline note (2026-09):** Subagents are **disabled by default** in iCline dev builds, following the upstream VS Code extension where they are temporarily disabled pending harness stabilization. The `subagentsEnabled` setting exists but has no effect in the extension yet — this page describes the upstream/CLI behavior and is kept for reference until subagents are re-enabled.
+
+Subagents are enabled by default in Cline official. Cline decides when parallel research is worth the overhead — you don't need to opt in or call them out in your prompt. To turn subagents off, disable the `use_subagents` tool in Settings → Features → Agent.
 
 This setting applies across all editors (VS Code, JetBrains, CLI).
 

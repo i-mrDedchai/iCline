@@ -335,7 +335,7 @@ export const xaiModels = {
 		supportsReasoning: true,
 		inputPrice: 2.0,
 		outputPrice: 6.0,
-		description: "Grok 4.5 — SpaceXAI frontier model (subscription via OAuth / CLI; PAYG when using API key).",
+		description: "Grok 4.5 — xAI frontier model (subscription via OAuth / CLI; PAYG when using API key).",
 		apiFormat: ApiFormat.OPENAI_RESPONSES,
 	},
 	"grok-4.3": {
@@ -355,7 +355,7 @@ export const xaiModels = {
 		supportsPromptCache: true,
 		inputPrice: 0.2,
 		outputPrice: 1.5,
-		description: "Grok Build 0.1 ??? coding model on the public xAI API.",
+		description: "Grok Build 0.1 — agentic coding model on the public xAI API.",
 	},
 	"grok-4.20-0309-reasoning": {
 		maxTokens: 32_768,

@@ -714,3 +714,85 @@ describe("ProviderCatalog Phase 3.6 subscribe", () => {
 		expect(listener).not.toHaveBeenCalled()
 	})
 })
+
+// ---- xAI picker auth-aware models (9-vs-2 regression, smoke 2026-09) ----
+
+const xaiMocks = vi.hoisted(() => ({
+	isAuthenticated: vi.fn(async (): Promise<boolean> => false),
+	readGrokCliToken: vi.fn((): { accessToken: string } | null => null),
+	getModelsCache: vi.fn((): unknown => null),
+	getApiConfiguration: vi.fn((): unknown => ({ xaiApiKey: "" })),
+	readCachedModels: vi.fn(async (): Promise<Record<string, ModelInfo> | undefined> => undefined),
+}))
+
+vi.mock("@/core/storage/StateManager", () => ({
+	StateManager: {
+		get: () => ({
+			getApiConfiguration: xaiMocks.getApiConfiguration,
+			getModelsCache: xaiMocks.getModelsCache,
+		}),
+	},
+}))
+
+vi.mock("@/integrations/xai/oauth", () => ({
+	xaiOAuthManager: { isAuthenticated: xaiMocks.isAuthenticated },
+}))
+
+vi.mock("@/integrations/xai/grok-cli-auth", () => ({
+	readGrokCliToken: xaiMocks.readGrokCliToken,
+}))
+
+vi.mock("@/core/controller/models/refreshXaiSubscriptionModels", () => ({
+	readCachedModels: xaiMocks.readCachedModels,
+}))
+
+describe("resolveXaiAuthAwareModels (picker must match Settings list)", () => {
+	const providerId = parseProviderId("xai")
+	const now = () => 1_000
+
+	beforeEach(() => {
+		xaiMocks.isAuthenticated.mockResolvedValue(false)
+		xaiMocks.readGrokCliToken.mockReturnValue(null)
+		xaiMocks.getModelsCache.mockReturnValue(null)
+		xaiMocks.getApiConfiguration.mockReturnValue({ xaiApiKey: "" })
+		xaiMocks.readCachedModels.mockResolvedValue(undefined)
+	})
+
+	it("merges CLI and cached subscription models for an authenticated user", async () => {
+		xaiMocks.isAuthenticated.mockResolvedValue(true)
+		xaiMocks.getModelsCache.mockReturnValue({
+			"grok-4.5": { supportsPromptCache: false },
+			"grok-4.3": { supportsPromptCache: false },
+		})
+
+		const { _testing } = await import("./catalog")
+		const result = await _testing.resolveXaiAuthAwareModels(providerId, {} as Fingerprint, now)
+
+		const ids = [...result.models.keys()]
+		expect(ids).toContain("grok-composer-2.5-fast")
+		expect(ids).toContain("grok-build")
+		expect(ids).toContain("grok-4.5")
+		expect(ids).toContain("grok-4.3")
+	})
+
+	it("includes disk-cached subscription models when the live auth check fails", async () => {
+		xaiMocks.readCachedModels.mockResolvedValue({
+			"grok-4.5": { supportsPromptCache: false },
+			"grok-4.3": { supportsPromptCache: false },
+		})
+
+		const { _testing } = await import("./catalog")
+		const result = await _testing.resolveXaiAuthAwareModels(providerId, {} as Fingerprint, now)
+
+		const ids = [...result.models.keys()]
+		expect(ids).toContain("grok-4.5")
+		expect(ids).toContain("grok-composer-2.5-fast")
+	})
+
+	it("falls back to CLI-only models without auth and without a cache", async () => {
+		const { _testing } = await import("./catalog")
+		const result = await _testing.resolveXaiAuthAwareModels(providerId, {} as Fingerprint, now)
+
+		expect([...result.models.keys()].sort()).toEqual(["grok-build", "grok-composer-2.5-fast"])
+	})
+})

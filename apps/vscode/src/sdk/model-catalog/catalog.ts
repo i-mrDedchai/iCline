@@ -5,6 +5,7 @@ import { StateManager } from "@/core/storage/StateManager"
 import { getFeatureFlagsService } from "@/services/feature-flags"
 import { getXaiModelsForAuth, type ModelInfo, xaiDefaultModelId } from "@/shared/api"
 import { FeatureFlag } from "@/shared/services/feature-flags/feature-flags"
+import { Logger } from "@/shared/services/Logger"
 import { getProviderSettingsManager } from "../provider-migration"
 import type {
 	CatalogError,
@@ -238,6 +239,26 @@ async function resolveXaiAuthAwareModels(
 	let xaiSubscriptionModels: Record<string, ModelInfo> = {}
 
 	try {
+		const apiConfig = StateManager.get().getApiConfiguration()
+		hasApiKey = !!apiConfig.xaiApiKey?.trim()
+		const cache = StateManager.get().getModelsCache("xaiSubscription")
+		if (cache && Object.keys(cache).length > 0) {
+			xaiSubscriptionModels = cache
+		} else {
+			// The in-memory cache starts empty after a restart even when the
+			// disk cache still holds models from an earlier authenticated
+			// session — without this the picker drops to CLI-only models.
+			const { readCachedModels } = await import("@/core/controller/models/refreshXaiSubscriptionModels")
+			const diskCache = await readCachedModels()
+			if (diskCache && Object.keys(diskCache).length > 0) {
+				xaiSubscriptionModels = diskCache
+			}
+		}
+	} catch {
+		// StateManager unavailable
+	}
+
+	try {
 		const { xaiOAuthManager } = await import("@/integrations/xai/oauth")
 		const { readGrokCliToken } = await import("@/integrations/xai/grok-cli-auth")
 		subscriptionAuthenticated = (await xaiOAuthManager.isAuthenticated()) || !!readGrokCliToken()?.accessToken
@@ -245,15 +266,16 @@ async function resolveXaiAuthAwareModels(
 		// OAuth/CLI modules unavailable in some test hosts
 	}
 
-	try {
-		const apiConfig = StateManager.get().getApiConfiguration()
-		hasApiKey = !!apiConfig.xaiApiKey?.trim()
-		const cache = StateManager.get().getModelsCache("xaiSubscription")
-		if (cache && Object.keys(cache).length > 0) {
-			xaiSubscriptionModels = cache
-		}
-	} catch {
-		// StateManager unavailable
+	// The subscription cache is only written after an authenticated fetch, so a
+	// non-empty cache with a failed live auth check means the check flaked
+	// (e.g. expired access token awaiting refresh). Trust the cache — otherwise
+	// the picker silently degrades to CLI-only models while the Settings UI
+	// still shows the merged list (smoke 2026-09: 9 models vs 2).
+	if (!subscriptionAuthenticated && Object.keys(xaiSubscriptionModels).length > 0) {
+		Logger.warn(
+			"[model-catalog] xAI live auth check failed but a subscription model cache exists — including cached subscription models",
+		)
+		subscriptionAuthenticated = true
 	}
 
 	const authModels = getXaiModelsForAuth({
@@ -340,6 +362,7 @@ export const _testing = {
 	createProviderModelsCache,
 	makeCacheKey,
 	assertRecordMatchesRequest,
+	resolveXaiAuthAwareModels,
 }
 
 /**

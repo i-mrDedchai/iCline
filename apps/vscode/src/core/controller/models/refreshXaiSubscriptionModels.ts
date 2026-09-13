@@ -132,7 +132,7 @@ async function fetchAndCacheModels(): Promise<Record<string, ModelInfo>> {
 	return models
 }
 
-async function readCachedModels(): Promise<Record<string, ModelInfo> | undefined> {
+export async function readCachedModels(): Promise<Record<string, ModelInfo> | undefined> {
 	const cachePath = path.join(await ensureCacheDirectoryExists(), GlobalFileNames.xaiSubscriptionModels)
 	if (!(await fileExistsAtPath(cachePath))) {
 		return undefined

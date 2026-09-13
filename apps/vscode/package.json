@@ -1,7 +1,7 @@
 {
 	"name": "iCline",
 	"displayName": "%extension.displayName%",
-	"description": "Standalone Cline fork for VS Code — no official Cline required. Supports Grok, ZenMux, OpenRouter, and other providers.",
+	"description": "%extension.description%",
 	"version": "0.1.18-dev.5",
 	"icon": "assets/icons/icon.png",
 	"engines": {
@@ -65,7 +65,7 @@
 	"contributes": {
 		"icons": {
 			"cline-icon": {
-				"description": "cline",
+				"description": "iCline icon",
 				"default": {
 					"fontPath": "assets/icons/cline-bot.woff",
 					"fontCharacter": "\\e900"
@@ -75,21 +75,21 @@
 		"walkthroughs": [
 			{
 				"id": "ClineWalkthrough",
-				"title": "Meet Cline, your new coding partner",
-				"description": "Cline codes like a developer because it thinks like one. Here are 5 ways to put it to work:",
+				"title": "Meet iCline, your new coding partner",
+				"description": "iCline codes like a developer because it thinks like one. Here are 5 ways to put it to work:",
 				"steps": [
 					{
 						"id": "welcome",
 						"title": "Start with a Goal, Not Just a Prompt",
-						"description": "Tell Cline what you want to achieve. It plans, asks, and then codes, like a true partner.",
+						"description": "Tell iCline what you want to achieve. It plans, asks, and then codes, like a true partner.",
 						"media": {
 							"markdown": "walkthrough/step1.md"
 						}
 					},
 					{
 						"id": "learn",
-						"title": "Let Cline Learn Your Codebase",
-						"description": "Point Cline to your project. It builds understanding to make smart, context-aware changes.",
+						"title": "Let iCline Learn Your Codebase",
+						"description": "Point iCline to your project. It builds understanding to make smart, context-aware changes.",
 						"media": {
 							"markdown": "walkthrough/step2.md"
 						}
@@ -97,7 +97,7 @@
 					{
 						"id": "advanced-features",
 						"title": "Always Use the Best AI Models",
-						"description": "Cline empowers you with State-of-the-Art AI, connecting to top models (Anthropic, Gemini, OpenAI & more).",
+						"description": "iCline empowers you with State-of-the-Art AI, connecting to top models (Anthropic, Gemini, OpenAI & more).",
 						"media": {
 							"markdown": "walkthrough/step3.md"
 						}
@@ -113,7 +113,7 @@
 					{
 						"id": "getting-started",
 						"title": "You're Always in Control",
-						"description": "Review Cline's plans and diffs. Approve changes before they happen. No surprises.",
+						"description": "Review iCline's plans and diffs. Approve changes before they happen. No surprises.",
 						"media": {
 							"markdown": "walkthrough/step5.md"
 						},
@@ -188,12 +188,12 @@
 			},
 			{
 				"command": "iCline.addToChat",
-				"title": "Add to Cline",
+				"title": "Add to iCline",
 				"category": "iCline"
 			},
 			{
 				"command": "iCline.addTerminalOutputToChat",
-				"title": "Add to Cline",
+				"title": "Add to iCline",
 				"category": "iCline"
 			},
 			{
@@ -203,7 +203,7 @@
 			},
 			{
 				"command": "iCline.generateGitCommitMessage",
-				"title": "Generate Commit Message with Cline",
+				"title": "Generate Commit Message with iCline",
 				"category": "iCline",
 				"icon": "$(cline-icon)"
 			},
@@ -215,29 +215,29 @@
 			},
 			{
 				"command": "iCline.explainCode",
-				"title": "Explain with Cline",
+				"title": "Explain with iCline",
 				"category": "iCline"
 			},
 			{
 				"command": "iCline.improveCode",
-				"title": "Improve with Cline",
+				"title": "Improve with iCline",
 				"category": "iCline"
 			},
 			{
 				"command": "iCline.jupyterGenerateCell",
-				"title": "Generate Jupyter Cell with Cline",
+				"title": "Generate Jupyter Cell with iCline",
 				"category": "iCline",
 				"icon": "$(sparkle)"
 			},
 			{
 				"command": "iCline.jupyterExplainCell",
-				"title": "Explain Jupyter Cell with Cline",
+				"title": "Explain Jupyter Cell with iCline",
 				"category": "iCline",
 				"icon": "$(question)"
 			},
 			{
 				"command": "iCline.jupyterImproveCell",
-				"title": "Improve Jupyter Cell with Cline",
+				"title": "Improve Jupyter Cell with iCline",
 				"category": "iCline",
 				"icon": "$(lightbulb)"
 			},

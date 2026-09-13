@@ -27,6 +27,7 @@
 
 - **Claim namespace Open VSX สำเร็จ** — publisher `i-mrdedchai` ยืนยันแล้ว ([Eclipse Foundation #11300](https://github.com/EclipseFdn/open-vsx.org/issues/11300) ปิดเป็น completed)
 - **ยอดติดตั้ง Open VSX** — **116+ installs** ภายใน ~12 ชม. หลังขึ้นลิสต์ (และยังเพิ่มอยู่)
+- **v0.1.17 Stable** — แก้ไอคอน/สกรีนช็อตบน store, เก็บกวาดตารางเปรียบเทียบ
 - **v0.1.16 Stable** — welcome home, แก้ quick start ได้, export/import history, branding iCline ในแชท
 
 ## เริ่มต้นอย่างรวดเร็ว

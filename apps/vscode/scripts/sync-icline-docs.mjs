@@ -111,10 +111,7 @@ function patchReadme(readme, { version, manifest, releasesUrl, vsixName, isThai 
 		`| \`iCline.updates.releasesUrl\` | URL GitHub Releases API | \`${releasesUrl}\` |`,
 	)
 
-	next = next.replace(
-		/```\nhttps:\/\/api\.github\.com\/repos\/.*?\/releases\/latest\n```/,
-		`\`\`\`\n${releasesUrl}\n\`\`\``,
-	)
+	next = next.replace(/```\nhttps:\/\/api\.github\.com\/repos\/.*?\/releases\/latest\n```/, `\`\`\`\n${releasesUrl}\n\`\`\``)
 
 	next = next.replace(/เลือก \*\*xAI\*\* แล้วกด/, `เลือก **${manifest.providers.xai}** แล้วกด`)
 	next = next.replace(/`icline\.updates/g, "`iCline.updates")
@@ -164,10 +161,7 @@ function patchIclineMd(source, { version, manifest, releasesUrl, vsixName }) {
 		/<!-- icline:version -->[\s\S]*?<!-- \/icline:version -->/,
 		`<!-- icline:version -->\n> 📦 เวอร์ชัน \`${version}\` — [Releases](${url}/releases) · [Changelog](${changelogUrl(manifest)})\n<!-- /icline:version -->`,
 	)
-	next = next.replace(
-		/- `iCline\.updates\.releasesUrl`/,
-		`- \`iCline.updates.releasesUrl\` (default: \`${releasesUrl}\`)`,
-	)
+	next = next.replace(/^- `iCline\.updates\.releasesUrl`.*$/m, `- \`iCline.updates.releasesUrl\` (default: \`${releasesUrl}\`)`)
 	next = next.replace(/i-mrDed\.iCline/g, manifest.extensionId || "i-mrdedchai.iCline")
 	next = next.replace(/i-mrded\.iCline/g, manifest.extensionId || "i-mrdedchai.iCline")
 	next = next.replace(/https:\/\/github\.com\/i-mrDed\/iCline/g, url)
@@ -195,10 +189,7 @@ function patchProviders(providers, manifest) {
 }
 
 function patchUpdateService(source, releasesUrl) {
-	return source.replace(
-		/const DEFAULT_ICLINE_RELEASES_URL = ".*?"/,
-		`const DEFAULT_ICLINE_RELEASES_URL = "${releasesUrl}"`,
-	)
+	return source.replace(/const DEFAULT_ICLINE_RELEASES_URL = ".*?"/, `const DEFAULT_ICLINE_RELEASES_URL = "${releasesUrl}"`)
 }
 
 function changelogUrl(manifest) {
@@ -207,12 +198,21 @@ function changelogUrl(manifest) {
 }
 
 function parseVersionParts(version) {
-	const devMatch = version.match(/^(.+)-dev\.(\d+)$/)
+	const devMatch = version.match(/^(.+)-dev\.(\d+)(?:-fix\.(\d+))?$/)
 	if (devMatch) {
+		const fixN = devMatch[3]
 		return {
 			releaseVersion: devMatch[1],
 			devBuildNumber: Number.parseInt(devMatch[2], 10),
-			devBuildLabel: `dev build ${devMatch[2]}`,
+			devBuildLabel: fixN ? `dev build ${devMatch[2]} · fix.${fixN}` : `dev build ${devMatch[2]}`,
+		}
+	}
+	const fixMatch = version.match(/^(.+)-fix\.(\d+)$/)
+	if (fixMatch) {
+		return {
+			releaseVersion: fixMatch[1],
+			devBuildNumber: null,
+			devBuildLabel: `fix.${fixMatch[2]}`,
 		}
 	}
 	return {

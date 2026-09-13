@@ -36,15 +36,15 @@ This is a great option when you need:
 ### Tips and Notes
 
 -   **No per-token cost** — the TaskHeader cost indicator is disabled for Jan (and other local providers) since tokens are free on your own hardware.
--   **Context window** — iCline assumes a safe default of 32,768 tokens. Some models support more, but most 7B–13B quantized models top out around 32K. Adjust the `Context Window` field in model config if you need more.
+-   **Context window** — when Jan's `/v1/models` response lacks size info, iCline falls back to a 128K context window. Most 7B–13B quantized models top out around 32K — adjust the `Context Window` field in model config to match your model.
 -   **Tool calling support** — not all local models support OpenAI-style tool calls. Without tool support, iCline cannot edit files or run commands. Pick a model advertised as supporting `function calling` (most modern Qwen-Coder, Llama-3.3, and Mistral models do).
 -   **Performance** — for usable agentic coding, a 70B-class model on a 24 GB+ GPU is recommended. Smaller models will work but produce more errors. CPU-only inference is generally too slow for the iterative iCline loop.
--   **Connection errors** — if iCline shows "Failed to reach Jan Local API Server", open Jan → **Settings → Local API Server** and confirm the server is **Started**. Verify the host and port match what you entered in iCline. Jan must remain running in the background while iCline is working.
--   **API key is optional** — iCline falls back to a placeholder (`"noop"`) when no key is set. This is normal for local servers without auth enabled.
+-   **Connection errors** — if iCline shows a connection error when sending a task, open Jan → **Settings → Local API Server** and confirm the server is **Started**. Verify the host and port match what you entered in iCline. Jan must remain running in the background while iCline is working.
+-   **API key is optional** — when no key is set, iCline sends no Authorization header. This is normal for local servers without auth enabled.
 
 ### Troubleshooting
 
--   **"Failed to reach Jan Local API Server"** — open Jan → Settings → Local API Server, start the server, and verify the base URL, port, and API key match your Jan configuration.
+-   **Connection error** — open Jan → Settings → Local API Server, start the server, and verify the base URL, port, and API key match your Jan configuration.
 -   **Model dropdown is empty** — Jan server is not running or has no models downloaded. Start Jan, download a model in the **Models Hub**, then restart the Local API Server.
 -   **Slow responses / timeouts** — local model throughput depends on your hardware. Reduce the `Context Window` in iCline model config to reduce the per-request token load, or pick a smaller quantized model.
 -   **Tool calls don't fire** — the model you picked doesn't support OpenAI-style function calling. Switch to a model with documented tool support.

@@ -181,6 +181,9 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 						modelId,
 					}),
 				)
+				// Close before applying the effort preference: a thrown effort change must
+				// not leave the popover stuck open over an already-committed selection.
+				setOpen(false)
 				// Apply saved reasoning effort preference if any
 				if (saved?.reasoningEffort !== undefined) {
 					await handleModeFieldChange(
@@ -189,7 +192,6 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 						mode,
 					)
 				}
-				setOpen(false)
 			} catch (err) {
 				console.error("QuickModelPicker: failed to commit model selection:", err)
 			}

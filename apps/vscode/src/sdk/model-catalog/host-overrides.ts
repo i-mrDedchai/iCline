@@ -13,6 +13,7 @@
 
 import { OLLAMA_DEFAULT_CONTEXT_WINDOW } from "@cline/llms"
 import type { ModelInfo } from "@shared/api"
+import { ApiFormat } from "@shared/proto/cline/models"
 import { StateManager } from "@/core/storage/StateManager"
 import { getProviderSettingsManager } from "../provider-migration"
 import type { ProviderId } from "./contracts"
@@ -51,12 +52,37 @@ function resolveOllamaContextWindow(): number {
 	return OLLAMA_DEFAULT_CONTEXT_WINDOW
 }
 
+/**
+ * Sakana's API protocol setting is stored (`sakanaApiProtocol`) but the SDK
+ * builtin hardcodes `openai-responses`. Map the user's choice onto the model's
+ * apiFormat so the dropdown actually changes the wire format for both the
+ * model list and the session config (smoke 2026-09: dropdown was inert).
+ */
+function resolveSakanaApiFormat(): ModelInfo["apiFormat"] {
+	try {
+		const protocol = StateManager.get().getApiConfiguration().sakanaApiProtocol
+		if (protocol === "chat_completions") {
+			return ApiFormat.OPENAI_CHAT
+		}
+		if (protocol === "responses") {
+			return ApiFormat.OPENAI_RESPONSES
+		}
+	} catch {
+		// StateManager unavailable (e.g. tests) — keep the SDK default.
+	}
+	return undefined
+}
+
 export function applyHostModelInfoOverrides(providerId: ProviderId, modelId: string, modelInfo: ModelInfo): ModelInfo {
 	if (providerId === "vertex" && vertexModelSupportsGlobalEndpoint(providerId, modelId)) {
 		return { ...modelInfo, supportsGlobalEndpoint: true }
 	}
 	if (providerId === "ollama") {
 		return { ...modelInfo, contextWindow: resolveOllamaContextWindow() }
+	}
+	if (providerId === "sakana") {
+		const apiFormat = resolveSakanaApiFormat()
+		return apiFormat ? { ...modelInfo, apiFormat } : modelInfo
 	}
 	return modelInfo
 }

@@ -31,6 +31,8 @@
 | | Cline official | iCline |
 |---|---|---|
 | Extension ID | `saoudrizwan.claude-dev` | `i-mrdedchai.iCline` |
+| Verified publisher | `saoudrizwan` | `i-mrdedchai` ✅ |
+| VS Marketplace · Open VSX | Marketplace only | ✅ ทั้งสอง |
 | ⚡ เมนูด่วนเลือก Provider / Model บนแชท | ❌ | ✅ |
 | 🏠 Quick Start 12 แบบ (แก้ prompt ได้) | ❌ | ✅ |
 | 📦 Export / Import history (`.zip`) | ❌ | ✅ |
