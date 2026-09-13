@@ -53,6 +53,8 @@ sdk/**
 README.marketplace.md
 .README.github.bak
 package.json.backup
+# Sidecar backup written by package-vsix-wip.mjs while vsce runs; restored after.
+.package.json.wip.bak
 
 # Custom
 **/demo.gif
