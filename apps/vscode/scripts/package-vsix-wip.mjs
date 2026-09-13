@@ -135,8 +135,23 @@ fs.writeFileSync(pkgPath, JSON.stringify(pkgJson, null, "\t") + "\n")
 stampBuildMetadata()
 swapResult = swapIn()
 
+// The webview bundle embeds build-metadata.ts (the About page reads the
+// compiled constant), so rebuild it AFTER stamping. The extension esbuild
+// output is independent of build-metadata and reuses whatever is on disk.
 let exitCode = 1
 try {
+	const webviewBuild = spawnSync("npm", ["run", "build:webview"], {
+		stdio: "inherit",
+		cwd: extRoot,
+		shell: process.platform === "win32",
+		env: process.env,
+	})
+	if (webviewBuild.status !== 0) {
+		console.error("\nwebview rebuild failed with exit", webviewBuild.status)
+		restoreAll()
+		process.exit(webviewBuild.status ?? 1)
+	}
+
 	const result = spawnSync(
 		process.execPath,
 		[vsceJs, "package", "--no-dependencies", ...getVsceImageRewriteArgs(manifest), "--out", out],

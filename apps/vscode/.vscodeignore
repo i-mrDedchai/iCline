@@ -55,6 +55,7 @@ README.marketplace.md
 package.json.backup
 # Sidecar backup written by package-vsix-wip.mjs while vsce runs; restored after.
 .package.json.wip.bak
+.build-metadata.wip.bak
 
 # Custom
 **/demo.gif
