@@ -132,10 +132,8 @@ describe("SdkTaskHistory", () => {
 			{ type: "say", say: "task", text: "Build the feature", partial: false },
 			{ type: "say", say: "text", text: "Done", partial: false },
 			{ type: "say", say: "user_feedback", text: "Follow up", partial: false },
-			// A trailing ask:"completion_result" is appended so a reopened task
-			// shows the completion/resume affordance instead of a stuck spinner.
-			{ type: "ask", ask: "completion_result", partial: false },
 		])
+		expect(result.some((message) => message.ask === "completion_result")).toBe(false)
 	})
 
 	it("includes persisted SDK message metrics for task header pricing", () => {
@@ -207,13 +205,194 @@ describe("SdkTaskHistory", () => {
 			{ type: "say", say: "task", text: "add a joke", partial: false },
 			{ type: "say", say: "tool", partial: false },
 			{ type: "say", say: "text", text: "Done!", partial: false },
-			{ type: "ask", ask: "completion_result", partial: false },
 		])
+		expect(result.some((message) => message.ask === "completion_result")).toBe(false)
 		expect(result.map((message) => message.text).join("\n")).not.toContain(rawToolResult)
 		expect(JSON.parse(result[1].text ?? "{}")).toMatchObject({
 			tool: "editedExistingFile",
 			path: "/Users/maxpaulus/c/c2/README.md",
 		})
+	})
+
+	it("renders a persisted completion tool as say:completion_result without a fake ask", () => {
+		const result = sdkMessagesToClineMessages([
+			{ role: "user", content: "finish up" },
+			{
+				role: "assistant",
+				content: [
+					{
+						type: "tool_use",
+						id: "toolu_done",
+						name: "attempt_completion",
+						input: { result: "All done" },
+					},
+				],
+			},
+			{
+				role: "user",
+				content: [
+					{
+						type: "tool_result",
+						tool_use_id: "toolu_done",
+						name: "attempt_completion",
+						content: "ok",
+					},
+				],
+			},
+		])
+
+		expect(result.some((message) => message.type === "say" && message.say === "completion_result")).toBe(true)
+		expect(result.some((message) => message.ask === "completion_result")).toBe(false)
+	})
+
+	it("does not treat an earlier completion as the last-turn outcome after a follow-up", () => {
+		const result = sdkMessagesToClineMessages([
+			{ role: "user", content: "first" },
+			{
+				role: "assistant",
+				content: [
+					{
+						type: "tool_use",
+						id: "toolu_done",
+						name: "submit_and_exit",
+						input: { summary: "First turn done" },
+					},
+				],
+			},
+			{
+				role: "user",
+				content: [
+					{
+						type: "tool_result",
+						tool_use_id: "toolu_done",
+						name: "submit_and_exit",
+						content: "ok",
+					},
+					{ type: "text", text: "one more thing" },
+				],
+			},
+			{ role: "assistant", content: [{ type: "text", text: "Sure, what next?" }] },
+		])
+
+		const lastSay = [...result].reverse().find((message) => message.type === "say")
+		expect(lastSay).toMatchObject({ say: "text", text: "Sure, what next?" })
+		expect(result.some((message) => message.ask === "completion_result")).toBe(false)
+	})
+
+	it("gives each last-turn unmatched tool its own timestamp", () => {
+		const result = sdkMessagesToClineMessages([
+			{ role: "user", content: "do two things" },
+			{
+				role: "assistant",
+				content: [
+					{
+						type: "tool_use",
+						id: "toolu_a",
+						name: "editor",
+						input: { path: "a.md", new_text: "a" },
+					},
+					{
+						type: "tool_use",
+						id: "toolu_b",
+						name: "editor",
+						input: { path: "b.md", new_text: "b" },
+					},
+				],
+			},
+		])
+
+		const toolRows = result.filter((message) => message.say === "tool")
+		expect(toolRows).toHaveLength(2)
+		expect(toolRows[0].ts).not.toBe(toolRows[1].ts)
+		expect(toolRows.every((message) => message.partial === true)).toBe(true)
+	})
+
+	it("emits user_feedback for image-only follow-ups so an earlier completion is not the last turn", () => {
+		const result = sdkMessagesToClineMessages([
+			{ role: "user", content: "first" },
+			{
+				role: "assistant",
+				content: [
+					{
+						type: "tool_use",
+						id: "toolu_done",
+						name: "attempt_completion",
+						input: { result: "First turn done" },
+					},
+				],
+			},
+			{
+				role: "user",
+				content: [
+					{
+						type: "tool_result",
+						tool_use_id: "toolu_done",
+						name: "attempt_completion",
+						content: "ok",
+					},
+				],
+			},
+			{
+				role: "user",
+				content: [{ type: "image", mediaType: "image/png", data: "abc" }],
+			},
+			{ role: "assistant", content: [{ type: "text", text: "Got the screenshot" }] },
+		])
+
+		const feedback = result.find((message) => message.say === "user_feedback")
+		expect(feedback?.images).toEqual(["data:image/png;base64,abc"])
+		const lastSay = [...result].reverse().find((message) => message.type === "say" && message.say !== "api_req_started")
+		expect(lastSay).toMatchObject({ say: "text", text: "Got the screenshot" })
+	})
+
+	it("does not mark unmatched commands as still executing", () => {
+		const result = sdkMessagesToClineMessages([
+			{ role: "user", content: "run it" },
+			{
+				role: "assistant",
+				content: [
+					{
+						type: "tool_use",
+						id: "toolu_cmd",
+						name: "execute_command",
+						input: { command: "echo hi" },
+					},
+				],
+			},
+		])
+
+		const commandRow = result.find((message) => message.say === "command")
+		expect(commandRow).toMatchObject({
+			say: "command",
+			partial: true,
+			commandCompleted: true,
+			text: "echo hi",
+		})
+		expect(commandRow?.text ?? "").not.toContain("Output:")
+	})
+
+	it("leaves last-turn unmatched non-completion tools partial so reopen can resume", () => {
+		const result = sdkMessagesToClineMessages([
+			{ role: "user", content: "edit the file" },
+			{
+				role: "assistant",
+				content: [
+					{
+						type: "tool_use",
+						id: "toolu_edit",
+						name: "editor",
+						input: { path: "README.md", new_text: "hi" },
+					},
+				],
+			},
+		])
+
+		const toolRow = result.find((message) => message.say === "tool")
+		expect(toolRow?.partial).toBe(true)
+		expect(result.some((message) => message.ask === "completion_result")).toBe(false)
+		expect(result.findIndex((message) => message.say === "tool")).toBeGreaterThan(
+			result.findIndex((message) => message.say === "task"),
+		)
 	})
 
 	it("hides subagent sessions from task history", async () => {
@@ -491,8 +670,8 @@ describe("SdkTaskHistory", () => {
 		expect(clineMessages).toEqual([
 			{ ts: 1, type: "say", say: "task", text: "old legacy UI" },
 			expect.objectContaining({ text: "new SDK answer" }),
-			expect.objectContaining({ type: "ask", ask: "completion_result" }),
 		])
+		expect(clineMessages.some((message) => message.ask === "completion_result")).toBe(false)
 		expect(resumeMessages).toEqual(fallbackMessages)
 	})
 

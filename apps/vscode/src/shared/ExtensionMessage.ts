@@ -397,6 +397,8 @@ export interface ClineApiReqInfo {
 		delaySec: number
 		errorSnippet?: string
 	}
+	/** Synthetic / estimate row — counted by getLastApiReqTotalTokens, skipped by getApiMetrics. */
+	excludeFromTotals?: boolean
 }
 
 export interface ClineSubagentUsageInfo {

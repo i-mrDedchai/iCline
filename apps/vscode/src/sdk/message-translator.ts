@@ -20,7 +20,7 @@
 // - SDK "agent_event" content_end → ClineMessage with partial=false
 // - SDK "agent_event" content_start (tool: attempt_completion) → ClineMessage say="completion_result"
 // - SDK "agent_event" content_end (tool: attempt_completion) → ClineMessage say="completion_result" (final)
-// - SDK "agent_event" done → ClineMessage ask="completion_result" (always; must be last message)
+// - SDK "agent_event" done → no transcript message (TurnState is the UI authority)
 // - SDK "agent_event" error → ClineMessage say="error"
 // - SDK "agent_event" usage → ClineMessage say="api_req_started" with ClineApiReqInfo JSON
 // - SDK "ended" event → finalizes the session
@@ -1683,6 +1683,29 @@ type SdkMessageWithMetrics = SdkMessage & {
 	}
 }
 
+function extractPersistedUserImages(content: SdkMessage["content"]): string[] {
+	if (typeof content === "string") {
+		return []
+	}
+	const images: string[] = []
+	for (const block of content) {
+		if (block.type !== "image") {
+			continue
+		}
+		const data = "data" in block && typeof block.data === "string" ? block.data : undefined
+		if (!data) {
+			continue
+		}
+		if (data.startsWith("data:")) {
+			images.push(data)
+			continue
+		}
+		const mediaType = "mediaType" in block && typeof block.mediaType === "string" ? block.mediaType : "image/png"
+		images.push(`data:${mediaType};base64,${data}`)
+	}
+	return images
+}
+
 function textContentBlocksToText(content: SdkMessage["content"]): string {
 	if (typeof content === "string") {
 		return content.trim()
@@ -1799,8 +1822,41 @@ export function sdkMessagesToClineMessages(messages: SdkMessageWithMetrics[], mi
 	const state = new MessageTranslatorState(minter)
 	const pendingToolUses = new Map<string, SdkToolUseBlock>()
 
-	const flushUnmatchedToolUses = () => {
+	const flushUnmatchedToolUses = (mode: "finalize" | "leave_partial" = "finalize") => {
 		for (const toolUse of pendingToolUses.values()) {
+			// Last-turn unmatched non-completion tools stay partial so reopen can
+			// classify the transcript as interrupted (Resume) instead of completed.
+			if (mode === "leave_partial" && !isCompletionTool(toolUse.name)) {
+				if (toolUse.name === "run_commands" || toolUse.name === "execute_command") {
+					// Do not plant COMMAND_OUTPUT_STRING — ChatRow would show a live
+					// "executing" pulse on a dead history session.
+					clineMessages.push({
+						ts: state.nextTs(),
+						type: "say",
+						say: "command",
+						text: extractCommandText(toolUse.input),
+						partial: true,
+						commandCompleted: true,
+					})
+				} else {
+					clineMessages.push(
+						...agentEventToMessages(
+							{
+								type: "content_start",
+								contentType: "tool",
+								toolName: toolUse.name,
+								toolCallId: toolUse.id,
+								input: toolUse.input,
+							} as AgentEvent,
+							state,
+						),
+					)
+					// content_start reuses streamingToolTs; clear so the next unmatched
+					// tool gets its own identity (addMessages upserts on ts).
+					state.clearStreamingTool()
+				}
+				continue
+			}
 			clineMessages.push(...finalizePersistedToolUse(toolUse, state))
 		}
 		pendingToolUses.clear()
@@ -1875,12 +1931,15 @@ export function sdkMessagesToClineMessages(messages: SdkMessageWithMetrics[], mi
 		}
 
 		const userText = textContentBlocksToText(message.content)
-		if (userText) {
+		const userImages = extractPersistedUserImages(message.content)
+		const hasToolResult = message.content.some((block) => block.type === "tool_result")
+		if (userText || (userImages.length > 0 && !hasToolResult)) {
 			clineMessages.push({
 				ts: state.nextTs(),
 				type: "say",
 				say: clineMessages.length === 0 ? "task" : "user_feedback",
 				text: userText,
+				images: userImages.length > 0 ? userImages : undefined,
 				partial: false,
 			})
 		}
@@ -1900,21 +1959,11 @@ export function sdkMessagesToClineMessages(messages: SdkMessageWithMetrics[], mi
 		}
 	}
 
-	// Always emit ask:"completion_result"
-	// as the LAST message so it comes after the usage event's
-	// say:"api_req_started". This is critical: the webview uses
-	// the last raw message to determine UI state. If the usage
-	// event is last, the webview shows "Thinking..." instead of
-	// the completion UI
-	clineMessages.push({
-		ts: state.nextTs(),
-		type: "ask",
-		ask: "completion_result",
-		text: "",
-		partial: false,
-	})
-
-	flushUnmatchedToolUses()
+	// History conversion is a pure transcript. Do not invent a terminal
+	// ask:"completion_result" — live `done` no longer emits one, and the
+	// footer reads TurnState. Flush last-turn unmatched tools as partial
+	// rows so reopen can tell interrupted work from a finished follow-up.
+	flushUnmatchedToolUses("leave_partial")
 	return clineMessages
 }
 

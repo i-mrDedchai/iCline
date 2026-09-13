@@ -937,7 +937,7 @@ describe("translateSessionEvent — agent_event content_end", () => {
 // ---------------------------------------------------------------------------
 
 describe("translateSessionEvent — agent_event done", () => {
-	it("translates done event to ask completion_result with empty text (no green rectangle)", () => {
+	it("translates done event to no transcript message (TurnState is the UI authority)", () => {
 		const state = new MessageTranslatorState()
 		const event: CoreSessionEvent = {
 			type: "agent_event",
@@ -1503,8 +1503,7 @@ describe("translateSessionEvent — full streaming flow", () => {
 		expect(endResult.messages[0].partial).toBe(false)
 		expect(endResult.messages[0].text).toBe("Hello world!")
 
-		// 3. Done — without attempt_completion, emits ask:"completion_result"
-		// with empty text (no green rectangle, just enables follow-up input)
+		// 3. Done — no transcript message; UI mode comes from TurnState
 		const doneResult = translateSessionEvent(
 			{
 				type: "agent_event",

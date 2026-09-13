@@ -34,6 +34,9 @@ Upstream sync + smoke-test restoration on the v4.0.0 SDK architecture (dev build
 - 🐟 **Sakana provider error safety** — sanitized error logging removes API keys from error output
 - 🐟 **Sakana provider validation** — require an API key in onboarding/settings, include Sakana in configured-provider discovery, and handle Responses API function-call done events without emitting nameless tool calls
 - 🔧 **Jan provider RPC type** — wrap `getJanModels` args in `OpenAiModelsRequest.create({ baseUrl, apiKey })` so the `metadata` proto field is auto-filled (fixes TS2345 and the webview build)
+- 🧭 **Reopen history TurnState** — opening a task from history now resets the footer phase (`completed` / `resumable` / `awaiting_followup` / `idle`) and clears leftover approval prompts, instead of keeping Cancel/Thinking from the previous live turn
+- 📜 **History is not always completed** — `sdkMessagesToClineMessages` no longer appends a fake `ask:completion_result`; last-turn unmatched tools stay partial so Resume is offered only when the turn was interrupted
+- 📊 **Compact metrics** — post-compact context-bar estimates are marked `excludeFromTotals` so header token/cost totals no longer jump after `/compact`
 
 ### Changed
 - 🗄️ **Legacy code archived** — prior `ChatModelPicker.tsx`, `chatModelPickerUtils.ts`, `ModelThinkingStatusIcons.tsx` moved to `docs/icline/legacy-chat-model-picker/` (depended on removed APIs). ModelThinkingStatusIcons UX is temporarily dropped — to be re-implemented on the new SDK hooks later.

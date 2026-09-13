@@ -69,6 +69,37 @@ describe("getApiMetrics", () => {
 		assert.equal(metrics.totalTokensOut, 0)
 		assert.equal(metrics.totalCost, 0)
 	})
+
+	it("skips api_req_started rows marked excludeFromTotals", () => {
+		const messages: ClineMessage[] = [
+			{
+				ts: 1,
+				type: "say",
+				say: "api_req_started",
+				text: JSON.stringify({
+					tokensIn: 10,
+					tokensOut: 20,
+					cost: 0.12,
+				}),
+			},
+			{
+				ts: 2,
+				type: "say",
+				say: "api_req_started",
+				text: JSON.stringify({
+					tokensIn: 5,
+					tokensOut: 0,
+					cost: 0,
+					excludeFromTotals: true,
+				}),
+			},
+		]
+
+		const metrics = getApiMetrics(messages)
+		assert.equal(metrics.totalTokensIn, 10)
+		assert.equal(metrics.totalTokensOut, 20)
+		assert.ok(Math.abs(metrics.totalCost - 0.12) < 1e-9)
+	})
 })
 
 describe("getLastApiReqTotalTokens", () => {
@@ -99,5 +130,35 @@ describe("getLastApiReqTotalTokens", () => {
 
 		const total = getLastApiReqTotalTokens(messages)
 		assert.equal(total, 23)
+	})
+
+	it("still reads the latest excludeFromTotals estimate for the context bar", () => {
+		const messages: ClineMessage[] = [
+			{
+				ts: 1,
+				type: "say",
+				say: "api_req_started",
+				text: JSON.stringify({
+					tokensIn: 10,
+					tokensOut: 20,
+					cost: 0.12,
+				}),
+			},
+			{
+				ts: 2,
+				type: "say",
+				say: "api_req_started",
+				text: JSON.stringify({
+					tokensIn: 5,
+					tokensOut: 0,
+					cacheWrites: 0,
+					cacheReads: 0,
+					cost: 0,
+					excludeFromTotals: true,
+				}),
+			},
+		]
+
+		assert.equal(getLastApiReqTotalTokens(messages), 5)
 	})
 })

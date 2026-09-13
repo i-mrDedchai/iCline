@@ -159,6 +159,49 @@ describe("SdkCompactionCoordinator", () => {
 		)
 	})
 
+	it("emits a post-compact usage estimate marked excludeFromTotals from the last real usage row", async () => {
+		const activeSession = makeActiveSession()
+		activeSession.sdkHost.readMessages.mockResolvedValueOnce([
+			{ role: "user", content: "1" },
+			{ role: "assistant", content: "2" },
+			{ role: "user", content: "3" },
+		])
+		const { coordinator, options } = makeCoordinator({
+			activeSession,
+			clineMessages: [
+				{
+					ts: 1,
+					type: "say",
+					say: "api_req_started",
+					text: JSON.stringify({ tokensIn: 1000, tokensOut: 200, cacheWrites: 0, cacheReads: 0, cost: 0.4 }),
+				},
+			],
+		})
+		mockCreateContextCompactionPrepareTurn.mockReturnValueOnce(
+			vi.fn().mockResolvedValue({ messages: [{ role: "user", content: "summary" }] }),
+		)
+
+		await coordinator.compactTask()
+
+		const estimateCall = options.messages.appendAndEmit.mock.calls.find(([messages]) =>
+			messages.some((message: { say?: string }) => message.say === "api_req_started"),
+		)
+		expect(estimateCall).toBeDefined()
+		const estimate = JSON.parse(estimateCall?.[0][0].text ?? "{}")
+		expect(estimate).toMatchObject({
+			tokensIn: 400,
+			tokensOut: 0,
+			cacheWrites: 0,
+			cacheReads: 0,
+			cost: 0,
+			excludeFromTotals: true,
+		})
+		expect(options.messages.appendAndEmit).toHaveBeenCalledWith(
+			[expect.objectContaining({ say: "info", text: "Compacted 3 messages to 1." })],
+			expect.anything(),
+		)
+	})
+
 	it("reports a failure when compaction throws", async () => {
 		const activeSession = makeActiveSession()
 		const { coordinator, options } = makeCoordinator({ activeSession })
@@ -176,6 +219,7 @@ describe("SdkCompactionCoordinator", () => {
 
 interface MakeCoordinatorInput {
 	activeSession: ReturnType<typeof makeActiveSession> | undefined
+	clineMessages: Array<{ ts: number; type: "say"; say: string; text?: string }>
 }
 
 function makeCoordinator(input: Partial<MakeCoordinatorInput> = {}) {
@@ -203,7 +247,7 @@ function makeCoordinator(input: Partial<MakeCoordinatorInput> = {}) {
 		},
 		messages: {
 			appendAndEmit: vi.fn(),
-			getClineMessages: vi.fn(() => []),
+			getClineMessages: vi.fn(() => input.clineMessages ?? []),
 		},
 		sessionConfigBuilder: {
 			build: vi.fn().mockResolvedValue(config),

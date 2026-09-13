@@ -147,6 +147,20 @@ code --install-extension "D:\.grok\iCline\cline-temp\apps\vscode\dist\i-mrdedcha
 
 จุดที่ควรเช็ค: Jan · xAI OAuth+chat · Quick picker (expand/effort) · agent แนะนำตัว iCline · History export/import
 
+---
+
+## 🔧 SDK history / compact (`fix/sdk-history-reopen-turnstate`)
+
+**สถานะ:** แก้ในโค้ดแล้ว — รอ smoke บน VSIX ของ branch นี้
+
+| # | Item | How to smoke | Pass |
+|---|------|----------------|------|
+| H1 | Reopen **completed** task | Finish a task (green box / Start New Task) → New Task → History → open it | Footer = Start New Task, not Thinking/Cancel |
+| H2 | Reopen **incomplete** task | Cancel mid-tool → History → reopen | Footer = Resume Task; interrupted tool rows render as **finished** (finalize strips `partial`) — the footer is the Resume signal, not the row |
+| H3 | Reopen **follow-up** chat | Let a turn end without completion tool → History → reopen | Input enabled, no Resume / Start New Task |
+| H4 | Switch away from pending approval | While Approve/Reject is showing, open another history item | Old approval must not fire on the next keystroke |
+| C1 | Compact metrics | Long chat → Compact | Context bar drops; header token/cost totals do **not** jump by the estimate |
+
 ## กฎ sync ปลอดภัย (กันซ้ำรอย v4.0 กลืนฟีเจอร์ iCline)
 
 1. **อย่า sync กลาง restore** — จบ smoke / commit WIP ก่อน  

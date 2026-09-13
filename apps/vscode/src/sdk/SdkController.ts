@@ -532,6 +532,7 @@ export class Controller {
 			},
 			onAskResponse: (text, images, files) => this.askResponse(text, images, files),
 			resetMessageTranslator: () => this.resetMessageTranslatorAndFence(),
+			setTurnPhase: (phase, anchorTs) => this.turnStateTracker.set(phase, anchorTs),
 			// Bump the epoch synchronously before abort so straggler events from the cancelled
 			// turn carry the old epoch and are dropped by the webview. The resumable phase is set
 			// in SdkController.cancelTask before this runs.
@@ -1877,6 +1878,7 @@ export class Controller {
 	 */
 	resetMessageTranslatorAndFence(): void {
 		this.messageTranslatorState.reset()
+		this.messageTranslatorState.clearTurnOutcome()
 		this.messageTranslatorState.getMinter().bumpEpoch()
 	}
 

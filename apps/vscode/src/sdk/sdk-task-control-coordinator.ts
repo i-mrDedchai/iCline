@@ -1,10 +1,50 @@
-import type { ClineMessage } from "@shared/ExtensionMessage"
+import type { ClineMessage, TurnPhase } from "@shared/ExtensionMessage"
 import { Logger } from "@/shared/services/Logger"
 import type { SdkInteractionCoordinator } from "./sdk-interaction-coordinator"
 import type { SdkMessageCoordinator } from "./sdk-message-coordinator"
 import { isAbortError, type SdkSessionLifecycle } from "./sdk-session-lifecycle"
 import type { SdkTaskHistory } from "./sdk-task-history"
 import { createTaskProxy, type TaskProxy } from "./task-proxy"
+
+function isHistoryBookkeepingMessage(message: ClineMessage): boolean {
+	return message.say === "api_req_started" || message.say === "deleted_api_reqs" || message.say === "subagent_usage"
+}
+
+/**
+ * Classify a reopened history transcript the same way the live session-event
+ * coordinator classifies a finished turn: completed (completion tool),
+ * resumable (interrupted / unmatched tool), or awaiting_followup.
+ */
+export function classifyReopenedHistory(messages: ClineMessage[]): {
+	phase: TurnPhase
+	appendResumeTask: boolean
+} {
+	const cleaned = messages.filter((m) => m.ask !== "resume_task" && m.ask !== "resume_completed_task")
+	if (cleaned.length === 0) {
+		return { phase: "idle", appendResumeTask: false }
+	}
+
+	let lastUserIdx = -1
+	for (let i = cleaned.length - 1; i >= 0; i--) {
+		if (cleaned[i].say === "task" || cleaned[i].say === "user_feedback") {
+			lastUserIdx = i
+			break
+		}
+	}
+	const lastTurn = cleaned.slice(lastUserIdx + 1).filter((m) => !isHistoryBookkeepingMessage(m))
+
+	if (lastTurn.some((m) => m.ask === "completion_result" || m.say === "completion_result")) {
+		return { phase: "completed", appendResumeTask: false }
+	}
+	if (lastTurn.some((m) => m.partial === true)) {
+		return { phase: "resumable", appendResumeTask: true }
+	}
+	// User sent something and the agent never answered — Resume, not a finished follow-up.
+	if (lastTurn.length === 0 && lastUserIdx >= 0) {
+		return { phase: "resumable", appendResumeTask: true }
+	}
+	return { phase: "awaiting_followup", appendResumeTask: false }
+}
 
 export interface SdkTaskControlCoordinatorOptions {
 	sessions: SdkSessionLifecycle
@@ -15,6 +55,7 @@ export interface SdkTaskControlCoordinatorOptions {
 	setTask: (task: TaskProxy | undefined) => void
 	onAskResponse: (text?: string, images?: string[], files?: string[]) => Promise<void>
 	resetMessageTranslator: () => void
+	setTurnPhase?: (phase: TurnPhase, anchorTs?: number) => void
 	postStateToWebview: () => Promise<void>
 	/**
 	 * Raise the cancel fence SYNCHRONOUSLY before aborting the SDK session: bump the epoch so any
@@ -98,6 +139,10 @@ export class SdkTaskControlCoordinator {
 				}
 			}
 
+			// Drop leftover approval/followup promises from the previous live task
+			// before any await that could let the user answer the old ask.
+			this.options.interactions.clearPending("Showing task from history")
+
 			await this.options.sessions.endActiveSession("showTaskWithId")
 
 			const currentTask = this.options.getTask()
@@ -115,8 +160,10 @@ export class SdkTaskControlCoordinator {
 			const cleanedMessages = isLegacyTask
 				? this.appendLegacyTaskWarningAndResumeMessage(messages)
 				: messages.length > 0
-					? this.appendFreshResumeMessage(messages)
+					? this.appendFreshResumeMessage(rawMessages, messages)
 					: []
+
+			this.applyReopenTurnPhase(rawMessages, cleanedMessages)
 
 			const task = createTaskProxy(
 				taskId,
@@ -141,22 +188,42 @@ export class SdkTaskControlCoordinator {
 			Logger.log(`[SdkController] Showing task: ${taskId}`)
 		} catch (error) {
 			Logger.error("[SdkController] Failed to show task:", error)
+			// The previous task was already cleared but no new one installed; drop the
+			// stale live-turn phase so the footer can't show Thinking/Cancel or a phantom
+			// approval with no session behind it.
+			this.options.setTurnPhase?.("idle")
+			await this.options
+				.postStateToWebview()
+				.catch((e) => Logger.error("[SdkController] State sync after show failure:", e))
 		}
 	}
 
-	private appendFreshResumeMessage(messages: ClineMessage[]): ClineMessage[] {
-		const lastRelevantMessage = [...messages]
-			.reverse()
-			.find((m) => m.ask !== "resume_task" && m.ask !== "resume_completed_task")
-		const resumeAsk = lastRelevantMessage?.ask === "completion_result" ? "resume_completed_task" : "resume_task"
-		const cleanedMessages = messages.filter((m) => m.ask !== "resume_task" && m.ask !== "resume_completed_task")
-		cleanedMessages.push({
-			ts: Date.now(),
-			type: "ask",
-			ask: resumeAsk,
-			text: "",
-		})
+	private appendFreshResumeMessage(rawMessages: ClineMessage[], finalizedMessages: ClineMessage[]): ClineMessage[] {
+		const cleanedMessages = finalizedMessages.filter((m) => m.ask !== "resume_task" && m.ask !== "resume_completed_task")
+		// Classify from the raw transcript: finalizeMessagesForSave strips `partial`,
+		// which is the interrupted-turn signal.
+		const classification = classifyReopenedHistory(rawMessages)
+		if (classification.appendResumeTask) {
+			cleanedMessages.push({
+				ts: Date.now(),
+				type: "ask",
+				ask: "resume_task",
+				text: "",
+			})
+		}
 		return cleanedMessages
+	}
+
+	private applyReopenTurnPhase(rawMessages: ClineMessage[], cleanedMessages: ClineMessage[]): void {
+		const last = cleanedMessages[cleanedMessages.length - 1]
+		// An appended resume_task (interrupted last turn, or the legacy warning path)
+		// is the source of truth for the resumable footer/Enter contract.
+		if (last?.ask === "resume_task") {
+			this.options.setTurnPhase?.("resumable", last.ts)
+			return
+		}
+		const classification = classifyReopenedHistory(rawMessages)
+		this.options.setTurnPhase?.(classification.phase)
 	}
 
 	private appendLegacyTaskWarningAndResumeMessage(messages: ClineMessage[]): ClineMessage[] {

@@ -64,7 +64,7 @@ describe("SdkTaskControlCoordinator", () => {
 		expect(options.resetMessageTranslator).toHaveBeenCalledOnce()
 	})
 
-	it("shows a task by creating a proxy, loading messages, and appending a fresh resume ask", async () => {
+	it("shows a completed task without inventing a resume ask, and sets completed TurnState", async () => {
 		const existingTask = makeTask("old-task")
 		const activeSession = makeActiveSession()
 		const sdkClineMessages: ClineMessage[] = [
@@ -81,6 +81,7 @@ describe("SdkTaskControlCoordinator", () => {
 		await coordinator.showTaskWithId("task-1")
 
 		expect(options.taskHistory.findHistoryItem).toHaveBeenCalledWith("task-1")
+		expect(options.interactions.clearPending).toHaveBeenCalledWith("Showing task from history")
 		expect(options.sessions.endActiveSession).toHaveBeenCalledWith("showTaskWithId")
 		expect(existingTask.messageStateHandler.clear).toHaveBeenCalledOnce()
 		expect(options.resetMessageTranslator).toHaveBeenCalledOnce()
@@ -89,9 +90,138 @@ describe("SdkTaskControlCoordinator", () => {
 		expect(state.task?.messageStateHandler.getClineMessages()).toEqual([
 			{ ts: 1, type: "say", say: "task", text: "hello" },
 			{ ts: 2, type: "ask", ask: "completion_result", text: "" },
-			expect.objectContaining({ type: "ask", ask: "resume_completed_task" }),
 		])
+		expect(options.setTurnPhase).toHaveBeenCalledWith("completed")
 		expect(options.postStateToWebview).toHaveBeenCalledOnce()
+	})
+
+	it("treats say:completion_result as completed even when usage rows follow it", async () => {
+		const sdkClineMessages: ClineMessage[] = [
+			{ ts: 1, type: "say", say: "task", text: "hello" },
+			{ ts: 2, type: "say", say: "completion_result", text: "All done" },
+			{ ts: 3, type: "say", say: "api_req_started", text: JSON.stringify({ tokensIn: 10, tokensOut: 2 }) },
+		]
+		const { coordinator, options, state } = makeCoordinator({
+			hasHistoryItem: true,
+			clineMessages: sdkClineMessages,
+		})
+
+		await coordinator.showTaskWithId("task-1")
+
+		expect(state.task?.messageStateHandler.getClineMessages()).toEqual(sdkClineMessages)
+		expect(options.setTurnPhase).toHaveBeenCalledWith("completed")
+	})
+
+	it("sets resumable TurnState and appends resume_task when the last turn is still partial", async () => {
+		const sdkClineMessages: ClineMessage[] = [
+			{ ts: 1, type: "say", say: "task", text: "hello" },
+			{ ts: 2, type: "say", say: "tool", text: "{}", partial: true },
+		]
+		const { coordinator, options, state } = makeCoordinator({
+			hasHistoryItem: true,
+			clineMessages: sdkClineMessages,
+		})
+
+		await coordinator.showTaskWithId("task-1")
+
+		const loaded = state.task?.messageStateHandler.getClineMessages() ?? []
+		expect(loaded[0]).toEqual({ ts: 1, type: "say", say: "task", text: "hello" })
+		expect(loaded[1]).toMatchObject({ type: "say", say: "tool", text: "final" })
+		expect(loaded[2]).toEqual(expect.objectContaining({ type: "ask", ask: "resume_task" }))
+		expect(options.setTurnPhase).toHaveBeenCalledWith("resumable", loaded[2].ts)
+	})
+
+	it("sets resumable TurnState when the last row is an unanswered user message", async () => {
+		const sdkClineMessages: ClineMessage[] = [{ ts: 1, type: "say", say: "task", text: "hello" }]
+		const { coordinator, options, state } = makeCoordinator({
+			hasHistoryItem: true,
+			clineMessages: sdkClineMessages,
+		})
+
+		await coordinator.showTaskWithId("task-1")
+
+		const loaded = state.task?.messageStateHandler.getClineMessages() ?? []
+		expect(loaded[0]).toEqual(sdkClineMessages[0])
+		expect(loaded[1]).toEqual(expect.objectContaining({ type: "ask", ask: "resume_task" }))
+		expect(options.setTurnPhase).toHaveBeenCalledWith("resumable", loaded[1].ts)
+	})
+
+	it("does not treat an earlier completion as completed after a later follow-up turn", async () => {
+		const sdkClineMessages: ClineMessage[] = [
+			{ ts: 1, type: "say", say: "task", text: "hello" },
+			{ ts: 2, type: "say", say: "completion_result", text: "First turn done" },
+			{ ts: 3, type: "say", say: "user_feedback", text: "one more thing" },
+			{ ts: 4, type: "say", say: "text", text: "Sure" },
+		]
+		const { coordinator, options, state } = makeCoordinator({
+			hasHistoryItem: true,
+			clineMessages: sdkClineMessages,
+		})
+
+		await coordinator.showTaskWithId("task-1")
+
+		expect(state.task?.messageStateHandler.getClineMessages()).toEqual(sdkClineMessages)
+		expect(options.setTurnPhase).toHaveBeenCalledWith("awaiting_followup")
+	})
+
+	it("sets awaiting_followup when the last turn is finished text with no completion tool", async () => {
+		const sdkClineMessages: ClineMessage[] = [
+			{ ts: 1, type: "say", say: "task", text: "hello" },
+			{ ts: 2, type: "say", say: "text", text: "Need more info" },
+		]
+		const { coordinator, options, state } = makeCoordinator({
+			hasHistoryItem: true,
+			clineMessages: sdkClineMessages,
+		})
+
+		await coordinator.showTaskWithId("task-1")
+
+		expect(state.task?.messageStateHandler.getClineMessages()).toEqual(sdkClineMessages)
+		expect(options.setTurnPhase).toHaveBeenCalledWith("awaiting_followup")
+	})
+
+	it("sets idle TurnState when the reopened task has no messages", async () => {
+		const { coordinator, options } = makeCoordinator({
+			hasHistoryItem: true,
+			clineMessages: [],
+		})
+
+		await coordinator.showTaskWithId("task-1")
+
+		expect(options.setTurnPhase).toHaveBeenCalledWith("idle")
+		expect(options.setTask).toHaveBeenCalledOnce()
+	})
+
+	it("resets TurnState to idle when loading the task throws mid-way", async () => {
+		const { coordinator, options } = makeCoordinator({
+			hasHistoryItem: true,
+			task: makeTask("old-task"),
+			clineMessages: [{ ts: 1, type: "say", say: "task", text: "hello" }],
+		})
+		;(options.taskHistory.getClineMessages as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("host read failed"))
+
+		await coordinator.showTaskWithId("task-1")
+
+		expect(options.setTurnPhase).toHaveBeenCalledWith("idle")
+		expect(options.setTask).not.toHaveBeenCalled()
+		expect(options.postStateToWebview).toHaveBeenCalledOnce()
+	})
+
+	it("sets TurnState before installing the task proxy", async () => {
+		const order: string[] = []
+		const { coordinator, options } = makeCoordinator({
+			hasHistoryItem: true,
+			clineMessages: [{ ts: 1, type: "say", say: "task", text: "hello" }],
+		})
+		;(options.setTurnPhase as ReturnType<typeof vi.fn>).mockImplementation(() => order.push("phase"))
+		options.setTask.mockImplementation((task) => {
+			order.push("setTask")
+			return task
+		})
+
+		await coordinator.showTaskWithId("task-1")
+
+		expect(order.slice(0, 2)).toEqual(["phase", "setTask"])
 	})
 
 	it("shows a legacy task with a warning and a resume ask", async () => {
@@ -105,7 +235,8 @@ describe("SdkTaskControlCoordinator", () => {
 		await coordinator.showTaskWithId("legacy-task")
 
 		expect(options.taskHistory.isLegacyTask).toHaveBeenCalledWith("legacy-task")
-		expect(state.task?.messageStateHandler.getClineMessages()).toEqual([
+		const loaded = state.task?.messageStateHandler.getClineMessages() ?? []
+		expect(loaded).toEqual([
 			{ ts: 1, type: "say", say: "task", text: "legacy task" },
 			expect.objectContaining({
 				type: "say",
@@ -114,6 +245,7 @@ describe("SdkTaskControlCoordinator", () => {
 			}),
 			expect.objectContaining({ type: "ask", ask: "resume_task" }),
 		])
+		expect(options.setTurnPhase).toHaveBeenCalledWith("resumable", loaded[2].ts)
 	})
 
 	it("does not show a task that is missing from history", async () => {
@@ -123,6 +255,8 @@ describe("SdkTaskControlCoordinator", () => {
 
 		expect(options.setTask).not.toHaveBeenCalled()
 		expect(options.taskHistory.getClineMessages).not.toHaveBeenCalled()
+		expect(options.interactions.clearPending).not.toHaveBeenCalled()
+		expect(options.setTurnPhase).not.toHaveBeenCalled()
 	})
 
 	it("does not install the new task proxy until its messages are loaded", async () => {
@@ -217,6 +351,7 @@ function makeCoordinator(input: Partial<MakeCoordinatorInput> = {}) {
 		}),
 		onAskResponse: vi.fn().mockResolvedValue(undefined),
 		resetMessageTranslator: vi.fn(),
+		setTurnPhase: vi.fn(),
 		raiseCancelFence: vi.fn(),
 		postStateToWebview: vi.fn().mockResolvedValue(undefined),
 	} as unknown as SdkTaskControlCoordinatorOptions & {
@@ -240,6 +375,7 @@ function makeCoordinator(input: Partial<MakeCoordinatorInput> = {}) {
 		getTask: ReturnType<typeof vi.fn>
 		setTask: ReturnType<typeof vi.fn>
 		resetMessageTranslator: ReturnType<typeof vi.fn>
+		setTurnPhase: ReturnType<typeof vi.fn>
 		postStateToWebview: ReturnType<typeof vi.fn>
 	}
 

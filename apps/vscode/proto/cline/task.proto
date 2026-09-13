@@ -43,12 +43,12 @@ service TaskService {
   rpc taskFeedback(StringRequest) returns (Empty);
   // Executes a quick win task with command and title
   rpc executeQuickWin(ExecuteQuickWinRequest) returns (Empty);
-	// Deletes all task history
-	rpc deleteAllTaskHistory(EmptyRequest) returns (DeleteAllTaskHistoryCount);
-	// Exports selected (or all) tasks to a user-selected .zip archive
-	rpc exportTaskHistory(StringArrayRequest) returns (TaskHistoryTransferResult);
-	// Imports tasks from a user-selected .zip archive
-	rpc importTaskHistory(EmptyRequest) returns (TaskHistoryTransferResult);
+  // Deletes all task history
+  rpc deleteAllTaskHistory(EmptyRequest) returns (DeleteAllTaskHistoryCount);
+  // Exports selected (or all) tasks to a user-selected .zip archive
+  rpc exportTaskHistory(StringArrayRequest) returns (TaskHistoryTransferResult);
+  // Imports tasks from a user-selected .zip archive
+  rpc importTaskHistory(EmptyRequest) returns (TaskHistoryTransferResult);
 }
 
 // Request message for creating a new task

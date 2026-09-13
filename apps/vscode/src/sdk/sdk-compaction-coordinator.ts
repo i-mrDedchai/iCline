@@ -14,7 +14,8 @@
 // fake "Conversation Summary" instead of compacting (CLINE-2503).
 
 import type { Message as SdkMessage } from "@cline/llms"
-import type { ClineMessage } from "@shared/ExtensionMessage"
+import type { ClineApiReqInfo, ClineMessage } from "@shared/ExtensionMessage"
+import { getLastApiReqTotalTokens } from "@shared/getApiMetrics"
 import type { Mode } from "@shared/storage/types"
 import type { StateManager } from "@/core/storage/StateManager"
 import { Logger } from "@/shared/services/Logger"
@@ -153,24 +154,26 @@ export class SdkCompactionCoordinator {
 			return
 		}
 		const clineMessages = this.readClineMessages()
-		const lastTotal = this.readLastApiReqTotalTokens(clineMessages)
+		const lastTotal = getLastApiReqTotalTokens(clineMessages)
 		if (lastTotal <= 0) {
 			return
 		}
 		const ratio = messagesBefore > 0 ? Math.min(1, Math.max(0.05, messagesAfter / messagesBefore)) : 0.5
 		// Keep a small floor so the bar doesn't jump to empty when counts are close.
 		const estimated = Math.max(1, Math.round(lastTotal * ratio))
+		const usage: ClineApiReqInfo = {
+			tokensIn: estimated,
+			tokensOut: 0,
+			cacheWrites: 0,
+			cacheReads: 0,
+			cost: 0,
+			excludeFromTotals: true,
+		}
 		const usageMessage: ClineMessage = {
 			ts: Date.now(),
 			type: "say",
 			say: "api_req_started",
-			text: JSON.stringify({
-				tokensIn: estimated,
-				tokensOut: 0,
-				cacheWrites: 0,
-				cacheReads: 0,
-				cost: 0,
-			}),
+			text: JSON.stringify(usage),
 			partial: false,
 		}
 		this.options.messages.appendAndEmit([usageMessage], {
@@ -181,24 +184,6 @@ export class SdkCompactionCoordinator {
 
 	private readClineMessages(): ClineMessage[] {
 		return this.options.messages.getClineMessages()
-	}
-
-	private readLastApiReqTotalTokens(messages: ClineMessage[]): number {
-		for (let i = messages.length - 1; i >= 0; i--) {
-			const msg = messages[i]
-			if (msg.type === "say" && msg.say === "api_req_started" && msg.text) {
-				try {
-					const { tokensIn, tokensOut, cacheWrites, cacheReads } = JSON.parse(msg.text)
-					const total = (tokensIn || 0) + (tokensOut || 0) + (cacheWrites || 0) + (cacheReads || 0)
-					if (total > 0) {
-						return total
-					}
-				} catch {
-					// continue
-				}
-			}
-		}
-		return 0
 	}
 
 	private getCurrentMode(): Mode {

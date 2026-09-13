@@ -757,26 +757,26 @@ message ModelsApiConfiguration {
   optional string aihubmix_app_code = 84;
   optional string nous_research_api_key = 85;
   optional bool azure_identity = 86;
-	optional string wandb_api_key = 87;
+  optional string wandb_api_key = 87;
 
-	// iCline-specific providers
-	optional string sakana_api_key = 88;
-	optional string jan_api_key = 89;
-	optional string zenmux_api_key = 90;
-	optional string zenmux_api_protocol = 91;
-	optional string zenmux_provider_routing = 92;
-	optional string sakana_billing_mode = 93;
-	optional string sakana_api_protocol = 94;
-	optional string jan_base_url = 95;
-	optional string plan_mode_sakana_model_id = 96;
-	optional string act_mode_sakana_model_id = 97;
-	optional string plan_mode_jan_model_id = 98;
-	optional string act_mode_jan_model_id = 99;
-	optional string plan_mode_zenmux_model_id = 150;
-	optional string act_mode_zenmux_model_id = 151;
+  // iCline-specific providers
+  optional string sakana_api_key = 88;
+  optional string jan_api_key = 89;
+  optional string zenmux_api_key = 90;
+  optional string zenmux_api_protocol = 91;
+  optional string zenmux_provider_routing = 92;
+  optional string sakana_billing_mode = 93;
+  optional string sakana_api_protocol = 94;
+  optional string jan_base_url = 95;
+  optional string plan_mode_sakana_model_id = 96;
+  optional string act_mode_sakana_model_id = 97;
+  optional string plan_mode_jan_model_id = 98;
+  optional string act_mode_jan_model_id = 99;
+  optional string plan_mode_zenmux_model_id = 150;
+  optional string act_mode_zenmux_model_id = 151;
 
-	// Plan mode configurations
-	optional string plan_mode_api_provider = 100;
+  // Plan mode configurations
+  optional string plan_mode_api_provider = 100;
   optional string plan_mode_api_model_id = 101;
   optional int64 plan_mode_thinking_budget_tokens = 102;
   optional string plan_mode_reasoning_effort = 103;

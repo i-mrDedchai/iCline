@@ -45,6 +45,9 @@ export function getApiMetrics(messages: ClineMessage[]): ApiMetrics {
 		) {
 			try {
 				const parsedData = JSON.parse(message.text)
+				if (parsedData.excludeFromTotals === true) {
+					return
+				}
 				const { tokensIn, tokensOut, cacheWrites, cacheReads, cost } = parsedData
 
 				if (typeof tokensIn === "number") {
