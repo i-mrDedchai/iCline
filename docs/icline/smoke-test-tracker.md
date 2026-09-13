@@ -151,7 +151,7 @@ code --install-extension "D:\.grok\iCline\cline-temp\apps\vscode\dist\i-mrdedcha
 
 ## 🔧 SDK history / compact (`fix/sdk-history-reopen-turnstate`)
 
-**สถานะ:** แก้ในโค้ดแล้ว — รอ smoke บน VSIX ของ branch นี้
+**สถานะ:** แก้ในโค้ดแล้ว + committed — รอ smoke บน **`0.1.18-dev.5-fix.7`** (2026-09-13)
 
 | # | Item | How to smoke | Pass |
 |---|------|----------------|------|
