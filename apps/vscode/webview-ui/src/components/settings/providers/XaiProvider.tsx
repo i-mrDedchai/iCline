@@ -1,11 +1,11 @@
-import { getXaiModelsForAuth, type ModelInfo, openAiModelInfoSafeDefaults, xaiDefaultModelId } from "@shared/api"
+import { type ModelInfo, openAiModelInfoSafeDefaults, xaiDefaultModelId } from "@shared/api"
 import { Mode } from "@shared/storage/types"
 import { VSCodeButton, VSCodeCheckbox, VSCodeDropdown, VSCodeOption } from "@vscode/webview-ui-toolkit/react"
-import { useMemo, useState } from "react"
+import { useEffect, useState } from "react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useProviderConfig } from "@/hooks/useProviderConfig"
 import { useProviderModelSelection } from "@/hooks/useProviderModelSelection"
-import { useStaticProviderSelection } from "@/hooks/useStaticProviderSelection"
+import { useProviderModels } from "@/hooks/useProviderModels"
 import { AccountServiceClient } from "@/services/grpc-client"
 import { DROPDOWN_Z_INDEX } from "../ApiOptions"
 import { ApiKeyField } from "../common/ApiKeyField"
@@ -56,54 +56,38 @@ export const XaiProvider = ({ showModelOptions, isPopup, currentMode }: XaiProvi
 	const { handleModeFieldChange } = useApiConfigurationHandlers()
 	const { config, write, commitSelection } = useProviderConfig(PROVIDER_ID)
 
-	const modeFields = getModeSpecificFields(apiConfiguration, currentMode)
+	// Shared catalog path (same as QuickModelPicker via resolveProviderModels).
+	const { models, defaultModelId: hookDefaultModelId, isLoading, isStale, error, refresh } = useProviderModels(PROVIDER_ID)
 
-	// SDK catalog alone only has PAYG models. Merge iCline auth-aware list
-	// (CLI subscription models + live subscription fetch + API key models).
-	const {
-		models: sdkModels,
-		defaultModelId,
-		selectedModelId: legacySelectedModelId,
-		selectedModelInfo: legacySelectedModelInfo,
-		hideUsageCost,
-	} = useStaticProviderSelection(PROVIDER_ID, apiConfiguration, currentMode)
+	const modeFields = getModeSpecificFields(apiConfiguration, currentMode)
 
 	const hasApiKey = !!apiConfiguration?.xaiApiKey?.trim()
 	const oauthConnected = !!xaiOAuthIsAuthenticated
 	const cliOnlyConnected = !!xaiGrokCliIsAuthenticated && !oauthConnected
 	const subscriptionAuthenticated = oauthConnected || !!xaiGrokCliIsAuthenticated
 
-	const models = useMemo(
-		() =>
-			getXaiModelsForAuth({
-				subscriptionAuthenticated,
-				hasApiKey,
-				xaiSubscriptionModels,
-			}),
-		[subscriptionAuthenticated, hasApiKey, xaiSubscriptionModels],
-	)
+	// Refresh when auth-related inputs change (hook already refreshes on mount).
+	// Do NOT refresh on search keystrokes — XaiProvider has no search.
+	useEffect(() => {
+		void refresh()
+	}, [xaiOAuthIsAuthenticated, xaiGrokCliIsAuthenticated, hasApiKey, xaiSubscriptionModels, refresh])
 
-	// Prefer auth-aware catalog; fall back to SDK models if auth list is empty.
-	const effectiveModels = Object.keys(models).length > 0 ? models : sdkModels
-
-	// When on OAuth/CLI subscription, prefer catalog model info (correct context +
-	// included pricing) over any stale committed selection that may still carry
-	// PAYG prices or the generic 128K safe-default.
-	const catalogSelectedInfo = (id: string | undefined) => (id ? effectiveModels[id] : undefined)
+	const resolvedDefaultModelId = hookDefaultModelId || xaiDefaultFromCatalog(models)
 
 	const {
 		selectedModelId,
 		selectedModelInfo: rawSelectedModelInfo,
 		commitModelSelection,
 	} = useProviderModelSelection(PROVIDER_ID, currentMode, {
-		models: effectiveModels,
-		defaultModelId: legacySelectedModelId || xaiDefaultFromCatalog(effectiveModels),
+		models,
+		defaultModelId: resolvedDefaultModelId,
 		config,
 		commitSelection,
-		fallbackModelInfo: catalogSelectedInfo(legacySelectedModelId) ?? legacySelectedModelInfo,
 	})
 
-	const selectedModelInfo = catalogSelectedInfo(selectedModelId) ?? rawSelectedModelInfo
+	// Prefer catalog model info (correct context + included pricing) over any
+	// stale committed selection that may still carry PAYG prices.
+	const selectedModelInfo = (selectedModelId ? models[selectedModelId] : undefined) ?? rawSelectedModelInfo
 
 	// Local state for reasoning effort toggle
 	const [reasoningEffortSelected, setReasoningEffortSelected] = useState(!!modeFields.reasoningEffort)
@@ -118,9 +102,8 @@ export const XaiProvider = ({ showModelOptions, isPopup, currentMode }: XaiProvi
 			return
 		}
 
-		const fallbackModelId = defaultModelId || Object.keys(effectiveModels)[0] || modelId
-		const modelInfo =
-			effectiveModels[modelId] ?? effectiveModels[fallbackModelId] ?? selectedModelInfo ?? openAiModelInfoSafeDefaults
+		const fallbackModelId = resolvedDefaultModelId || Object.keys(models)[0] || modelId
+		const modelInfo = models[modelId] ?? models[fallbackModelId] ?? selectedModelInfo ?? openAiModelInfoSafeDefaults
 
 		void commitModelSelection({
 			modelId,
@@ -158,6 +141,12 @@ export const XaiProvider = ({ showModelOptions, isPopup, currentMode }: XaiProvi
 		}
 	}
 
+	const modelCount = Object.keys(models).length
+	const modelsEmpty = modelCount === 0
+	const showLoading = isLoading && modelsEmpty
+	// Subscription sessions typically include usage; hide PAYG-style cost display.
+	const hideUsageCost = subscriptionAuthenticated
+
 	const connectionVariant = oauthConnected ? "oauth" : cliOnlyConnected ? "cli" : "disconnected"
 	const connectionLabel = oauthConnected
 		? "Connected — Grok (OAuth & Subscription)"
@@ -165,7 +154,7 @@ export const XaiProvider = ({ showModelOptions, isPopup, currentMode }: XaiProvi
 			? "Connected — Grok CLI auth only"
 			: "Not connected"
 	const connectionDetail = oauthConnected
-		? `${Object.keys(effectiveModels).length} models (CLI + subscription)`
+		? `${modelCount} models (CLI + subscription)`
 		: cliOnlyConnected
 			? "OAuth signed out. Session from ~/.grok/auth.json is still active."
 			: hasApiKey
@@ -235,9 +224,30 @@ export const XaiProvider = ({ showModelOptions, isPopup, currentMode }: XaiProvi
 
 			{showModelOptions && (
 				<>
+					{error && (
+						<p
+							style={{
+								fontSize: "12px",
+								color: "var(--vscode-errorForeground)",
+								marginBottom: 8,
+							}}>
+							Failed to load models{error.message ? `: ${error.message}` : ""}
+							{isStale && modelCount > 0 ? " (showing cached list)" : ""}
+						</p>
+					)}
+					{showLoading && (
+						<p
+							style={{
+								fontSize: "12px",
+								color: "var(--vscode-descriptionForeground)",
+								marginBottom: 8,
+							}}>
+							Loading models…
+						</p>
+					)}
 					<ModelSelector
 						label="Model"
-						models={effectiveModels}
+						models={models}
 						onChange={(event: Event) => handleModelChange(getEventValue(event))}
 						selectedModelId={selectedModelId}
 					/>
