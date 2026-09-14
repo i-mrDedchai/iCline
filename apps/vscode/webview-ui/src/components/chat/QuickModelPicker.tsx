@@ -12,13 +12,22 @@
  *  - Reasoning effort chips for the active model when mode has effort set
  *    or the model id looks like a reasoning variant.
  *  - "Edit in Settings…" opens the full API config section.
+ *
+ * Set A: search providers + expanded models; active-first A–Z sort;
+ * Free/Standard sections; empty states for no models / no search match.
  */
 
 import { CommitModelSelectionRequest } from "@shared/proto/cline/models"
 import { isOpenaiReasoningEffort, OPENAI_REASONING_EFFORT_OPTIONS, type OpenaiReasoningEffort } from "@shared/storage/types"
 import { Check, ChevronDown, Pencil, RefreshCw, Search } from "lucide-react"
-import { useCallback, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { getChatModelPreference, normalizePreferenceEffort, setChatModelPreference } from "@/components/chat/chatModelPreferences"
+import {
+	filterModelsByQuery,
+	type ModelEntry,
+	type ModelInfoLike,
+	partitionFreeStandard,
+} from "@/components/chat/quickModelPickerList"
 import { getModeSpecificFields } from "@/components/settings/utils/providerUtils"
 import { useApiConfigurationHandlers } from "@/components/settings/utils/useApiConfigurationHandlers"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -129,6 +138,42 @@ function useProviderModelsCache(providerId: string | null) {
 	return { models, defaultModelId, isLoading, refresh }
 }
 
+function ModelSectionHeader({ label }: { label: string }) {
+	return (
+		<div className="px-7 pt-1.5 pb-0.5 text-[10px] uppercase tracking-wide text-(--vscode-descriptionForeground) opacity-80">
+			{label}
+		</div>
+	)
+}
+
+function ModelRow({
+	modelId,
+	modelInfo,
+	isCurrentModel,
+	providerId,
+	onSelect,
+}: {
+	modelId: string
+	modelInfo: ModelInfoLike
+	isCurrentModel: boolean
+	providerId: string
+	onSelect: (providerId: string, modelId: string) => void
+}) {
+	return (
+		<button
+			className={cn(
+				"w-full flex items-center justify-between pl-7 pr-3 py-1 text-[11px] text-left",
+				"hover:bg-(--vscode-list-hoverBackground) transition-colors",
+				isCurrentModel ? "text-(--vscode-foreground) font-medium" : "text-(--vscode-descriptionForeground)",
+			)}
+			onClick={() => onSelect(providerId, modelId)}
+			type="button">
+			<span className="truncate flex-1">{modelInfo?.name || modelId}</span>
+			{isCurrentModel && <Check className="text-(--vscode-terminal-ansiGreen) shrink-0 ml-2" size={12} />}
+		</button>
+	)
+}
+
 export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPickerProps) {
 	const { providers, isLoading: providersLoading } = useProviderListings()
 	const { mode, apiConfiguration } = useExtensionState()
@@ -225,16 +270,65 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 		[currentProvider, currentModelId, handleModeFieldChange, mode],
 	)
 
+	const searchTrimmed = search.trim()
+	const searchLower = searchTrimmed.toLowerCase()
+
+	const filteredModelEntries = useMemo(() => {
+		return filterModelsByQuery(models as Record<string, ModelInfoLike | undefined>, searchTrimmed)
+	}, [models, searchTrimmed])
+
+	const { free: freeModels, standard: standardModels } = useMemo(() => {
+		const activeId = expandedProvider === currentProvider ? currentModelId : undefined
+		return partitionFreeStandard(filteredModelEntries, activeId)
+	}, [filteredModelEntries, expandedProvider, currentProvider, currentModelId])
+
+	const providerNameMatches = useCallback(
+		(p: { id: string; name?: string }) => {
+			if (!searchLower) {
+				return true
+			}
+			return p.name?.toLowerCase().includes(searchLower) || p.id.toLowerCase().includes(searchLower)
+		},
+		[searchLower],
+	)
+
 	const filteredProviders = useMemo(() => {
 		const sorted = [...providers].sort((a, b) =>
 			(a.name || a.id).localeCompare(b.name || b.id, undefined, { sensitivity: "base" }),
 		)
-		if (!search.trim()) {
+		if (!searchTrimmed) {
 			return sorted
 		}
-		const q = search.toLowerCase()
-		return sorted.filter((p) => p.name?.toLowerCase().includes(q) || p.id.toLowerCase().includes(q))
-	}, [providers, search])
+		return sorted.filter((p) => {
+			if (providerNameMatches(p)) {
+				return true
+			}
+			// Keep expanded provider visible when loaded models match the query
+			// (so typing a model name while expanded still shows that provider).
+			if (expandedProvider === p.id && filteredModelEntries.length > 0) {
+				return true
+			}
+			return false
+		})
+	}, [providers, searchTrimmed, providerNameMatches, expandedProvider, filteredModelEntries])
+
+	// Auto-expand: if search non-empty and expanded has zero model matches after filter
+	// but some provider name matches, expand the first provider-name match.
+	// If expanded has model matches, stay on it.
+	useEffect(() => {
+		if (!searchTrimmed) {
+			return
+		}
+		if (filteredModelEntries.length > 0) {
+			return
+		}
+		const nameMatch = [...providers]
+			.sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id, undefined, { sensitivity: "base" }))
+			.find((p) => p.name?.toLowerCase().includes(searchLower) || p.id.toLowerCase().includes(searchLower))
+		if (nameMatch && nameMatch.id !== expandedProvider) {
+			setExpandedProvider(nameMatch.id)
+		}
+	}, [searchTrimmed, searchLower, filteredModelEntries.length, providers, expandedProvider])
 
 	const showEffortBar = useMemo(() => {
 		void effortBump
@@ -254,6 +348,37 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 	}, [currentModelId, currentProvider, activeEffort, expandedProvider, models, effortBump])
 
 	const selectedEffortDisplay = normalizePreferenceEffort(activeEffort)
+
+	const renderModelSections = (providerId: string, isCurrent: boolean) => {
+		const renderRows = (entries: ModelEntry[]) =>
+			entries.map(([modelId, modelInfo]) => (
+				<ModelRow
+					isCurrentModel={isCurrent && currentModelId === modelId}
+					key={modelId}
+					modelId={modelId}
+					modelInfo={modelInfo}
+					onSelect={(pid, mid) => void handleSelectModel(pid, mid)}
+					providerId={providerId}
+				/>
+			))
+
+		return (
+			<>
+				{freeModels.length > 0 && (
+					<>
+						<ModelSectionHeader label="Free" />
+						{renderRows(freeModels)}
+					</>
+				)}
+				{standardModels.length > 0 && (
+					<>
+						<ModelSectionHeader label="Standard" />
+						{renderRows(standardModels)}
+					</>
+				)}
+			</>
+		)
+	}
 
 	return (
 		<Popover onOpenChange={handleOpenChange} open={open}>
@@ -280,7 +405,7 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 							autoFocus
 							className="flex-1 bg-transparent border-none outline-none text-xs text-(--vscode-foreground) placeholder:text-(--vscode-descriptionForeground)"
 							onChange={(e) => setSearch(e.target.value)}
-							placeholder="Search providers…"
+							placeholder="Search providers or models…"
 							type="text"
 							value={search}
 						/>
@@ -300,6 +425,7 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 							filteredProviders.map((provider) => {
 								const isExpanded = expandedProvider === provider.id
 								const isCurrent = currentProvider === provider.id
+								const modelsEmpty = Object.keys(models).length === 0
 								return (
 									<div
 										className="border-b border-(--vscode-editorGroup-border)/40 last:border-b-0"
@@ -332,37 +458,16 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 													<div className="px-3 py-1.5 text-[11px] text-(--vscode-descriptionForeground)">
 														Loading models…
 													</div>
-												) : Object.keys(models).length === 0 ? (
+												) : modelsEmpty ? (
 													<div className="px-3 py-1.5 text-[11px] text-(--vscode-descriptionForeground) italic">
-														No models available.
+														No models available. Try Refresh.
+													</div>
+												) : filteredModelEntries.length === 0 ? (
+													<div className="px-3 py-1.5 text-[11px] text-(--vscode-descriptionForeground) italic">
+														No models match.
 													</div>
 												) : (
-													Object.entries(models).map(([modelId, modelInfo]) => {
-														const isCurrentModel = isCurrent && currentModelId === modelId
-														return (
-															<button
-																className={cn(
-																	"w-full flex items-center justify-between pl-7 pr-3 py-1 text-[11px] text-left",
-																	"hover:bg-(--vscode-list-hoverBackground) transition-colors",
-																	isCurrentModel
-																		? "text-(--vscode-foreground) font-medium"
-																		: "text-(--vscode-descriptionForeground)",
-																)}
-																key={modelId}
-																onClick={() => void handleSelectModel(provider.id, modelId)}
-																type="button">
-																<span className="truncate flex-1">
-																	{(modelInfo as { name?: string })?.name || modelId}
-																</span>
-																{isCurrentModel && (
-																	<Check
-																		className="text-(--vscode-terminal-ansiGreen) shrink-0 ml-2"
-																		size={12}
-																	/>
-																)}
-															</button>
-														)
-													})
+													renderModelSections(provider.id, isCurrent)
 												)}
 											</div>
 										)}
