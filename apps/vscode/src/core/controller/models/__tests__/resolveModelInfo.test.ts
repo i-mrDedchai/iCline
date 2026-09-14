@@ -291,4 +291,75 @@ describe("resolveModelInfo", () => {
 		})
 		expect(response.modelInfo).toBeUndefined()
 	})
+	it("prefers a committed xAI subscription-only selection over sdk-default substitution", async () => {
+		const { resolveModelInfo } = await import("../resolveModelInfo")
+		const providerId = parseProviderId("xai")
+		const store = makeStore({ providerId })
+		// Committed selection for a subscription-live id that the static catalog
+		// does not list. Even with fallback-grade metadata, once the selection
+		// carries real base info (catalog/state), resolve must not snap to default.
+		vi.mocked(store.readSelection).mockImplementation((_, mode) =>
+			mode === "act"
+				? {
+						providerId,
+						modelId: "grok-4.6",
+						modelInfoSource: "catalog" as const,
+						baseModelInfo: { name: "Grok 4.6", supportsPromptCache: true, contextWindow: 2_000_000 },
+						modelInfo: { name: "Grok 4.6", supportsPromptCache: true, contextWindow: 2_000_000 },
+					}
+				: undefined,
+		)
+		const catalog = makeCatalog()
+		vi.mocked(catalog.peekModels).mockReturnValue(
+			peekResult(
+				"xai",
+				[["grok-composer-2.5-fast", { name: "Composer 2.5 Fast", supportsPromptCache: true, contextWindow: 128_000 }]],
+				"grok-composer-2.5-fast",
+			),
+		)
+
+		const response = await resolveModelInfo(makeController(store, catalog), {
+			providerId: "xai",
+			modelId: "grok-4.6",
+		})
+
+		expect(response.source).toBe("committed-selection")
+		expect(response.modelId).toBe("grok-4.6")
+		expect(response.modelInfo?.contextWindow).toBe(2_000_000)
+		expect(catalog.resolveModels).not.toHaveBeenCalled()
+	})
+
+	it("keeps a fallback-grade xAI subscription id when the catalog would substitute default", async () => {
+		const { resolveModelInfo } = await import("../resolveModelInfo")
+		const providerId = parseProviderId("xai")
+		const store = makeStore({ providerId })
+		vi.mocked(store.readSelection).mockImplementation((_, mode) =>
+			mode === "act"
+				? {
+						providerId,
+						modelId: "grok-4.6",
+						modelInfoSource: "fallback" as const,
+						baseModelInfo: { name: "grok-4.6", supportsPromptCache: false },
+						modelInfo: { name: "grok-4.6", supportsPromptCache: false },
+					}
+				: undefined,
+		)
+		const catalog = makeCatalog()
+		vi.mocked(catalog.peekModels).mockReturnValue(
+			peekResult(
+				"xai",
+				[["grok-composer-2.5-fast", { name: "Composer 2.5 Fast", supportsPromptCache: true, contextWindow: 128_000 }]],
+				"grok-composer-2.5-fast",
+			),
+		)
+
+		const response = await resolveModelInfo(makeController(store, catalog), {
+			providerId: "xai",
+			modelId: "grok-4.6",
+		})
+
+		expect(response.modelId).toBe("grok-4.6")
+		expect(response.source).toBe("committed-selection")
+	})
+
 })

@@ -123,9 +123,19 @@ export function useNormalizedApiConfiguration(mode: Mode): NormalizedApiConfig {
 				selectedModelInfo: unknownModelInfo,
 			}
 		}
+		// When resolveModelInfo substitutes sdk-default for an unrecognized
+		// requested id (subscription-live xAI models historically tripped
+		// this), keep the committed/requested id for display so the Quick
+		// Model Picker checkmark + chat badge do not snap back. ModelInfo
+		// still comes from the resolved payload (default metadata is better
+		// than unknown for capability gates).
+		const displayModelId =
+			resolvedInfo.source === "sdk-default" && modelId && resolvedInfo.modelId !== modelId
+				? modelId
+				: resolvedInfo.modelId
 		return {
 			selectedProvider: provider,
-			selectedModelId: resolvedInfo.modelId,
+			selectedModelId: displayModelId,
 			selectedModelInfo: fromProtobufModelInfo(resolvedInfo.modelInfo),
 		}
 	}, [provider, modelId, resolvedInfo])

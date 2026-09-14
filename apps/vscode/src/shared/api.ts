@@ -338,6 +338,18 @@ export const xaiModels = {
 		description: "Grok 4.5 — xAI frontier model (subscription via OAuth / CLI; PAYG when using API key).",
 		apiFormat: ApiFormat.OPENAI_RESPONSES,
 	},
+	"grok-4.6": {
+		name: "Grok 4.6",
+		maxTokens: 32_768,
+		contextWindow: 2_000_000,
+		supportsImages: true,
+		supportsPromptCache: true,
+		supportsReasoning: true,
+		inputPrice: 2.0,
+		outputPrice: 6.0,
+		description: "Grok 4.6 — xAI frontier model (subscription via OAuth / CLI; PAYG when using API key).",
+		apiFormat: ApiFormat.OPENAI_RESPONSES,
+	},
 	"grok-4.3": {
 		name: "Grok 4.3",
 		maxTokens: 32_768,

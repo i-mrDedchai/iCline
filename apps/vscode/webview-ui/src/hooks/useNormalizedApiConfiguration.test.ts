@@ -176,4 +176,28 @@ describe("useNormalizedApiConfiguration", () => {
 		await waitFor(() => expect(result.current.selectedModelId).toBe("deepseek-v4-flash"))
 		expect(result.current.selectedModelInfo.contextWindow).toBe(1_000_000)
 	})
+	it("keeps the committed xAI model id when resolve returns sdk-default for a different id", async () => {
+		setApiConfiguration({ actModeApiProvider: "xai", actModeApiModelId: "grok-4.6" })
+		mockResolveModelInfo.mockResolvedValue(
+			ResolveModelInfoResponse.create({
+				providerId: "xai",
+				modelId: "grok-composer-2.5-fast",
+				source: "sdk-default",
+				modelInfo: {
+					name: "Composer 2.5 Fast",
+					contextWindow: 128_000,
+					maxTokens: 16_384,
+					supportsPromptCache: true,
+					apiFormat: ApiFormat.OPENAI_RESPONSES,
+				},
+			}),
+		)
+
+		const { result } = renderHook(() => useNormalizedApiConfiguration("act"))
+
+		await waitFor(() => expect(result.current.selectedModelInfo.contextWindow).toBe(128_000))
+		expect(result.current.selectedModelId).toBe("grok-4.6")
+		expect(mockResolveModelInfo).toHaveBeenCalledWith({ providerId: "xai", modelId: "grok-4.6" })
+	})
+
 })

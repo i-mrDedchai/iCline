@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => {
 	let apiConfiguration: MockApiConfiguration = {}
 	let providerSettingsById: Record<string, Record<string, unknown>> = {}
 	let generatedModelsByProvider: Record<string, Record<string, ModelInfo>> = {}
+	let modelsCacheByKey: Record<string, Record<string, ModelInfo>> = {}
 	let modelsFile: { version: 1; providers: Record<string, { models?: Record<string, Record<string, unknown>> }> } = {
 		version: 1,
 		providers: {},
@@ -29,6 +30,7 @@ const mocks = vi.hoisted(() => {
 			providerSettingsById = {}
 			generatedModelsByProvider = {}
 			modelsFile = { version: 1, providers: {} }
+			modelsCacheByKey = {}
 			saveProviderSettings.mockClear()
 		},
 		setApiConfiguration(value: MockApiConfiguration): void {
@@ -58,10 +60,17 @@ const mocks = vi.hoisted(() => {
 		setModelsFile(value: typeof modelsFile): void {
 			modelsFile = value
 		},
+		setModelsCache(key: string, models: Record<string, ModelInfo>): void {
+			modelsCacheByKey = { ...modelsCacheByKey, [key]: models }
+		},
 		getStateManager() {
 			return {
 				getApiConfiguration: () => ({ ...apiConfiguration }),
 				getGlobalSettingsKey: (key: keyof MockApiConfiguration) => apiConfiguration[key],
+				getModelsCache: (key: string) => modelsCacheByKey[key],
+				setModelsCache: (key: string, models: Record<string, ModelInfo>) => {
+					modelsCacheByKey = { ...modelsCacheByKey, [key]: models }
+				},
 				setSecret: (key: keyof MockApiConfiguration, value: unknown) => {
 					apiConfiguration = { ...apiConfiguration, [key]: value }
 				},
@@ -989,4 +998,62 @@ describe("createProviderConfigStore", () => {
 		// the SDK's writeModelsFileSync enforces.
 		expect(() => StoredModelEntrySchema.parse(entry)).not.toThrow()
 	})
+	it("treats xAI subscription-cache ids as known and does not discard committed state", async () => {
+		const { createProviderConfigStore } = await import("./store")
+		const providerId = parseProviderId("xai")
+		const subscriptionOnlyId = "grok-4.6"
+		const subscriptionInfo: ModelInfo = {
+			name: "Grok 4.6",
+			contextWindow: 2_000_000,
+			maxTokens: 32_768,
+			supportsPromptCache: true,
+			supportsReasoning: true,
+		}
+		// Not in the static SDK catalog — only in the live subscription cache.
+		mocks.setModelsCache("xaiSubscription", { [subscriptionOnlyId]: subscriptionInfo })
+		mocks.setApiConfiguration({
+			actModeApiProvider: "xai",
+			planModeApiProvider: "xai",
+			actModeApiModelId: subscriptionOnlyId,
+			planModeApiModelId: subscriptionOnlyId,
+		})
+		mocks.setProviderSettings({
+			xai: { provider: "xai", model: subscriptionOnlyId },
+		})
+
+		const store = createProviderConfigStore()
+		const selection = store.readSelection(providerId, "act")
+
+		expect(selection?.modelId).toBe(subscriptionOnlyId)
+		expect(selection?.modelInfoSource).toBe("catalog")
+		expect(selection?.modelInfo.contextWindow).toBe(2_000_000)
+	})
+
+	it("round-trips commitSelection for an xAI subscription-only id without falling back", async () => {
+		const { createProviderConfigStore } = await import("./store")
+		const providerId = parseProviderId("xai")
+		const subscriptionOnlyId = "grok-4.6"
+		mocks.setModelsCache("xaiSubscription", {
+			[subscriptionOnlyId]: {
+				name: "Grok 4.6",
+				contextWindow: 2_000_000,
+				maxTokens: 32_768,
+				supportsPromptCache: true,
+			},
+		})
+		mocks.setApiConfiguration({
+			actModeApiProvider: "xai",
+			planModeApiProvider: "xai",
+			planActSeparateModelsSetting: false,
+		})
+
+		const store = createProviderConfigStore()
+		store.commitSelection(providerId, "act", { providerId, modelId: subscriptionOnlyId })
+		const selection = store.readSelection(providerId, "act")
+
+		expect(selection?.modelId).toBe(subscriptionOnlyId)
+		expect(selection?.modelInfoSource).not.toBe("fallback")
+		expect(mocks.getSavedProviderSettings("xai")?.model).toBe(subscriptionOnlyId)
+	})
+
 })

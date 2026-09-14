@@ -14,6 +14,7 @@ import { Controller } from ".."
 
 /** Known subscription chat models when the live API list is unavailable. */
 export const XAI_SUBSCRIPTION_API_FALLBACK_IDS = [
+	"grok-4.6",
 	"grok-4.5",
 	"grok-build-0.1",
 	"grok-4.3",
