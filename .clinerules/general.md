@@ -20,6 +20,7 @@ This file is the secret sauce for working effectively in this codebase. It captu
 - When creating PRs, contributors should not create changelog-entry files. Maintainers handle release versioning and changelog curation during the release process.
 - When adding new feature flags, see this PR as a reference https://github.com/cline/cline/pull/7566
 - Additional instructions about making requests: @.clinerules/network.md
+- **UI hover text = balloon tooltip, never native `title`** on iCline-owned surfaces, and capability icons have fixed colors (reasoning `#c39bff`, thinking `#ffd166`, vision `#5ec8ff`, audio `#ff7eb6`, video `#ff9466`, training `#4de3c1`) — full rules: `docs/icline/ui-guidelines.md`
 
 ## Searching the Codebase — Avoiding Build Output
 
