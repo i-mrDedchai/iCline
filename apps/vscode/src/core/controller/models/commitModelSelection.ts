@@ -31,8 +31,13 @@ export async function commitModelSelection(
 		const modes = separate ? [mode] : (["plan", "act"] as const)
 		const updates: Partial<GlobalStateAndSettings> = {}
 		for (const targetMode of modes) {
-			updates[`${targetMode}ModeApiProvider`] = legacyProvider
-			updates[getProviderModelIdKey(legacyProvider, targetMode)] = selection.modelId
+			// Object.assign avoids TS2322 on Partial<GlobalStateAndSettings> indexed
+			// writes (SettingsKey values are a wide union; string is not assignable
+			// to every member). Same computed-key pattern as setGlobalStateBatch.
+			Object.assign(updates, {
+				[`${targetMode}ModeApiProvider`]: legacyProvider,
+				[getProviderModelIdKey(legacyProvider, targetMode)]: selection.modelId,
+			})
 		}
 
 		// Critical: getApiConfiguration reads remote > session > task > global.
