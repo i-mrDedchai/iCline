@@ -1,4 +1,4 @@
-import { type ModelInfo, openAiModelInfoSafeDefaults, xaiDefaultModelId } from "@shared/api"
+﻿import { type ModelInfo, openAiModelInfoSafeDefaults, xaiDefaultModelId } from "@shared/api"
 import { Mode } from "@shared/storage/types"
 import { VSCodeButton, VSCodeCheckbox, VSCodeDropdown, VSCodeOption } from "@vscode/webview-ui-toolkit/react"
 import { useEffect, useRef, useState } from "react"
@@ -51,7 +51,7 @@ interface XaiProviderProps {
 }
 
 export const XaiProvider = ({ showModelOptions, isPopup, currentMode }: XaiProviderProps) => {
-	const { apiConfiguration, xaiOAuthIsAuthenticated, xaiGrokCliIsAuthenticated } = useExtensionState()
+	const { apiConfiguration, xaiOAuthIsAuthenticated, xaiGrokCliIsAuthenticated, xaiSubscriptionModels } = useExtensionState()
 
 	const { handleModeFieldChange } = useApiConfigurationHandlers()
 	const { config, write, commitSelection } = useProviderConfig(PROVIDER_ID)
@@ -68,13 +68,16 @@ export const XaiProvider = ({ showModelOptions, isPopup, currentMode }: XaiProvi
 
 	// Refresh when auth-related inputs change (hook already refreshes on mount).
 	// Keep refresh in a ref so callback identity cannot re-trigger this effect.
-	// Do not depend on xaiSubscriptionModels object identity (avoids refresh loops).
-	// Do NOT refresh on search keystrokes — XaiProvider has no search.
+	// Fingerprint subscription model *ids* (sorted join) โ€” not object identity / not length alone.
+	// Do NOT refresh on search keystrokes - XaiProvider has no search.
 	const refreshRef = useRef(refresh)
 	refreshRef.current = refresh
+	const xaiSubscriptionModelsFingerprint = Object.keys(xaiSubscriptionModels ?? {})
+		.sort()
+		.join("\n")
 	useEffect(() => {
 		void refreshRef.current()
-	}, [xaiOAuthIsAuthenticated, xaiGrokCliIsAuthenticated, hasApiKey])
+	}, [xaiOAuthIsAuthenticated, xaiGrokCliIsAuthenticated, hasApiKey, xaiSubscriptionModelsFingerprint])
 
 	const resolvedDefaultModelId = hookDefaultModelId || xaiDefaultFromCatalog(models)
 
@@ -153,16 +156,16 @@ export const XaiProvider = ({ showModelOptions, isPopup, currentMode }: XaiProvi
 
 	const connectionVariant = oauthConnected ? "oauth" : cliOnlyConnected ? "cli" : "disconnected"
 	const connectionLabel = oauthConnected
-		? "Connected โ€” Grok (OAuth & Subscription)"
+		? "Connected เน€เธยเนยเธเนโฌย Grok (OAuth & Subscription)"
 		: cliOnlyConnected
-			? "Connected โ€” Grok CLI auth only"
+			? "Connected เน€เธยเนยเธเนโฌย Grok CLI auth only"
 			: "Not connected"
 	const connectionDetail = oauthConnected
 		? `${modelCount} models (CLI + subscription)`
 		: cliOnlyConnected
 			? "OAuth signed out. Session from ~/.grok/auth.json is still active."
 			: hasApiKey
-				? "Pay-as-you-go API key โ€” console.x.ai models"
+				? "Pay-as-you-go API key เน€เธยเนยเธเนโฌย console.x.ai models"
 				: undefined
 
 	return (
@@ -186,8 +189,8 @@ export const XaiProvider = ({ showModelOptions, isPopup, currentMode }: XaiProvi
 								color: "var(--vscode-descriptionForeground)",
 								marginTop: 8,
 							}}>
-							โ ๏ธ OAuth was signed out, but Grok CLI login at <code>~/.grok/auth.json</code> is still detected.
-							Sign out of Grok CLI separately to fully disconnect.
+							เน€เธยเธขยเธขย เน€เธยเน€เธยเธขย OAuth was signed out, but Grok CLI login at{" "}
+							<code>~/.grok/auth.json</code> is still detected. Sign out of Grok CLI separately to fully disconnect.
 						</p>
 						<VSCodeButton onClick={handleSignIn}>Sign in to Grok (OAuth)</VSCodeButton>
 					</div>
@@ -201,8 +204,8 @@ export const XaiProvider = ({ showModelOptions, isPopup, currentMode }: XaiProvi
 								marginBottom: "10px",
 								marginTop: 10,
 							}}>
-							๐” Sign in with SuperGrok or X Premium for Composer 2.5 Fast, Grok Build, Grok 4.3 and more. Add an
-							API key for extra pay-as-you-go models.
+							เน€เธยเธขยเนโฌยเธขย Sign in with SuperGrok or X Premium for Composer 2.5 Fast, Grok Build, Grok 4.3
+							and more. Add an API key for extra pay-as-you-go models.
 						</p>
 						<VSCodeButton onClick={handleSignIn}>Sign in to Grok (OAuth)</VSCodeButton>
 					</div>
@@ -246,7 +249,7 @@ export const XaiProvider = ({ showModelOptions, isPopup, currentMode }: XaiProvi
 								color: "var(--vscode-descriptionForeground)",
 								marginBottom: 8,
 							}}>
-							Loading modelsโ€ฆ
+							Loading modelsเน€เธยเนยเธเน€เธย
 						</p>
 					)}
 					<ModelSelector
