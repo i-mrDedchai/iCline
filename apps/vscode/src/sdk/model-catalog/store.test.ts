@@ -1056,4 +1056,139 @@ describe("createProviderConfigStore", () => {
 		expect(mocks.getSavedProviderSettings("xai")?.model).toBe(subscriptionOnlyId)
 	})
 
+	it("treats a non-xAI live-cache-only id as known catalog metadata", async () => {
+		const { createProviderConfigStore } = await import("./store")
+		const providerId = parseProviderId("groq")
+		const liveOnlyId = "live-only-groq-model"
+		const liveInfo: ModelInfo = {
+			name: "Live Only Groq",
+			contextWindow: 131_072,
+			maxTokens: 8_192,
+			supportsPromptCache: false,
+		}
+		// Not in the static SDK catalog — only in the provider live models cache.
+		mocks.setModelsCache("groq", { [liveOnlyId]: liveInfo })
+		mocks.setApiConfiguration({
+			actModeApiProvider: "groq",
+			planModeApiProvider: "groq",
+			actModeGroqModelId: liveOnlyId,
+			planModeGroqModelId: liveOnlyId,
+			actModeGroqModelInfo: liveInfo,
+			planModeGroqModelInfo: liveInfo,
+		})
+		mocks.setProviderSettings({
+			groq: { provider: "groq", model: liveOnlyId },
+		})
+
+		const store = createProviderConfigStore()
+		const selection = store.readSelection(providerId, "act")
+
+		expect(selection?.modelId).toBe(liveOnlyId)
+		expect(selection?.modelInfoSource).toBe("catalog")
+		expect(selection?.modelInfo.contextWindow).toBe(131_072)
+	})
+
+	it("keeps a providers.json-committed id for a live-cache provider without replacing it", async () => {
+		const { createProviderConfigStore } = await import("./store")
+		const providerId = parseProviderId("zenmux")
+		const committedId = "committed-only-zenmux-model"
+		// No static catalog entry and no live cache — only providers.json.
+		mocks.setApiConfiguration({
+			actModeApiProvider: "zenmux",
+			planModeApiProvider: "zenmux",
+			actModeZenmuxModelId: committedId,
+			planModeZenmuxModelId: committedId,
+		})
+		mocks.setProviderSettings({
+			zenmux: { provider: "zenmux", model: committedId },
+		})
+
+		const store = createProviderConfigStore()
+		const selection = store.readSelection(providerId, "act")
+
+		expect(selection?.modelId).toBe(committedId)
+		// No live/static base → fallback-grade metadata, but id must not be discarded.
+		expect(selection?.modelInfoSource).toBe("fallback")
+	})
+
+	it("does not treat an unknown id as known when absent from static, live, and committed", async () => {
+		const { createProviderConfigStore } = await import("./store")
+		const providerId = parseProviderId("zenmux")
+		const unknownId = "totally-unknown-zenmux-id"
+		mocks.setApiConfiguration({
+			actModeApiProvider: "zenmux",
+			planModeApiProvider: "zenmux",
+			actModeZenmuxModelId: unknownId,
+			planModeZenmuxModelId: unknownId,
+		})
+		// providers.json has a different committed model (or none matching).
+		mocks.setProviderSettings({
+			zenmux: { provider: "zenmux", model: "some-other-committed-id" },
+		})
+
+		const store = createProviderConfigStore()
+		const selection = store.readSelection(providerId, "act")
+
+		// Unknown state id is discarded in favor of providers.json committed selection.
+		expect(selection?.modelId).toBe("some-other-committed-id")
+	})
+
+	it("does not open free-text custom ids for non-whitelist providers via live-cache path", async () => {
+		const { createProviderConfigStore } = await import("./store")
+		const { providerAllowsCustomModelIds } = await import("./custom-model-ids")
+		expect(providerAllowsCustomModelIds("groq")).toBe(false)
+		expect(providerAllowsCustomModelIds("xai")).toBe(false)
+		expect(providerAllowsCustomModelIds("zenmux")).toBe(false)
+		expect(providerAllowsCustomModelIds("openai")).toBe(true)
+		expect(providerAllowsCustomModelIds("ollama")).toBe(true)
+
+		const providerId = parseProviderId("groq")
+		const freeTextId = "user-typed-not-in-any-list"
+		mocks.setApiConfiguration({
+			actModeApiProvider: "groq",
+			planModeApiProvider: "groq",
+			actModeGroqModelId: freeTextId,
+			planModeGroqModelId: freeTextId,
+		})
+		mocks.setProviderSettings({
+			groq: { provider: "groq", model: "known-committed-groq" },
+		})
+
+		const store = createProviderConfigStore()
+		// Groq has a modelInfo key, so state id is still read — but without live/static
+		// base the selection is fallback-grade (not treated as a custom-id catalog hit).
+		const selection = store.readSelection(providerId, "act")
+		expect(selection?.modelId).toBe(freeTextId)
+		expect(selection?.modelInfoSource).toBe("fallback")
+	})
+
+	it("round-trips commitSelection for a live-only OpenRouter id without sdk-default coercion", async () => {
+		const { createProviderConfigStore } = await import("./store")
+		const providerId = parseProviderId("openrouter")
+		const liveOnlyId = "vendor/live-only-or-model"
+		mocks.setModelsCache("openRouter", {
+			[liveOnlyId]: {
+				name: "Live Only OR",
+				contextWindow: 200_000,
+				maxTokens: 16_384,
+				supportsPromptCache: true,
+			},
+		})
+		mocks.setApiConfiguration({
+			actModeApiProvider: "openrouter",
+			planModeApiProvider: "openrouter",
+			planActSeparateModelsSetting: false,
+		})
+
+		const store = createProviderConfigStore()
+		store.commitSelection(providerId, "act", { providerId, modelId: liveOnlyId })
+		const selection = store.readSelection(providerId, "act")
+
+		expect(selection?.modelId).toBe(liveOnlyId)
+		expect(selection?.modelInfoSource).not.toBe("fallback")
+		expect(selection?.modelInfo.contextWindow).toBe(200_000)
+		expect(mocks.getSavedProviderSettings("openrouter")?.model).toBe(liveOnlyId)
+	})
+
+
 })

@@ -362,4 +362,62 @@ describe("resolveModelInfo", () => {
 		expect(response.source).toBe("committed-selection")
 	})
 
+	it("prefers a committed non-xAI live-cache selection over sdk-default substitution", async () => {
+		const { resolveModelInfo } = await import("../resolveModelInfo")
+		const providerId = parseProviderId("groq")
+		const store = makeStore({ providerId })
+		vi.mocked(store.readSelection).mockImplementation((_, mode) =>
+			mode === "act"
+				? {
+						providerId,
+						modelId: "live-only-groq-model",
+						modelInfoSource: "catalog" as const,
+						baseModelInfo: { name: "Live Only Groq", supportsPromptCache: false, contextWindow: 131_072 },
+						modelInfo: { name: "Live Only Groq", supportsPromptCache: false, contextWindow: 131_072 },
+					}
+				: undefined,
+		)
+		const catalog = makeCatalog()
+		vi.mocked(catalog.peekModels).mockReturnValue(
+			peekResult(
+				"groq",
+				[["llama-3.3-70b-versatile", { name: "Llama 3.3 70B", supportsPromptCache: false, contextWindow: 128_000 }]],
+				"llama-3.3-70b-versatile",
+			),
+		)
+
+		const response = await resolveModelInfo(makeController(store, catalog), {
+			providerId: "groq",
+			modelId: "live-only-groq-model",
+		})
+
+		expect(response.source).toBe("committed-selection")
+		expect(response.modelId).toBe("live-only-groq-model")
+		expect(response.modelInfo?.contextWindow).toBe(131_072)
+		expect(catalog.resolveModels).not.toHaveBeenCalled()
+	})
+
+	it("does not coerce a requested custom-whitelist id to sdk-default", async () => {
+		const { resolveModelInfo } = await import("../resolveModelInfo")
+		const { providerAllowsCustomModelIds } = await import("@/sdk/model-catalog/custom-model-ids")
+		expect(providerAllowsCustomModelIds("ollama")).toBe(true)
+
+		const providerId = parseProviderId("ollama")
+		const store = makeStore({ providerId })
+		const catalog = makeCatalog()
+		vi.mocked(catalog.peekModels).mockReturnValue(
+			peekResult("ollama", [["llama3", { name: "Llama 3", supportsPromptCache: false, contextWindow: 8_192 }]], "llama3"),
+		)
+
+		const response = await resolveModelInfo(makeController(store, catalog), {
+			providerId: "ollama",
+			modelId: "my-local-finetune",
+		})
+
+		// Custom-id providers must not substitute the catalog default for an unrecognized id.
+		expect(response.modelId).toBe("my-local-finetune")
+		expect(response.source).toBe("unknown")
+	})
+
+
 })

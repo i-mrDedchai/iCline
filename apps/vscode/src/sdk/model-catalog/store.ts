@@ -169,9 +169,52 @@ function isModelInfo(value: unknown): value is ModelInfo {
 	return isRecord(value) && typeof value.supportsPromptCache === "boolean"
 }
 
-function readXaiSubscriptionCachedModelInfo(modelId: string): ModelInfo | undefined {
+/** StateManager live models-cache keys (see getModelsCache / setModelsCache). */
+type ModelsCacheKey =
+	| "openRouter"
+	| "groq"
+	| "baseten"
+	| "huggingFace"
+	| "requesty"
+	| "huaweiCloudMaas"
+	| "hicap"
+	| "aihubmix"
+	| "liteLlm"
+	| "vercel"
+	| "zenmux"
+	| "xaiSubscription"
+
+/**
+ * Map SDK provider id → live models-cache key. Providers without an entry are
+ * static∪committed only. xAI uses the subscription/auth cache, not a separate
+ * PAYG cache key.
+ */
+const LIVE_MODELS_CACHE_KEY_BY_SDK_PROVIDER: Readonly<Partial<Record<string, ModelsCacheKey>>> = {
+	openrouter: "openRouter",
+	groq: "groq",
+	baseten: "baseten",
+	huggingface: "huggingFace",
+	requesty: "requesty",
+	"huawei-cloud-maas": "huaweiCloudMaas",
+	hicap: "hicap",
+	aihubmix: "aihubmix",
+	litellm: "liteLlm",
+	"vercel-ai-gateway": "vercel",
+	zenmux: "zenmux",
+	xai: "xaiSubscription",
+}
+
+function liveModelsCacheKeyForProvider(providerId: ProviderId): ModelsCacheKey | undefined {
+	return LIVE_MODELS_CACHE_KEY_BY_SDK_PROVIDER[toSdkProviderId(providerId)]
+}
+
+function readLiveCachedModelInfo(providerId: ProviderId, modelId: string): ModelInfo | undefined {
+	const cacheKey = liveModelsCacheKeyForProvider(providerId)
+	if (!cacheKey) {
+		return undefined
+	}
 	try {
-		const cache = StateManager.get().getModelsCache("xaiSubscription")
+		const cache = StateManager.get().getModelsCache(cacheKey)
 		const info = cache?.[modelId]
 		return isModelInfo(info) ? info : undefined
 	} catch {
@@ -180,10 +223,11 @@ function readXaiSubscriptionCachedModelInfo(modelId: string): ModelInfo | undefi
 }
 
 /**
- * True when the id is present in a static SDK catalog, the live xAI
- * subscription/auth cache, or the providers.json committed model field.
- * Subscription-live ids (e.g. grok-4.6) are not in the static catalog but
- * must still be treated as first-class for store reads + resolveModelInfo.
+ * True when the id is present in a static SDK catalog, that provider's live
+ * models map/cache (when one exists), or the providers.json committed model
+ * field. Live-only ids (e.g. xAI grok-4.6, OpenRouter/Groq/ZenMux rows missing
+ * from the static catalog) must still be first-class for store reads +
+ * resolveModelInfo so Settings/Quick Picker do not snap to sdk-default.
  */
 function isKnownModelIdForProvider(providerId: ProviderId, modelId: string): boolean {
 	const sdkProviderId = toSdkProviderId(providerId)
@@ -193,14 +237,12 @@ function isKnownModelIdForProvider(providerId: ProviderId, modelId: string): boo
 	) {
 		return true
 	}
-	if (sdkProviderId === "xai") {
-		if (readXaiSubscriptionCachedModelInfo(modelId)) {
-			return true
-		}
-		// Picker/settings write-through also persists the id on providers.json.
-		if (readProviderSettingsModelId(providerId) === modelId) {
-			return true
-		}
+	if (readLiveCachedModelInfo(providerId, modelId)) {
+		return true
+	}
+	// Picker/settings write-through also persists the id on providers.json.
+	if (readProviderSettingsModelId(providerId) === modelId) {
+		return true
 	}
 	return false
 }
@@ -439,15 +481,13 @@ function readBaseModelInfoForProvider(providerId: ProviderId, modelId: string): 
 		}
 	}
 
-	// xAI subscription-live models (auth-aware cache) are authoritative base
-	// metadata even when absent from the static SDK catalog — without this,
-	// resolveSelection marks them as fallback and resolveModelInfo may
-	// substitute sdk-default (Quick Model Picker snap-back).
-	if (sdkProviderId === "xai") {
-		const cached = readXaiSubscriptionCachedModelInfo(modelId)
-		if (cached) {
-			return applyHostModelInfoOverrides(providerId, modelId, cached)
-		}
+	// Live-cache models (OpenRouter/Groq/ZenMux/xAI subscription/…) are
+	// authoritative base metadata even when absent from the static SDK catalog —
+	// without this, resolveSelection marks them as fallback and resolveModelInfo
+	// may substitute sdk-default (Quick Model Picker snap-back).
+	const cached = readLiveCachedModelInfo(providerId, modelId)
+	if (cached) {
+		return applyHostModelInfoOverrides(providerId, modelId, cached)
 	}
 
 	return undefined
