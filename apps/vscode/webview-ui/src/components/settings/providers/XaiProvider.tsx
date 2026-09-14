@@ -1,7 +1,7 @@
 import { type ModelInfo, openAiModelInfoSafeDefaults, xaiDefaultModelId } from "@shared/api"
 import { Mode } from "@shared/storage/types"
 import { VSCodeButton, VSCodeCheckbox, VSCodeDropdown, VSCodeOption } from "@vscode/webview-ui-toolkit/react"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useProviderConfig } from "@/hooks/useProviderConfig"
 import { useProviderModelSelection } from "@/hooks/useProviderModelSelection"
@@ -51,7 +51,7 @@ interface XaiProviderProps {
 }
 
 export const XaiProvider = ({ showModelOptions, isPopup, currentMode }: XaiProviderProps) => {
-	const { apiConfiguration, xaiOAuthIsAuthenticated, xaiGrokCliIsAuthenticated, xaiSubscriptionModels } = useExtensionState()
+	const { apiConfiguration, xaiOAuthIsAuthenticated, xaiGrokCliIsAuthenticated } = useExtensionState()
 
 	const { handleModeFieldChange } = useApiConfigurationHandlers()
 	const { config, write, commitSelection } = useProviderConfig(PROVIDER_ID)
@@ -67,10 +67,14 @@ export const XaiProvider = ({ showModelOptions, isPopup, currentMode }: XaiProvi
 	const subscriptionAuthenticated = oauthConnected || !!xaiGrokCliIsAuthenticated
 
 	// Refresh when auth-related inputs change (hook already refreshes on mount).
+	// Keep refresh in a ref so callback identity cannot re-trigger this effect.
+	// Do not depend on xaiSubscriptionModels object identity (avoids refresh loops).
 	// Do NOT refresh on search keystrokes — XaiProvider has no search.
+	const refreshRef = useRef(refresh)
+	refreshRef.current = refresh
 	useEffect(() => {
-		void refresh()
-	}, [xaiOAuthIsAuthenticated, xaiGrokCliIsAuthenticated, hasApiKey, xaiSubscriptionModels, refresh])
+		void refreshRef.current()
+	}, [xaiOAuthIsAuthenticated, xaiGrokCliIsAuthenticated, hasApiKey])
 
 	const resolvedDefaultModelId = hookDefaultModelId || xaiDefaultFromCatalog(models)
 
@@ -149,16 +153,16 @@ export const XaiProvider = ({ showModelOptions, isPopup, currentMode }: XaiProvi
 
 	const connectionVariant = oauthConnected ? "oauth" : cliOnlyConnected ? "cli" : "disconnected"
 	const connectionLabel = oauthConnected
-		? "Connected — Grok (OAuth & Subscription)"
+		? "Connected โ€” Grok (OAuth & Subscription)"
 		: cliOnlyConnected
-			? "Connected — Grok CLI auth only"
+			? "Connected โ€” Grok CLI auth only"
 			: "Not connected"
 	const connectionDetail = oauthConnected
 		? `${modelCount} models (CLI + subscription)`
 		: cliOnlyConnected
 			? "OAuth signed out. Session from ~/.grok/auth.json is still active."
 			: hasApiKey
-				? "Pay-as-you-go API key — console.x.ai models"
+				? "Pay-as-you-go API key โ€” console.x.ai models"
 				: undefined
 
 	return (
@@ -182,8 +186,8 @@ export const XaiProvider = ({ showModelOptions, isPopup, currentMode }: XaiProvi
 								color: "var(--vscode-descriptionForeground)",
 								marginTop: 8,
 							}}>
-							⚠️ OAuth was signed out, but Grok CLI login at <code>~/.grok/auth.json</code> is still detected. Sign
-							out of Grok CLI separately to fully disconnect.
+							โ ๏ธ OAuth was signed out, but Grok CLI login at <code>~/.grok/auth.json</code> is still detected.
+							Sign out of Grok CLI separately to fully disconnect.
 						</p>
 						<VSCodeButton onClick={handleSignIn}>Sign in to Grok (OAuth)</VSCodeButton>
 					</div>
@@ -197,7 +201,7 @@ export const XaiProvider = ({ showModelOptions, isPopup, currentMode }: XaiProvi
 								marginBottom: "10px",
 								marginTop: 10,
 							}}>
-							🔐 Sign in with SuperGrok or X Premium for Composer 2.5 Fast, Grok Build, Grok 4.3 and more. Add an
+							๐” Sign in with SuperGrok or X Premium for Composer 2.5 Fast, Grok Build, Grok 4.3 and more. Add an
 							API key for extra pay-as-you-go models.
 						</p>
 						<VSCodeButton onClick={handleSignIn}>Sign in to Grok (OAuth)</VSCodeButton>
@@ -242,7 +246,7 @@ export const XaiProvider = ({ showModelOptions, isPopup, currentMode }: XaiProvi
 								color: "var(--vscode-descriptionForeground)",
 								marginBottom: 8,
 							}}>
-							Loading models…
+							Loading modelsโ€ฆ
 						</p>
 					)}
 					<ModelSelector
