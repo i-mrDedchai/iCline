@@ -215,17 +215,17 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 		ref,
 	) => {
 		const {
-		mode,
-		apiConfiguration,
-		openRouterModels,
-		platform,
-		localWorkflowToggles,
-		globalWorkflowToggles,
-		remoteWorkflowToggles,
-		remoteConfigSettings,
-		mcpServers,
-		navigateToSettingsModelPicker,
-	} = useExtensionState()
+			mode,
+			apiConfiguration,
+			openRouterModels,
+			platform,
+			localWorkflowToggles,
+			globalWorkflowToggles,
+			remoteWorkflowToggles,
+			remoteConfigSettings,
+			mcpServers,
+			navigateToSettingsModelPicker,
+		} = useExtensionState()
 		const [isTextAreaFocused, setIsTextAreaFocused] = useState(false)
 		const [isDraggingOver, setIsDraggingOver] = useState(false)
 		const [gitCommits, setGitCommits] = useState<GitCommit[]>([])
@@ -1092,85 +1092,90 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 					selectionStart: inputValue.length + 2,
 				},
 			} as React.ChangeEvent<HTMLTextAreaElement>
-		handleInputChange(event)
-		updateHighlights()
-	}, [inputValue, handleInputChange, updateHighlights])
+			handleInputChange(event)
+			updateHighlights()
+		}, [inputValue, handleInputChange, updateHighlights])
 
-	// iCline: QuickModelPicker replaces the navigate-to-settings model button.
-	// The picker is an inline popover that uses the v4.0.0 SDK hooks
-	// (useProviderListings + useProviderModels + commitModelSelection RPC)
-	// so it supports every provider including Sakana/Jan/zenmux. Falls back
-	// to the upstream "open settings" flow if the picker is unavailable.
-	const handleModelButtonClick = useCallback(() => {
-		navigateToSettingsModelPicker?.({ targetSection: "api-config" })
-	}, [navigateToSettingsModelPicker])
+		// iCline: QuickModelPicker replaces the navigate-to-settings model button.
+		// The picker is an inline popover that uses the v4.0.0 SDK hooks
+		// (useProviderListings + useProviderModels + commitModelSelection RPC)
+		// so it supports every provider including Sakana/Jan/zenmux. Falls back
+		// to the upstream "open settings" flow if the picker is unavailable.
+		const handleModelButtonClick = useCallback(() => {
+			navigateToSettingsModelPicker?.({ targetSection: "api-config" })
+		}, [navigateToSettingsModelPicker])
 
-	// Listen for "Edit in Settings…" from QuickModelPicker footer
-	useEffect(() => {
-		const handler = () => handleModelButtonClick()
-		window.addEventListener("icline:navigate-to-settings-model-picker", handler)
-		return () => window.removeEventListener("icline:navigate-to-settings-model-picker", handler)
-	}, [handleModelButtonClick])
+		// Listen for "Edit in Settings…" from QuickModelPicker footer
+		useEffect(() => {
+			const handler = () => handleModelButtonClick()
+			window.addEventListener("icline:navigate-to-settings-model-picker", handler)
+			return () => window.removeEventListener("icline:navigate-to-settings-model-picker", handler)
+		}, [handleModelButtonClick])
 
-	// Get model display name
+		// Get model display name — rendered as "provider: model" (a space after the
+		// provider prefix, maintainer request 2026-09-14); normalized once here so
+		// every provider branch and both surfaces (chat header + picker footer) match.
 		const modelDisplayName = useMemo(() => {
-			const {
-				vsCodeLmModelSelector,
-				togetherModelId,
-				lmStudioModelId,
-				ollamaModelId,
-				liteLlmModelId,
-				requestyModelId,
-				vercelAiGatewayModelId,
-				zenmuxModelId,
-				sakanaModelId,
-				janModelId,
-			} = getModeSpecificFields(apiConfiguration, mode)
-			const unknownModel = "unknown"
+			const raw = ((): string => {
+				const {
+					vsCodeLmModelSelector,
+					togetherModelId,
+					lmStudioModelId,
+					ollamaModelId,
+					liteLlmModelId,
+					requestyModelId,
+					vercelAiGatewayModelId,
+					zenmuxModelId,
+					sakanaModelId,
+					janModelId,
+				} = getModeSpecificFields(apiConfiguration, mode)
+				const unknownModel = "unknown"
 
-			if (!apiConfiguration) {
-				return unknownModel
-			}
-			switch (selectedProvider) {
-				case "cline":
-					return `${selectedProvider}:${selectedModelId}`
-				case "cline-pass":
-					// Free models selected on ClinePass go through Cline usage billing,
-					// so label them the same way as the cline provider
-					return selectedModelId.startsWith("cline-pass/")
-						? `${selectedProvider}:${selectedModelId.replace(/^cline-pass\//, "")}`
-						: `cline:${selectedModelId}`
-				case "openai":
-					return `openai-compat:${selectedModelId}`
-				case "vscode-lm":
-					return `vscode-lm:${vsCodeLmModelSelector ? `${vsCodeLmModelSelector.vendor ?? ""}/${vsCodeLmModelSelector.family ?? ""}` : unknownModel}`
-				case "together":
-					return `${selectedProvider}:${togetherModelId}`
-				case "lmstudio":
-					return `${selectedProvider}:${lmStudioModelId}`
-				case "ollama":
-					return `${selectedProvider}:${ollamaModelId}`
-				case "litellm":
-					return `${selectedProvider}:${liteLlmModelId}`
-				case "requesty":
-					return `${selectedProvider}:${requestyModelId}`
-				case "vercel-ai-gateway":
-					return `${selectedProvider}:${vercelAiGatewayModelId || selectedModelId}`
-				case "zenmux":
-					return `${selectedProvider}:${zenmuxModelId || selectedModelId}`
-			case "sakana":
-				return `${selectedProvider}:${sakanaModelId || selectedModelId}`
-			case "jan":
-				return `${selectedProvider}:${janModelId || selectedModelId}`
-			case "anthropic":
-				case "openrouter":
-				default:
-					return `${selectedProvider}:${selectedModelId}`
-			}
+				if (!apiConfiguration) {
+					return unknownModel
+				}
+				switch (selectedProvider) {
+					case "cline":
+						return `${selectedProvider}:${selectedModelId}`
+					case "cline-pass":
+						// Free models selected on ClinePass go through Cline usage billing,
+						// so label them the same way as the cline provider
+						return selectedModelId.startsWith("cline-pass/")
+							? `${selectedProvider}:${selectedModelId.replace(/^cline-pass\//, "")}`
+							: `cline:${selectedModelId}`
+					case "openai":
+						return `openai-compat:${selectedModelId}`
+					case "vscode-lm":
+						return `vscode-lm:${vsCodeLmModelSelector ? `${vsCodeLmModelSelector.vendor ?? ""}/${vsCodeLmModelSelector.family ?? ""}` : unknownModel}`
+					case "together":
+						return `${selectedProvider}:${togetherModelId}`
+					case "lmstudio":
+						return `${selectedProvider}:${lmStudioModelId}`
+					case "ollama":
+						return `${selectedProvider}:${ollamaModelId}`
+					case "litellm":
+						return `${selectedProvider}:${liteLlmModelId}`
+					case "requesty":
+						return `${selectedProvider}:${requestyModelId}`
+					case "vercel-ai-gateway":
+						return `${selectedProvider}:${vercelAiGatewayModelId || selectedModelId}`
+					case "zenmux":
+						return `${selectedProvider}:${zenmuxModelId || selectedModelId}`
+					case "sakana":
+						return `${selectedProvider}:${sakanaModelId || selectedModelId}`
+					case "jan":
+						return `${selectedProvider}:${janModelId || selectedModelId}`
+					case "anthropic":
+					case "openrouter":
+					default:
+						return `${selectedProvider}:${selectedModelId}`
+				}
+			})()
+			return raw.replace(/^([a-z0-9_-]+):(\S)/i, "$1: $2")
 		}, [apiConfiguration, mode, selectedProvider, selectedModelId])
 
-	// Function to show error message for unsupported files for drag and drop
-	const showUnsupportedFileErrorMessage = () => {
+		// Function to show error message for unsupported files for drag and drop
+		const showUnsupportedFileErrorMessage = () => {
 			// Show error message for unsupported files
 			setShowUnsupportedFileError(true)
 
@@ -1635,11 +1640,11 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 
 							<ClineRulesToggleModal />
 
-						<ModelContainer>
-							<ModelButtonWrapper>
-								<QuickModelPicker modelDisplayName={modelDisplayName} disabled={false} />
-							</ModelButtonWrapper>
-						</ModelContainer>
+							<ModelContainer>
+								<ModelButtonWrapper>
+									<QuickModelPicker disabled={false} modelDisplayName={modelDisplayName} />
+								</ModelButtonWrapper>
+							</ModelContainer>
 						</ButtonGroup>
 					</div>
 					{/* Tooltip for Plan/Act toggle remains outside the conditional rendering */}

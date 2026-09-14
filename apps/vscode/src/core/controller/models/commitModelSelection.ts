@@ -24,7 +24,7 @@ export async function commitModelSelection(
 
 	if (hasProviderCatalogStateController(controller)) {
 		controller.stateManager.setGlobalStateBatch({
-			[`${mode}ModeApiProvider`]: providerId,
+			[`${mode}ModeApiProvider`]: toLegacyApiProvider(providerId.toString()),
 			[getProviderModelIdKey(toLegacyApiProvider(providerId.toString()), mode)]: selection.modelId,
 		})
 		await controller.stateManager.flushPendingState?.()
@@ -32,6 +32,13 @@ export async function commitModelSelection(
 		if (nextApiConfiguration) {
 			controller.handleApiConfigurationChanged?.(previousApiConfiguration ?? {}, nextApiConfiguration)
 		}
+		// A picker commit changes state the chat view renders (active provider +
+		// model label both read `apiConfiguration` from pushed state), so push
+		// the updated state instead of waiting for an unrelated action (e.g.
+		// sending a message) to refresh it. Regression from the v4.0.0 merge
+		// (smoke 2026-09-14): without this push a picker click could look like
+		// a no-op until something else pushed state.
+		await controller.postStateToWebview?.()
 	}
 
 	return Empty.create()

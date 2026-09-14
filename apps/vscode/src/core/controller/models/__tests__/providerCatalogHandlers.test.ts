@@ -37,12 +37,14 @@ function makeController(
 	catalog: ProviderCatalog,
 	stateManager?: TestStateManager,
 	handleApiConfigurationChanged?: ReturnType<typeof vi.fn<(previous: ApiConfiguration, next: ApiConfiguration) => void>>,
+	postStateToWebview?: ReturnType<typeof vi.fn<() => Promise<void>>>,
 ): ProviderCatalogController {
 	return {
 		getProviderConfigStore: () => store,
 		getProviderCatalog: () => catalog,
 		...(stateManager ? { stateManager } : {}),
 		...(handleApiConfigurationChanged ? { handleApiConfigurationChanged } : {}),
+		...(postStateToWebview ? { postStateToWebview } : {}),
 	}
 }
 
@@ -320,6 +322,53 @@ describe("provider model catalog handlers", () => {
 			modelId: "deepseek-v4-flash",
 			overrides: {},
 		})
+	})
+
+	// Regression (smoke 2026-09-14): the webview renders the chat header from
+	// pushed state — a picker commit without postStateToWebview makes every
+	// click look like a no-op until an unrelated action pushes state.
+	it("commitModelSelection pushes the updated state to the webview", async () => {
+		const { commitModelSelection } = await import("../commitModelSelection")
+		const providerId = parseProviderId("deepseek")
+		const store = makeStore({ providerId })
+		const stateManager: TestStateManager = {
+			setGlobalStateBatch: vi.fn(),
+			flushPendingState: vi.fn(async () => undefined),
+			getApiConfiguration: vi.fn().mockReturnValue({ actModeApiProvider: "deepseek" }),
+		}
+		const postStateToWebview = vi.fn<() => Promise<void>>().mockResolvedValue(undefined)
+		const controller = makeController(store, makeCatalog(), stateManager, undefined, postStateToWebview)
+
+		await commitModelSelection(controller, {
+			providerId: "deepseek",
+			mode: "act",
+			modelId: "deepseek-v4-flash",
+		})
+
+		expect(postStateToWebview).toHaveBeenCalledTimes(1)
+	})
+
+	// Regression (smoke 2026-09-14): the provider state key must store the
+	// LEGACY spelling (SDK_PROVIDER_ID_TO_LEGACY_API_PROVIDER), not the raw
+	// parsed id — casing drift here desyncs the rest of the legacy app.
+	it("commitModelSelection stores the legacy provider spelling in the provider state key", async () => {
+		const { commitModelSelection } = await import("../commitModelSelection")
+		const store = makeStore({ providerId: parseProviderId("nousresearch") })
+		const stateManager: TestStateManager = {
+			setGlobalStateBatch: vi.fn(),
+			flushPendingState: vi.fn(async () => undefined),
+		}
+		const controller = makeController(store, makeCatalog(), stateManager)
+
+		await commitModelSelection(controller, {
+			providerId: "nousresearch",
+			mode: "act",
+			modelId: "model-a",
+		})
+
+		expect(stateManager.setGlobalStateBatch).toHaveBeenCalledWith(
+			expect.objectContaining({ actModeApiProvider: "nousResearch" }),
+		)
 	})
 
 	it("commitModelSelection reports provider changes when config is initialized", async () => {

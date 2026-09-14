@@ -149,6 +149,15 @@ code --install-extension "D:\.grok\iCline\cline-temp\apps\vscode\dist\i-mrdedcha
 
 ---
 
+## 🔧 fix.8 smoke (2026-09-14)
+
+| # | รายการ | ผล |
+|---|--------|-----|
+| 1 | xAI models แสดงใน picker ครบ | ✅ ผ่าน |
+| 2 | คลิกเลือกโมเดลข้าม Provider ใน picker | ❌ **เลือกได้เฉพาะ Provider ที่ active อยู่** — คลิกโมเดลเจ้าอื่นไม่ตอบสนอง (P0 ใหม่ → fix.9) |
+| 3 | Sakana protocol dropdown ทำงาน | ⏸️ UI layout ซ้อนทับ (Model/Reasoning Effort ใต้ API protocol) → แก้ใน fix.9 · ทดสอบแชทรอ API key |
+| 4 | About metadata + branding | ✅ ผ่าน (`dev build 5 · fix.8`, walkthrough/คลิกขวา iCline) |
+
 ## 🔧 SDK history / compact (`fix/sdk-history-reopen-turnstate`)
 
 **สถานะ:** ✅ **Smoke ผ่านบน `0.1.18-dev.5-fix.7`** (maintainer ยืนยัน 2026-09-14: ทำงานดีขึ้น/ถูกต้องขึ้นโดยรวม — เจอจุดใหม่จะรายงานเพิ่ม)

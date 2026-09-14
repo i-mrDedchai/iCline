@@ -1,11 +1,11 @@
-import { sakanaDefaultModelId, sakanaModels, type SakanaModelId } from "@shared/api"
+import { type SakanaModelId, sakanaDefaultModelId, sakanaModels } from "@shared/api"
 import type { Mode } from "@shared/storage/types"
 import { VSCodeDropdown, VSCodeOption } from "@vscode/webview-ui-toolkit/react"
-import React, { useMemo } from "react"
+import React from "react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
-import { ModelInfoView } from "./common/ModelInfoView"
 import { DROPDOWN_Z_INDEX } from "./ApiOptions"
-import { DropdownContainer } from "./common/ModelSelector"
+import { ModelInfoView } from "./common/ModelInfoView"
+import { DropdownContainer, ModelSelector } from "./common/ModelSelector"
 import { getModeSpecificFields } from "./utils/providerUtils"
 import { useApiConfigurationHandlers } from "./utils/useApiConfigurationHandlers"
 
@@ -33,7 +33,6 @@ const SakanaModelPicker: React.FC<SakanaModelPickerProps> = ({ isPopup, currentM
 	const { handleModeFieldsChange, handleModeFieldChange } = useApiConfigurationHandlers()
 	const modeFields = getModeSpecificFields(apiConfiguration, currentMode)
 
-	const modelIds = useMemo(() => Object.keys(sakanaModels) as SakanaModelId[], [])
 	const selectedModelId = modeFields.sakanaModelId || sakanaDefaultModelId
 	const selectedModelInfo = modeFields.sakanaModelInfo || sakanaModels[selectedModelId as SakanaModelId]
 	const selectedReasoningEffort = normalizeSakanaReasoningEffort(modeFields.reasoningEffort, selectedModelId)
@@ -55,29 +54,27 @@ const SakanaModelPicker: React.FC<SakanaModelPickerProps> = ({ isPopup, currentM
 
 	return (
 		<div>
-			<label>
-				<span style={{ fontWeight: 500 }}>Model</span>
-			</label>
-			<DropdownContainer className="dropdown-container" zIndex={DROPDOWN_Z_INDEX - 100}>
-				<VSCodeDropdown
+			{/* Shared ModelSelector keeps the label inside the dropdown container —
+			    the same proven layout as the xai page (smoke 2026-09: the hand-rolled
+			    label + container stacked here overlapped the Reasoning Effort block). */}
+			<div style={{ marginBottom: 12 }}>
+				<ModelSelector
+					label="Model"
+					models={sakanaModels}
 					onChange={(e: any) => handleModelChange(e.target.value)}
-					style={{ width: "100%", marginTop: 3 }}
-					value={selectedModelId}>
-					{modelIds.map((id) => (
-						<VSCodeOption key={id} value={id}>
-							{sakanaModels[id].name ? `${id} — ${sakanaModels[id].name}` : id}
-						</VSCodeOption>
-					))}
-				</VSCodeDropdown>
-			</DropdownContainer>
+					selectedModelId={selectedModelId}
+					zIndex={DROPDOWN_Z_INDEX - 100}
+				/>
+			</div>
 
 			{selectedModelInfo?.supportsReasoning && (
-				<div style={{ marginTop: 10 }}>
-					<label>
+				<div style={{ marginTop: 4, marginBottom: 12 }}>
+					<label htmlFor="sakana-reasoning-effort">
 						<span style={{ fontWeight: 500 }}>Reasoning Effort</span>
 					</label>
 					<DropdownContainer className="dropdown-container" zIndex={DROPDOWN_Z_INDEX - 100}>
 						<VSCodeDropdown
+							id="sakana-reasoning-effort"
 							onChange={(e: any) =>
 								handleModeFieldChange(
 									{ plan: "planModeReasoningEffort", act: "actModeReasoningEffort" },
