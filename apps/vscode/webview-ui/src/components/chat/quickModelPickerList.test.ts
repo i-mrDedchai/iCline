@@ -6,6 +6,9 @@ import {
 	type ModelEntry,
 	modelsMatchQuery,
 	partitionFreeStandard,
+	pickAutoExpandProvider,
+	providersMatchingModelQuery,
+	type WarmModelsByProvider,
 } from "./quickModelPickerList"
 
 describe("isFreeModel", () => {
@@ -68,6 +71,12 @@ describe("filterModelsByQuery", () => {
 	it("returns empty when nothing matches", () => {
 		expect(filterModelsByQuery(models, "xyzzy")).toHaveLength(0)
 	})
+	it("accepts Record with richer ModelInfo-like values without cast", () => {
+		const rich: Record<string, { name?: string; supportsPromptCache: boolean }> = {
+			"a/b": { name: "Bee", supportsPromptCache: true },
+		}
+		expect(filterModelsByQuery(rich, "bee")).toHaveLength(1)
+	})
 })
 
 describe("partitionFreeStandard", () => {
@@ -97,5 +106,88 @@ describe("modelsMatchQuery", () => {
 	})
 	it("is false when none match", () => {
 		expect(modelsMatchQuery({ "x/y": { name: "Hello" } }, "zzz")).toBe(false)
+	})
+})
+
+describe("providersMatchingModelQuery", () => {
+	const providers = [
+		{ id: "zenmux", name: "ZenMux" },
+		{ id: "anthropic", name: "Anthropic" },
+		{ id: "openrouter", name: "OpenRouter" },
+	]
+	const warm: WarmModelsByProvider = {
+		openrouter: {
+			models: {
+				"anthropic/claude-3.5-sonnet": { name: "Claude 3.5 Sonnet" },
+				"meta/llama": { name: "Llama" },
+			},
+		},
+		// anthropic never warmed — model search won't find its models
+	}
+
+	it("returns empty for empty query", () => {
+		expect(providersMatchingModelQuery(providers, warm, "")).toEqual([])
+		expect(providersMatchingModelQuery(providers, warm, "  ")).toEqual([])
+	})
+
+	it("matches by provider name/id (A–Z)", () => {
+		const r = providersMatchingModelQuery(providers, warm, "open")
+		expect(r.map((p) => p.id)).toEqual(["openrouter"])
+	})
+
+	it("matches across providers via warm model id/name", () => {
+		const r = providersMatchingModelQuery(providers, warm, "claude")
+		expect(r.map((p) => p.id)).toEqual(["openrouter"])
+	})
+
+	it("includes both name and warm model hits, sorted A–Z", () => {
+		const r = providersMatchingModelQuery(providers, warm, "anthropic")
+		// anthropic by provider name; openrouter by warm model id prefix "anthropic/…"
+		expect(r.map((p) => p.id)).toEqual(["anthropic", "openrouter"])
+	})
+
+	it("does not surface unwarmed providers for model-only queries", () => {
+		const r = providersMatchingModelQuery(providers, warm, "llama")
+		expect(r.map((p) => p.id)).toEqual(["openrouter"])
+		expect(r.find((p) => p.id === "anthropic")).toBeUndefined()
+	})
+})
+
+describe("pickAutoExpandProvider", () => {
+	const providers = [
+		{ id: "zenmux", name: "ZenMux" },
+		{ id: "anthropic", name: "Anthropic" },
+		{ id: "openrouter", name: "OpenRouter" },
+	]
+	const warm: WarmModelsByProvider = {
+		openrouter: {
+			models: { "org/claude-sonnet": { name: "Claude Sonnet" } },
+		},
+		zenmux: {
+			models: { "z/claude-lite": { name: "Claude Lite" } },
+		},
+	}
+
+	it("returns null for empty query", () => {
+		expect(pickAutoExpandProvider(providers, warm, "", "anthropic")).toBeNull()
+	})
+
+	it("prefers active provider when it has a warm or name match", () => {
+		expect(pickAutoExpandProvider(providers, warm, "claude", "zenmux")).toBe("zenmux")
+		expect(pickAutoExpandProvider(providers, warm, "anthropic", "anthropic")).toBe("anthropic")
+	})
+
+	it("else picks first A–Z provider with warm model match", () => {
+		// active anthropic has neither warm model nor (for "claude") name match on models —
+		// "claude" does not match provider name "Anthropic"
+		expect(pickAutoExpandProvider(providers, warm, "claude", "anthropic")).toBe("openrouter")
+	})
+
+	it("else falls back to first A–Z provider name/id match", () => {
+		expect(pickAutoExpandProvider(providers, {}, "zen", "anthropic")).toBe("zenmux")
+	})
+
+	it("returns null when nothing matches", () => {
+		expect(pickAutoExpandProvider(providers, warm, "xyzzy", "anthropic")).toBeNull()
 	})
 })

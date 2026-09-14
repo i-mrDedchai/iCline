@@ -15,6 +15,10 @@
  *
  * Set A: search providers + expanded models; active-first A–Z sort;
  * Free/Standard sections; empty states for no models / no search match.
+ *
+ * A.1: cross-provider model search reads warm `providerModelsByProvider` only
+ * (no resolveProviderModels / RPC on keystroke). Unwarmed providers stay
+ * invisible to model search until expand/Refresh.
  */
 
 import { CommitModelSelectionRequest } from "@shared/proto/cline/models"
@@ -26,7 +30,9 @@ import {
 	filterModelsByQuery,
 	type ModelEntry,
 	type ModelInfoLike,
+	modelsMatchQuery,
 	partitionFreeStandard,
+	pickAutoExpandProvider,
 } from "@/components/chat/quickModelPickerList"
 import { getModeSpecificFields } from "@/components/settings/utils/providerUtils"
 import { useApiConfigurationHandlers } from "@/components/settings/utils/useApiConfigurationHandlers"
@@ -176,7 +182,7 @@ function ModelRow({
 
 export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPickerProps) {
 	const { providers, isLoading: providersLoading } = useProviderListings()
-	const { mode, apiConfiguration } = useExtensionState()
+	const { mode, apiConfiguration, providerModelsByProvider } = useExtensionState()
 	const { handleModeFieldChange } = useApiConfigurationHandlers()
 	const [open, setOpen] = useState(false)
 	/** null = nothing expanded; user may collapse the active provider freely. */
@@ -273,9 +279,30 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 	const searchTrimmed = search.trim()
 	const searchLower = searchTrimmed.toLowerCase()
 
+	const warmModelsFor = useCallback(
+		(providerId: string | null | undefined) => {
+			if (!providerId) {
+				return {}
+			}
+			return providerModelsByProvider?.[providerId]?.models ?? {}
+		},
+		[providerModelsByProvider],
+	)
+
+	/** Prefer hook models when loaded; else warm map so search hits are clickable immediately. */
+	const displayModels = useMemo(() => {
+		if (!expandedProvider) {
+			return {}
+		}
+		if (Object.keys(models).length > 0) {
+			return models
+		}
+		return warmModelsFor(expandedProvider)
+	}, [expandedProvider, models, warmModelsFor])
+
 	const filteredModelEntries = useMemo(() => {
-		return filterModelsByQuery(models as Record<string, ModelInfoLike | undefined>, searchTrimmed)
-	}, [models, searchTrimmed])
+		return filterModelsByQuery(displayModels, searchTrimmed)
+	}, [displayModels, searchTrimmed])
 
 	const { free: freeModels, standard: standardModels } = useMemo(() => {
 		const activeId = expandedProvider === currentProvider ? currentModelId : undefined
@@ -303,32 +330,35 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 			if (providerNameMatches(p)) {
 				return true
 			}
-			// Keep expanded provider visible when loaded models match the query
-			// (so typing a model name while expanded still shows that provider).
+			// A.1: include providers with warm model matches (no RPC on keystroke).
+			if (modelsMatchQuery(warmModelsFor(p.id), searchTrimmed)) {
+				return true
+			}
+			// Keep expanded provider visible when displayed models match the query.
 			if (expandedProvider === p.id && filteredModelEntries.length > 0) {
 				return true
 			}
 			return false
 		})
-	}, [providers, searchTrimmed, providerNameMatches, expandedProvider, filteredModelEntries])
+	}, [providers, searchTrimmed, providerNameMatches, warmModelsFor, expandedProvider, filteredModelEntries])
 
-	// Auto-expand: if search non-empty and expanded has zero model matches after filter
-	// but some provider name matches, expand the first provider-name match.
-	// If expanded has model matches, stay on it.
+	// A.1 auto-expand: if search non-empty and expanded has zero model matches
+	// (hook ∪ warm), expand active-if-match else first A–Z warm model match else name match.
 	useEffect(() => {
 		if (!searchTrimmed) {
 			return
 		}
-		if (filteredModelEntries.length > 0) {
+		const expandedHasModelMatch =
+			!!expandedProvider &&
+			(modelsMatchQuery(models, searchTrimmed) || modelsMatchQuery(warmModelsFor(expandedProvider), searchTrimmed))
+		if (expandedHasModelMatch) {
 			return
 		}
-		const nameMatch = [...providers]
-			.sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id, undefined, { sensitivity: "base" }))
-			.find((p) => p.name?.toLowerCase().includes(searchLower) || p.id.toLowerCase().includes(searchLower))
-		if (nameMatch && nameMatch.id !== expandedProvider) {
-			setExpandedProvider(nameMatch.id)
+		const next = pickAutoExpandProvider(providers, providerModelsByProvider, searchTrimmed, currentProvider)
+		if (next && next !== expandedProvider) {
+			setExpandedProvider(next)
 		}
-	}, [searchTrimmed, searchLower, filteredModelEntries.length, providers, expandedProvider])
+	}, [searchTrimmed, expandedProvider, models, warmModelsFor, providers, providerModelsByProvider, currentProvider])
 
 	const showEffortBar = useMemo(() => {
 		void effortBump
@@ -425,7 +455,7 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 							filteredProviders.map((provider) => {
 								const isExpanded = expandedProvider === provider.id
 								const isCurrent = currentProvider === provider.id
-								const modelsEmpty = Object.keys(models).length === 0
+								const displayEmpty = Object.keys(displayModels).length === 0
 								return (
 									<div
 										className="border-b border-(--vscode-editorGroup-border)/40 last:border-b-0"
@@ -454,20 +484,20 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 										</button>
 										{isExpanded && (
 											<div className="pb-1">
-												{modelsLoading ? (
+												{filteredModelEntries.length > 0 ? (
+													renderModelSections(provider.id, isCurrent)
+												) : modelsLoading && displayEmpty ? (
 													<div className="px-3 py-1.5 text-[11px] text-(--vscode-descriptionForeground)">
 														Loading models…
 													</div>
-												) : modelsEmpty ? (
+												) : displayEmpty ? (
 													<div className="px-3 py-1.5 text-[11px] text-(--vscode-descriptionForeground) italic">
 														No models available. Try Refresh.
 													</div>
-												) : filteredModelEntries.length === 0 ? (
+												) : (
 													<div className="px-3 py-1.5 text-[11px] text-(--vscode-descriptionForeground) italic">
 														No models match.
 													</div>
-												) : (
-													renderModelSections(provider.id, isCurrent)
 												)}
 											</div>
 										)}
