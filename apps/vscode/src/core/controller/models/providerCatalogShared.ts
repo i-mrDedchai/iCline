@@ -38,9 +38,14 @@ export interface ProviderCatalogController {
 export interface ProviderCatalogStateController extends ProviderCatalogController {
 	stateManager: {
 		setGlobalStateBatch(updates: Partial<GlobalStateAndSettings>): void
+		/** Pierce task/session overrides — see StateManager.setSettingsWriteThrough. */
+		setSettingsWriteThrough?(updates: Partial<GlobalStateAndSettings>, taskId?: string): void
+		getGlobalSettingsKey?<K extends string>(key: K): unknown
 		flushPendingState?(): Promise<void>
 		getApiConfiguration?(): ApiConfiguration
 	}
+	/** Active task, when present — picker commits must update task-scoped settings too. */
+	task?: { taskId: string }
 	handleApiConfigurationChanged?(previous: ApiConfiguration, next: ApiConfiguration): void
 	postStateToWebview?: () => Promise<void>
 }

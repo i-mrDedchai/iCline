@@ -1,4 +1,5 @@
 import type { Mode } from "@shared/storage/types"
+import { getModeSpecificFields } from "@/components/settings/utils/providerUtils"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 
 const PROVIDER_LABELS: Record<string, string> = {
@@ -30,23 +31,67 @@ function shortenModelId(modelId: string): string {
 	return `${modelId.slice(0, 33)}…`
 }
 
+/** Resolve the provider-specific model id (not always *ModeApiModelId). */
+function getChipModelId(
+	provider: string,
+	apiConfiguration: ReturnType<typeof useExtensionState>["apiConfiguration"],
+	mode: Mode,
+): string | undefined {
+	if (!apiConfiguration) {
+		return undefined
+	}
+	const fields = getModeSpecificFields(apiConfiguration, mode)
+	switch (provider) {
+		case "openrouter":
+			return fields.openRouterModelId || fields.apiModelId
+		case "openai":
+			return fields.openAiModelId || fields.apiModelId
+		case "ollama":
+			return fields.ollamaModelId
+		case "lmstudio":
+			return fields.lmStudioModelId
+		case "litellm":
+			return fields.liteLlmModelId
+		case "requesty":
+			return fields.requestyModelId
+		case "together":
+			return fields.togetherModelId
+		case "fireworks":
+			return fields.fireworksModelId
+		case "groq":
+			return fields.groqModelId
+		case "baseten":
+			return fields.basetenModelId
+		case "huggingface":
+			return fields.huggingFaceModelId
+		case "vercel-ai-gateway":
+			return fields.vercelAiGatewayModelId
+		case "zenmux":
+			return fields.zenmuxModelId || fields.apiModelId
+		case "sakana":
+			return fields.sakanaModelId || fields.apiModelId
+		case "jan":
+			return fields.janModelId || fields.apiModelId
+		case "cline":
+			return fields.clineModelId || fields.apiModelId
+		case "cline-pass":
+			return fields.clinePassModelId || fields.apiModelId
+		case "aihubmix":
+			return fields.aihubmixModelId || fields.apiModelId
+		default:
+			return fields.apiModelId
+	}
+}
+
 interface ProviderModelChipProps {
 	mode: Mode
 }
 
 const ProviderModelChip = ({ mode }: ProviderModelChipProps) => {
 	const { apiConfiguration } = useExtensionState()
-	// upstream removed normalizeApiConfiguration from providerUtils; read the
-	// mode-specific provider + model id directly (the only fields this chip
-	// needs) instead of restoring the full provider-switch normalizer.
 	const selectedProvider =
-		(mode === "plan"
-			? apiConfiguration?.planModeApiProvider
-			: apiConfiguration?.actModeApiProvider) || "anthropic"
-	const selectedModelId =
-		mode === "plan"
-			? apiConfiguration?.planModeApiModelId
-			: apiConfiguration?.actModeApiModelId
+		(mode === "plan" ? apiConfiguration?.planModeApiProvider : apiConfiguration?.actModeApiProvider) || "anthropic"
+	const selectedModelId = getChipModelId(selectedProvider, apiConfiguration, mode)
 	const providerLabel = formatProviderLabel(selectedProvider)
 	const modelLabel = selectedModelId ? shortenModelId(selectedModelId) : "default model"
 

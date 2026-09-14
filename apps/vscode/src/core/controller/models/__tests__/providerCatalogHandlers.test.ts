@@ -8,6 +8,8 @@ import type { ProviderCatalogController } from "../providerCatalogShared"
 
 type TestStateManager = {
 	setGlobalStateBatch: ReturnType<typeof vi.fn>
+	setSettingsWriteThrough?: ReturnType<typeof vi.fn>
+	getGlobalSettingsKey?: ReturnType<typeof vi.fn>
 	flushPendingState?: ReturnType<typeof vi.fn<() => Promise<void>>>
 	getApiConfiguration?: ReturnType<typeof vi.fn<() => ApiConfiguration | undefined>>
 }
@@ -250,6 +252,8 @@ describe("provider model catalog handlers", () => {
 		const store = makeStore({ providerId })
 		const stateManager: TestStateManager = {
 			setGlobalStateBatch: vi.fn(),
+			setSettingsWriteThrough: vi.fn(),
+			getGlobalSettingsKey: vi.fn().mockReturnValue(false),
 			flushPendingState: vi.fn(async () => undefined),
 		}
 		const controller = makeController(store, makeCatalog(), stateManager)
@@ -274,10 +278,16 @@ describe("provider model catalog handlers", () => {
 				capabilities: ["prompt-cache"],
 			}),
 		})
-		expect(stateManager.setGlobalStateBatch).toHaveBeenCalledWith({
-			actModeApiProvider: "deepseek",
-			actModeApiModelId: "deepseek-v4-flash",
-		})
+		// planActSeparateModelsSetting false → sync plan+act provider/model
+		expect(stateManager.setSettingsWriteThrough).toHaveBeenCalledWith(
+			{
+				planModeApiProvider: "deepseek",
+				planModeApiModelId: "deepseek-v4-flash",
+				actModeApiProvider: "deepseek",
+				actModeApiModelId: "deepseek-v4-flash",
+			},
+			undefined,
+		)
 		expect(stateManager.flushPendingState).toHaveBeenCalledTimes(1)
 	})
 
@@ -333,6 +343,8 @@ describe("provider model catalog handlers", () => {
 		const store = makeStore({ providerId })
 		const stateManager: TestStateManager = {
 			setGlobalStateBatch: vi.fn(),
+			setSettingsWriteThrough: vi.fn(),
+			getGlobalSettingsKey: vi.fn().mockReturnValue(false),
 			flushPendingState: vi.fn(async () => undefined),
 			getApiConfiguration: vi.fn().mockReturnValue({ actModeApiProvider: "deepseek" }),
 		}
@@ -356,6 +368,8 @@ describe("provider model catalog handlers", () => {
 		const store = makeStore({ providerId: parseProviderId("nousresearch") })
 		const stateManager: TestStateManager = {
 			setGlobalStateBatch: vi.fn(),
+			setSettingsWriteThrough: vi.fn(),
+			getGlobalSettingsKey: vi.fn().mockReturnValue(true),
 			flushPendingState: vi.fn(async () => undefined),
 		}
 		const controller = makeController(store, makeCatalog(), stateManager)
@@ -366,8 +380,9 @@ describe("provider model catalog handlers", () => {
 			modelId: "model-a",
 		})
 
-		expect(stateManager.setGlobalStateBatch).toHaveBeenCalledWith(
+		expect(stateManager.setSettingsWriteThrough).toHaveBeenCalledWith(
 			expect.objectContaining({ actModeApiProvider: "nousResearch" }),
+			undefined,
 		)
 	})
 
@@ -377,6 +392,8 @@ describe("provider model catalog handlers", () => {
 		const store = makeStore({ providerId })
 		const stateManager: TestStateManager = {
 			setGlobalStateBatch: vi.fn(),
+			setSettingsWriteThrough: vi.fn(),
+			getGlobalSettingsKey: vi.fn().mockReturnValue(false),
 			flushPendingState: vi.fn(async () => undefined),
 			getApiConfiguration: vi
 				.fn<() => ApiConfiguration | undefined>()
@@ -395,6 +412,35 @@ describe("provider model catalog handlers", () => {
 
 		expect(handleApiConfigurationChanged).toHaveBeenCalledWith({}, { actModeApiProvider: "deepseek" })
 		expect(stateManager.flushPendingState).toHaveBeenCalledTimes(1)
+	})
+
+	it("commitModelSelection write-through passes active taskId so task overrides update", async () => {
+		const { commitModelSelection } = await import("../commitModelSelection")
+		const providerId = parseProviderId("anthropic")
+		const store = makeStore({ providerId })
+		const stateManager: TestStateManager = {
+			setGlobalStateBatch: vi.fn(),
+			setSettingsWriteThrough: vi.fn(),
+			getGlobalSettingsKey: vi.fn().mockReturnValue(true),
+			flushPendingState: vi.fn(async () => undefined),
+			getApiConfiguration: vi.fn().mockReturnValue({ actModeApiProvider: "anthropic" }),
+		}
+		const controller = {
+			...makeController(store, makeCatalog(), stateManager),
+			task: { taskId: "task-123" },
+		}
+		await commitModelSelection(controller, {
+			providerId: "anthropic",
+			mode: "act",
+			modelId: "claude-opus-5",
+		})
+		expect(stateManager.setSettingsWriteThrough).toHaveBeenCalledWith(
+			{
+				actModeApiProvider: "anthropic",
+				actModeApiModelId: "claude-opus-5",
+			},
+			"task-123",
+		)
 	})
 
 	it("commitModelSelection rejects invalid mode", async () => {
