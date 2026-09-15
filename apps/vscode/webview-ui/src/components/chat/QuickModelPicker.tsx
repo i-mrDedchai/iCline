@@ -189,6 +189,7 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 	const [expandedProvider, setExpandedProvider] = useState<string | null>(null)
 	const [search, setSearch] = useState("")
 	const [effortBump, setEffortBump] = useState(0)
+	const [commitError, setCommitError] = useState<string | null>(null)
 
 	const currentProvider =
 		(mode === "plan" ? apiConfiguration?.planModeApiProvider : apiConfiguration?.actModeApiProvider) || "anthropic"
@@ -210,6 +211,7 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 				// Do NOT re-seed when user collapses — that was the force-expand bug.
 				setExpandedProvider(currentProvider)
 				setSearch("")
+				setCommitError(null)
 			} else {
 				setSearch("")
 			}
@@ -223,6 +225,7 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 
 	const handleSelectModel = useCallback(
 		async (providerId: string, modelId: string) => {
+			setCommitError(null)
 			try {
 				const saved = getChatModelPreference(providerId, modelId)
 				await ModelsServiceClient.commitModelSelection(
@@ -245,6 +248,7 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 				}
 			} catch (err) {
 				console.error("QuickModelPicker: failed to commit model selection:", err)
+				setCommitError(err instanceof Error ? err.message : "Could not activate this model.")
 			}
 		},
 		[mode, handleModeFieldChange],
@@ -546,6 +550,14 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 									{EFFORT_LABELS.none}
 								</button>
 							</div>
+						</div>
+					)}
+
+					{commitError && (
+						<div
+							className="shrink-0 px-3 py-1.5 text-[11px] text-(--vscode-errorForeground) border-t border-(--vscode-editorGroup-border)"
+							role="alert">
+							{commitError}
 						</div>
 					)}
 

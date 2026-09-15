@@ -116,7 +116,7 @@ describe("resolveModelInfo", () => {
 		expect(catalog.resolveModels).not.toHaveBeenCalled()
 	})
 
-	it("returns sdk-default when the requested id is missing but the catalog has a default", async () => {
+	it("does not substitute sdk-default when a requested id is missing from the catalog", async () => {
 		const { resolveModelInfo } = await import("../resolveModelInfo")
 		const store = makeStore({ providerId: parseProviderId("deepseek") })
 		const catalog = makeCatalog()
@@ -133,10 +133,32 @@ describe("resolveModelInfo", () => {
 			modelId: "claude-sonnet-4-5-20250929",
 		})
 
-		expect(response.source).toBe("sdk-default")
-		expect(response.modelId).toBe("deepseek-v4-flash")
-		expect(response.modelInfo?.contextWindow).toBe(1_000_000)
-		expect(catalog.resolveModels).not.toHaveBeenCalled()
+		expect(response.source).toBe("unknown")
+		expect(response.modelId).toBe("claude-sonnet-4-5-20250929")
+		expect(response.modelInfo).toBeUndefined()
+		expect(catalog.resolveModels).toHaveBeenCalledOnce()
+	})
+
+	it("does not snap an xAI live-only requested id to the catalog default", async () => {
+		const { resolveModelInfo } = await import("../resolveModelInfo")
+		const store = makeStore({ providerId: parseProviderId("xai") })
+		const catalog = makeCatalog()
+		vi.mocked(catalog.peekModels).mockReturnValue(
+			peekResult(
+				"xai",
+				[["grok-composer-2.5-fast", { name: "Composer 2.5 Fast", supportsPromptCache: true, contextWindow: 128_000 }]],
+				"grok-composer-2.5-fast",
+			),
+		)
+
+		const response = await resolveModelInfo(makeController(store, catalog), {
+			providerId: "xai",
+			modelId: "grok-4.6",
+		})
+
+		expect(response.source).toBe("unknown")
+		expect(response.modelId).toBe("grok-4.6")
+		expect(response.modelInfo).toBeUndefined()
 	})
 
 	it("returns sdk-default when the request omits a model id and the catalog has a default", async () => {
@@ -418,6 +440,4 @@ describe("resolveModelInfo", () => {
 		expect(response.modelId).toBe("my-local-finetune")
 		expect(response.source).toBe("unknown")
 	})
-
-
 })

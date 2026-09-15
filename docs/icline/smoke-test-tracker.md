@@ -149,6 +149,28 @@ code --install-extension "D:\.grok\iCline\cline-temp\apps\vscode\dist\i-mrdedcha
 
 ---
 
+## 🔧 fix.15 — Quick Picker requested-id invariant (2026-09-15)
+
+**สถานะ:** แพ็ก VSIX รอ maintainer smoke — **ยังไม่ปิดรอบ**
+
+**Branch:** `fix/quick-model-picker-activate`  
+**VSIX:** `apps/vscode/dist/i-mrdedchai.iCline-0.1.18-dev.5-fix.15.vsix`
+
+งานในรอบนี้ (root-cause, ไม่แปะชื่อบน header):
+- `resolveModelInfo` / `pickFromCatalog`: ถ้ามี requested model id แล้ว id นั้นไม่อยู่ใน catalog → **ห้าม** แทนด้วย `defaultModelId`
+- ถอด workaround ที่ header โชว์ id ที่ขอแต่ metadata เป็นของ Composer
+- Picker โชว์ข้อความ error ถ้า `commitModelSelection` พัง
+
+จุดที่ควรคลิกทดสอบ:
+1. Quick Picker บนหน้าแชท — คลิกโมเดล xAI ที่ไม่ใช่ Composer (เช่น Grok 4.3 / 4.5 / 4.6) แล้วชื่อบนแถบต้องเป็นโมเดลนั้น ไม่เด้ง `xai: grok-composer-2.5-fast`
+2. คลิกโมเดลข้าม provider แล้วแถบหัว + แชทต้องเป็น provider/model ที่คลิก
+3. ลิสต์ติ๊กถูกตรงกับที่ active
+4. About แสดง `dev build 5 · fix.15`
+
+รอบแพ็กก่อนหน้าใน worktree นี้: fix.10–fix.14 (VSIX ใน `dist/`)
+
+---
+
 ## 🔧 fix.8 smoke (2026-09-14)
 
 | # | รายการ | ผล |
