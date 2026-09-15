@@ -212,19 +212,18 @@ export class StateManager {
 		this.scheduleDebouncedPersistence()
 	}
 
-
 	/**
-	 * Write settings so they take effect immediately even when task or session
-	 * overrides would otherwise shadow `setGlobalStateBatch`.
+	 * Write settings so they take effect immediately even when higher-precedence
+	 * layers would otherwise shadow `setGlobalStateBatch`.
 	 *
 	 * Precedence in getSettingWithOverride is:
 	 *   remote > sessionOverride > taskState > global
-	 * Quick Model Picker / commitModelSelection must pierce task+session layers
-	 * or cross-provider clicks look like no-ops (provider stuck, generic model id
-	 * updates alone — smoke 2026-09-14).
+	 * Quick Model Picker / commitModelSelection must pierce those layers or
+	 * cross-provider clicks look like no-ops (provider stuck, generic model id
+	 * updates alone — smoke 2026-09-14 / fix.14 `xai: glm-5.3-flash`).
 	 *
 	 * - Always updates global state (persisted).
-	 * - Clears matching session overrides (in-memory only).
+	 * - Drops matching remote + session overrides (in-memory) so the write wins now.
 	 * - If `taskId` is provided, writes the same keys into task settings.
 	 * - If no `taskId` but task cache still shadows a key, drop that key from
 	 *   the in-memory task cache so global wins (stale cache after task end).
@@ -237,6 +236,9 @@ export class StateManager {
 		this.setGlobalStateBatch(updates)
 
 		for (const key of Object.keys(updates) as Array<keyof Settings>) {
+			if (key in this.remoteConfigCache) {
+				delete this.remoteConfigCache[key]
+			}
 			if (key in this.sessionOverrideCache) {
 				delete this.sessionOverrideCache[key]
 			}

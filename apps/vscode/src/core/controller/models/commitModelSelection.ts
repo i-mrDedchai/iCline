@@ -21,8 +21,11 @@ export async function commitModelSelection(
 	const previousApiConfiguration = hasProviderCatalogStateController(controller)
 		? controller.stateManager.getApiConfiguration?.()
 		: undefined
-	controller.getProviderConfigStore().commitSelection(providerId, mode, selection)
 
+	// Flip active provider+model through shadowing layers BEFORE store.commitSelection.
+	// store.commitSelection writes model id (and info) via setGlobalStateBatch only —
+	// if that runs first while task/session/remote still pin the old provider, readers
+	// briefly (or durably) see pairs like `xai` + `glm-5.3-flash` (shared apiModelId).
 	if (hasProviderCatalogStateController(controller)) {
 		const legacyProvider = toLegacyApiProvider(providerId.toString())
 		// Mirror store.syncedModes: when plan/act share models, keep both
@@ -40,18 +43,17 @@ export async function commitModelSelection(
 			})
 		}
 
-		// Critical: getApiConfiguration reads remote > session > task > global.
-		// Writing only global (setGlobalStateBatch) is shadowed by task/session
-		// overrides — smoke 2026-09-14 showed cross-provider picker clicks leave
-		// actModeApiProvider stuck (e.g. "cline") while actModeApiModelId updates,
-		// producing badges like "Cline · claude-opus-5" and a stale picker check.
 		const taskId = controller.task?.taskId
 		if (typeof controller.stateManager.setSettingsWriteThrough === "function") {
 			controller.stateManager.setSettingsWriteThrough(updates, taskId)
 		} else {
 			controller.stateManager.setGlobalStateBatch(updates)
 		}
+	}
 
+	controller.getProviderConfigStore().commitSelection(providerId, mode, selection)
+
+	if (hasProviderCatalogStateController(controller)) {
 		await controller.stateManager.flushPendingState?.()
 		const nextApiConfiguration = controller.stateManager.getApiConfiguration?.()
 		if (nextApiConfiguration) {

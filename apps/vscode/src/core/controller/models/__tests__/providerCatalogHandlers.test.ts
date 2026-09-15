@@ -443,6 +443,42 @@ describe("provider model catalog handlers", () => {
 		)
 	})
 
+	it("commitModelSelection write-through runs before store.commitSelection", async () => {
+		const { commitModelSelection } = await import("../commitModelSelection")
+		const providerId = parseProviderId("zai")
+		const order: string[] = []
+		const store = makeStore({ providerId })
+		store.commitSelection = vi.fn(() => {
+			order.push("store")
+		}) as typeof store.commitSelection
+		const stateManager: TestStateManager = {
+			setGlobalStateBatch: vi.fn(),
+			setSettingsWriteThrough: vi.fn(() => {
+				order.push("writeThrough")
+			}),
+			getGlobalSettingsKey: vi.fn().mockReturnValue(false),
+			flushPendingState: vi.fn(async () => undefined),
+			getApiConfiguration: vi.fn().mockReturnValue({ actModeApiProvider: "xai", actModeApiModelId: "grok-4" }),
+		}
+		const controller = makeController(store, makeCatalog(), stateManager)
+		await commitModelSelection(controller, {
+			providerId: "zai",
+			mode: "act",
+			modelId: "glm-5.3-flash",
+		})
+		expect(order).toEqual(["writeThrough", "store"])
+		// xai/zai share *ModeApiModelId — provider + model must flip together.
+		expect(stateManager.setSettingsWriteThrough).toHaveBeenCalledWith(
+			{
+				planModeApiProvider: "zai",
+				planModeApiModelId: "glm-5.3-flash",
+				actModeApiProvider: "zai",
+				actModeApiModelId: "glm-5.3-flash",
+			},
+			undefined,
+		)
+	})
+
 	it("commitModelSelection rejects invalid mode", async () => {
 		const { commitModelSelection } = await import("../commitModelSelection")
 		const providerId = parseProviderId("deepseek")
