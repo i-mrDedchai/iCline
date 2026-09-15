@@ -15,6 +15,7 @@ Upstream sync + smoke-test restoration on the v4.0.0 SDK architecture (dev build
 - 📚 **Provider docs** — `docs/provider-config/sakana.mdx` and `docs/provider-config/jan.mdx` added to the docs site navigation
 
 ### Fixed
+- 🎯 **Settings is source of truth (fix.18)** — Cline Usage-Billing list policy is shared (`filterOpenRouterModelIds` + recommended/free allowlist). Quick Picker shows that filtered Cline set, not the raw catalog / `:free` name heuristic. Settings provider/model writes go through `commitModelSelection` (dedicated key only; empty model id does not copy leftover xAI `grok-composer-2.5-fast`).
 - 🎯 **Quick Picker activate (fix.17)** — stacked-bug pass after failed fix.16 smoke: picker and header share one model-id reader; this picker skips Radix Portal so the VS Code webview cannot swallow pointerdown; host writes the dedicated model key only (does not clobber leftover `*ModeApiModelId`); hot-swap the live session only when it is already on that provider.
 - 🎯 **Quick Picker activate (fix.16)** — model rows commit on pointerdown so VS Code webview cannot swallow the click; same-provider model switches now restart the active session (not only provider changes).
 - 🎯 **Quick Picker activate (fix.15)** — `resolveModelInfo` no longer replaces a user-requested model id with the provider catalog default (the `xai: grok-composer-2.5-fast` snap). Chat-header label uses the committed id; picker shows commit errors instead of failing silently.

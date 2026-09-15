@@ -1,4 +1,6 @@
+import type { ApiProvider } from "@shared/api"
 import { StringRequest } from "@shared/proto/cline/common"
+import { CommitModelSelectionRequest } from "@shared/proto/cline/models"
 import type { Mode } from "@shared/storage/types"
 import { VSCodeTextField } from "@vscode/webview-ui-toolkit/react"
 import Fuse from "fuse.js"
@@ -11,6 +13,7 @@ import { PLATFORM_CONFIG, PlatformType } from "@/config/platform.config"
 import { CLINE_PASS_FEATURE_FLAG } from "@/constants/featureFlags"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useHasFeatureFlag } from "@/hooks/useFeatureFlag"
+import { getActiveProviderAndModelId } from "@/hooks/useNormalizedApiConfiguration"
 import { useProviderListings } from "@/hooks/useProviderListings"
 import { ModelsServiceClient } from "@/services/grpc-client"
 import { OPENROUTER_MODEL_PICKER_Z_INDEX } from "./OpenRouterModelPicker"
@@ -53,7 +56,6 @@ import { VertexProvider } from "./providers/VertexProvider"
 import { VSCodeLmProvider } from "./providers/VSCodeLmProvider"
 import { XaiProvider } from "./providers/XaiProvider"
 import { ZAiProvider } from "./providers/ZAiProvider"
-import { useApiConfigurationHandlers } from "./utils/useApiConfigurationHandlers"
 
 interface ApiOptionsProps {
 	showModelOptions: boolean
@@ -119,8 +121,6 @@ const ApiOptions = ({
 		? undefined
 		: (getGenericProviderSettings(selectedProvider, catalogProviderListing) ??
 			getFallbackGenericProviderSettings(selectedProvider))
-
-	const { handleModeFieldChange } = useApiConfigurationHandlers()
 
 	const [_ollamaModels, setOllamaModels] = useState<string[]>([])
 
@@ -221,7 +221,23 @@ const ApiOptions = ({
 	}, [searchableItems, searchTerm, fuse, currentProviderLabel])
 
 	const handleProviderChange = (newProvider: string) => {
-		handleModeFieldChange({ plan: "planModeApiProvider", act: "actModeApiProvider" }, newProvider as any, currentMode)
+		// Dedicated field for the TARGET provider (or omit so host uses that
+		// provider's default). Never pass leftover *ModeApiModelId from xAI
+		// when switching to cline/jan/etc.
+		const patchedConfiguration = {
+			...apiConfiguration,
+			...(currentMode === "plan"
+				? { planModeApiProvider: newProvider as ApiProvider }
+				: { actModeApiProvider: newProvider as ApiProvider }),
+		}
+		const { modelId } = getActiveProviderAndModelId(patchedConfiguration, currentMode)
+		void ModelsServiceClient.commitModelSelection(
+			CommitModelSelectionRequest.create({
+				providerId: newProvider,
+				mode: currentMode,
+				modelId: modelId?.trim() || undefined,
+			}),
+		).catch((err) => console.error("Failed to commit provider selection:", err))
 		setIsDropdownVisible(false)
 		setSelectedIndex(-1)
 	}

@@ -108,6 +108,39 @@ describe("ClineModelPicker", () => {
 		})
 	})
 
+	it("commits providerId cline + modelId and ignores leftover actModeApiModelId", async () => {
+		vi.mocked(useExtensionState).mockReturnValue({
+			apiConfiguration: {
+				actModeApiProvider: "xai",
+				actModeApiModelId: "grok-composer-2.5-fast",
+				actModeClineModelId: "cline-default",
+				actModeClineModelInfo: {
+					name: "Cline Default",
+					supportsPromptCache: true,
+				},
+			},
+			favoritedModelIds: [],
+			planActSeparateModelsSetting: true,
+		} as ReturnType<typeof useExtensionState>)
+
+		render(<ClineModelPicker currentMode="act" />)
+
+		expect(screen.getByRole("combobox")).toHaveValue("cline-default")
+		expect(screen.getByRole("combobox")).not.toHaveValue("grok-composer-2.5-fast")
+
+		fireEvent.click(await screen.findByText("cline-next"))
+
+		await waitFor(() => expect(mocks.commitSelection).toHaveBeenCalledTimes(1))
+		expect(mocks.commitSelection).toHaveBeenCalledWith("act", {
+			providerId: "cline",
+			modelId: "cline-next",
+		})
+		expect(mocks.commitSelection).not.toHaveBeenCalledWith(
+			expect.anything(),
+			expect.objectContaining({ modelId: "grok-composer-2.5-fast" }),
+		)
+	})
+
 	it("hydrates the selected Cline model from provider config when legacy settings are empty", () => {
 		vi.mocked(useExtensionState).mockReturnValue({
 			apiConfiguration: {},

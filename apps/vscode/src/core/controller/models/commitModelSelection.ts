@@ -1,8 +1,10 @@
+import type { Mode, ProviderId } from "@/sdk/model-catalog/contracts"
+import type { ApiConfiguration } from "@/shared/api"
 import { toLegacyApiProvider } from "@/shared/model-catalog/provider-helpers"
 import { Empty } from "@/shared/proto/cline/common"
 import { CommitModelSelectionRequest } from "@/shared/proto/cline/models"
-import { getProviderModelIdKey } from "@/shared/storage/provider-keys"
-import type { GlobalStateAndSettings } from "@/shared/storage/state-keys"
+import { getProviderDefaultModelId, getProviderModelIdKey } from "@/shared/storage/provider-keys"
+import type { GlobalStateAndSettings, SettingsKey } from "@/shared/storage/state-keys"
 import {
 	hasProviderCatalogStateController,
 	type ProviderCatalogController,
@@ -10,6 +12,60 @@ import {
 	parseProviderIdRequest,
 	toModelSelection,
 } from "./providerCatalogShared"
+
+function readConfigString(config: ApiConfiguration | undefined, key: SettingsKey): string {
+	const value = config?.[key as keyof ApiConfiguration]
+	return typeof value === "string" ? value.trim() : ""
+}
+
+/**
+ * Empty/omitted modelId (Settings provider switch without a model click) must
+ * resolve against the TARGET provider's dedicated slot or that provider's
+ * default. Never copy leftover *ModeApiModelId (e.g. grok-composer-2.5-fast)
+ * into cline/jan/openrouter.
+ */
+function resolveCommitModelId(
+	request: CommitModelSelectionRequest,
+	providerId: ProviderId,
+	mode: Mode,
+	controller: ProviderCatalogController,
+	apiConfig: ApiConfiguration | undefined,
+): string {
+	const requested = request.modelId?.trim()
+	if (requested) {
+		return requested
+	}
+
+	const legacyProvider = toLegacyApiProvider(providerId.toString())
+	const dedicatedKey = getProviderModelIdKey(legacyProvider, mode)
+	const genericKey = `${mode}ModeApiModelId` as SettingsKey
+
+	if (dedicatedKey !== genericKey) {
+		const dedicatedId = readConfigString(apiConfig, dedicatedKey)
+		if (dedicatedId) {
+			return dedicatedId
+		}
+	}
+
+	const remembered = controller.getProviderConfigStore().readSelection(providerId, mode)?.modelId?.trim()
+	if (remembered) {
+		return remembered
+	}
+
+	if (dedicatedKey === genericKey) {
+		const slotId = readConfigString(apiConfig, dedicatedKey)
+		if (slotId) {
+			return slotId
+		}
+	}
+
+	const fallback = getProviderDefaultModelId(legacyProvider)?.trim()
+	if (fallback) {
+		return fallback
+	}
+
+	throw new Error("model_id is required")
+}
 
 export async function commitModelSelection(
 	controller: ProviderCatalogController,
@@ -24,10 +80,11 @@ export async function commitModelSelection(
 			? "plan"
 			: "act"
 	const mode = parseModeRequest(requestedMode || modeFromState)
-	const selection = toModelSelection(request, providerId)
 	const previousApiConfiguration = hasProviderCatalogStateController(controller)
 		? controller.stateManager.getApiConfiguration?.()
 		: undefined
+	const modelId = resolveCommitModelId(request, providerId, mode, controller, previousApiConfiguration)
+	const selection = toModelSelection({ ...request, modelId }, providerId)
 
 	// Flip active provider+model through shadowing layers BEFORE store.commitSelection.
 	// store.commitSelection writes model id (and info) via setGlobalStateBatch only —

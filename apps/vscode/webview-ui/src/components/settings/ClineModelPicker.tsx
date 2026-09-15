@@ -1,25 +1,25 @@
-import { openAiModelInfoSafeDefaults } from "@shared/api"
 import { CLINE_RECOMMENDED_MODELS_FALLBACK } from "@shared/cline/recommended-models"
-import { EmptyRequest, StringRequest } from "@shared/proto/cline/common"
-import { type ClineRecommendedModel, ClineRecommendedModelsResponse } from "@shared/proto/cline/models"
+import { StringRequest } from "@shared/proto/cline/common"
+import { type ClineRecommendedModel } from "@shared/proto/cline/models"
 import { fromProtobufModelInfo } from "@shared/proto-conversions/models/typeConversion"
 import type { Mode } from "@shared/storage/types"
 import { isClaudeOpusAdaptiveThinkingModel, resolveClaudeOpusAdaptiveThinking } from "@shared/utils/reasoning-support"
 import { VSCodeTextField } from "@vscode/webview-ui-toolkit/react"
 import Fuse from "fuse.js"
 import type React from "react"
-import { type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react"
 import styled from "styled-components"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useDynamicProviderSelection } from "@/hooks/useDynamicProviderSelection"
 import { useProviderConfig } from "@/hooks/useProviderConfig"
 import { useProviderModels } from "@/hooks/useProviderModels"
-import { ModelsServiceClient, StateServiceClient } from "@/services/grpc-client"
+import { StateServiceClient } from "@/services/grpc-client"
 import { highlight } from "../history/HistoryView"
 import { ModelInfoView } from "./common/ModelInfoView"
 import FeaturedModelCard from "./FeaturedModelCard"
 import ReasoningEffortSelector from "./ReasoningEffortSelector"
-import { filterOpenRouterModelIds, getModeSpecificFields } from "./utils/providerUtils"
+import { filterClineSettingsModelIds, useClineSettingsModelList } from "./useClineSettingsModelList"
+import { getModeSpecificFields } from "./utils/providerUtils"
 import { useApiConfigurationHandlers } from "./utils/useApiConfigurationHandlers"
 
 // Star icon for favorites
@@ -60,8 +60,6 @@ interface FeaturedModelCardEntry {
 	label: string
 }
 
-const CLINE_RECOMMENDED_MODELS_RETRY_DELAY_MS = 5000
-
 function normalizeModelId(modelId: string): string {
 	return modelId.trim().toLowerCase()
 }
@@ -93,10 +91,11 @@ const FREE_MODELS_FALLBACK: FeaturedModelCardEntry[] = CLINE_RECOMMENDED_MODELS_
 	.filter((model): model is FeaturedModelCardEntry => model !== null)
 
 const ClineModelPicker: React.FC<ClineModelPickerProps> = ({ isPopup, currentMode, showProviderRouting, initialTab }) => {
-	const { handleModeFieldsChange, handleFieldChange } = useApiConfigurationHandlers()
+	const { handleFieldChange } = useApiConfigurationHandlers()
 	const { apiConfiguration, favoritedModelIds } = useExtensionState()
 	const { models: catalogClineModels, defaultModelId: clineDefaultModelId } = useProviderModels("cline")
 	const { config, write: writeProviderConfig, commitSelection } = useProviderConfig("cline")
+	const { recommended: rpcRecommended, free: rpcFree, freeAllowlist } = useClineSettingsModelList()
 	const modeFields = getModeSpecificFields(apiConfiguration, currentMode)
 	const effectiveClineModels = catalogClineModels
 	const committedSelection = currentMode === "plan" ? config?.planSelection : config?.actSelection
@@ -111,13 +110,21 @@ const ClineModelPicker: React.FC<ClineModelPickerProps> = ({ isPopup, currentMod
 	const searchTermEditedByUserRef = useRef(false)
 	const [isDropdownVisible, setIsDropdownVisible] = useState(false)
 	const [selectedIndex, setSelectedIndex] = useState(-1)
-	const [clineRecommendedModels, setClineRecommendedModels] = useState<FeaturedModelCardEntry[]>([])
-	const [clineFreeModels, setClineFreeModels] = useState<FeaturedModelCardEntry[]>([])
-	const freeClineModelIds = useMemo(() => {
-		const freeModelIds =
-			clineFreeModels.length > 0 ? clineFreeModels.map((model) => model.id) : FREE_MODELS_FALLBACK.map((model) => model.id)
-		return [...new Set(freeModelIds)]
-	}, [clineFreeModels])
+	const clineRecommendedModels = useMemo(
+		() =>
+			rpcRecommended
+				.map((model) => toFeaturedModelCardEntry(model, "RECOMMENDED"))
+				.filter((model): model is FeaturedModelCardEntry => model !== null),
+		[rpcRecommended],
+	)
+	const clineFreeModels = useMemo(
+		() =>
+			rpcFree
+				.map((model) => toFeaturedModelCardEntry(model, "FREE"))
+				.filter((model): model is FeaturedModelCardEntry => model !== null),
+		[rpcFree],
+	)
+	const freeClineModelIds = freeAllowlist
 	const freeClineModelIdSet = useMemo(
 		() => new Set(freeClineModelIds.map((modelId) => normalizeModelId(modelId))),
 		[freeClineModelIds],
@@ -128,67 +135,6 @@ const ClineModelPicker: React.FC<ClineModelPickerProps> = ({ isPopup, currentMod
 		[clineRecommendedModels],
 	)
 	const freeModels = useMemo(() => (clineFreeModels.length > 0 ? clineFreeModels : FREE_MODELS_FALLBACK), [clineFreeModels])
-	const hasSuccessfulClineRecommendedModelsFetchRef = useRef(false)
-	const isFetchingClineRecommendedModelsRef = useRef(false)
-	const clineRecommendedModelsRetryTimeoutRef = useRef<number | null>(null)
-
-	const refreshClineRecommendedModels = useCallback(async (): Promise<boolean> => {
-		try {
-			const response = await ModelsServiceClient.makeUnaryRequest(
-				"refreshClineRecommendedModelsRpc",
-				EmptyRequest.create({}),
-				EmptyRequest.toJSON,
-				ClineRecommendedModelsResponse.fromJSON,
-			)
-			const recommended = (response.recommended ?? [])
-				.map((model) => toFeaturedModelCardEntry(model, "RECOMMENDED"))
-				.filter((model): model is FeaturedModelCardEntry => model !== null)
-			const free = (response.free ?? [])
-				.map((model) => toFeaturedModelCardEntry(model, "FREE"))
-				.filter((model): model is FeaturedModelCardEntry => model !== null)
-			setClineRecommendedModels(recommended)
-			setClineFreeModels(free)
-			return true
-		} catch (error) {
-			console.error("Failed to refresh Cline recommended models:", error)
-			return false
-		}
-	}, [])
-
-	const clearClineRecommendedModelsRetryTimeout = useCallback(() => {
-		if (clineRecommendedModelsRetryTimeoutRef.current !== null) {
-			window.clearTimeout(clineRecommendedModelsRetryTimeoutRef.current)
-			clineRecommendedModelsRetryTimeoutRef.current = null
-		}
-	}, [])
-
-	const fetchClineRecommendedModels = useCallback(async () => {
-		if (hasSuccessfulClineRecommendedModelsFetchRef.current || isFetchingClineRecommendedModelsRef.current) {
-			return
-		}
-		isFetchingClineRecommendedModelsRef.current = true
-		const succeeded = await refreshClineRecommendedModels()
-		isFetchingClineRecommendedModelsRef.current = false
-
-		if (succeeded) {
-			hasSuccessfulClineRecommendedModelsFetchRef.current = true
-			clearClineRecommendedModelsRetryTimeout()
-			return
-		}
-
-		if (clineRecommendedModelsRetryTimeoutRef.current === null) {
-			clineRecommendedModelsRetryTimeoutRef.current = window.setTimeout(() => {
-				clineRecommendedModelsRetryTimeoutRef.current = null
-				void fetchClineRecommendedModels()
-			}, CLINE_RECOMMENDED_MODELS_RETRY_DELAY_MS)
-		}
-	}, [clearClineRecommendedModelsRetryTimeout, refreshClineRecommendedModels])
-
-	useEffect(() => {
-		return () => {
-			clearClineRecommendedModelsRetryTimeout()
-		}
-	}, [clearClineRecommendedModelsRetryTimeout])
 
 	useEffect(() => {
 		if (initialTab) {
@@ -210,33 +156,10 @@ const ClineModelPicker: React.FC<ClineModelPickerProps> = ({ isPopup, currentMod
 		searchTermEditedByUserRef.current = false
 		setSearchTerm(newModelId)
 
-		const modelInfo = effectiveClineModels?.[newModelId] ?? {
-			...openAiModelInfoSafeDefaults,
-			name: newModelId,
-		}
-
 		void commitSelection(currentMode, {
 			providerId: "cline",
 			modelId: newModelId,
 		}).catch((err) => console.error("Failed to commit Cline model selection:", err))
-
-		void handleModeFieldsChange(
-			{
-				clineModelId: {
-					plan: "planModeClineModelId",
-					act: "actModeClineModelId",
-				},
-				clineModelInfo: {
-					plan: "planModeClineModelInfo",
-					act: "actModeClineModelInfo",
-				},
-			},
-			{
-				clineModelId: newModelId,
-				clineModelInfo: modelInfo,
-			},
-			currentMode,
-		)
 	}
 
 	const baseSelection = useDynamicProviderSelection("cline", apiConfiguration, currentMode)
@@ -283,10 +206,6 @@ const ClineModelPicker: React.FC<ClineModelPickerProps> = ({ isPopup, currentMod
 		modeFields.clineModelInfo,
 	])
 
-	useEffect(() => {
-		void fetchClineRecommendedModels()
-	}, [fetchClineRecommendedModels])
-
 	// Sync external changes when the modelId changes
 	useEffect(() => {
 		searchTermEditedByUserRef.current = false
@@ -308,7 +227,7 @@ const ClineModelPicker: React.FC<ClineModelPickerProps> = ({ isPopup, currentMod
 
 	const modelIds = useMemo(() => {
 		const unfilteredModelIds = Object.keys(effectiveClineModels ?? {}).sort((a, b) => a.localeCompare(b))
-		return filterOpenRouterModelIds(unfilteredModelIds, "cline", freeClineModelIds)
+		return filterClineSettingsModelIds(unfilteredModelIds, freeClineModelIds)
 	}, [effectiveClineModels, freeClineModelIds])
 
 	const searchableItems = useMemo(() => {

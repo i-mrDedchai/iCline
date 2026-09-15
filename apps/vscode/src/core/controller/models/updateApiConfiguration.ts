@@ -138,13 +138,18 @@ export async function updateApiConfiguration(controller: Controller, request: Up
 			controller.stateManager.setSecretsBatch(secrets)
 		}
 		if (Object.keys(options).length > 0) {
-			controller.stateManager.setGlobalStateBatch(
-				normalizeProviderSwitchModel(
-					controller.getProviderConfigStore(),
-					controller.stateManager.getApiConfiguration(),
-					options,
-				),
+			const updates = normalizeProviderSwitchModel(
+				controller.getProviderConfigStore(),
+				controller.stateManager.getApiConfiguration(),
+				options,
 			)
+			// Pierce session+task the same way commitModelSelection does. Remote
+			// is not cleared (org policy). Prefer Settings → commitModelSelection.
+			if (typeof controller.stateManager.setSettingsWriteThrough === "function") {
+				controller.stateManager.setSettingsWriteThrough(updates, controller.task?.taskId)
+			} else {
+				controller.stateManager.setGlobalStateBatch(updates)
+			}
 			await clearOrganizationForClinePassProviderSelection(controller, controller.stateManager.getApiConfiguration())
 		}
 

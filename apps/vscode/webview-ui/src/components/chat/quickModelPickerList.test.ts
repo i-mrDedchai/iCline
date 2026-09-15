@@ -1,3 +1,5 @@
+import { CLINE_RECOMMENDED_MODELS_FALLBACK } from "@shared/cline/recommended-models"
+import { filterOpenRouterModelIds } from "@shared/utils/model-filters"
 import { describe, expect, it } from "vitest"
 import {
 	compareModelEntries,
@@ -10,6 +12,25 @@ import {
 	providersMatchingModelQuery,
 	type WarmModelsByProvider,
 } from "./quickModelPickerList"
+
+/** Catalog split: paid, blocked :free, allowlisted :free, exception :free, -free name trap. */
+const CLINE_BILLING_CATALOG_IDS = [
+	"anthropic/claude-sonnet-4.6",
+	"meta-llama/llama-3.3-70b:free",
+	"org/allowlisted-only:free",
+	"arcee-ai/trinity-large-preview:free",
+	"tool-free",
+] as const
+
+const CLINE_BILLING_ALLOWLIST = ["org/allowlisted-only:free", ...CLINE_RECOMMENDED_MODELS_FALLBACK.free.map((model) => model.id)]
+
+const CLINE_BILLING_NAMES: Record<string, string> = {
+	"anthropic/claude-sonnet-4.6": "Claude Sonnet 4.6",
+	"meta-llama/llama-3.3-70b:free": "Llama 3.3 70B",
+	"org/allowlisted-only:free": "Allowlisted Free",
+	"arcee-ai/trinity-large-preview:free": "Trinity Large Preview",
+	"tool-free": "Tool Free",
+}
 
 describe("isFreeModel", () => {
 	it("detects :free in id", () => {
@@ -189,5 +210,37 @@ describe("pickAutoExpandProvider", () => {
 
 	it("returns null when nothing matches", () => {
 		expect(pickAutoExpandProvider(providers, warm, "xyzzy", "anthropic")).toBeNull()
+	})
+})
+
+describe("Cline Usage-Billing filter vs Quick Picker heuristic", () => {
+	const catalogIds = [...CLINE_BILLING_CATALOG_IDS]
+	const settingsSet = filterOpenRouterModelIds(catalogIds, "cline", CLINE_BILLING_ALLOWLIST)
+	const heuristicDrop = catalogIds.filter((id) => !isFreeModel(id, CLINE_BILLING_NAMES[id]))
+	const partitionedAll = (() => {
+		const entries: ModelEntry[] = catalogIds.map((id) => [id, { name: CLINE_BILLING_NAMES[id] }])
+		const { free, standard } = partitionFreeStandard(entries)
+		return [...free, ...standard].map(([id]) => id)
+	})()
+
+	it("keeps paid, allowlisted :free, exception :free, and -free ids; drops other :free", () => {
+		expect([...settingsSet].sort()).toEqual(
+			[
+				"anthropic/claude-sonnet-4.6",
+				"org/allowlisted-only:free",
+				"arcee-ai/trinity-large-preview:free",
+				"tool-free",
+			].sort(),
+		)
+		expect(settingsSet).not.toContain("meta-llama/llama-3.3-70b:free")
+	})
+
+	it("is not the raw catalog", () => {
+		expect([...settingsSet].sort()).not.toEqual([...catalogIds].sort())
+	})
+
+	it("is not the :free-name heuristic in quickModelPickerList (drop-filter or keep-all partition)", () => {
+		expect([...settingsSet].sort()).not.toEqual([...heuristicDrop].sort())
+		expect([...settingsSet].sort()).not.toEqual([...partitionedAll].sort())
 	})
 })

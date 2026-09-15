@@ -34,6 +34,7 @@ import {
 	partitionFreeStandard,
 	pickAutoExpandProvider,
 } from "@/components/chat/quickModelPickerList"
+import { filterClineSettingsModelIds, useClineSettingsModelList } from "@/components/settings/useClineSettingsModelList"
 import { getModeSpecificFields } from "@/components/settings/utils/providerUtils"
 import { useApiConfigurationHandlers } from "@/components/settings/utils/useApiConfigurationHandlers"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -156,6 +157,7 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 	const { providers, isLoading: providersLoading } = useProviderListings()
 	const { mode, apiConfiguration, providerModelsByProvider } = useExtensionState()
 	const { selectedProvider: currentProvider, selectedModelId: currentModelId } = useNormalizedApiConfiguration(mode)
+	const { freeAllowlist: clineFreeAllowlist } = useClineSettingsModelList()
 	const { handleModeFieldChange } = useApiConfigurationHandlers()
 	const [open, setOpen] = useState(false)
 	/** null = nothing expanded; user may collapse the active provider freely. */
@@ -261,14 +263,26 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 	const searchTrimmed = search.trim()
 	const searchLower = searchTrimmed.toLowerCase()
 
+	const applyClineSettingsFilter = useCallback(
+		(providerId: string | null | undefined, modelsById: Record<string, ModelInfoLike | undefined>) => {
+			if (providerId !== "cline") {
+				return modelsById
+			}
+			const allowed = new Set(filterClineSettingsModelIds(Object.keys(modelsById), clineFreeAllowlist))
+			return Object.fromEntries(Object.entries(modelsById).filter(([id]) => allowed.has(id)))
+		},
+		[clineFreeAllowlist],
+	)
+
 	const warmModelsFor = useCallback(
 		(providerId: string | null | undefined) => {
 			if (!providerId) {
 				return {}
 			}
-			return providerModelsByProvider?.[providerId]?.models ?? {}
+			const warm = providerModelsByProvider?.[providerId]?.models ?? {}
+			return applyClineSettingsFilter(providerId, warm)
 		},
-		[providerModelsByProvider],
+		[applyClineSettingsFilter, providerModelsByProvider],
 	)
 
 	/** Prefer hook models when loaded; else warm map so search hits are clickable immediately. */
@@ -276,11 +290,9 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 		if (!expandedProvider) {
 			return {}
 		}
-		if (Object.keys(models).length > 0) {
-			return models
-		}
-		return warmModelsFor(expandedProvider)
-	}, [expandedProvider, models, warmModelsFor])
+		const raw = Object.keys(models).length > 0 ? models : warmModelsFor(expandedProvider)
+		return applyClineSettingsFilter(expandedProvider, raw)
+	}, [applyClineSettingsFilter, expandedProvider, models, warmModelsFor])
 
 	const filteredModelEntries = useMemo(() => {
 		return filterModelsByQuery(displayModels, searchTrimmed)

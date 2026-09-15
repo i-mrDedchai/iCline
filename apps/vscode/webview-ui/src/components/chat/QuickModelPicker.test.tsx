@@ -1,3 +1,5 @@
+import { CLINE_RECOMMENDED_MODELS_FALLBACK } from "@shared/cline/recommended-models"
+import { filterOpenRouterModelIds } from "@shared/utils/model-filters"
 import { fireEvent, render, screen, waitFor } from "@testing-library/react"
 import type { ReactNode } from "react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
@@ -7,6 +9,24 @@ import { useProviderListings } from "@/hooks/useProviderListings"
 import { useProviderModels } from "@/hooks/useProviderModels"
 import { ModelsServiceClient } from "@/services/grpc-client"
 import { QuickModelPicker } from "./QuickModelPicker"
+
+const CLINE_BILLING_CATALOG_IDS = [
+	"anthropic/claude-sonnet-4.6",
+	"meta-llama/llama-3.3-70b:free",
+	"org/allowlisted-only:free",
+	"arcee-ai/trinity-large-preview:free",
+	"tool-free",
+] as const
+
+const CLINE_BILLING_ALLOWLIST = ["org/allowlisted-only:free", ...CLINE_RECOMMENDED_MODELS_FALLBACK.free.map((model) => model.id)]
+
+const CLINE_BILLING_NAMES: Record<string, string> = {
+	"anthropic/claude-sonnet-4.6": "Claude Sonnet 4.6",
+	"meta-llama/llama-3.3-70b:free": "Llama 3.3 70B",
+	"org/allowlisted-only:free": "Allowlisted Free",
+	"arcee-ai/trinity-large-preview:free": "Trinity Large Preview",
+	"tool-free": "Tool Free",
+}
 
 vi.mock("@/context/ExtensionStateContext", () => ({
 	useExtensionState: vi.fn(),
@@ -33,6 +53,16 @@ vi.mock("@/components/settings/utils/useApiConfigurationHandlers", () => ({
 vi.mock("@/services/grpc-client", () => ({
 	ModelsServiceClient: {
 		commitModelSelection: vi.fn(),
+		makeUnaryRequest: vi.fn(async () => ({
+			recommended: [],
+			free: [
+				{
+					id: "org/allowlisted-only:free",
+					description: "Allowlisted free model",
+					tags: ["FREE"],
+				},
+			],
+		})),
 	},
 }))
 
@@ -176,5 +206,74 @@ describe("QuickModelPicker", () => {
 		pointerDown(janModel, 2)
 
 		expect(ModelsServiceClient.commitModelSelection).not.toHaveBeenCalled()
+	})
+})
+
+describe("QuickModelPicker Cline list matches Settings Usage-Billing filter", () => {
+	beforeEach(() => {
+		vi.clearAllMocks()
+		vi.mocked(ModelsServiceClient.commitModelSelection).mockResolvedValue({})
+		vi.mocked(useProviderListings).mockReturnValue({
+			providers: [
+				{ id: "xai", name: "xAI" },
+				{ id: "cline", name: "Cline" },
+			],
+			isLoading: false,
+			error: undefined,
+			refresh: vi.fn(),
+		} as ReturnType<typeof useProviderListings>)
+		vi.mocked(useProviderModels).mockImplementation(((providerId: string) => {
+			if (providerId === "cline") {
+				return {
+					models: Object.fromEntries(
+						CLINE_BILLING_CATALOG_IDS.map((id) => [
+							id,
+							{ name: CLINE_BILLING_NAMES[id], supportsPromptCache: false },
+						]),
+					),
+					defaultModelId: "anthropic/claude-sonnet-4.6",
+					isLoading: false,
+					isStale: false,
+					error: undefined,
+					refresh: vi.fn(),
+					fingerprint: "cline",
+				}
+			}
+			return mockProviderModels(providerId)
+		}) as typeof useProviderModels)
+		vi.mocked(useExtensionState).mockReturnValue({
+			mode: "act",
+			apiConfiguration: {
+				actModeApiProvider: "xai",
+				actModeApiModelId: LEFTOVER_XAI_MODEL_ID,
+			},
+			providerModelsByProvider: {},
+		} as ReturnType<typeof useExtensionState>)
+		vi.mocked(useNormalizedApiConfiguration).mockReturnValue({
+			selectedProvider: "xai",
+			selectedModelId: LEFTOVER_XAI_MODEL_ID,
+			selectedModelInfo: { supportsPromptCache: false },
+		})
+	})
+
+	it("shows filterOpenRouterModelIds(..., 'cline', allowlist), not raw catalog or isFreeModel heuristic", async () => {
+		const settingsSet = new Set(filterOpenRouterModelIds([...CLINE_BILLING_CATALOG_IDS], "cline", CLINE_BILLING_ALLOWLIST))
+
+		render(<QuickModelPicker modelDisplayName={LEFTOVER_XAI_MODEL_ID} />)
+		fireEvent.click(screen.getByRole("button", { name: "Cline" }))
+
+		await waitFor(() => {
+			const visibleNames = screen
+				.getAllByRole("button")
+				.map((el) => el.textContent?.trim() ?? "")
+				.filter((name) => Object.values(CLINE_BILLING_NAMES).includes(name))
+			const visibleIds = CLINE_BILLING_CATALOG_IDS.filter((id) => visibleNames.includes(CLINE_BILLING_NAMES[id]))
+
+			expect(visibleIds.sort()).toEqual([...settingsSet].sort())
+			expect(visibleIds).not.toContain("meta-llama/llama-3.3-70b:free")
+			expect(visibleIds).toContain("org/allowlisted-only:free")
+			expect(visibleIds).toContain("tool-free")
+			expect(visibleIds.sort()).not.toEqual([...CLINE_BILLING_CATALOG_IDS].sort())
+		})
 	})
 })

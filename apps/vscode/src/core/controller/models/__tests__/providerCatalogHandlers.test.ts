@@ -513,6 +513,79 @@ describe("provider model catalog handlers", () => {
 		expect(written.actModeApiModelId).toBeUndefined()
 	})
 
+	it("commitModelSelection to cline writes dedicated Cline key and omits leftover generic apiModelId", async () => {
+		const { commitModelSelection } = await import("../commitModelSelection")
+		const providerId = parseProviderId("cline")
+		const store = makeStore({ providerId })
+		const stateManager: TestStateManager = {
+			setGlobalStateBatch: vi.fn(),
+			setSettingsWriteThrough: vi.fn(),
+			getGlobalSettingsKey: vi.fn().mockReturnValue(true),
+			flushPendingState: vi.fn(async () => undefined),
+			getApiConfiguration: vi.fn().mockReturnValue({
+				actModeApiProvider: "xai",
+				actModeApiModelId: "grok-composer-2.5-fast",
+			}),
+		}
+		const controller = makeController(store, makeCatalog(), stateManager)
+
+		await commitModelSelection(controller, {
+			providerId: "cline",
+			mode: "act",
+			modelId: "anthropic/claude-sonnet-4.5",
+		})
+
+		const written = stateManager.setSettingsWriteThrough?.mock.calls[0]?.[0] as Record<string, unknown>
+		expect(written.actModeApiProvider).toBe("cline")
+		expect(written.actModeClineModelId).toBe("anthropic/claude-sonnet-4.5")
+		expect(written.actModeApiModelId).not.toBe("anthropic/claude-sonnet-4.5")
+		expect(written.actModeApiModelId).toBeUndefined()
+		expect(written.actModeApiModelId).not.toBe("grok-composer-2.5-fast")
+		expect(store.commitSelection).toHaveBeenCalledWith(
+			providerId,
+			"act",
+			expect.objectContaining({ modelId: "anthropic/claude-sonnet-4.5" }),
+		)
+	})
+
+	it("commitModelSelection to cline with empty modelId does not copy leftover generic grok id", async () => {
+		const { commitModelSelection } = await import("../commitModelSelection")
+		const { getProviderDefaultModelId } = await import("@/shared/storage/provider-keys")
+		const providerId = parseProviderId("cline")
+		const store = makeStore({ providerId })
+		const leftover = "grok-composer-2.5-fast"
+		const stateManager: TestStateManager = {
+			setGlobalStateBatch: vi.fn(),
+			setSettingsWriteThrough: vi.fn(),
+			getGlobalSettingsKey: vi.fn().mockReturnValue(true),
+			flushPendingState: vi.fn(async () => undefined),
+			getApiConfiguration: vi.fn().mockReturnValue({
+				actModeApiProvider: "xai",
+				actModeApiModelId: leftover,
+			}),
+		}
+		const controller = makeController(store, makeCatalog(), stateManager)
+
+		await commitModelSelection(controller, {
+			providerId: "cline",
+			mode: "act",
+			modelId: "",
+		})
+
+		const written = stateManager.setSettingsWriteThrough?.mock.calls[0]?.[0] as Record<string, unknown>
+		const expectedDefault = getProviderDefaultModelId("cline")
+		expect(written.actModeApiProvider).toBe("cline")
+		expect(written.actModeClineModelId).toBe(expectedDefault)
+		expect(written.actModeClineModelId).not.toBe(leftover)
+		expect(written.actModeApiModelId).toBeUndefined()
+		expect(store.commitSelection).toHaveBeenCalledWith(
+			providerId,
+			"act",
+			expect.objectContaining({ modelId: expectedDefault }),
+		)
+		expect(store.commitSelection).not.toHaveBeenCalledWith(providerId, "act", expect.objectContaining({ modelId: leftover }))
+	})
+
 	it("commitModelSelection empty mode falls back to the host act/plan setting", async () => {
 		const { commitModelSelection } = await import("../commitModelSelection")
 		const providerId = parseProviderId("xai")

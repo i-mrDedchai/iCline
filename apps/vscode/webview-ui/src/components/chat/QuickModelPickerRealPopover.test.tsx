@@ -32,6 +32,10 @@ vi.mock("@/components/settings/utils/useApiConfigurationHandlers", () => ({
 vi.mock("@/services/grpc-client", () => ({
 	ModelsServiceClient: {
 		commitModelSelection: vi.fn(),
+		makeUnaryRequest: vi.fn(async () => ({
+			recommended: [],
+			free: [],
+		})),
 	},
 }))
 
