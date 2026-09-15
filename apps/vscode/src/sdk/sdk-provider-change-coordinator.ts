@@ -2,6 +2,7 @@ import type { ApiConfiguration } from "@shared/api"
 import type { Mode } from "@shared/storage/types"
 import type { StateManager } from "@/core/storage/StateManager"
 import { Logger } from "@/shared/services/Logger"
+import { getProviderModelIdKey } from "@/shared/storage/provider-keys"
 import type { SdkMessageCoordinator } from "./sdk-message-coordinator"
 import type { SdkSessionConfigBuilder } from "./sdk-session-config-builder"
 import type { SdkSessionLifecycle } from "./sdk-session-lifecycle"
@@ -31,6 +32,16 @@ function providerForMode(config: ApiConfiguration, mode: Mode): string | undefin
 	return mode === "plan" ? config.planModeApiProvider : config.actModeApiProvider
 }
 
+function modelIdForMode(config: ApiConfiguration, mode: Mode): string | undefined {
+	const provider = providerForMode(config, mode)
+	if (!provider) {
+		return undefined
+	}
+	const key = getProviderModelIdKey(provider, mode)
+	const value = config[key]
+	return typeof value === "string" ? value : undefined
+}
+
 export class SdkProviderChangeCoordinator {
 	constructor(private readonly options: SdkProviderChangeCoordinatorOptions) {}
 
@@ -38,19 +49,21 @@ export class SdkProviderChangeCoordinator {
 		const mode = this.getCurrentMode()
 		const previousProvider = providerForMode(previous, mode)
 		const nextProvider = providerForMode(next, mode)
+		const previousModelId = modelIdForMode(previous, mode)
+		const nextModelId = modelIdForMode(next, mode)
 
-		if (previousProvider === nextProvider) {
+		if (previousProvider === nextProvider && previousModelId === nextModelId) {
 			return
 		}
 
 		const activeSession = this.options.sessions.getActiveSession()
 		if (!activeSession) {
-			Logger.log("[SdkController] Provider changed without active session; next task will use new provider")
+			Logger.log("[SdkController] Provider/model changed without active session; next task will use the new selection")
 			return
 		}
 
 		Logger.log(
-			`[SdkController] Active provider changed for ${mode}: ${previousProvider ?? "none"} -> ${nextProvider ?? "none"}`,
+			`[SdkController] Active selection changed for ${mode}: ${previousProvider ?? "none"}/${previousModelId ?? "none"} -> ${nextProvider ?? "none"}/${nextModelId ?? "none"}`,
 		)
 
 		this.options.rebuilds.request("provider", () => this.restartActiveSessionForProviderChange())

@@ -27,6 +27,19 @@ describe("SdkProviderChangeCoordinator", () => {
 		expect(options.sessions.replaceActiveSession).not.toHaveBeenCalled()
 	})
 
+	it("restarts when the active model id changes on the same provider", () => {
+		const activeSession = makeActiveSession({ isRunning: true })
+		const { coordinator, options } = makeCoordinator({ activeSession })
+
+		coordinator.handleApiConfigurationChanged(
+			{ actModeApiProvider: "xai", actModeApiModelId: "grok-composer-2.5-fast" },
+			{ actModeApiProvider: "xai", actModeApiModelId: "grok-4.6" },
+		)
+
+		expect(options.sessions.replaceActiveSession).not.toHaveBeenCalled()
+		expect(options.rebuilds.request).toHaveBeenCalledWith("provider", expect.any(Function))
+	})
+
 	it("does nothing without an active session", () => {
 		const { coordinator, options } = makeCoordinator()
 

@@ -149,6 +149,21 @@ code --install-extension "D:\.grok\iCline\cline-temp\apps\vscode\dist\i-mrdedcha
 
 ---
 
+## 🔧 fix.16 — Quick Picker click + same-provider session (2026-09-15)
+
+**สถานะ:** แพ็ก VSIX รอ maintainer smoke — **ยังไม่ปิดรอบ**
+
+**สาเหตุที่ fix.15 ยังไม่พอ:** invariant กันแค่การ snap ชื่อหลัง commit สำเร็จ — ถ้าคลิกถูก webview กิน (popover unmount ก่อน `click`) หรือสลับโมเดลใน xAI เดิมโดยไม่รีสตาร์ท session อาการ “คลิกแล้วไม่ active” ยังอยู่
+
+**VSIX:** `apps/vscode/dist/i-mrdedchai.iCline-0.1.18-dev.5-fix.16.vsix`
+
+จุดทดสอบ:
+1. คลิกโมเดลใน provider อื่น (ไม่ใช่ตัวที่ active) ต้องสลับได้ ไม่เงียบ
+2. คลิกโมเดล xAI อื่น (เช่น Grok 4.6) ชื่อบนแถบ + แชทต้องเป็นโมเดลนั้น
+3. About: `dev build 5 · fix.16`
+
+---
+
 ## 🔧 fix.15 — Quick Picker requested-id invariant (2026-09-15)
 
 **สถานะ:** แพ็ก VSIX รอ maintainer smoke — **ยังไม่ปิดรอบ**

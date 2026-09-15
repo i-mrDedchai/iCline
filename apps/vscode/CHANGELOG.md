@@ -15,6 +15,7 @@ Upstream sync + smoke-test restoration on the v4.0.0 SDK architecture (dev build
 - 📚 **Provider docs** — `docs/provider-config/sakana.mdx` and `docs/provider-config/jan.mdx` added to the docs site navigation
 
 ### Fixed
+- 🎯 **Quick Picker activate (fix.16)** — model rows commit on pointerdown so VS Code webview cannot swallow the click; same-provider model switches now restart the active session (not only provider changes).
 - 🎯 **Quick Picker activate (fix.15)** — `resolveModelInfo` no longer replaces a user-requested model id with the provider catalog default (the `xai: grok-composer-2.5-fast` snap). Chat-header label uses the committed id; picker shows commit errors instead of failing silently.
 - 📦 **History export/import (root-cause)** — the prior fix used `import * as archiverNS` then called `archiverNS(...)`, which throws "archiverNS is not a function" at runtime under esbuild/bun (namespace objects are non-callable). Reached the callable via `archiverNS.default` instead. Added a real-archiver round-trip test (3 tests).
 - 🔌 **Proto RPCs restored** — 5 iCline RPCs lost in the upstream merge are restored (handlers already existed): `refreshIclineUpdates`, `dismissIclineUpdate` (UpdateService); `refreshZenmuxModelsRpc`, `refreshXaiSubscriptionModelsRpc`, `getJanModels` (model fetching).

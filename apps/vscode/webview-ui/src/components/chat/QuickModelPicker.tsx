@@ -172,7 +172,22 @@ function ModelRow({
 				"hover:bg-(--vscode-list-hoverBackground) transition-colors",
 				isCurrentModel ? "text-(--vscode-foreground) font-medium" : "text-(--vscode-descriptionForeground)",
 			)}
-			onClick={() => onSelect(providerId, modelId)}
+			onClick={(event) => {
+				// Keyboard activation (Enter/Space) does not fire pointerdown with a button.
+				if (event.detail === 0) {
+					onSelect(providerId, modelId)
+				}
+				event.preventDefault()
+			}}
+			onPointerDown={(event) => {
+				if (event.button !== 0) {
+					return
+				}
+				// Commit on pointerdown so Radix/VS Code webview cannot unmount the
+				// row (dismiss-as-outside) before the click event fires.
+				event.preventDefault()
+				onSelect(providerId, modelId)
+			}}
 			type="button">
 			<span className="truncate flex-1">{modelInfo?.name || modelId}</span>
 			{isCurrentModel && <Check className="text-(--vscode-terminal-ansiGreen) shrink-0 ml-2" size={12} />}
