@@ -24,7 +24,7 @@ export async function commitModelSelection(
 
 	// Flip active provider+model through shadowing layers BEFORE store.commitSelection.
 	// store.commitSelection writes model id (and info) via setGlobalStateBatch only —
-	// if that runs first while task/session/remote still pin the old provider, readers
+	// if that runs first while task/session still pin the old provider, readers
 	// briefly (or durably) see pairs like `xai` + `glm-5.3-flash` (shared apiModelId).
 	if (hasProviderCatalogStateController(controller)) {
 		const legacyProvider = toLegacyApiProvider(providerId.toString())
