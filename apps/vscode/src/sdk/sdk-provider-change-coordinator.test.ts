@@ -40,6 +40,47 @@ describe("SdkProviderChangeCoordinator", () => {
 		expect(options.rebuilds.request).toHaveBeenCalledWith("provider", expect.any(Function))
 	})
 
+	it("requests a rebuild when the dedicated jan model id changes even if leftover actModeApiModelId is unchanged", () => {
+		const activeSession = makeActiveSession({ isRunning: true })
+		const { coordinator, options } = makeCoordinator({ activeSession })
+
+		coordinator.handleApiConfigurationChanged(
+			{
+				actModeApiProvider: "jan",
+				actModeJanModelId: "jan-a",
+				actModeApiModelId: "grok-composer-2.5-fast",
+			},
+			{
+				actModeApiProvider: "jan",
+				actModeJanModelId: "jan-b",
+				actModeApiModelId: "grok-composer-2.5-fast",
+			},
+		)
+
+		expect(options.sessions.replaceActiveSession).not.toHaveBeenCalled()
+		expect(options.rebuilds.request).toHaveBeenCalledWith("provider", expect.any(Function))
+	})
+
+	it("does not treat leftover grok-composer-2.5-fast as the jan model when dedicated ids match", () => {
+		const activeSession = makeActiveSession({ isRunning: true })
+		const { coordinator, options } = makeCoordinator({ activeSession })
+
+		coordinator.handleApiConfigurationChanged(
+			{
+				actModeApiProvider: "jan",
+				actModeJanModelId: "jan-a",
+				actModeApiModelId: "grok-composer-2.5-fast",
+			},
+			{
+				actModeApiProvider: "jan",
+				actModeJanModelId: "jan-a",
+				actModeApiModelId: "grok-composer-2.5-fast",
+			},
+		)
+
+		expect(options.rebuilds.request).not.toHaveBeenCalled()
+	})
+
 	it("does nothing without an active session", () => {
 		const { coordinator, options } = makeCoordinator()
 

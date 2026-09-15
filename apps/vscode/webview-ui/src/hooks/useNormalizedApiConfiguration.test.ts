@@ -176,6 +176,52 @@ describe("useNormalizedApiConfiguration", () => {
 		await waitFor(() => expect(result.current.selectedModelId).toBe("deepseek-v4-flash"))
 		expect(result.current.selectedModelInfo.contextWindow).toBe(1_000_000)
 	})
+	it.each([
+		["jan", "actModeJanModelId", "jan-local-7b"],
+		["sakana", "actModeSakanaModelId", "fugu-ultra"],
+		["zenmux", "actModeZenmuxModelId", "openrouter/auto"],
+	] as const)("after switching to %s, selectedModelId is the dedicated field not leftover actModeApiModelId", async (provider, dedicatedKey, dedicatedId) => {
+		setApiConfiguration({
+			actModeApiProvider: provider,
+			actModeApiModelId: "grok-composer-2.5-fast",
+			[dedicatedKey]: dedicatedId,
+		})
+		mockResolveModelInfo.mockResolvedValue(modelInfoResponse(provider, dedicatedId, 32_768))
+
+		const { result } = renderHook(() => useNormalizedApiConfiguration("act"))
+
+		await waitFor(() => expect(result.current.selectedModelId).toBe(dedicatedId))
+		expect(result.current.selectedProvider).toBe(provider)
+		expect(result.current.selectedModelId).not.toBe("grok-composer-2.5-fast")
+		expect(mockResolveModelInfo).toHaveBeenCalledWith({ providerId: provider, modelId: dedicatedId })
+	})
+
+	it.each([
+		"jan",
+		"sakana",
+		"zenmux",
+	] as const)("does not keep leftover grok-composer-2.5-fast when %s dedicated model id is empty", async (provider) => {
+		setApiConfiguration({
+			actModeApiProvider: provider,
+			actModeApiModelId: "grok-composer-2.5-fast",
+		})
+		mockResolveModelInfo.mockResolvedValue(
+			ResolveModelInfoResponse.create({
+				providerId: provider,
+				modelId: "",
+				source: "unknown",
+			}),
+		)
+
+		const { result } = renderHook(() => useNormalizedApiConfiguration("act"))
+
+		expect(result.current.selectedProvider).toBe(provider)
+		expect(result.current.selectedModelId).not.toBe("grok-composer-2.5-fast")
+		await waitFor(() => expect(mockResolveModelInfo).toHaveBeenCalled())
+		expect(mockResolveModelInfo).toHaveBeenCalledWith({ providerId: provider, modelId: undefined })
+		expect(result.current.selectedModelId).not.toBe("grok-composer-2.5-fast")
+	})
+
 	it("keeps the requested xAI model id when resolve returns unknown (no sdk-default snap)", async () => {
 		setApiConfiguration({ actModeApiProvider: "xai", actModeApiModelId: "grok-4.6" })
 		mockResolveModelInfo.mockResolvedValue(

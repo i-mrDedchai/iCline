@@ -42,6 +42,7 @@ import { ClineError } from "@/services/error/ClineError"
 import { McpHub } from "@/services/mcp/McpHub"
 import { telemetryService } from "@/services/telemetry"
 import type { ClineExtensionContext } from "@/shared/cline"
+import { toLegacyApiProvider } from "@/shared/model-catalog/provider-helpers"
 import { ShowMessageRequest, ShowMessageType } from "@/shared/proto/host/window"
 import { Logger } from "@/shared/services/Logger"
 import { isClineManagedProvider } from "@/shared/utils/cline"
@@ -53,6 +54,7 @@ import { MessageTranslatorState, reshapeErrorForWebview } from "./message-transl
 import { createProviderCatalog } from "./model-catalog/catalog"
 import type { Disposable, ProviderCatalog, ProviderConfigChange, ProviderConfigStore } from "./model-catalog/contracts"
 import { parseProviderId } from "./model-catalog/provider-id"
+import { toSdkProviderId } from "./model-catalog/sdk-provider-id"
 import { createProviderConfigStore } from "./model-catalog/store"
 import {
 	PROVIDER_FAILURE_ERROR_TYPE,
@@ -132,6 +134,42 @@ function dateStringToTimestamp(value: string | null | undefined): number {
 	}
 	const timestamp = Date.parse(value)
 	return Number.isFinite(timestamp) ? timestamp : 0
+}
+
+/**
+ * Compare extension, legacy, and SDK provider spellings.
+ * `event.providerId` is lowercased (`nousresearch`); ApiConfiguration stores
+ * `nousResearch`; session startConfig uses the SDK id (`openai-compatible`).
+ */
+export function sameProviderIdentity(left: string | undefined, right: string | undefined): boolean {
+	const a = left?.trim()
+	const b = right?.trim()
+	if (!a || !b) {
+		return false
+	}
+	if (a === b || a.toLowerCase() === b.toLowerCase()) {
+		return true
+	}
+	return toSdkProviderId(a) === toSdkProviderId(b) || toLegacyApiProvider(a) === toLegacyApiProvider(b)
+}
+
+/**
+ * Hot-swap the live session model only when the session is already on this
+ * provider. Picker write-through flips ApiConfiguration *before* the selection
+ * event, so comparing event.providerId to the config provider is always true
+ * and would call updateActiveSessionModel on the *old* session (xai session
+ * gets glm-5.3-flash; chat header shows the mixed pair until rebuild).
+ */
+export function shouldHotSwapActiveSessionModel(input: {
+	eventMode: string
+	eventProviderId: string
+	currentMode: "plan" | "act"
+	sessionProviderId: string | undefined
+}): boolean {
+	if (input.eventMode !== input.currentMode) {
+		return false
+	}
+	return sameProviderIdentity(input.sessionProviderId, input.eventProviderId)
 }
 
 function historyItemToTaskResponse(item: HistoryItem): TaskResponse {
@@ -666,13 +704,14 @@ export class Controller {
 		try {
 			const modeValue = this.stateManager.getGlobalSettingsKey("mode")
 			const mode = modeValue === "plan" ? "plan" : "act"
-			if (event.mode !== mode) {
-				return false
-			}
-
-			const apiConfig = this.stateManager.getApiConfiguration()
-			const activeProvider = mode === "plan" ? apiConfig.planModeApiProvider : apiConfig.actModeApiProvider
-			return activeProvider === event.providerId.toString()
+			const session = this.sessions?.getActiveSession()
+			const sessionProviderId = session?.startResult?.manifest?.provider?.trim() || session?.startConfig?.providerId?.trim()
+			return shouldHotSwapActiveSessionModel({
+				eventMode: event.mode,
+				eventProviderId: event.providerId.toString(),
+				currentMode: mode,
+				sessionProviderId,
+			})
 		} catch {
 			return false
 		}

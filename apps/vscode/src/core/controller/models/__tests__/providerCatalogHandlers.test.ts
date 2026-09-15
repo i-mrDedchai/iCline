@@ -479,6 +479,109 @@ describe("provider model catalog handlers", () => {
 		)
 	})
 
+	it.each([
+		["jan", "actModeJanModelId", "jan-local-7b"],
+		["sakana", "actModeSakanaModelId", "fugu-ultra"],
+		["zenmux", "actModeZenmuxModelId", "openrouter/auto"],
+		["openrouter", "actModeOpenRouterModelId", "anthropic/claude-sonnet-4"],
+	] as const)("commitModelSelection writes dedicated %s model key, not leftover generic apiModelId", async (provider, dedicatedKey, modelId) => {
+		const { commitModelSelection } = await import("../commitModelSelection")
+		const providerId = parseProviderId(provider)
+		const store = makeStore({ providerId })
+		const stateManager: TestStateManager = {
+			setGlobalStateBatch: vi.fn(),
+			setSettingsWriteThrough: vi.fn(),
+			getGlobalSettingsKey: vi.fn().mockReturnValue(true),
+			flushPendingState: vi.fn(async () => undefined),
+			getApiConfiguration: vi.fn().mockReturnValue({
+				actModeApiProvider: "xai",
+				actModeApiModelId: "grok-composer-2.5-fast",
+			}),
+		}
+		const controller = makeController(store, makeCatalog(), stateManager)
+
+		await commitModelSelection(controller, {
+			providerId: provider,
+			mode: "act",
+			modelId,
+		})
+
+		const written = stateManager.setSettingsWriteThrough?.mock.calls[0]?.[0] as Record<string, unknown>
+		expect(written.actModeApiProvider).toBe(provider)
+		expect(written[dedicatedKey]).toBe(modelId)
+		// Cross-provider must not clobber xai/anthropic/etc. generic slot.
+		expect(written.actModeApiModelId).toBeUndefined()
+	})
+
+	it("commitModelSelection empty mode falls back to the host act/plan setting", async () => {
+		const { commitModelSelection } = await import("../commitModelSelection")
+		const providerId = parseProviderId("xai")
+		const store = makeStore({ providerId })
+		const stateManager: TestStateManager = {
+			setGlobalStateBatch: vi.fn(),
+			setSettingsWriteThrough: vi.fn(),
+			getGlobalSettingsKey: vi.fn((key: string) => (key === "mode" ? "plan" : true)),
+			flushPendingState: vi.fn(async () => undefined),
+		}
+		const controller = makeController(store, makeCatalog(), stateManager)
+
+		await commitModelSelection(controller, {
+			providerId: "xai",
+			mode: "",
+			modelId: "grok-4.6",
+		})
+
+		expect(store.commitSelection).toHaveBeenCalledWith(providerId, "plan", expect.objectContaining({ modelId: "grok-4.6" }))
+		expect(stateManager.setSettingsWriteThrough).toHaveBeenCalledWith(
+			expect.objectContaining({
+				planModeApiProvider: "xai",
+				planModeApiModelId: "grok-4.6",
+			}),
+			undefined,
+		)
+	})
+
+	it("commitModelSelection same-provider jan model id change reports dedicated ids for session rebuild", async () => {
+		const { commitModelSelection } = await import("../commitModelSelection")
+		const providerId = parseProviderId("jan")
+		const store = makeStore({ providerId })
+		const previous = {
+			actModeApiProvider: "jan" as const,
+			actModeJanModelId: "jan-a",
+			actModeApiModelId: "grok-composer-2.5-fast",
+		}
+		const next = {
+			actModeApiProvider: "jan" as const,
+			actModeJanModelId: "jan-b",
+			actModeApiModelId: "grok-composer-2.5-fast",
+		}
+		const stateManager: TestStateManager = {
+			setGlobalStateBatch: vi.fn(),
+			setSettingsWriteThrough: vi.fn(),
+			getGlobalSettingsKey: vi.fn().mockReturnValue(true),
+			flushPendingState: vi.fn(async () => undefined),
+			getApiConfiguration: vi
+				.fn<() => ApiConfiguration | undefined>()
+				.mockReturnValueOnce(previous)
+				.mockReturnValueOnce(next),
+		}
+		const handleApiConfigurationChanged = vi.fn<(previous: ApiConfiguration, next: ApiConfiguration) => void>()
+		const controller = makeController(store, makeCatalog(), stateManager, handleApiConfigurationChanged)
+
+		await commitModelSelection(controller, {
+			providerId: "jan",
+			mode: "act",
+			modelId: "jan-b",
+		})
+
+		expect(handleApiConfigurationChanged).toHaveBeenCalledWith(previous, next)
+		const written = stateManager.setSettingsWriteThrough?.mock.calls[0]?.[0] as Record<string, unknown>
+		expect(written.actModeApiProvider).toBe("jan")
+		expect(written.actModeJanModelId).toBe("jan-b")
+		expect(written.actModeApiModelId).not.toBe("jan-b")
+		expect(written.actModeApiModelId).toBeUndefined()
+	})
+
 	it("commitModelSelection rejects invalid mode", async () => {
 		const { commitModelSelection } = await import("../commitModelSelection")
 		const providerId = parseProviderId("deepseek")

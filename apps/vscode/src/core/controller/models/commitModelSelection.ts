@@ -16,7 +16,14 @@ export async function commitModelSelection(
 	request: CommitModelSelectionRequest,
 ): Promise<Empty> {
 	const providerId = parseProviderIdRequest(request.providerId)
-	const mode = parseModeRequest(request.mode)
+	// Empty/omitted mode (webview race) falls back to the host's current mode
+	// rather than throwing — a throw here looks like a dead picker click.
+	const requestedMode = request.mode?.trim()
+	const modeFromState =
+		hasProviderCatalogStateController(controller) && controller.stateManager.getGlobalSettingsKey?.("mode") === "plan"
+			? "plan"
+			: "act"
+	const mode = parseModeRequest(requestedMode || modeFromState)
 	const selection = toModelSelection(request, providerId)
 	const previousApiConfiguration = hasProviderCatalogStateController(controller)
 		? controller.stateManager.getApiConfiguration?.()
@@ -34,6 +41,10 @@ export async function commitModelSelection(
 		const modes = separate ? [mode] : (["plan", "act"] as const)
 		const updates: Partial<GlobalStateAndSettings> = {}
 		for (const targetMode of modes) {
+			// Dedicated key only. When it equals *ModeApiModelId (xai/anthropic/
+			// deepseek) that single write updates the shared slot; do not also
+			// assign genericKey — that would copy jan/sakana/zenmux ids into
+			// xAI's leftover slot.
 			// Object.assign avoids TS2322 on Partial<GlobalStateAndSettings> indexed
 			// writes (SettingsKey values are a wide union; string is not assignable
 			// to every member). Same computed-key pattern as setGlobalStateBatch.

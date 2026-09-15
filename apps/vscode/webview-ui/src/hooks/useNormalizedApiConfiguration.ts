@@ -30,7 +30,10 @@ const unknownModelInfo: ModelInfo = {
  * adding a provider that needs its own model-id field, extend the map
  * here and the corresponding writer.
  */
-function getActiveProviderAndModelId(apiConfiguration: ReturnType<typeof useExtensionState>["apiConfiguration"], mode: Mode) {
+export function getActiveProviderAndModelId(
+	apiConfiguration: ReturnType<typeof useExtensionState>["apiConfiguration"],
+	mode: Mode,
+) {
 	const provider = ((mode === "plan" ? apiConfiguration?.planModeApiProvider : apiConfiguration?.actModeApiProvider) ||
 		"anthropic") as ApiProvider
 	const modeFields = getModeSpecificFields(apiConfiguration, mode)

@@ -1116,19 +1116,13 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 		// provider prefix, maintainer request 2026-09-14); normalized once here so
 		// every provider branch and both surfaces (chat header + picker footer) match.
 		const modelDisplayName = useMemo(() => {
+			// Single source of truth: selectedProvider/selectedModelId already resolve
+			// the mode-specific field (jan/sakana/zenmux/… vs generic apiModelId) via
+			// useNormalizedApiConfiguration. Never re-read raw mode fields here —
+			// that was the header/picker disagreement (stale per-provider id shown
+			// with the other surface's provider prefix).
 			const raw = ((): string => {
-				const {
-					vsCodeLmModelSelector,
-					togetherModelId,
-					lmStudioModelId,
-					ollamaModelId,
-					liteLlmModelId,
-					requestyModelId,
-					vercelAiGatewayModelId,
-					zenmuxModelId,
-					sakanaModelId,
-					janModelId,
-				} = getModeSpecificFields(apiConfiguration, mode)
+				const { vsCodeLmModelSelector } = getModeSpecificFields(apiConfiguration, mode)
 				const unknownModel = "unknown"
 
 				if (!apiConfiguration) {
@@ -1148,23 +1142,14 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 					case "vscode-lm":
 						return `vscode-lm:${vsCodeLmModelSelector ? `${vsCodeLmModelSelector.vendor ?? ""}/${vsCodeLmModelSelector.family ?? ""}` : unknownModel}`
 					case "together":
-						return `${selectedProvider}:${togetherModelId}`
 					case "lmstudio":
-						return `${selectedProvider}:${lmStudioModelId}`
 					case "ollama":
-						return `${selectedProvider}:${ollamaModelId}`
 					case "litellm":
-						return `${selectedProvider}:${liteLlmModelId}`
 					case "requesty":
-						return `${selectedProvider}:${requestyModelId}`
 					case "vercel-ai-gateway":
-						return `${selectedProvider}:${vercelAiGatewayModelId || selectedModelId}`
 					case "zenmux":
-						return `${selectedProvider}:${zenmuxModelId || selectedModelId}`
 					case "sakana":
-						return `${selectedProvider}:${sakanaModelId || selectedModelId}`
 					case "jan":
-						return `${selectedProvider}:${janModelId || selectedModelId}`
 					case "anthropic":
 					case "openrouter":
 					default:

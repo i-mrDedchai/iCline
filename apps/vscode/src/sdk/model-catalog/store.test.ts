@@ -192,6 +192,26 @@ describe("createProviderConfigStore", () => {
 		expect(store.read(providerId).baseUrl).toBeUndefined()
 	})
 
+	it("commits dedicated OpenRouter model id without overwriting leftover generic apiModelId", async () => {
+		const { createProviderConfigStore } = await import("./store")
+		mocks.setApiConfiguration({
+			actModeApiProvider: "xai",
+			planModeApiProvider: "xai",
+			actModeApiModelId: "grok-composer-2.5-fast",
+			planModeApiModelId: "grok-composer-2.5-fast",
+			planActSeparateModelsSetting: true,
+		})
+		const store = createProviderConfigStore()
+		const providerId = parseProviderId("openrouter")
+		store.commitSelection(providerId, "act", {
+			providerId,
+			modelId: "anthropic/claude-sonnet-4",
+		})
+
+		expect(mocks.getApiConfiguration().actModeOpenRouterModelId).toBe("anthropic/claude-sonnet-4")
+		expect(mocks.getApiConfiguration().actModeApiModelId).toBe("grok-composer-2.5-fast")
+	})
+
 	it("round-trips commitSelection then readSelection for provider-specific model info", async () => {
 		const { createProviderConfigStore } = await import("./store")
 		const store = createProviderConfigStore()
@@ -1189,6 +1209,4 @@ describe("createProviderConfigStore", () => {
 		expect(selection?.modelInfo.contextWindow).toBe(200_000)
 		expect(mocks.getSavedProviderSettings("openrouter")?.model).toBe(liveOnlyId)
 	})
-
-
 })

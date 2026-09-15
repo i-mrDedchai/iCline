@@ -149,9 +149,24 @@ code --install-extension "D:\.grok\iCline\cline-temp\apps\vscode\dist\i-mrdedcha
 
 ---
 
-## 🔧 fix.16 — Quick Picker click + same-provider session (2026-09-15)
+## 🔧 fix.17 — stacked Quick Picker activate (2026-09-15)
 
 **สถานะ:** แพ็ก VSIX รอ maintainer smoke — **ยังไม่ปิดรอบ**
+
+**สาเหตุที่ fix.16 ยังไม่พอ:** header/picker อ่านคนละ map; popover Portal ทำให้คลิกถูก dismiss ก่อน commit; host เคย mirror id ลงช่อง generic; hot-swap ไป session เก่าหลัง write-through
+
+**VSIX:** `apps/vscode/dist/i-mrdedchai.iCline-0.1.18-dev.5-fix.17.vsix`
+
+จุดทดสอบ:
+1. คลิกโมเดลข้าม provider — ชื่อบนแถบต้องเป็น `provider: model` ของตัวที่คลิก ไม่เงียบ ไม่คนละคู่
+2. คลิกโมเดลใน provider เดิม (เช่น Composer → Grok 4.6) — แถบ + แชทต้องเป็นโมเดลนั้น
+3. About: `dev build 5 · fix.17`
+
+---
+
+## 🔧 fix.16 — Quick Picker click + same-provider session (2026-09-15)
+
+**สถานะ:** smoke ไม่ผ่าน (คลิกแล้วยังไม่ active + แสดงผล provider/model เพี้ยน) — ส่งต่อ fix.17
 
 **สาเหตุที่ fix.15 ยังไม่พอ:** invariant กันแค่การ snap ชื่อหลัง commit สำเร็จ — ถ้าคลิกถูก webview กิน (popover unmount ก่อน `click`) หรือสลับโมเดลใน xAI เดิมโดยไม่รีสตาร์ท session อาการ “คลิกแล้วไม่ active” ยังอยู่
 

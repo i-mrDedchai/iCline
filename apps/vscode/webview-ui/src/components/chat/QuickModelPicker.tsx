@@ -24,7 +24,7 @@
 import { CommitModelSelectionRequest } from "@shared/proto/cline/models"
 import { isOpenaiReasoningEffort, OPENAI_REASONING_EFFORT_OPTIONS, type OpenaiReasoningEffort } from "@shared/storage/types"
 import { Check, ChevronDown, Pencil, RefreshCw, Search } from "lucide-react"
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { getChatModelPreference, normalizePreferenceEffort, setChatModelPreference } from "@/components/chat/chatModelPreferences"
 import {
 	filterModelsByQuery,
@@ -38,6 +38,7 @@ import { getModeSpecificFields } from "@/components/settings/utils/providerUtils
 import { useApiConfigurationHandlers } from "@/components/settings/utils/useApiConfigurationHandlers"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { useExtensionState } from "@/context/ExtensionStateContext"
+import { useNormalizedApiConfiguration } from "@/hooks/useNormalizedApiConfiguration"
 import { useProviderListings } from "@/hooks/useProviderListings"
 import { useProviderModels } from "@/hooks/useProviderModels"
 import { cn } from "@/lib/utils"
@@ -62,57 +63,11 @@ const EFFORT_LABELS: Record<OpenaiReasoningEffort, string> = {
 const EFFORT_CHIPS = OPENAI_REASONING_EFFORT_OPTIONS.filter((e) => e !== "none") as OpenaiReasoningEffort[]
 
 /**
- * Resolve the mode-specific model id for a provider. Generic plan/actModeApiModelId
- * is wrong for providers that store ids in dedicated fields (jan, zenmux, etc.).
+ * Single source of truth for the active provider+model lives in
+ * useNormalizedApiConfiguration.getActiveProviderAndModelId (gRPC-resolved).
+ * The picker used to keep a duplicate reader here that disagreed on
+ * jan/sakana/zenmux vs generic apiModelId fallbacks — deleted.
  */
-function getSelectedModelIdForProvider(
-	providerId: string,
-	apiConfiguration: ReturnType<typeof useExtensionState>["apiConfiguration"],
-	mode: "plan" | "act",
-): string | undefined {
-	if (!apiConfiguration) {
-		return undefined
-	}
-	const fields = getModeSpecificFields(apiConfiguration, mode)
-	switch (providerId) {
-		case "openrouter":
-			return fields.openRouterModelId || fields.apiModelId
-		case "openai":
-			return fields.openAiModelId || fields.apiModelId
-		case "ollama":
-			return fields.ollamaModelId
-		case "lmstudio":
-			return fields.lmStudioModelId
-		case "litellm":
-			return fields.liteLlmModelId
-		case "requesty":
-			return fields.requestyModelId
-		case "together":
-			return fields.togetherModelId
-		case "fireworks":
-			return fields.fireworksModelId
-		case "groq":
-			return fields.groqModelId
-		case "baseten":
-			return fields.basetenModelId
-		case "huggingface":
-			return fields.huggingFaceModelId
-		case "vercel-ai-gateway":
-			return fields.vercelAiGatewayModelId
-		case "zenmux":
-			return fields.zenmuxModelId || fields.apiModelId
-		case "sakana":
-			return fields.sakanaModelId || fields.apiModelId
-		case "jan":
-			return fields.janModelId || fields.apiModelId
-		case "cline":
-			return fields.clineModelId || fields.apiModelId
-		case "cline-pass":
-			return fields.clinePassModelId || fields.apiModelId
-		default:
-			return fields.apiModelId
-	}
-}
 
 function modelLikelySupportsEffort(
 	modelId: string,
@@ -185,7 +140,9 @@ function ModelRow({
 				}
 				// Commit on pointerdown so Radix/VS Code webview cannot unmount the
 				// row (dismiss-as-outside) before the click event fires.
+				// stopPropagation keeps the gesture from being classified as outside.
 				event.preventDefault()
+				event.stopPropagation()
 				onSelect(providerId, modelId)
 			}}
 			type="button">
@@ -198,6 +155,7 @@ function ModelRow({
 export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPickerProps) {
 	const { providers, isLoading: providersLoading } = useProviderListings()
 	const { mode, apiConfiguration, providerModelsByProvider } = useExtensionState()
+	const { selectedProvider: currentProvider, selectedModelId: currentModelId } = useNormalizedApiConfiguration(mode)
 	const { handleModeFieldChange } = useApiConfigurationHandlers()
 	const [open, setOpen] = useState(false)
 	/** null = nothing expanded; user may collapse the active provider freely. */
@@ -205,11 +163,10 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 	const [search, setSearch] = useState("")
 	const [effortBump, setEffortBump] = useState(0)
 	const [commitError, setCommitError] = useState<string | null>(null)
+	/** Guards pointerdown+click double-commit (pointerdown commits, keyboard click re-commits). */
+	const committingRef = useRef(false)
 
-	const currentProvider =
-		(mode === "plan" ? apiConfiguration?.planModeApiProvider : apiConfiguration?.actModeApiProvider) || "anthropic"
-
-	const currentModelId = getSelectedModelIdForProvider(currentProvider, apiConfiguration, mode)
+	// NOTE: currentProvider/currentModelId come from useNormalizedApiConfiguration
 
 	const modeFields = getModeSpecificFields(apiConfiguration, mode)
 	const activeEffort: OpenaiReasoningEffort | undefined = isOpenaiReasoningEffort(modeFields.reasoningEffort)
@@ -240,6 +197,10 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 
 	const handleSelectModel = useCallback(
 		async (providerId: string, modelId: string) => {
+			if (committingRef.current) {
+				return
+			}
+			committingRef.current = true
 			setCommitError(null)
 			try {
 				const saved = getChatModelPreference(providerId, modelId)
@@ -264,6 +225,8 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 			} catch (err) {
 				console.error("QuickModelPicker: failed to commit model selection:", err)
 				setCommitError(err instanceof Error ? err.message : "Could not activate this model.")
+			} finally {
+				committingRef.current = false
 			}
 		},
 		[mode, handleModeFieldChange],
@@ -444,7 +407,22 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 			<PopoverContent
 				align="start"
 				className="w-[440px] max-w-[90vw] p-0 gap-0"
+				data-icline-quick-picker=""
+				disablePortal
+				onInteractOutside={(e) => {
+					// Belt-and-braces with disablePortal: a pointerdown that starts
+					// inside the picker must never dismiss it. True outside clicks
+					// still close via the default Radix behavior.
+					if ((e.target as HTMLElement | null)?.closest?.("[data-icline-quick-picker]")) {
+						e.preventDefault()
+					}
+				}}
 				onOpenAutoFocus={(e) => e.preventDefault()}
+				onPointerDownOutside={(e) => {
+					if ((e.target as HTMLElement | null)?.closest?.("[data-icline-quick-picker]")) {
+						e.preventDefault()
+					}
+				}}
 				side="top">
 				<div className="flex flex-col max-h-[420px]">
 					{/* Search bar */}
