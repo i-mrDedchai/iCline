@@ -238,7 +238,7 @@ export const XaiProvider = ({ showModelOptions, isPopup, currentMode }: XaiProvi
 								color: "var(--vscode-errorForeground)",
 								marginBottom: 8,
 							}}>
-							Failed to load models{error.message ? `: ${error.message}` : ""}
+							Failed to load models{error ? `: ${error}` : ""}
 							{isStale && modelCount > 0 ? " (showing cached list)" : ""}
 						</p>
 					)}
