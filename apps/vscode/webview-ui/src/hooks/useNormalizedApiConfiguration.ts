@@ -120,7 +120,14 @@ export function useNormalizedApiConfiguration(mode: Mode): NormalizedApiConfig {
 	}, [provider, modelId])
 
 	return useMemo(() => {
-		const selectedModelId = resolvedInfo?.modelId || modelId || ""
+		const selectedModelId = modelId || ""
+		const rpcMatchesCurrent =
+			resolvedInfo != null &&
+			Boolean(resolvedInfo.modelInfo) &&
+			resolvedInfo.source !== "unknown" &&
+			(!resolvedInfo.providerId || resolvedInfo.providerId === provider) &&
+			(selectedModelId ? resolvedInfo.modelId === selectedModelId : true)
+
 		if (liveCatalogInfo && selectedModelId) {
 			return {
 				selectedProvider: provider,
@@ -128,17 +135,18 @@ export function useNormalizedApiConfiguration(mode: Mode): NormalizedApiConfig {
 				selectedModelInfo: applyGrok46OfficialContextWindow(selectedModelId, liveCatalogInfo),
 			}
 		}
-		if (!resolvedInfo || resolvedInfo.source === "unknown" || !resolvedInfo.modelInfo) {
+		if (!rpcMatchesCurrent || !resolvedInfo?.modelInfo || resolvedInfo.source === "unknown") {
 			return {
 				selectedProvider: provider,
-				selectedModelId,
+				selectedModelId: selectedModelId || resolvedInfo?.modelId || "",
 				selectedModelInfo: unknownModelInfo,
 			}
 		}
+		const resolvedModelId = selectedModelId || resolvedInfo.modelId || ""
 		return {
 			selectedProvider: provider,
-			selectedModelId,
-			selectedModelInfo: applyGrok46OfficialContextWindow(selectedModelId, fromProtobufModelInfo(resolvedInfo.modelInfo)),
+			selectedModelId: resolvedModelId,
+			selectedModelInfo: applyGrok46OfficialContextWindow(resolvedModelId, fromProtobufModelInfo(resolvedInfo.modelInfo)),
 		}
 	}, [liveCatalogInfo, provider, modelId, resolvedInfo])
 }

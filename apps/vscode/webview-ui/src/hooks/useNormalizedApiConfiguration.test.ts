@@ -260,4 +260,37 @@ describe("useNormalizedApiConfiguration", () => {
 		await waitFor(() => expect(result.current.selectedModelId).toBe("poolside/laguna-s-2.1:free"))
 		expect(result.current.selectedModelInfo.contextWindow).toBe(262_144)
 	})
+
+	it("does not keep Grok 4.6's 500k after switching to another Cline model", async () => {
+		setApiConfiguration({ actModeApiProvider: "cline", actModeClineModelId: "cline-free/deepseek-v4.1-flash" }, {
+			providerModelsByProvider: {
+				cline: {
+					models: {
+						"cline-free/deepseek-v4.1-flash": {
+							name: "DeepSeek V4.1 Flash",
+							supportsPromptCache: false,
+							contextWindow: 1_000_000,
+						},
+					},
+				},
+			},
+		} as Partial<ReturnType<typeof useExtensionState>>)
+		mockResolveModelInfo.mockResolvedValue(modelInfoResponse("xai", "grok-4.6", 500_000))
+
+		const { result } = renderHook(() => useNormalizedApiConfiguration("act"))
+
+		expect(result.current.selectedModelId).toBe("cline-free/deepseek-v4.1-flash")
+		expect(result.current.selectedModelInfo.contextWindow).toBe(1_000_000)
+	})
+
+	it("hides contextWindow when the RPC is still for the previous model", async () => {
+		setApiConfiguration({ actModeApiProvider: "cline", actModeClineModelId: "cline-free/deepseek-v4.1-flash" })
+		mockResolveModelInfo.mockResolvedValue(modelInfoResponse("xai", "grok-4.6", 500_000))
+
+		const { result } = renderHook(() => useNormalizedApiConfiguration("act"))
+
+		await waitFor(() => expect(mockResolveModelInfo).toHaveBeenCalled())
+		expect(result.current.selectedModelId).toBe("cline-free/deepseek-v4.1-flash")
+		expect(result.current.selectedModelInfo.contextWindow).toBeUndefined()
+	})
 })
