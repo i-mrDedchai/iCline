@@ -25,15 +25,17 @@ import { CLINE_RECOMMENDED_MODELS_FALLBACK } from "@shared/cline/recommended-mod
 import { CommitModelSelectionRequest } from "@shared/proto/cline/models"
 import { isOpenaiReasoningEffort, OPENAI_REASONING_EFFORT_OPTIONS, type OpenaiReasoningEffort } from "@shared/storage/types"
 import { Check, ChevronDown, Pencil, RefreshCw, Search } from "lucide-react"
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { getChatModelPreference, normalizePreferenceEffort, setChatModelPreference } from "@/components/chat/chatModelPreferences"
 import {
+	ACTIVE_MODEL_ATTR,
 	filterModelsByQuery,
 	type ModelEntry,
 	type ModelInfoLike,
 	modelsMatchQuery,
 	partitionFreeStandard,
 	pickAutoExpandProvider,
+	queryActivePickerScrollTarget,
 } from "@/components/chat/quickModelPickerList"
 import {
 	filterClineSettingsModelIds,
@@ -153,6 +155,7 @@ function ModelRow({
 				event.stopPropagation()
 				onSelect(providerId, modelId)
 			}}
+			{...(isCurrentModel ? { "data-icline-current-model": "" } : {})}
 			type="button">
 			<span className="truncate flex-1">{modelInfo?.name || modelId}</span>
 			{badge ? (
@@ -184,6 +187,9 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 	const [commitError, setCommitError] = useState<string | null>(null)
 	/** Guards pointerdown+click double-commit (pointerdown commits, keyboard click re-commits). */
 	const committingRef = useRef(false)
+	const listRef = useRef<HTMLDivElement>(null)
+	const userScrolledThisOpenRef = useRef(false)
+	const programmaticScrollRef = useRef(false)
 
 	// NOTE: currentProvider/currentModelId come from useNormalizedApiConfiguration
 
@@ -203,6 +209,7 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 				setExpandedProvider(currentProvider)
 				setSearch("")
 				setCommitError(null)
+				userScrolledThisOpenRef.current = false
 				void refreshClineFeatured()
 			} else {
 				setSearch("")
@@ -414,6 +421,32 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 		}
 	}, [searchTrimmed, expandedProvider, models, warmModelsFor, providers, providerModelsByProvider, currentProvider])
 
+	// On open (and when the active model's rows finish loading), bring the
+	// current provider/model into the scroll viewport. Do not re-pin if the
+	// user has already scrolled this open, and do not jump while searching.
+	useLayoutEffect(() => {
+		if (!open || searchTrimmed || userScrolledThisOpenRef.current) {
+			return
+		}
+		const frame = window.requestAnimationFrame(() => {
+			const list = listRef.current
+			if (!list) {
+				return
+			}
+			const target = queryActivePickerScrollTarget(list, currentProvider)
+			if (!target) {
+				return
+			}
+			const block: ScrollLogicalPosition = target.hasAttribute(ACTIVE_MODEL_ATTR) ? "center" : "start"
+			programmaticScrollRef.current = true
+			target.scrollIntoView({ block, inline: "nearest" })
+			window.requestAnimationFrame(() => {
+				programmaticScrollRef.current = false
+			})
+		})
+		return () => window.cancelAnimationFrame(frame)
+	}, [open, searchTrimmed, currentProvider, currentModelId, expandedProvider, modelsLoading, filteredModelEntries.length])
+
 	const showEffortBar = useMemo(() => {
 		void effortBump
 		if (!currentModelId) {
@@ -542,7 +575,14 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 					</div>
 
 					{/* Provider + model list */}
-					<div className="flex-1 overflow-y-auto min-h-0">
+					<div
+						className="flex-1 overflow-y-auto min-h-0"
+						onScroll={() => {
+							if (open && !programmaticScrollRef.current) {
+								userScrolledThisOpenRef.current = true
+							}
+						}}
+						ref={listRef}>
 						{providersLoading ? (
 							<div className="px-3 py-4 text-xs text-(--vscode-descriptionForeground) text-center">
 								Loading providers…
@@ -559,6 +599,7 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 								return (
 									<div
 										className="border-b border-(--vscode-editorGroup-border)/40 last:border-b-0"
+										data-icline-provider={provider.id}
 										key={provider.id}>
 										<button
 											aria-expanded={isExpanded}

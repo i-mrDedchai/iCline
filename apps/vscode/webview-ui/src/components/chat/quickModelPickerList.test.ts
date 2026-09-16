@@ -2,6 +2,8 @@ import { CLINE_RECOMMENDED_MODELS_FALLBACK } from "@shared/cline/recommended-mod
 import { filterOpenRouterModelIds } from "@shared/utils/model-filters"
 import { describe, expect, it } from "vitest"
 import {
+	ACTIVE_MODEL_ATTR,
+	ACTIVE_PROVIDER_ATTR,
 	compareModelEntries,
 	filterModelsByQuery,
 	isFreeModel,
@@ -10,6 +12,7 @@ import {
 	partitionFreeStandard,
 	pickAutoExpandProvider,
 	providersMatchingModelQuery,
+	queryActivePickerScrollTarget,
 	type WarmModelsByProvider,
 } from "./quickModelPickerList"
 
@@ -242,5 +245,28 @@ describe("Cline Usage-Billing filter vs Quick Picker heuristic", () => {
 	it("is not the :free-name heuristic in quickModelPickerList (drop-filter or keep-all partition)", () => {
 		expect([...settingsSet].sort()).not.toEqual([...heuristicDrop].sort())
 		expect([...settingsSet].sort()).not.toEqual([...partitionedAll].sort())
+	})
+})
+
+describe("queryActivePickerScrollTarget", () => {
+	it("prefers the current model row over the provider group", () => {
+		const root = document.createElement("div")
+		root.innerHTML = `
+			<div ${ACTIVE_PROVIDER_ATTR}="cerebras"></div>
+			<div ${ACTIVE_PROVIDER_ATTR}="xai">
+				<button ${ACTIVE_MODEL_ATTR} id="current-model">Grok</button>
+			</div>
+		`
+		expect(queryActivePickerScrollTarget(root, "xai")?.id).toBe("current-model")
+	})
+
+	it("falls back to the active provider group when the model row is not mounted yet", () => {
+		const root = document.createElement("div")
+		root.innerHTML = `
+			<div ${ACTIVE_PROVIDER_ATTR}="cerebras"></div>
+			<div ${ACTIVE_PROVIDER_ATTR}="xai" id="xai-group"></div>
+		`
+		expect(queryActivePickerScrollTarget(root, "xai")?.id).toBe("xai-group")
+		expect(queryActivePickerScrollTarget(root, "zai")).toBeNull()
 	})
 })

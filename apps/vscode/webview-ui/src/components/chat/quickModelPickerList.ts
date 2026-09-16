@@ -19,6 +19,29 @@ export type WarmModelsByProvider = {
 	readonly [providerId: string]: { readonly models?: ModelsById } | undefined
 }
 
+export const ACTIVE_PROVIDER_ATTR = "data-icline-provider"
+export const ACTIVE_MODEL_ATTR = "data-icline-current-model"
+
+function escapeAttrSelector(value: string): string {
+	if (typeof CSS !== "undefined" && typeof CSS.escape === "function") {
+		return CSS.escape(value)
+	}
+	return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')
+}
+
+/** Prefer the current model row; else the active provider group. */
+export function queryActivePickerScrollTarget(root: ParentNode, currentProvider?: string | null): HTMLElement | null {
+	const model = root.querySelector(`[${ACTIVE_MODEL_ATTR}]`)
+	if (model instanceof HTMLElement) {
+		return model
+	}
+	if (!currentProvider) {
+		return null
+	}
+	const provider = root.querySelector(`[${ACTIVE_PROVIDER_ATTR}="${escapeAttrSelector(currentProvider)}"]`)
+	return provider instanceof HTMLElement ? provider : null
+}
+
 /** True if id or name contains `:free`, `-free`, or `(free)` (case-insensitive). */
 export function isFreeModel(modelId: string, name?: string): boolean {
 	const matches = (s: string) => {

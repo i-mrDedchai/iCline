@@ -123,6 +123,33 @@ describe("QuickModelPicker real Popover", () => {
 		})
 	})
 
+	it("scrolls the active provider into view when the picker opens", async () => {
+		const scrollIntoView = vi.fn()
+		HTMLElement.prototype.scrollIntoView = scrollIntoView
+
+		vi.mocked(useProviderListings).mockReturnValue({
+			providers: [
+				{ id: "cerebras", name: "Cerebras" },
+				{ id: "xai", name: "xAI" },
+				{ id: "zai", name: "Z.AI" },
+			],
+			isLoading: false,
+			error: undefined,
+			refresh: vi.fn(),
+		} as ReturnType<typeof useProviderListings>)
+
+		render(<QuickModelPicker modelDisplayName={LEFTOVER_XAI_MODEL_ID} />)
+		fireEvent.click(screen.getByRole("button", { name: new RegExp(LEFTOVER_XAI_MODEL_ID) }))
+
+		await waitFor(() => expect(scrollIntoView).toHaveBeenCalled())
+		const scrolled = scrollIntoView.mock.instances as HTMLElement[]
+		expect(
+			scrolled.some(
+				(el) => el.getAttribute("data-icline-provider") === "xai" || el.hasAttribute("data-icline-current-model"),
+			),
+		).toBe(true)
+	})
+
 	it("pointerdown on a Jan model commits via the REAL Radix popover (no dismiss-before-commit)", async () => {
 		render(<QuickModelPicker modelDisplayName={LEFTOVER_XAI_MODEL_ID} />)
 
