@@ -87,8 +87,9 @@ export function getActiveProviderAndModelId(
  * not assume features are unsupported.
  */
 export function useNormalizedApiConfiguration(mode: Mode): NormalizedApiConfig {
-	const { apiConfiguration } = useExtensionState()
+	const { apiConfiguration, providerModelsByProvider } = useExtensionState()
 	const { provider, modelId } = getActiveProviderAndModelId(apiConfiguration, mode)
+	const liveCatalogInfo = modelId ? providerModelsByProvider?.[provider]?.models?.[modelId] : undefined
 	const [resolvedInfo, setResolvedInfo] = useState<
 		Awaited<ReturnType<typeof ModelsServiceClient.resolveModelInfo>> | undefined
 	>(undefined)
@@ -119,18 +120,25 @@ export function useNormalizedApiConfiguration(mode: Mode): NormalizedApiConfig {
 	}, [provider, modelId])
 
 	return useMemo(() => {
+		const selectedModelId = resolvedInfo?.modelId || modelId || ""
+		if (liveCatalogInfo && selectedModelId) {
+			return {
+				selectedProvider: provider,
+				selectedModelId,
+				selectedModelInfo: applyGrok46OfficialContextWindow(selectedModelId, liveCatalogInfo),
+			}
+		}
 		if (!resolvedInfo || resolvedInfo.source === "unknown" || !resolvedInfo.modelInfo) {
 			return {
 				selectedProvider: provider,
-				selectedModelId: resolvedInfo?.modelId || modelId || "",
+				selectedModelId,
 				selectedModelInfo: unknownModelInfo,
 			}
 		}
-		const resolvedModelId = resolvedInfo.modelId
 		return {
 			selectedProvider: provider,
-			selectedModelId: resolvedModelId,
-			selectedModelInfo: applyGrok46OfficialContextWindow(resolvedModelId, fromProtobufModelInfo(resolvedInfo.modelInfo)),
+			selectedModelId,
+			selectedModelInfo: applyGrok46OfficialContextWindow(selectedModelId, fromProtobufModelInfo(resolvedInfo.modelInfo)),
 		}
-	}, [provider, modelId, resolvedInfo])
+	}, [liveCatalogInfo, provider, modelId, resolvedInfo])
 }

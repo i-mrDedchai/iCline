@@ -16,28 +16,16 @@ function toHostModelInfo(providerId: Parameters<typeof applyHostModelInfoOverrid
  *
  * Resolution order:
  *
- *   1. Committed selection — the user's most-recently-chosen plan/act
- *      model ID resolved against SDK catalog metadata, the picker's state
- *      snapshot, and stored overrides by the provider config store. A
- *      selection whose metadata is pure fallback fabrication (no catalog or
- *      state base, no overrides) is deferred behind the catalog steps below
- *      and only returned as a last resort.
+ *   1. Catalog peek / resolve for the *requested* id. This is the same
+ *      live list Settings uses. Specs (contextWindow, prices) must not
+ *      come from a stale committed snapshot when the catalog has that id.
  *
- *   2. Catalog peek — a non-fetching look-up of the catalog cache for
- *      the provider's current effective config fingerprint. Hits when
- *      the catalog has been populated for the current config, either
- *      by the settings UI opening or by a prior call to this handler.
+ *   2. Committed selection — used when the catalog does not yet know the
+ *      requested id (live-only models before the list is warm). Fallback-
+ *      grade fabrication is last resort before "unknown".
  *
- *   3. Awaited catalog resolve — if the peek misses, awaits
- *      `catalog.resolveModels(providerId)` so the response carries
- *      authoritative data the first time it is asked. The catalog has
- *      in-flight dedup and a per-fingerprint cache, so subsequent
- *      callers do not pay this cost again.
- *
- * If after all three steps neither the committed selection nor the
- * SDK catalog has anything to say, the handler returns
- * `source: "unknown"`. Webview consumers render that as a neutral
- * placeholder rather than fabricating a model info.
+ * A non-empty requested id is never replaced with catalog defaultModelId
+ * (that snap-back was the Quick Picker activate bug).
  */
 export async function resolveModelInfo(
 	controller: ProviderCatalogController,
@@ -47,10 +35,8 @@ export async function resolveModelInfo(
 	const requestedModelId = request.modelId?.trim() || ""
 
 	const store = controller.getProviderConfigStore()
-	// A committed selection whose metadata is pure fallback fabrication (no
-	// catalog/state base and no user overrides) must not shadow the live
-	// catalog below; it is kept only as a last resort before "unknown".
 	let fallbackSelection: ReturnType<typeof store.readSelection>
+	let committedSelection: ReturnType<typeof store.readSelection>
 	if (requestedModelId) {
 		for (const mode of ["act", "plan"] as const) {
 			const selection = store.readSelection(providerId, mode)
@@ -61,12 +47,8 @@ export async function resolveModelInfo(
 				fallbackSelection ??= selection
 				continue
 			}
-			return ResolveModelInfoResponse.create({
-				providerId,
-				modelId: selection.modelId,
-				modelInfo: toHostModelInfo(providerId, selection.modelId, selection.modelInfo),
-				source: "committed-selection",
-			})
+			committedSelection ??= selection
+			break
 		}
 	}
 
@@ -74,32 +56,60 @@ export async function resolveModelInfo(
 	const cached = catalog.peekModels(providerId)
 	if (cached?.ok) {
 		const hit = pickFromCatalog(cached, requestedModelId)
-		// A default-model substitution answers a question about a different
-		// model; the committed selection, even fallback-grade, is closer.
-		if (hit && (hit.matchedRequested || !fallbackSelection)) {
+		if (hit?.matchedRequested) {
 			return ResolveModelInfoResponse.create({
 				providerId,
 				modelId: hit.modelId,
 				modelInfo: toHostModelInfo(providerId, hit.modelId, hit.modelInfo),
-				source: hit.matchedRequested ? "sdk-known-models" : "sdk-default",
+				source: "sdk-known-models",
+			})
+		}
+		if (hit && !committedSelection && !fallbackSelection) {
+			return ResolveModelInfoResponse.create({
+				providerId,
+				modelId: hit.modelId,
+				modelInfo: toHostModelInfo(providerId, hit.modelId, hit.modelInfo),
+				source: "sdk-default",
+			})
+		}
+		if (committedSelection) {
+			return ResolveModelInfoResponse.create({
+				providerId,
+				modelId: committedSelection.modelId,
+				modelInfo: toHostModelInfo(providerId, committedSelection.modelId, committedSelection.modelInfo),
+				source: "committed-selection",
 			})
 		}
 	}
 
-	// Cache miss. Await a real resolve so the caller doesn't have to
-	// retry or race a warmer. The catalog dedup'\''s in-flight requests
-	// and caches the result, so the per-fingerprint cost is paid once.
 	const resolved = await catalog.resolveModels(providerId).catch(() => undefined)
 	if (resolved?.ok) {
 		const hit = pickFromCatalog(resolved, requestedModelId)
-		if (hit && (hit.matchedRequested || !fallbackSelection)) {
+		if (hit?.matchedRequested) {
 			return ResolveModelInfoResponse.create({
 				providerId,
 				modelId: hit.modelId,
 				modelInfo: toHostModelInfo(providerId, hit.modelId, hit.modelInfo),
-				source: hit.matchedRequested ? "sdk-known-models" : "sdk-default",
+				source: "sdk-known-models",
 			})
 		}
+		if (hit && !committedSelection && !fallbackSelection) {
+			return ResolveModelInfoResponse.create({
+				providerId,
+				modelId: hit.modelId,
+				modelInfo: toHostModelInfo(providerId, hit.modelId, hit.modelInfo),
+				source: "sdk-default",
+			})
+		}
+	}
+
+	if (committedSelection) {
+		return ResolveModelInfoResponse.create({
+			providerId,
+			modelId: committedSelection.modelId,
+			modelInfo: toHostModelInfo(providerId, committedSelection.modelId, committedSelection.modelInfo),
+			source: "committed-selection",
+		})
 	}
 
 	if (fallbackSelection) {

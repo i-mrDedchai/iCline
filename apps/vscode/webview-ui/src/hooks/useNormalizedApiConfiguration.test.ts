@@ -20,8 +20,8 @@ const mockUseExtensionState = vi.mocked(useExtensionState)
 const mockResolveModelInfo = vi.mocked(ModelsServiceClient.resolveModelInfo)
 const mockResolveProviderModels = vi.mocked(ModelsServiceClient.resolveProviderModels)
 
-function setApiConfiguration(apiConfiguration: Record<string, unknown>) {
-	mockUseExtensionState.mockReturnValue({ apiConfiguration } as ReturnType<typeof useExtensionState>)
+function setApiConfiguration(apiConfiguration: Record<string, unknown>, extra?: Partial<ReturnType<typeof useExtensionState>>) {
+	mockUseExtensionState.mockReturnValue({ apiConfiguration, ...extra } as ReturnType<typeof useExtensionState>)
 }
 
 function modelInfoResponse(providerId: string, modelId: string, contextWindow = 1_000_000) {
@@ -237,5 +237,27 @@ describe("useNormalizedApiConfiguration", () => {
 		await waitFor(() => expect(result.current.selectedModelId).toBe("grok-4.6"))
 		expect(result.current.selectedModelInfo.contextWindow).toBeUndefined()
 		expect(mockResolveModelInfo).toHaveBeenCalledWith({ providerId: "xai", modelId: "grok-4.6" })
+	})
+
+	it("uses live Settings catalog contextWindow over a stale resolve snapshot", async () => {
+		setApiConfiguration({ actModeApiProvider: "cline", actModeClineModelId: "poolside/laguna-s-2.1:free" }, {
+			providerModelsByProvider: {
+				cline: {
+					models: {
+						"poolside/laguna-s-2.1:free": {
+							name: "Laguna S 2.1",
+							supportsPromptCache: false,
+							contextWindow: 262_144,
+						},
+					},
+				},
+			},
+		} as Partial<ReturnType<typeof useExtensionState>>)
+		mockResolveModelInfo.mockResolvedValue(modelInfoResponse("cline", "poolside/laguna-s-2.1:free", 131_072))
+
+		const { result } = renderHook(() => useNormalizedApiConfiguration("act"))
+
+		await waitFor(() => expect(result.current.selectedModelId).toBe("poolside/laguna-s-2.1:free"))
+		expect(result.current.selectedModelInfo.contextWindow).toBe(262_144)
 	})
 })

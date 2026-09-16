@@ -15,6 +15,7 @@ Upstream sync + smoke-test restoration on the v4.0.0 SDK architecture (dev build
 - 📚 **Provider docs** — `docs/provider-config/sakana.mdx` and `docs/provider-config/jan.mdx` added to the docs site navigation
 
 ### Fixed
+- 🎯 **Chat context bar follows the selected model (fix.24)** — the header meter uses the same live catalog Settings shows. A stale committed snapshot (e.g. 131K leftover) no longer shadows a 262K Cline model after switching in the picker.
 - 🎯 **Grok 4.6 context window (fix.23)** — 500k is applied on every display path: static table, subscription-cache rewrite (stale 2M from older builds), host catalog, Cline/OpenRouter `x-ai/grok-4.6`, chat `resolveModelInfo`, and Settings. Official xAI docs; 2M is Grok 4.20.
 - 🎯 **Grok 4.6 context window (fix.22)** — `grok-4.6` is 500k tokens (official xAI docs, same as 4.5), not 2M (that is Grok 4.20). Chat/Settings host override so a stale 2M snapshot cannot stick.
 - 🎯 **Selected model stays in A–Z order (fix.21)** — the active model keeps its place in the group (checkmark + scroll-into-view) instead of jumping to the top, so nearby models stay next to it.

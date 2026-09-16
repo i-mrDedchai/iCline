@@ -86,7 +86,38 @@ describe("resolveModelInfo", () => {
 		expect(response.source).toBe("committed-selection")
 		expect(response.modelId).toBe("deepseek-v4-pro")
 		expect(response.modelInfo?.contextWindow).toBe(999_999)
-		expect(catalog.peekModels).not.toHaveBeenCalled()
+	})
+
+	it("prefers live catalog contextWindow over a stale committed snapshot for the same id", async () => {
+		const { resolveModelInfo } = await import("../resolveModelInfo")
+		const providerId = parseProviderId("cline")
+		const store = makeStore({ providerId })
+		vi.mocked(store.readSelection).mockImplementation((_, mode) =>
+			mode === "act"
+				? {
+						providerId,
+						modelId: "poolside/laguna-s-2.1:free",
+						modelInfoSource: "state" as const,
+						modelInfo: { name: "Laguna S 2.1", supportsPromptCache: false, contextWindow: 131_072 },
+					}
+				: undefined,
+		)
+		const catalog = makeCatalog()
+		vi.mocked(catalog.peekModels).mockReturnValue(
+			peekResult(
+				"cline",
+				[["poolside/laguna-s-2.1:free", { name: "Laguna S 2.1", supportsPromptCache: false, contextWindow: 262_144 }]],
+				"anthropic/claude-sonnet-4.6",
+			),
+		)
+
+		const response = await resolveModelInfo(makeController(store, catalog), {
+			providerId: "cline",
+			modelId: "poolside/laguna-s-2.1:free",
+		})
+
+		expect(response.source).toBe("sdk-known-models")
+		expect(response.modelInfo?.contextWindow).toBe(262_144)
 		expect(catalog.resolveModels).not.toHaveBeenCalled()
 	})
 
