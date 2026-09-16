@@ -154,7 +154,12 @@ describe("SdkCompactionCoordinator", () => {
 
 		expect(options.sessions.replaceActiveSession).not.toHaveBeenCalled()
 		expect(options.messages.appendAndEmit).toHaveBeenCalledWith(
-			[expect.objectContaining({ say: "info", text: "Couldn't compact the conversation. Please try again." })],
+			[
+				expect.objectContaining({
+					say: "info",
+					text: "Couldn't compact the conversation. Please try again. (Compaction sidecar could not be persisted.)",
+				}),
+			],
 			expect.anything(),
 		)
 	})
@@ -211,7 +216,7 @@ describe("SdkCompactionCoordinator", () => {
 
 		expect(options.sessions.replaceActiveSession).not.toHaveBeenCalled()
 		expect(options.messages.appendAndEmit).toHaveBeenCalledWith(
-			[expect.objectContaining({ say: "info", text: "Couldn't compact the conversation. Please try again." })],
+			[expect.objectContaining({ say: "info", text: "Couldn't compact the conversation. Please try again. (boom)" })],
 			expect.anything(),
 		)
 	})

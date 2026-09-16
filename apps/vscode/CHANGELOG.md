@@ -15,6 +15,7 @@ Upstream sync + smoke-test restoration on the v4.0.0 SDK architecture (dev build
 - 📚 **Provider docs** — `docs/provider-config/sakana.mdx` and `docs/provider-config/jan.mdx` added to the docs site navigation
 
 ### Fixed
+- 📊 **Compact error details (fix.29)** — when Compact fails, the chat shows the underlying reason (e.g. sidecar persist) instead of only "Couldn't compact the conversation."
 - 📊 **Compact durable context bar (fix.28)** — after Compact, closing and reopening the task from history keeps the reduced context estimate. The live bar row is not in the canonical SDK transcript; history load now re-applies it from the persisted compaction sidecar. WIP VSIX packing now runs `esbuild --production` so `dist/extension.js` is the current host, not a leftover debug bundle.
 - 🎯 **Chat bar leftover context window (fix.27)** — after picking a Cline featured id the header no longer keeps DeepSeek 1.0m or Grok 500k. Host `resolveModelInfo` does not reuse a warm-catalog miss snapshot; featured ids alias to a unique OpenRouter slug (`cline-free/solar-pro4` → `upstage/solar-pro4` = 524K); picker commit write-through clears leftover `*ClineModelInfo`.
 - 🎯 **Cline featured model context windows (fix.26)** — Usage-Billing free/recommended cards (`cline-free/solar-pro4`, …) are merged into the `cline` catalog with OpenRouter specs (Solar Pro 4 = 524K). They previously had no `cline` catalog row, so the chat bar kept a generic 1M.

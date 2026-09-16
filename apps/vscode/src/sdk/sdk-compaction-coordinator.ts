@@ -78,7 +78,8 @@ export class SdkCompactionCoordinator {
 			await this.runCompaction(activeSession.sdkHost, activeSession.sessionId)
 		} catch (error) {
 			Logger.error("[SdkController] compactTask failed:", error)
-			this.emitInfo(COMPACTION_FAILURE_MESSAGE, activeSession.sessionId)
+			const detail = error instanceof Error && error.message.trim() ? error.message.trim() : String(error)
+			this.emitInfo(`${COMPACTION_FAILURE_MESSAGE} (${detail})`, activeSession.sessionId)
 			await this.options.postStateToWebview()
 		} finally {
 			this.compactInFlight = false
