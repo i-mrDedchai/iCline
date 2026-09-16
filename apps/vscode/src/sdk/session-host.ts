@@ -35,6 +35,7 @@ export interface SdkSessionHost {
 	delete(sessionId: string): Promise<boolean>
 	readMessages(sessionId: string): Promise<SdkInitialMessages>
 	updateSessionCompactionState?(sessionId: string, state: SessionCompactionState): Promise<{ updated: boolean }>
+	readSessionCompactionState?(sessionId: string): Promise<SessionCompactionState | undefined>
 	restore(input: RestoreInput): Promise<RestoreResult>
 	update(
 		sessionId: string,

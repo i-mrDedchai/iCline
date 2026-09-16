@@ -1,4 +1,5 @@
 import type { SessionHistoryRecord } from "@cline/core"
+import { getLastApiReqTotalTokens } from "@shared/getApiMetrics"
 import type { HistoryItem } from "@shared/HistoryItem"
 import getFolderSize from "get-folder-size"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
@@ -6,6 +7,7 @@ import type { McpHub } from "@/services/mcp/McpHub"
 import type { TelemetryService } from "@/services/telemetry/TelemetryService"
 import { deleteLegacyTask, readApiConversationHistory, readTaskHistory, readUiMessages } from "./legacy-state-reader"
 import { sdkMessagesToClineMessages } from "./message-translator"
+import { estimatePostCompactTokens } from "./post-compact-usage"
 import type { SdkSessionLifecycle } from "./sdk-session-lifecycle"
 import { SdkTaskHistory, sessionHistoryRecordToHistoryItem } from "./sdk-task-history"
 import type { VscodeSessionHost } from "./vscode-session-host"
@@ -602,6 +604,40 @@ describe("SdkTaskHistory", () => {
 		expect(telemetry.captureLegacyTaskMigration).not.toHaveBeenCalled()
 	})
 
+	it("reapplies the compact context-bar estimate when reopening a compacted SDK task", async () => {
+		const { history, readMessages, readSessionCompactionState } = makeHistory([makeSessionRecord("task-1")])
+		readMessages.mockResolvedValueOnce([
+			{ role: "user", content: "Build the feature" },
+			{
+				role: "assistant",
+				content: [{ type: "text", text: "Done" }],
+				metrics: {
+					inputTokens: 80_000,
+					outputTokens: 20_000,
+					cacheReadTokens: 0,
+					cacheWriteTokens: 0,
+					cost: 0.1,
+				},
+			},
+		] as never)
+		readSessionCompactionState.mockResolvedValueOnce({
+			version: 1,
+			updated_at: "2026-09-16T00:00:00.000Z",
+			source_message_count: 10,
+			messages: [
+				{ role: "user", content: "a" },
+				{ role: "assistant", content: "b" },
+			],
+		})
+
+		const messages = await history.getClineMessages("task-1")
+		const lastTotal = getLastApiReqTotalTokens(messages)
+
+		expect(lastTotal).toBe(estimatePostCompactTokens(100_000, 10, 2))
+		expect(lastTotal).not.toBe(100_000)
+		expect(JSON.parse(messages[messages.length - 1].text ?? "{}").excludeFromTotals).toBe(true)
+	})
+
 	it("reads legacy task UI messages without migrating", async () => {
 		legacyStateReaderMock.taskHistory = [makeHistoryItem("legacy-task", { task: "legacy prompt" })]
 		legacyStateReaderMock.uiMessages = [{ ts: 1, type: "say", say: "task", text: "legacy prompt" }]
@@ -982,6 +1018,7 @@ function makeHistory(records: SessionHistoryRecord[], telemetry?: TelemetryServi
 	const getSession = vi.fn(async (sessionId: string) => currentRecords.find((record) => record.sessionId === sessionId))
 	const listHistory = vi.fn(async () => currentRecords)
 	const readMessages = vi.fn(async () => [])
+	const readSessionCompactionState = vi.fn(async () => undefined)
 	const startSession = vi.fn(async (input: { config: { sessionId?: string } }) => {
 		currentRecords = [makeSessionRecord(input.config.sessionId ?? "started"), ...currentRecords]
 		return { sessionId: input.config.sessionId }
@@ -990,6 +1027,7 @@ function makeHistory(records: SessionHistoryRecord[], telemetry?: TelemetryServi
 		get: getSession,
 		listHistory,
 		readMessages,
+		readSessionCompactionState,
 		start: startSession,
 		update: updateSession,
 		delete: deleteSession,
@@ -1011,6 +1049,7 @@ function makeHistory(records: SessionHistoryRecord[], telemetry?: TelemetryServi
 		updateSession,
 		deleteSession,
 		readMessages,
+		readSessionCompactionState,
 		startSession,
 	}
 }

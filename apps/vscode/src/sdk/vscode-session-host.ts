@@ -230,6 +230,10 @@ export class VscodeSessionHost implements SdkSessionHost {
 		return this.inner.updateSessionCompactionState(sessionId, state)
 	}
 
+	async readSessionCompactionState(sessionId: string): Promise<SessionCompactionState | undefined> {
+		return this.inner.readSessionCompactionState(sessionId)
+	}
+
 	async restore(input: RestoreInput): Promise<RestoreResult> {
 		return this.inner.restore(input)
 	}

@@ -16,6 +16,7 @@ import {
 } from "./legacy-task-handling"
 import type { MessageIdMinter } from "./message-id-minter"
 import { sdkMessagesToClineMessages } from "./message-translator"
+import { applyDurablePostCompactEstimate } from "./post-compact-usage"
 import type { SdkSessionLifecycle } from "./sdk-session-lifecycle"
 import type { VscodeSessionHost } from "./vscode-session-host"
 
@@ -427,15 +428,19 @@ export class SdkTaskHistory {
 			return readUiMessages(taskId, legacyTask.dataDir)
 		}
 
-		const sdkMessages = await this.withHistoryHost((host) => host.readMessages(taskId) as Promise<SdkMessage[]>)
+		const { sdkMessages, compaction } = await this.withHistoryHost(async (host) => ({
+			sdkMessages: (await host.readMessages(taskId)) as SdkMessage[],
+			compaction: host.readSessionCompactionState ? await host.readSessionCompactionState(taskId) : undefined,
+		}))
 		const clineMessages = sdkMessagesToClineMessages(
 			sanitizeSdkUserMessagesForDisplay(sdkMessages),
 			this.options.getMinter?.(),
 		)
-		if (sdkRecord && legacyTask) {
-			return mergeLegacyUiMessagesWithResumedSdkMessages(readUiMessages(taskId, legacyTask.dataDir), clineMessages)
-		}
-		return clineMessages
+		const withEstimate =
+			sdkRecord && legacyTask
+				? mergeLegacyUiMessagesWithResumedSdkMessages(readUiMessages(taskId, legacyTask.dataDir), clineMessages)
+				: clineMessages
+		return applyDurablePostCompactEstimate(withEstimate, compaction)
 	}
 
 	async isLegacyTask(taskId: string): Promise<boolean> {

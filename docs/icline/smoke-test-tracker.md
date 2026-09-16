@@ -1,7 +1,7 @@
 **Last updated:** 2026-09-16
-**Branch:** `fix/quick-model-picker-activate`
-**HEAD:** `cdd4d139b` (fix.27)
-**vsix:** `apps/vscode/dist/i-mrdedchai.iCline-0.1.18-dev.5-fix.27.vsix` (WIP smoke 2026-09-16, 11.35 MB) — committed locally, **ยังไม่ push / ยังไม่ merge main**
+**Branch:** `fix/compact-durable` (from `main` @ `93b60c1b7`)
+**HEAD:** (WIP compact durable)
+**vsix:** `apps/vscode/dist/i-mrdedchai.iCline-0.1.18-dev.5-fix.28.vsix` — pack after tests; do not overwrite `cline-temp` `fix.1`–`fix.9`
 
 **Release plan:** finish this Quick Picker worktree on **dev.5** → merge to main when ordered → ClinePass after that merge. Dynamic model lists for remaining providers stay **dev.6**.
 
@@ -162,6 +162,18 @@ code --install-extension "D:\.grok\iCline\cline-wt-quick-model-picker-activate\a
 แล้ว **Developer: Reload Window**
 
 จุดที่ควรเช็ค: Jan · xAI OAuth+chat · Quick picker (expand/effort) · agent แนะนำตัว iCline · History export/import
+
+---
+
+## 🔧 fix.28 — compact durable context bar (2026-09-16)
+
+**สถานะ:** แพ็ก VSIX รอ maintainer smoke — **ยังไม่ปิดรอบ**
+
+กด Compact แล้วแถบลดทันที (C1) ผ่านแล้ว แต่ปิด/เปิดแชทจากประวัติแล้วเลขกลับค่าก่อน compact เพราะแถวประมาณการอยู่แค่ในหน่วยความจำ โหลดประวัติอ่าน transcript เต็มจาก SDK
+
+**วิธี smoke:** แชทยาว → Compact แถบลด → History เปิดทาสกเดิม → แถบขวายังเลขหลัง compact ไม่กลับก้อนใหญ่
+
+**VSIX:** `apps/vscode/dist/i-mrdedchai.iCline-0.1.18-dev.5-fix.28.vsix`
 
 ---
 

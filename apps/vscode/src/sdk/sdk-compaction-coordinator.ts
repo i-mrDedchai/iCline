@@ -14,11 +14,12 @@
 // fake "Conversation Summary" instead of compacting (CLINE-2503).
 
 import type { Message as SdkMessage } from "@cline/llms"
-import type { ClineApiReqInfo, ClineMessage } from "@shared/ExtensionMessage"
+import type { ClineMessage } from "@shared/ExtensionMessage"
 import { getLastApiReqTotalTokens } from "@shared/getApiMetrics"
 import type { Mode } from "@shared/storage/types"
 import type { StateManager } from "@/core/storage/StateManager"
 import { Logger } from "@/shared/services/Logger"
+import { buildPostCompactUsageMessage, estimatePostCompactTokens } from "./post-compact-usage"
 import { compactSessionMessages } from "./sdk-compaction"
 import type { SdkMessageCoordinator } from "./sdk-message-coordinator"
 import type { SdkSessionConfigBuilder } from "./sdk-session-config-builder"
@@ -158,25 +159,8 @@ export class SdkCompactionCoordinator {
 		if (lastTotal <= 0) {
 			return
 		}
-		const ratio = messagesBefore > 0 ? Math.min(1, Math.max(0.05, messagesAfter / messagesBefore)) : 0.5
-		// Keep a small floor so the bar doesn't jump to empty when counts are close.
-		const estimated = Math.max(1, Math.round(lastTotal * ratio))
-		const usage: ClineApiReqInfo = {
-			tokensIn: estimated,
-			tokensOut: 0,
-			cacheWrites: 0,
-			cacheReads: 0,
-			cost: 0,
-			excludeFromTotals: true,
-		}
-		const usageMessage: ClineMessage = {
-			ts: Date.now(),
-			type: "say",
-			say: "api_req_started",
-			text: JSON.stringify(usage),
-			partial: false,
-		}
-		this.options.messages.appendAndEmit([usageMessage], {
+		const estimated = estimatePostCompactTokens(lastTotal, messagesBefore, messagesAfter)
+		this.options.messages.appendAndEmit([buildPostCompactUsageMessage(estimated)], {
 			type: "status",
 			payload: { sessionId, status: "running" },
 		})
