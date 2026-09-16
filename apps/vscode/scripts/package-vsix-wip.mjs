@@ -10,6 +10,9 @@
  *
  * The stamped metadata is what the About page shows: without this, fix.N
  * packs kept the stale "dev build N · <last sync:docs timestamp>" label.
+ *
+ * Always rebuild the host with `esbuild.mjs --production` before vsce. Skipping
+ * that reused a stale debug `dist/extension.js` (fat VSIX, missing host diffs).
  */
 import { spawnSync } from "node:child_process"
 import fs from "node:fs"
@@ -136,8 +139,8 @@ stampBuildMetadata()
 swapResult = swapIn()
 
 // The webview bundle embeds build-metadata.ts (the About page reads the
-// compiled constant), so rebuild it AFTER stamping. The extension esbuild
-// output is independent of build-metadata and reuses whatever is on disk.
+// compiled constant), so rebuild it AFTER stamping. vscode:prepublish is
+// stubbed so vsce does not run the full pipeline; compile the host here.
 let exitCode = 1
 try {
 	const webviewBuild = spawnSync("npm", ["run", "build:webview"], {
@@ -150,6 +153,17 @@ try {
 		console.error("\nwebview rebuild failed with exit", webviewBuild.status)
 		restoreAll()
 		process.exit(webviewBuild.status ?? 1)
+	}
+
+	const hostBuild = spawnSync(process.execPath, ["esbuild.mjs", "--production"], {
+		stdio: "inherit",
+		cwd: extRoot,
+		env: process.env,
+	})
+	if (hostBuild.status !== 0) {
+		console.error("\nhost esbuild --production failed with exit", hostBuild.status)
+		restoreAll()
+		process.exit(hostBuild.status ?? 1)
 	}
 
 	const result = spawnSync(
