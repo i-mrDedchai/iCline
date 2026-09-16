@@ -78,6 +78,15 @@ describe("applyHostModelInfoOverrides — xAI grok-4.6 context window", () => {
 		expect(result.contextWindow).toBe(500_000)
 	})
 
+	it("caps Cline/OpenRouter x-ai/grok-4.6 the same way", () => {
+		const cline = parseProviderId("cline")
+		const result = applyHostModelInfoOverrides(cline, "x-ai/grok-4.6", {
+			supportsPromptCache: true,
+			contextWindow: 2_000_000,
+		})
+		expect(result.contextWindow).toBe(500_000)
+	})
+
 	it("does not rewrite other xAI models", () => {
 		const result = applyHostModelInfoOverrides(xai, "grok-4.5", {
 			supportsPromptCache: true,

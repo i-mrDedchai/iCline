@@ -1,4 +1,4 @@
-import type { ApiProvider, ModelInfo } from "@shared/api"
+import { type ApiProvider, applyGrok46OfficialContextWindow, type ModelInfo } from "@shared/api"
 import { ResolveModelInfoRequest } from "@shared/proto/cline/models"
 import { fromProtobufModelInfo } from "@shared/proto-conversions/models/typeConversion"
 import type { Mode } from "@shared/storage/types"
@@ -126,10 +126,11 @@ export function useNormalizedApiConfiguration(mode: Mode): NormalizedApiConfig {
 				selectedModelInfo: unknownModelInfo,
 			}
 		}
+		const resolvedModelId = resolvedInfo.modelId
 		return {
 			selectedProvider: provider,
-			selectedModelId: resolvedInfo.modelId,
-			selectedModelInfo: fromProtobufModelInfo(resolvedInfo.modelInfo),
+			selectedModelId: resolvedModelId,
+			selectedModelInfo: applyGrok46OfficialContextWindow(resolvedModelId, fromProtobufModelInfo(resolvedInfo.modelInfo)),
 		}
 	}, [provider, modelId, resolvedInfo])
 }

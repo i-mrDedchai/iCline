@@ -12,7 +12,7 @@
  */
 
 import { OLLAMA_DEFAULT_CONTEXT_WINDOW } from "@cline/llms"
-import type { ModelInfo } from "@shared/api"
+import { applyGrok46OfficialContextWindow, type ModelInfo } from "@shared/api"
 import { ApiFormat } from "@shared/proto/cline/models"
 import { StateManager } from "@/core/storage/StateManager"
 import { getProviderSettingsManager } from "../provider-migration"
@@ -74,19 +74,18 @@ function resolveSakanaApiFormat(): ModelInfo["apiFormat"] {
 }
 
 export function applyHostModelInfoOverrides(providerId: ProviderId, modelId: string, modelInfo: ModelInfo): ModelInfo {
+	let next = modelInfo
 	if (providerId === "vertex" && vertexModelSupportsGlobalEndpoint(providerId, modelId)) {
-		return { ...modelInfo, supportsGlobalEndpoint: true }
+		next = { ...next, supportsGlobalEndpoint: true }
 	}
 	if (providerId === "ollama") {
-		return { ...modelInfo, contextWindow: resolveOllamaContextWindow() }
+		next = { ...next, contextWindow: resolveOllamaContextWindow() }
 	}
 	if (providerId === "sakana") {
 		const apiFormat = resolveSakanaApiFormat()
-		return apiFormat ? { ...modelInfo, apiFormat } : modelInfo
+		if (apiFormat) {
+			next = { ...next, apiFormat }
+		}
 	}
-	// Official xAI docs: grok-4.6 is 500k (same as 4.5), not Grok 4.20's 2M.
-	if (providerId === "xai" && modelId === "grok-4.6") {
-		return { ...modelInfo, contextWindow: 500_000 }
-	}
-	return modelInfo
+	return applyGrok46OfficialContextWindow(modelId, next)
 }

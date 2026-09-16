@@ -1,4 +1,4 @@
-import { type ModelInfo, openAiModelInfoSafeDefaults, xaiDefaultModelId } from "@shared/api"
+import { applyGrok46OfficialContextWindow, type ModelInfo, openAiModelInfoSafeDefaults, xaiDefaultModelId } from "@shared/api"
 import { Mode } from "@shared/storage/types"
 import { VSCodeButton, VSCodeCheckbox, VSCodeDropdown, VSCodeOption } from "@vscode/webview-ui-toolkit/react"
 import { useEffect, useRef, useState } from "react"
@@ -94,7 +94,10 @@ export const XaiProvider = ({ showModelOptions, isPopup, currentMode }: XaiProvi
 
 	// Prefer catalog model info (correct context + included pricing) over any
 	// stale committed selection that may still carry PAYG prices.
-	const selectedModelInfo = (selectedModelId ? models[selectedModelId] : undefined) ?? rawSelectedModelInfo
+	const selectedModelInfo = applyGrok46OfficialContextWindow(
+		selectedModelId,
+		(selectedModelId ? models[selectedModelId] : undefined) ?? rawSelectedModelInfo,
+	)
 
 	// Local state for reasoning effort toggle
 	const [reasoningEffortSelected, setReasoningEffortSelected] = useState(!!modeFields.reasoningEffort)

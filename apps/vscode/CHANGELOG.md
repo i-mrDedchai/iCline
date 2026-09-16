@@ -15,6 +15,7 @@ Upstream sync + smoke-test restoration on the v4.0.0 SDK architecture (dev build
 - 📚 **Provider docs** — `docs/provider-config/sakana.mdx` and `docs/provider-config/jan.mdx` added to the docs site navigation
 
 ### Fixed
+- 🎯 **Grok 4.6 context window (fix.23)** — 500k is applied on every display path: static table, subscription-cache rewrite (stale 2M from older builds), host catalog, Cline/OpenRouter `x-ai/grok-4.6`, chat `resolveModelInfo`, and Settings. Official xAI docs; 2M is Grok 4.20.
 - 🎯 **Grok 4.6 context window (fix.22)** — `grok-4.6` is 500k tokens (official xAI docs, same as 4.5), not 2M (that is Grok 4.20). Chat/Settings host override so a stale 2M snapshot cannot stick.
 - 🎯 **Selected model stays in A–Z order (fix.21)** — the active model keeps its place in the group (checkmark + scroll-into-view) instead of jumping to the top, so nearby models stay next to it.
 - 🎯 **Quick Picker opens on the active provider (fix.20)** — opening the chat picker scrolls the current provider (and the selected model once it is in the list) into view instead of leaving the viewport at the first A–Z provider.

@@ -1,5 +1,5 @@
 import { ensureCacheDirectoryExists, GlobalFileNames } from "@core/storage/disk"
-import { ModelInfo, xaiModels } from "@shared/api"
+import { applyGrok46OfficialContextWindow, type ModelInfo, xaiModels } from "@shared/api"
 import { fileExistsAtPath } from "@utils/fs"
 import axios from "axios"
 import fs from "fs/promises"
@@ -75,7 +75,9 @@ let pendingRefresh: Promise<Record<string, ModelInfo>> | null = null
 export async function refreshXaiSubscriptionModels(_controller: Controller): Promise<Record<string, ModelInfo>> {
 	const cache = StateManager.get().getModelsCache("xaiSubscription")
 	if (cache && Object.keys(cache).length > 0) {
-		return cache
+		const sanitized = sanitizeXaiSubscriptionCache(cache)
+		StateManager.get().setModelsCache("xaiSubscription", sanitized)
+		return sanitized
 	}
 	if (pendingRefresh) {
 		return pendingRefresh
@@ -129,8 +131,13 @@ async function fetchAndCacheModels(): Promise<Record<string, ModelInfo>> {
 		models = cached ?? buildFallbackSubscriptionModels()
 	}
 
-	StateManager.get().setModelsCache("xaiSubscription", models)
-	return models
+	const sanitized = sanitizeXaiSubscriptionCache(models)
+	StateManager.get().setModelsCache("xaiSubscription", sanitized)
+	return sanitized
+}
+
+function sanitizeXaiSubscriptionCache(models: Record<string, ModelInfo>): Record<string, ModelInfo> {
+	return Object.fromEntries(Object.entries(models).map(([id, info]) => [id, applyGrok46OfficialContextWindow(id, info)]))
 }
 
 export async function readCachedModels(): Promise<Record<string, ModelInfo> | undefined> {

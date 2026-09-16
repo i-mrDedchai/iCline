@@ -588,6 +588,24 @@ export const xaiModels = {
 	},
 } as const satisfies Record<string, ModelInfo>
 
+/** Official xAI Grok 4.6 context window (same as 4.5). Not Grok 4.20's 2M. */
+export const GROK_46_CONTEXT_WINDOW = 500_000
+
+export function isGrok46ModelId(modelId: string | undefined | null): boolean {
+	if (!modelId) {
+		return false
+	}
+	const id = modelId.trim().toLowerCase()
+	return id === "grok-4.6" || id.endsWith("/grok-4.6")
+}
+
+export function applyGrok46OfficialContextWindow(modelId: string, info: ModelInfo): ModelInfo {
+	if (!isGrok46ModelId(modelId) || info.contextWindow === GROK_46_CONTEXT_WINDOW) {
+		return info
+	}
+	return { ...info, contextWindow: GROK_46_CONTEXT_WINDOW }
+}
+
 /** Grok Build CLI proxy models (Composer / Grok Build). Always free via OAuth/CLI. */
 export const xaiCliModelIds = ["grok-composer-2.5-fast", "grok-build"] as const
 
@@ -619,8 +637,11 @@ export function asXaiSubscriptionIncludedModelInfo(modelId: string, info: ModelI
 		...info,
 		name: info.name ?? base?.name ?? modelId,
 		// Prefer known catalog context over generic SDK/safe defaults (128K).
-		contextWindow:
-			info.contextWindow && info.contextWindow !== 128_000
+		// Stale xAI subscription caches still carry grok-4.6 = 2M (copied from
+		// Grok 4.20); official window is 500k — never keep the cache 2M.
+		contextWindow: isGrok46ModelId(modelId)
+			? GROK_46_CONTEXT_WINDOW
+			: info.contextWindow && info.contextWindow !== 128_000
 				? info.contextWindow
 				: (base?.contextWindow ?? info.contextWindow),
 		maxTokens: info.maxTokens && info.maxTokens > 0 ? info.maxTokens : (base?.maxTokens ?? info.maxTokens),
