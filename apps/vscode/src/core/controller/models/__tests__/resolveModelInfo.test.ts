@@ -347,7 +347,7 @@ describe("resolveModelInfo", () => {
 
 		expect(response.source).toBe("committed-selection")
 		expect(response.modelId).toBe("grok-4.6")
-		expect(response.modelInfo?.contextWindow).toBe(2_000_000)
+		expect(response.modelInfo?.contextWindow).toBe(500_000)
 		expect(catalog.resolveModels).not.toHaveBeenCalled()
 	})
 

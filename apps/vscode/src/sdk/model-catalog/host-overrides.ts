@@ -84,5 +84,9 @@ export function applyHostModelInfoOverrides(providerId: ProviderId, modelId: str
 		const apiFormat = resolveSakanaApiFormat()
 		return apiFormat ? { ...modelInfo, apiFormat } : modelInfo
 	}
+	// Official xAI docs: grok-4.6 is 500k (same as 4.5), not Grok 4.20's 2M.
+	if (providerId === "xai" && modelId === "grok-4.6") {
+		return { ...modelInfo, contextWindow: 500_000 }
+	}
 	return modelInfo
 }

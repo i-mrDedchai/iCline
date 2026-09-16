@@ -15,6 +15,7 @@ Upstream sync + smoke-test restoration on the v4.0.0 SDK architecture (dev build
 - 📚 **Provider docs** — `docs/provider-config/sakana.mdx` and `docs/provider-config/jan.mdx` added to the docs site navigation
 
 ### Fixed
+- 🎯 **Grok 4.6 context window (fix.22)** — `grok-4.6` is 500k tokens (official xAI docs, same as 4.5), not 2M (that is Grok 4.20). Chat/Settings host override so a stale 2M snapshot cannot stick.
 - 🎯 **Selected model stays in A–Z order (fix.21)** — the active model keeps its place in the group (checkmark + scroll-into-view) instead of jumping to the top, so nearby models stay next to it.
 - 🎯 **Quick Picker opens on the active provider (fix.20)** — opening the chat picker scrolls the current provider (and the selected model once it is in the list) into view instead of leaving the viewport at the first A–Z provider.
 - 🎯 **Cline featured lists in Quick Picker (fix.19)** — Cline Usage-Billing Recommended/Free featured cards (RPC, with NEW/FREE badges) are the picker's Recommended/Free groups, not the `:free` name heuristic. Opening the picker or Refresh re-fetches the live featured list so Free stays in sync as Cline updates it.

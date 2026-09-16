@@ -341,7 +341,7 @@ export const xaiModels = {
 	"grok-4.6": {
 		name: "Grok 4.6",
 		maxTokens: 32_768,
-		contextWindow: 2_000_000,
+		contextWindow: 500_000,
 		supportsImages: true,
 		supportsPromptCache: true,
 		supportsReasoning: true,

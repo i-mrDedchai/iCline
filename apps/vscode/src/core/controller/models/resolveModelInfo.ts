@@ -1,7 +1,13 @@
+import type { ModelInfo } from "@shared/api"
 import type { ProviderModelsResult } from "@/sdk/model-catalog/contracts"
+import { applyHostModelInfoOverrides } from "@/sdk/model-catalog/host-overrides"
 import { ResolveModelInfoRequest, ResolveModelInfoResponse } from "@/shared/proto/cline/models"
 import { toProtobufModelInfo } from "@/shared/proto-conversions/models/typeConversion"
 import { type ProviderCatalogController, parseProviderIdRequest } from "./providerCatalogShared"
+
+function toHostModelInfo(providerId: Parameters<typeof applyHostModelInfoOverrides>[0], modelId: string, modelInfo: ModelInfo) {
+	return toProtobufModelInfo(applyHostModelInfoOverrides(providerId, modelId, modelInfo))
+}
 
 /**
  * Resolve a single (provider, model) pair for the webview's status /
@@ -58,7 +64,7 @@ export async function resolveModelInfo(
 			return ResolveModelInfoResponse.create({
 				providerId,
 				modelId: selection.modelId,
-				modelInfo: toProtobufModelInfo(selection.modelInfo),
+				modelInfo: toHostModelInfo(providerId, selection.modelId, selection.modelInfo),
 				source: "committed-selection",
 			})
 		}
@@ -74,7 +80,7 @@ export async function resolveModelInfo(
 			return ResolveModelInfoResponse.create({
 				providerId,
 				modelId: hit.modelId,
-				modelInfo: toProtobufModelInfo(hit.modelInfo),
+				modelInfo: toHostModelInfo(providerId, hit.modelId, hit.modelInfo),
 				source: hit.matchedRequested ? "sdk-known-models" : "sdk-default",
 			})
 		}
@@ -90,7 +96,7 @@ export async function resolveModelInfo(
 			return ResolveModelInfoResponse.create({
 				providerId,
 				modelId: hit.modelId,
-				modelInfo: toProtobufModelInfo(hit.modelInfo),
+				modelInfo: toHostModelInfo(providerId, hit.modelId, hit.modelInfo),
 				source: hit.matchedRequested ? "sdk-known-models" : "sdk-default",
 			})
 		}
@@ -100,7 +106,7 @@ export async function resolveModelInfo(
 		return ResolveModelInfoResponse.create({
 			providerId,
 			modelId: fallbackSelection.modelId,
-			modelInfo: toProtobufModelInfo(fallbackSelection.modelInfo),
+			modelInfo: toHostModelInfo(providerId, fallbackSelection.modelId, fallbackSelection.modelInfo),
 			source: "committed-selection",
 		})
 	}

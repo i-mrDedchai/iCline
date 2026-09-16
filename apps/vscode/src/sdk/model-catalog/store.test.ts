@@ -1046,7 +1046,7 @@ describe("createProviderConfigStore", () => {
 
 		expect(selection?.modelId).toBe(subscriptionOnlyId)
 		expect(selection?.modelInfoSource).toBe("catalog")
-		expect(selection?.modelInfo.contextWindow).toBe(2_000_000)
+		expect(selection?.modelInfo.contextWindow).toBe(500_000)
 	})
 
 	it("round-trips commitSelection for an xAI subscription-only id without falling back", async () => {
