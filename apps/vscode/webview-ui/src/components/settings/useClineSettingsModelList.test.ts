@@ -1,8 +1,8 @@
 import { CLINE_RECOMMENDED_MODELS_FALLBACK } from "@shared/cline/recommended-models"
 import { filterOpenRouterModelIds } from "@shared/utils/model-filters"
 import { describe, expect, it } from "vitest"
-import { isFreeModel, partitionFreeStandard } from "@/components/chat/quickModelPickerList"
-import { filterClineSettingsModelIds } from "./useClineSettingsModelList"
+import { isFreeModel, type ModelEntry, partitionFreeStandard } from "@/components/chat/quickModelPickerList"
+import { filterClineSettingsModelIds, partitionClinePickerSections } from "./useClineSettingsModelList"
 
 const CATALOG_IDS = [
 	"anthropic/claude-sonnet-4.6",
@@ -28,5 +28,40 @@ describe("filterClineSettingsModelIds", () => {
 		const heuristicKeepAll = [...partitioned.free, ...partitioned.standard].map(([id]) => id)
 		expect(settings.sort()).not.toEqual([...heuristicDrop].sort())
 		expect(settings.sort()).not.toEqual([...heuristicKeepAll].sort())
+	})
+})
+
+describe("partitionClinePickerSections", () => {
+	it("puts Settings featured free ids in Free with FREE badges even when the name has no :free", () => {
+		const catalog: ModelEntry[] = [
+			["z-ai/glm-5.3-flash", { name: "GLM-5.3-Flash" }],
+			["aion-2.0", { name: "Aion-2.0" }],
+			["poolside/laguna-s-2.1:free", { name: "Laguna S 2.1 (free)" }],
+		]
+		const featuredFree = [
+			{ id: "cline-free/deepseek-v4.1-flash", name: "DeepSeek V4.1 Flash", tags: ["FREE"] },
+			{ id: "z-ai/glm-5.3-flash", name: "GLM-5.3-Flash", tags: ["FREE"] },
+			{ id: "poolside/laguna-s-2.1:free", name: "Laguna S 2.1", tags: ["FREE"] },
+			{ id: "cline-free/muse-spark-1.3-contributor", name: "Muse Spark", tags: ["FREE"] },
+			{ id: "cline-free/solar-pro4", name: "Solar Pro 4", tags: ["FREE"] },
+		]
+		const featuredRecommended = [{ id: "openai/gpt-6-astra", name: "GPT-6 Astra", tags: ["NEW"] }]
+
+		const catalogPlusFeatured: ModelEntry[] = [
+			...catalog,
+			...featuredFree
+				.filter((model) => !catalog.some(([id]) => id === model.id))
+				.map((model) => [model.id, { name: model.name }] as ModelEntry),
+			["openai/gpt-6-astra", { name: "GPT-6 Astra" }],
+		]
+
+		const sections = partitionClinePickerSections(catalogPlusFeatured, featuredRecommended, featuredFree)
+
+		expect(sections.free.map((row) => row.id)).toEqual(featuredFree.map((model) => model.id))
+		expect(sections.free.every((row) => row.badge === "FREE")).toBe(true)
+		expect(sections.recommended.map((row) => row.id)).toEqual(["openai/gpt-6-astra"])
+		expect(sections.recommended[0]?.badge).toBe("NEW")
+		expect(sections.standard.map((row) => row.id)).toEqual(["aion-2.0"])
+		expect(isFreeModel("z-ai/glm-5.3-flash", "GLM-5.3-Flash")).toBe(false)
 	})
 })

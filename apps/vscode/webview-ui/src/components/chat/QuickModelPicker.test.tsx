@@ -266,14 +266,61 @@ describe("QuickModelPicker Cline list matches Settings Usage-Billing filter", ()
 			const visibleNames = screen
 				.getAllByRole("button")
 				.map((el) => el.textContent?.trim() ?? "")
-				.filter((name) => Object.values(CLINE_BILLING_NAMES).includes(name))
-			const visibleIds = CLINE_BILLING_CATALOG_IDS.filter((id) => visibleNames.includes(CLINE_BILLING_NAMES[id]))
+				.filter((name) => Object.values(CLINE_BILLING_NAMES).some((label) => name.includes(label)))
+			const visibleIds = CLINE_BILLING_CATALOG_IDS.filter((id) =>
+				visibleNames.some((name) => name.includes(CLINE_BILLING_NAMES[id])),
+			)
 
 			expect(visibleIds.sort()).toEqual([...settingsSet].sort())
 			expect(visibleIds).not.toContain("meta-llama/llama-3.3-70b:free")
 			expect(visibleIds).toContain("org/allowlisted-only:free")
 			expect(visibleIds).toContain("tool-free")
 			expect(visibleIds.sort()).not.toEqual([...CLINE_BILLING_CATALOG_IDS].sort())
+		})
+	})
+
+	it("puts Settings featured free models in Free with FREE badges, including ids with no :free in the name", async () => {
+		vi.mocked(ModelsServiceClient.makeUnaryRequest).mockResolvedValue({
+			recommended: [{ id: "openai/gpt-6-astra", name: "GPT-6 Astra", tags: ["NEW"] }],
+			free: [
+				{ id: "cline-free/deepseek-v4.1-flash", name: "DeepSeek V4.1 Flash", tags: ["FREE"] },
+				{ id: "z-ai/glm-5.3-flash", name: "GLM-5.3-Flash", tags: ["FREE"] },
+				{ id: "cline-free/solar-pro4", name: "Solar Pro 4", tags: ["FREE"] },
+				{ id: "cline-free/muse-spark-1.3-contributor", name: "Muse Spark", tags: ["FREE"] },
+				{ id: "poolside/laguna-s-2.1:free", name: "Laguna S 2.1", tags: ["FREE"] },
+			],
+		})
+		vi.mocked(useProviderModels).mockImplementation(((providerId: string) => {
+			if (providerId === "cline") {
+				return {
+					models: {
+						"z-ai/glm-5.3-flash": { name: "GLM-5.3-Flash", supportsPromptCache: false },
+						"aion-2.0": { name: "Aion-2.0", supportsPromptCache: false },
+						"poolside/laguna-s-2.1:free": { name: "Laguna S 2.1 (free)", supportsPromptCache: false },
+					},
+					defaultModelId: "z-ai/glm-5.3-flash",
+					isLoading: false,
+					isStale: false,
+					error: undefined,
+					refresh: vi.fn(),
+					fingerprint: "cline",
+				}
+			}
+			return mockProviderModels(providerId)
+		}) as typeof useProviderModels)
+
+		render(<QuickModelPicker modelDisplayName="z-ai/glm-5.3-flash" />)
+		fireEvent.click(screen.getByRole("button", { name: "Cline" }))
+
+		await waitFor(() => {
+			expect(screen.getByText("Free")).toBeInTheDocument()
+			expect(screen.getByRole("button", { name: /DeepSeek V4.1 Flash/ })).toHaveTextContent("FREE")
+			expect(screen.getByRole("button", { name: /GLM-5.3-Flash/ })).toHaveTextContent("FREE")
+			expect(screen.getByRole("button", { name: /Solar Pro 4/ })).toHaveTextContent("FREE")
+			expect(screen.getByRole("button", { name: /Muse Spark/ })).toHaveTextContent("FREE")
+			expect(screen.getByRole("button", { name: /Laguna S 2.1/ })).toHaveTextContent("FREE")
+			expect(screen.getByRole("button", { name: /GPT-6 Astra/ })).toHaveTextContent("NEW")
+			expect(screen.getByRole("button", { name: /Aion-2.0/ })).toBeInTheDocument()
 		})
 	})
 })

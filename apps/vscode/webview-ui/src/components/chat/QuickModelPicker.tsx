@@ -21,6 +21,7 @@
  * invisible to model search until expand/Refresh.
  */
 
+import { CLINE_RECOMMENDED_MODELS_FALLBACK } from "@shared/cline/recommended-models"
 import { CommitModelSelectionRequest } from "@shared/proto/cline/models"
 import { isOpenaiReasoningEffort, OPENAI_REASONING_EFFORT_OPTIONS, type OpenaiReasoningEffort } from "@shared/storage/types"
 import { Check, ChevronDown, Pencil, RefreshCw, Search } from "lucide-react"
@@ -34,7 +35,11 @@ import {
 	partitionFreeStandard,
 	pickAutoExpandProvider,
 } from "@/components/chat/quickModelPickerList"
-import { filterClineSettingsModelIds, useClineSettingsModelList } from "@/components/settings/useClineSettingsModelList"
+import {
+	filterClineSettingsModelIds,
+	partitionClinePickerSections,
+	useClineSettingsModelList,
+} from "@/components/settings/useClineSettingsModelList"
 import { getModeSpecificFields } from "@/components/settings/utils/providerUtils"
 import { useApiConfigurationHandlers } from "@/components/settings/utils/useApiConfigurationHandlers"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -114,12 +119,14 @@ function ModelRow({
 	isCurrentModel,
 	providerId,
 	onSelect,
+	badge,
 }: {
 	modelId: string
 	modelInfo: ModelInfoLike
 	isCurrentModel: boolean
 	providerId: string
 	onSelect: (providerId: string, modelId: string) => void
+	badge?: string
 }) {
 	return (
 		<button
@@ -148,6 +155,11 @@ function ModelRow({
 			}}
 			type="button">
 			<span className="truncate flex-1">{modelInfo?.name || modelId}</span>
+			{badge ? (
+				<span className="shrink-0 ml-2 text-[10px] uppercase tracking-wide text-(--vscode-textLink-foreground)">
+					{badge}
+				</span>
+			) : null}
 			{isCurrentModel && <Check className="text-(--vscode-terminal-ansiGreen) shrink-0 ml-2" size={12} />}
 		</button>
 	)
@@ -157,7 +169,12 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 	const { providers, isLoading: providersLoading } = useProviderListings()
 	const { mode, apiConfiguration, providerModelsByProvider } = useExtensionState()
 	const { selectedProvider: currentProvider, selectedModelId: currentModelId } = useNormalizedApiConfiguration(mode)
-	const { freeAllowlist: clineFreeAllowlist } = useClineSettingsModelList()
+	const {
+		recommended: clineRecommendedFeatured,
+		free: clineFreeFeatured,
+		freeAllowlist: clineFreeAllowlist,
+		refresh: refreshClineFeatured,
+	} = useClineSettingsModelList()
 	const { handleModeFieldChange } = useApiConfigurationHandlers()
 	const [open, setOpen] = useState(false)
 	/** null = nothing expanded; user may collapse the active provider freely. */
@@ -186,16 +203,26 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 				setExpandedProvider(currentProvider)
 				setSearch("")
 				setCommitError(null)
+				void refreshClineFeatured()
 			} else {
 				setSearch("")
 			}
 		},
-		[currentProvider],
+		[currentProvider, refreshClineFeatured],
 	)
 
-	const handleToggleProvider = useCallback((providerId: string) => {
-		setExpandedProvider((prev) => (prev === providerId ? null : providerId))
-	}, [])
+	const handleToggleProvider = useCallback(
+		(providerId: string) => {
+			setExpandedProvider((prev) => {
+				const next = prev === providerId ? null : providerId
+				if (next === "cline") {
+					void refreshClineFeatured()
+				}
+				return next
+			})
+		},
+		[refreshClineFeatured],
+	)
 
 	const handleSelectModel = useCallback(
 		async (providerId: string, modelId: string) => {
@@ -238,7 +265,8 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 		if (expandedProvider) {
 			void refresh()
 		}
-	}, [expandedProvider, refresh])
+		void refreshClineFeatured()
+	}, [expandedProvider, refresh, refreshClineFeatured])
 
 	const handleEffortChange = useCallback(
 		async (effort: OpenaiReasoningEffort) => {
@@ -285,23 +313,55 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 		[applyClineSettingsFilter, providerModelsByProvider],
 	)
 
+	const clineFeaturedRecommended =
+		clineRecommendedFeatured.length > 0 ? clineRecommendedFeatured : CLINE_RECOMMENDED_MODELS_FALLBACK.recommended
+	const clineFeaturedFree = clineFreeFeatured.length > 0 ? clineFreeFeatured : CLINE_RECOMMENDED_MODELS_FALLBACK.free
+
 	/** Prefer hook models when loaded; else warm map so search hits are clickable immediately. */
 	const displayModels = useMemo(() => {
 		if (!expandedProvider) {
 			return {}
 		}
 		const raw = Object.keys(models).length > 0 ? models : warmModelsFor(expandedProvider)
-		return applyClineSettingsFilter(expandedProvider, raw)
-	}, [applyClineSettingsFilter, expandedProvider, models, warmModelsFor])
+		const filtered = applyClineSettingsFilter(expandedProvider, raw)
+		if (expandedProvider !== "cline") {
+			return filtered
+		}
+		// Settings featured cards can list ids that are not in the SDK catalog yet.
+		const withFeatured = { ...filtered }
+		for (const model of [...clineFeaturedFree, ...clineFeaturedRecommended]) {
+			if (model.id && !withFeatured[model.id]) {
+				withFeatured[model.id] = { name: model.name || model.id }
+			}
+		}
+		return withFeatured
+	}, [applyClineSettingsFilter, clineFeaturedFree, clineFeaturedRecommended, expandedProvider, models, warmModelsFor])
 
 	const filteredModelEntries = useMemo(() => {
 		return filterModelsByQuery(displayModels, searchTrimmed)
 	}, [displayModels, searchTrimmed])
 
+	const activeIdForList = expandedProvider === currentProvider ? currentModelId : undefined
+
+	const clineSections = useMemo(() => {
+		if (expandedProvider !== "cline") {
+			return null
+		}
+		const sections = partitionClinePickerSections(
+			filteredModelEntries,
+			clineFeaturedRecommended,
+			clineFeaturedFree,
+			activeIdForList,
+		)
+		return sections
+	}, [activeIdForList, clineFeaturedFree, clineFeaturedRecommended, expandedProvider, filteredModelEntries])
+
 	const { free: freeModels, standard: standardModels } = useMemo(() => {
-		const activeId = expandedProvider === currentProvider ? currentModelId : undefined
-		return partitionFreeStandard(filteredModelEntries, activeId)
-	}, [filteredModelEntries, expandedProvider, currentProvider, currentModelId])
+		if (clineSections) {
+			return { free: [] as ModelEntry[], standard: [] as ModelEntry[] }
+		}
+		return partitionFreeStandard(filteredModelEntries, activeIdForList)
+	}, [activeIdForList, clineSections, filteredModelEntries])
 
 	const providerNameMatches = useCallback(
 		(p: { id: string; name?: string }) => {
@@ -374,17 +434,48 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 	const selectedEffortDisplay = normalizePreferenceEffort(activeEffort)
 
 	const renderModelSections = (providerId: string, isCurrent: boolean) => {
-		const renderRows = (entries: ModelEntry[]) =>
-			entries.map(([modelId, modelInfo]) => (
-				<ModelRow
-					isCurrentModel={isCurrent && currentModelId === modelId}
-					key={modelId}
-					modelId={modelId}
-					modelInfo={modelInfo}
-					onSelect={(pid, mid) => void handleSelectModel(pid, mid)}
-					providerId={providerId}
-				/>
-			))
+		const renderRows = (entries: Array<{ id: string; info: ModelInfoLike; badge?: string } | ModelEntry>) =>
+			entries.map((entry) => {
+				const modelId = Array.isArray(entry) ? entry[0] : entry.id
+				const modelInfo = Array.isArray(entry) ? entry[1] : entry.info
+				const badge = Array.isArray(entry) ? undefined : entry.badge
+				return (
+					<ModelRow
+						badge={badge}
+						isCurrentModel={isCurrent && currentModelId === modelId}
+						key={modelId}
+						modelId={modelId}
+						modelInfo={modelInfo}
+						onSelect={(pid, mid) => void handleSelectModel(pid, mid)}
+						providerId={providerId}
+					/>
+				)
+			})
+
+		if (clineSections) {
+			return (
+				<>
+					{clineSections.recommended.length > 0 && (
+						<>
+							<ModelSectionHeader label="Recommended" />
+							{renderRows(clineSections.recommended)}
+						</>
+					)}
+					{clineSections.free.length > 0 && (
+						<>
+							<ModelSectionHeader label="Free" />
+							{renderRows(clineSections.free)}
+						</>
+					)}
+					{clineSections.standard.length > 0 && (
+						<>
+							<ModelSectionHeader label="Standard" />
+							{renderRows(clineSections.standard)}
+						</>
+					)}
+				</>
+			)
+		}
 
 		return (
 			<>
