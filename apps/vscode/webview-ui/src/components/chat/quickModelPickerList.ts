@@ -1,6 +1,6 @@
 /**
  * Pure list helpers for QuickModelPicker (Set A + A.1): free/standard partition,
- * search filter, active-first A–Z sort, and warm cross-provider model match.
+ * search filter, A–Z sort (active stays in place), and warm cross-provider model match.
  * Kept free of React for vitest.
  */
 
@@ -58,22 +58,11 @@ export function isFreeModel(modelId: string, name?: string): boolean {
 }
 
 /**
- * Sort comparator: active model first, then A–Z by display name (name||id)
- * with localeCompare base sensitivity.
+ * Sort comparator: A–Z by display name (name||id) with localeCompare base
+ * sensitivity. The active model keeps this position (checkmark + scroll);
+ * it is not pinned to the top of the group.
  */
-export function compareModelEntries(
-	a: { id: string; name?: string },
-	b: { id: string; name?: string },
-	activeModelId?: string | null,
-): number {
-	const aActive = !!activeModelId && a.id === activeModelId
-	const bActive = !!activeModelId && b.id === activeModelId
-	if (aActive && !bActive) {
-		return -1
-	}
-	if (bActive && !aActive) {
-		return 1
-	}
+export function compareModelEntries(a: { id: string; name?: string }, b: { id: string; name?: string }): number {
 	const aLabel = a.name || a.id
 	const bLabel = b.name || b.id
 	return aLabel.localeCompare(bLabel, undefined, { sensitivity: "base" })
@@ -93,15 +82,12 @@ export function filterModelsByQuery(models: ModelsById, query: string): ModelEnt
 }
 
 /**
- * Sort entries (active first, then A–Z), then partition into Free then Standard.
- * Does not mutate the input array.
+ * Sort entries A–Z, then partition into Free then Standard.
+ * Does not mutate the input array. Active stays in A–Z order.
  */
-export function partitionFreeStandard(
-	entries: ModelEntry[],
-	activeModelId?: string | null,
-): { free: ModelEntry[]; standard: ModelEntry[] } {
+export function partitionFreeStandard(entries: ModelEntry[]): { free: ModelEntry[]; standard: ModelEntry[] } {
 	const sorted = [...entries].sort((a, b) =>
-		compareModelEntries({ id: a[0], name: a[1]?.name }, { id: b[0], name: b[1]?.name }, activeModelId),
+		compareModelEntries({ id: a[0], name: a[1]?.name }, { id: b[0], name: b[1]?.name }),
 	)
 	const free: ModelEntry[] = []
 	const standard: ModelEntry[] = []

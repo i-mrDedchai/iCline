@@ -15,6 +15,7 @@ Upstream sync + smoke-test restoration on the v4.0.0 SDK architecture (dev build
 - 📚 **Provider docs** — `docs/provider-config/sakana.mdx` and `docs/provider-config/jan.mdx` added to the docs site navigation
 
 ### Fixed
+- 🎯 **Selected model stays in A–Z order (fix.21)** — the active model keeps its place in the group (checkmark + scroll-into-view) instead of jumping to the top, so nearby models stay next to it.
 - 🎯 **Quick Picker opens on the active provider (fix.20)** — opening the chat picker scrolls the current provider (and the selected model once it is in the list) into view instead of leaving the viewport at the first A–Z provider.
 - 🎯 **Cline featured lists in Quick Picker (fix.19)** — Cline Usage-Billing Recommended/Free featured cards (RPC, with NEW/FREE badges) are the picker's Recommended/Free groups, not the `:free` name heuristic. Opening the picker or Refresh re-fetches the live featured list so Free stays in sync as Cline updates it.
 - 🎯 **Settings is source of truth (fix.18)** — Cline Usage-Billing list policy is shared (`filterOpenRouterModelIds` + recommended/free allowlist). Quick Picker shows that filtered Cline set, not the raw catalog / `:free` name heuristic. Settings provider/model writes go through `commitModelSelection` (dedicated key only; empty model id does not copy leftover xAI `grok-composer-2.5-fast`).

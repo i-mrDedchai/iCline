@@ -58,11 +58,11 @@ describe("isFreeModel", () => {
 })
 
 describe("compareModelEntries", () => {
-	it("puts active model first", () => {
+	it("does not pin an active id above A–Z order", () => {
 		const a = { id: "zebra", name: "Zebra" }
 		const b = { id: "alpha", name: "Alpha" }
-		expect(compareModelEntries(a, b, "zebra")).toBeLessThan(0)
-		expect(compareModelEntries(b, a, "zebra")).toBeGreaterThan(0)
+		expect(compareModelEntries(a, b)).toBeGreaterThan(0)
+		expect(compareModelEntries(b, a)).toBeLessThan(0)
 	})
 	it("sorts A–Z by display name with base sensitivity", () => {
 		expect(compareModelEntries({ id: "b", name: "Beta" }, { id: "a", name: "alpha" })).toBeGreaterThan(0)
@@ -104,16 +104,15 @@ describe("filterModelsByQuery", () => {
 })
 
 describe("partitionFreeStandard", () => {
-	it("puts free first section and keeps active-first sort within", () => {
+	it("puts free first section and keeps A–Z within each group, including the active model", () => {
 		const entries: ModelEntry[] = [
 			["paid/b", { name: "Beta Paid" }],
 			["free/a:free", { name: "Alpha Free" }],
 			["paid/active", { name: "Active Paid" }],
 			["free/z-free", { name: "Zebra Free" }],
 		]
-		const { free, standard } = partitionFreeStandard(entries, "paid/active")
+		const { free, standard } = partitionFreeStandard(entries)
 		expect(free.map(([id]) => id)).toEqual(["free/a:free", "free/z-free"])
-		expect(standard.map(([id]) => id)[0]).toBe("paid/active")
 		expect(standard.map(([id]) => id)).toEqual(["paid/active", "paid/b"])
 	})
 	it("leaves a section empty when no models of that kind", () => {

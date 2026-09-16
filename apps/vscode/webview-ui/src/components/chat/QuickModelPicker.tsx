@@ -13,7 +13,7 @@
  *    or the model id looks like a reasoning variant.
  *  - "Edit in Settings…" opens the full API config section.
  *
- * Set A: search providers + expanded models; active-first A–Z sort;
+ * Set A: search providers + expanded models; A–Z sort (active stays in place);
  * Free/Standard sections; empty states for no models / no search match.
  *
  * A.1: cross-provider model search reads warm `providerModelsByProvider` only
@@ -348,27 +348,19 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 		return filterModelsByQuery(displayModels, searchTrimmed)
 	}, [displayModels, searchTrimmed])
 
-	const activeIdForList = expandedProvider === currentProvider ? currentModelId : undefined
-
 	const clineSections = useMemo(() => {
 		if (expandedProvider !== "cline") {
 			return null
 		}
-		const sections = partitionClinePickerSections(
-			filteredModelEntries,
-			clineFeaturedRecommended,
-			clineFeaturedFree,
-			activeIdForList,
-		)
-		return sections
-	}, [activeIdForList, clineFeaturedFree, clineFeaturedRecommended, expandedProvider, filteredModelEntries])
+		return partitionClinePickerSections(filteredModelEntries, clineFeaturedRecommended, clineFeaturedFree)
+	}, [clineFeaturedFree, clineFeaturedRecommended, expandedProvider, filteredModelEntries])
 
 	const { free: freeModels, standard: standardModels } = useMemo(() => {
 		if (clineSections) {
 			return { free: [] as ModelEntry[], standard: [] as ModelEntry[] }
 		}
-		return partitionFreeStandard(filteredModelEntries, activeIdForList)
-	}, [activeIdForList, clineSections, filteredModelEntries])
+		return partitionFreeStandard(filteredModelEntries)
+	}, [clineSections, filteredModelEntries])
 
 	const providerNameMatches = useCallback(
 		(p: { id: string; name?: string }) => {

@@ -64,7 +64,6 @@ export function partitionClinePickerSections(
 	catalogEntries: ModelEntry[],
 	featuredRecommended: readonly ClineFeaturedModel[],
 	featuredFree: readonly ClineFeaturedModel[],
-	activeModelId?: string | null,
 ): { recommended: ClinePickerRow[]; free: ClinePickerRow[]; standard: ClinePickerRow[] } {
 	const catalog = new Map<string, ModelInfoLike>(catalogEntries)
 
@@ -92,7 +91,7 @@ export function partitionClinePickerSections(
 
 	const used = new Set<string>([...freeIds, ...recommendedIds])
 	const rest = catalogEntries.filter(([id]) => !used.has(id))
-	rest.sort((a, b) => compareModelEntries({ id: a[0], name: a[1]?.name }, { id: b[0], name: b[1]?.name }, activeModelId))
+	rest.sort((a, b) => compareModelEntries({ id: a[0], name: a[1]?.name }, { id: b[0], name: b[1]?.name }))
 	const standard = rest.map(([id, info]) => ({ id, info }))
 
 	return { recommended, free, standard }
