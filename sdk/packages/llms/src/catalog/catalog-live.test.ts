@@ -177,8 +177,43 @@ describe("models-dev-catalog", () => {
 			normalizeClineRecommendedProviderModels(
 				{ free: [{ id: "kwaipilot/kat-coder-pro" }] },
 				{},
-			),
-		).toEqual({});
+			)["cline-pass"],
+		).toBeUndefined();
+	});
+
+	it("puts Usage-Billing free models on the cline catalog with OpenRouter context windows", () => {
+		const result = normalizeClineRecommendedProviderModels(
+			{
+				free: [
+					{ id: "cline-free/solar-pro4", name: "Solar Pro 4" },
+					{ id: "cline-free/deepseek-v4.1-flash", name: "DeepSeek V4.1 Flash" },
+				],
+			},
+			{
+				"upstage/solar-pro4": {
+					id: "upstage/solar-pro4",
+					name: "Solar Pro 4",
+					contextWindow: 524_288,
+					maxInputTokens: 524_288,
+					maxTokens: 131_072,
+					capabilities: ["tools"],
+					pricing: { input: 0.09, output: 0.36, cacheRead: 0.018, cacheWrite: 0 },
+				},
+				"deepseek/deepseek-v4.1-flash": {
+					id: "deepseek/deepseek-v4.1-flash",
+					name: "DeepSeek V4.1 Flash",
+					contextWindow: 1_000_000,
+					maxInputTokens: 1_000_000,
+					maxTokens: 384_000,
+					capabilities: ["tools"],
+					pricing: { input: 0.15, output: 0.6, cacheRead: 0, cacheWrite: 0 },
+				},
+			},
+		);
+
+		expect(result.cline?.["cline-free/solar-pro4"]?.contextWindow).toBe(524_288);
+		expect(result.cline?.["cline-free/deepseek-v4.1-flash"]?.contextWindow).toBe(1_000_000);
+		expect(result["cline-pass"]).toBeUndefined();
 	});
 
 	it("uses input limits as the model request context window", () => {

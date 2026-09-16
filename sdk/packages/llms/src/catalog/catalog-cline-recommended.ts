@@ -9,6 +9,7 @@ export interface ClineRecommendedModelEntry {
 
 export interface ClineRecommendedModelsPayload {
 	clinePass?: ClineRecommendedModelEntry[];
+	recommended?: ClineRecommendedModelEntry[];
 	free?: ClineRecommendedModelEntry[];
 }
 
@@ -66,10 +67,6 @@ export function normalizeClineRecommendedProviderModels(
 	openRouterModels: Record<string, ModelInfo>,
 ): Record<string, Record<string, ModelInfo>> {
 	const clinePass = payload.clinePass ?? [];
-	if (clinePass.length === 0) {
-		return {};
-	}
-
 	const models: Record<string, ModelInfo> = {};
 	const openRouterModelsByName = buildModelsNameMap(openRouterModels);
 
@@ -89,29 +86,53 @@ export function normalizeClineRecommendedProviderModels(
 	// underneath; they ride usage billing at $0 instead of the subscription quota).
 	// Unlike pass models their ids are full OpenRouter-style ids, so look up
 	// capabilities by full id before falling back to the slug map.
-	(payload.free ?? []).forEach((entry) => {
-		if (models[entry.id]) {
+	if (clinePass.length > 0) {
+		(payload.free ?? []).forEach((entry) => {
+			if (models[entry.id]) {
+				return;
+			}
+
+			const capabilities =
+				openRouterModels?.[entry.id] ??
+				findORModelCapabilities(entry, openRouterModelsByName);
+
+			models[entry.id] = {
+				name: entry.name,
+				...capabilities,
+				id: entry.id,
+				description: entry.description,
+				pricing: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+			};
+		});
+	}
+
+	const clineUsage: Record<string, ModelInfo> = {};
+	const addClineUsageModel = (entry: ClineRecommendedModelEntry) => {
+		if (!entry.id || clineUsage[entry.id]) {
 			return;
 		}
-
 		const capabilities =
 			openRouterModels?.[entry.id] ??
 			findORModelCapabilities(entry, openRouterModelsByName);
-
-		models[entry.id] = {
+		clineUsage[entry.id] = {
 			name: entry.name,
 			...capabilities,
 			id: entry.id,
 			description: entry.description,
 			pricing: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
 		};
-	});
+	};
+	(payload.recommended ?? []).forEach(addClineUsageModel);
+	(payload.free ?? []).forEach(addClineUsageModel);
 
-	if (Object.keys(models).length === 0) {
-		return {};
+	const result: Record<string, Record<string, ModelInfo>> = {};
+	if (Object.keys(models).length > 0) {
+		result[CLINE_PASS_PROVIDER_ID] = models;
 	}
-
-	return { [CLINE_PASS_PROVIDER_ID]: models };
+	if (Object.keys(clineUsage).length > 0) {
+		result.cline = clineUsage;
+	}
+	return result;
 }
 
 export async function fetchClineRecommendedModelsPayload(

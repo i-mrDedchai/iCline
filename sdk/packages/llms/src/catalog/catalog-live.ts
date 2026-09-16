@@ -207,8 +207,21 @@ export async function fetchLiveProviderModels(
 			)
 		: {};
 
-	return {
+	const merged: Record<string, Record<string, ModelInfo>> = {
 		...providerModels,
 		...clineRecommended,
 	};
+	if (providerModels.cline || clineRecommended.cline) {
+		merged.cline = {
+			...(providerModels.cline ?? {}),
+			...(clineRecommended.cline ?? {}),
+		};
+	}
+	if (providerModels["cline-pass"] || clineRecommended["cline-pass"]) {
+		merged["cline-pass"] = {
+			...(providerModels["cline-pass"] ?? {}),
+			...(clineRecommended["cline-pass"] ?? {}),
+		};
+	}
+	return merged;
 }

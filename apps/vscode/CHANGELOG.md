@@ -15,6 +15,7 @@ Upstream sync + smoke-test restoration on the v4.0.0 SDK architecture (dev build
 - 📚 **Provider docs** — `docs/provider-config/sakana.mdx` and `docs/provider-config/jan.mdx` added to the docs site navigation
 
 ### Fixed
+- 🎯 **Cline featured model context windows (fix.26)** — Usage-Billing free/recommended cards (`cline-free/solar-pro4`, …) are merged into the `cline` catalog with OpenRouter specs (Solar Pro 4 = 524K). They previously had no `cline` catalog row, so the chat bar kept a generic 1M.
 - 🎯 **Context bar never shows another model's window (fix.25)** — after switching away from Grok 4.6, the meter no longer stamps 500k onto the next model. Specs bind only when provider+model id match the live selection; catalog default / previous RPC is ignored.
 - 🎯 **Chat context bar follows the selected model (fix.24)** — the header meter uses the same live catalog Settings shows. A stale committed snapshot (e.g. 131K leftover) no longer shadows a 262K Cline model after switching in the picker.
 - 🎯 **Grok 4.6 context window (fix.23)** — 500k is applied on every display path: static table, subscription-cache rewrite (stale 2M from older builds), host catalog, Cline/OpenRouter `x-ai/grok-4.6`, chat `resolveModelInfo`, and Settings. Official xAI docs; 2M is Grok 4.20.
