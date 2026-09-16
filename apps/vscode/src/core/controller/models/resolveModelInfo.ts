@@ -16,13 +16,16 @@ function toHostModelInfo(providerId: Parameters<typeof applyHostModelInfoOverrid
  *
  * Resolution order:
  *
- *   1. Catalog peek / resolve for the *requested* id. This is the same
- *      live list Settings uses. Specs (contextWindow, prices) must not
- *      come from a stale committed snapshot when the catalog has that id.
+ *   1. Catalog peek / resolve for the *requested* id (exact key, then a
+ *      unique last-segment alias so Cline `cline-free/solar-pro4` can use
+ *      OpenRouter `upstage/solar-pro4` specs). Specs must not come from a
+ *      stale committed snapshot when the catalog has that id or alias.
  *
  *   2. Committed selection — used when the catalog does not yet know the
- *      requested id (live-only models before the list is warm). Fallback-
- *      grade fabrication is last resort before "unknown".
+ *      requested id (live-only models before the list is warm). For Cline,
+ *      a warm OpenRouter-shaped catalog miss does *not* reuse leftover
+ *      snapshot windows (1M / 500k). Fallback-grade fabrication is last
+ *      resort before "unknown".
  *
  * A non-empty requested id is never replaced with catalog defaultModelId
  * (that snap-back was the Quick Picker activate bug).
@@ -54,6 +57,7 @@ export async function resolveModelInfo(
 
 	const catalog = controller.getProviderCatalog()
 	const cached = catalog.peekModels(providerId)
+	let populatedCatalogMiss = false
 	if (cached?.ok) {
 		const hit = pickFromCatalog(cached, requestedModelId)
 		if (hit?.matchedRequested) {
@@ -72,7 +76,9 @@ export async function resolveModelInfo(
 				source: "sdk-default",
 			})
 		}
-		if (committedSelection) {
+		if (requestedModelId && cached.models.size > 0 && providerId.toString() === "cline") {
+			populatedCatalogMiss = true
+		} else if (committedSelection) {
 			return ResolveModelInfoResponse.create({
 				providerId,
 				modelId: committedSelection.modelId,
@@ -101,9 +107,17 @@ export async function resolveModelInfo(
 				source: "sdk-default",
 			})
 		}
+		if (requestedModelId && resolved.models.size > 0 && providerId.toString() === "cline") {
+			populatedCatalogMiss = true
+		}
 	}
 
-	if (committedSelection) {
+	// Cline featured ids (`cline-free/solar-pro4`) are not OpenRouter catalog
+	// keys. A warm OpenRouter-shaped peek plus a leftover snapshot was returning
+	// DeepSeek 1M / Grok 500k for the new id. Other providers still use
+	// committed on miss (xAI live-only grok-4.6).
+	const suppressCommittedLeftover = populatedCatalogMiss && providerId.toString() === "cline"
+	if (committedSelection && !suppressCommittedLeftover) {
 		return ResolveModelInfoResponse.create({
 			providerId,
 			modelId: committedSelection.modelId,
@@ -128,6 +142,27 @@ export async function resolveModelInfo(
 	})
 }
 
+function modelIdSlug(modelId: string): string {
+	return modelId.split("/").at(-1) ?? modelId
+}
+
+function findUniqueSlugAlias(models: Map<string, ModelInfo>, requestedModelId: string): string | undefined {
+	if (!requestedModelId.includes("/")) {
+		return undefined
+	}
+	const slug = modelIdSlug(requestedModelId)
+	if (!slug) {
+		return undefined
+	}
+	const matches: string[] = []
+	for (const id of models.keys()) {
+		if (modelIdSlug(id) === slug) {
+			matches.push(id)
+		}
+	}
+	return matches.length === 1 ? matches[0] : undefined
+}
+
 function pickFromCatalog(result: Extract<ProviderModelsResult, { ok: true }>, requestedModelId: string) {
 	const matchedRequested = Boolean(requestedModelId) && result.models.has(requestedModelId)
 
@@ -135,6 +170,11 @@ function pickFromCatalog(result: Extract<ProviderModelsResult, { ok: true }>, re
 	// catalog defaultModelId (e.g. xAI grok-composer-2.5-fast) made Quick Picker
 	// / chat-header labels snap after a live or cross-provider click.
 	if (requestedModelId && !matchedRequested) {
+		const aliasId = findUniqueSlugAlias(result.models, requestedModelId)
+		const aliased = aliasId ? result.models.get(aliasId) : undefined
+		if (aliased) {
+			return { modelId: requestedModelId, modelInfo: aliased, matchedRequested: true }
+		}
 		return undefined
 	}
 

@@ -88,6 +88,165 @@ describe("resolveModelInfo", () => {
 		expect(response.modelInfo?.contextWindow).toBe(999_999)
 	})
 
+	it("resolveModelInfo cline-free/solar-pro4 does not return another model's window", async () => {
+		const { resolveModelInfo } = await import("../resolveModelInfo")
+		const providerId = parseProviderId("cline")
+		const store = makeStore({ providerId })
+		vi.mocked(store.readSelection).mockImplementation((_, mode) =>
+			mode === "act"
+				? {
+						providerId,
+						modelId: "cline-free/deepseek-v4.1-flash",
+						modelInfoSource: "state" as const,
+						modelInfo: { name: "DeepSeek leftover", supportsPromptCache: false, contextWindow: 1_000_000 },
+					}
+				: undefined,
+		)
+		const catalog = makeCatalog()
+		vi.mocked(catalog.peekModels).mockReturnValue(
+			peekResult(
+				"cline",
+				[
+					[
+						"cline-free/deepseek-v4.1-flash",
+						{ name: "DeepSeek V4.1 Flash", supportsPromptCache: false, contextWindow: 1_000_000 },
+					],
+					["cline-free/solar-pro4", { name: "Solar Pro 4", supportsPromptCache: false, contextWindow: 524_288 }],
+					["grok-4.6", { name: "Grok 4.6 leftover", supportsPromptCache: false, contextWindow: 500_000 }],
+				],
+				"cline-free/deepseek-v4.1-flash",
+			),
+		)
+
+		const response = await resolveModelInfo(makeController(store, catalog), {
+			providerId: "cline",
+			modelId: "cline-free/solar-pro4",
+		})
+
+		expect(response.modelId).toBe("cline-free/solar-pro4")
+		expect(response.modelInfo?.contextWindow).toBe(524_288)
+		expect(response.modelInfo?.contextWindow).not.toBe(1_000_000)
+		expect(response.modelInfo?.contextWindow).not.toBe(500_000)
+	})
+
+	it("prefers live catalog 524288 over a stale solar-pro4 committed snapshot of 1M or 500k", async () => {
+		const { resolveModelInfo } = await import("../resolveModelInfo")
+		const providerId = parseProviderId("cline")
+		const store = makeStore({ providerId })
+		vi.mocked(store.readSelection).mockImplementation((_, mode) =>
+			mode === "act"
+				? {
+						providerId,
+						modelId: "cline-free/solar-pro4",
+						modelInfoSource: "state" as const,
+						modelInfo: { name: "Solar Pro 4 leftover", supportsPromptCache: false, contextWindow: 500_000 },
+					}
+				: undefined,
+		)
+		const catalog = makeCatalog()
+		vi.mocked(catalog.peekModels).mockReturnValue(
+			peekResult(
+				"cline",
+				[["cline-free/solar-pro4", { name: "Solar Pro 4", supportsPromptCache: false, contextWindow: 524_288 }]],
+				"cline-free/deepseek-v4.1-flash",
+			),
+		)
+
+		const response = await resolveModelInfo(makeController(store, catalog), {
+			providerId: "cline",
+			modelId: "cline-free/solar-pro4",
+		})
+
+		expect(response.source).toBe("sdk-known-models")
+		expect(response.modelId).toBe("cline-free/solar-pro4")
+		expect(response.modelInfo?.contextWindow).toBe(524_288)
+		expect(response.modelInfo?.contextWindow).not.toBe(500_000)
+		expect(response.modelInfo?.contextWindow).not.toBe(1_000_000)
+	})
+
+	it("does not return leftover 1M/500k when peek is warm OpenRouter-shaped and cline-free/solar-pro4 is missing", async () => {
+		const { resolveModelInfo } = await import("../resolveModelInfo")
+		const providerId = parseProviderId("cline")
+		const store = makeStore({ providerId })
+		vi.mocked(store.readSelection).mockImplementation((_, mode) =>
+			mode === "act"
+				? {
+						providerId,
+						modelId: "cline-free/solar-pro4",
+						modelInfoSource: "state" as const,
+						modelInfo: { name: "DeepSeek leftover", supportsPromptCache: false, contextWindow: 1_000_000 },
+					}
+				: undefined,
+		)
+		const catalog = makeCatalog()
+		const openRouterShaped = peekResult(
+			"cline",
+			[
+				["poolside/laguna-s-2.1:free", { name: "Laguna S 2.1", supportsPromptCache: false, contextWindow: 262_144 }],
+				[
+					"deepseek/deepseek-v4.1-flash",
+					{ name: "DeepSeek V4.1 Flash", supportsPromptCache: false, contextWindow: 1_000_000 },
+				],
+				["x-ai/grok-4.6", { name: "Grok 4.6", supportsPromptCache: false, contextWindow: 500_000 }],
+			],
+			"poolside/laguna-s-2.1:free",
+		)
+		vi.mocked(catalog.peekModels).mockReturnValue(openRouterShaped)
+		vi.mocked(catalog.resolveModels).mockResolvedValue(openRouterShaped)
+
+		const response = await resolveModelInfo(makeController(store, catalog), {
+			providerId: "cline",
+			modelId: "cline-free/solar-pro4",
+		})
+
+		expect(response.modelId).toBe("cline-free/solar-pro4")
+		expect(response.modelInfo?.contextWindow).not.toBe(1_000_000)
+		expect(response.modelInfo?.contextWindow).not.toBe(500_000)
+		expect(response.source).toBe("unknown")
+		expect(response.modelInfo).toBeUndefined()
+	})
+
+	it("aliases cline-free/solar-pro4 to the unique OpenRouter slug instead of leftover 1M", async () => {
+		const { resolveModelInfo } = await import("../resolveModelInfo")
+		const providerId = parseProviderId("cline")
+		const store = makeStore({ providerId })
+		vi.mocked(store.readSelection).mockImplementation((_, mode) =>
+			mode === "act"
+				? {
+						providerId,
+						modelId: "cline-free/solar-pro4",
+						modelInfoSource: "state" as const,
+						modelInfo: { name: "DeepSeek leftover", supportsPromptCache: false, contextWindow: 1_000_000 },
+					}
+				: undefined,
+		)
+		const catalog = makeCatalog()
+		vi.mocked(catalog.peekModels).mockReturnValue(
+			peekResult(
+				"cline",
+				[
+					["upstage/solar-pro4", { name: "Solar Pro 4", supportsPromptCache: false, contextWindow: 524_288 }],
+					[
+						"deepseek/deepseek-v4.1-flash",
+						{ name: "DeepSeek V4.1 Flash", supportsPromptCache: false, contextWindow: 1_000_000 },
+					],
+					["x-ai/grok-4.6", { name: "Grok 4.6", supportsPromptCache: false, contextWindow: 500_000 }],
+				],
+				"deepseek/deepseek-v4.1-flash",
+			),
+		)
+
+		const response = await resolveModelInfo(makeController(store, catalog), {
+			providerId: "cline",
+			modelId: "cline-free/solar-pro4",
+		})
+
+		expect(response.modelId).toBe("cline-free/solar-pro4")
+		expect(response.modelInfo?.contextWindow).toBe(524_288)
+		expect(response.modelInfo?.contextWindow).not.toBe(1_000_000)
+		expect(response.modelInfo?.contextWindow).not.toBe(500_000)
+	})
+
 	it("prefers live catalog contextWindow over a stale committed snapshot for the same id", async () => {
 		const { resolveModelInfo } = await import("../resolveModelInfo")
 		const providerId = parseProviderId("cline")

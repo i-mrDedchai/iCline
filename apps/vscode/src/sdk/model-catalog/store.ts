@@ -711,7 +711,7 @@ function getModelIdKey(providerId: ProviderId, mode: Mode): keyof ApiConfigurati
 	return getProviderModelIdKey(providerForStorage(providerId) ?? "anthropic", mode) as keyof ApiConfiguration & SettingsKey
 }
 
-function getModelInfoKey(providerId: ProviderId, mode: Mode): (keyof ApiConfiguration & SettingsKey) | undefined {
+export function getModelInfoKey(providerId: ProviderId, mode: Mode): (keyof ApiConfiguration & SettingsKey) | undefined {
 	const keys = modelInfoKeysByProvider[providerKey(providerId)]
 	return keys ? modePair(mode, keys.plan, keys.act) : undefined
 }
@@ -880,9 +880,14 @@ function readStateModelInfoHint(providerId: ProviderId, mode: Mode, modelId: str
 	const apiConfiguration = StateManager.get().getApiConfiguration()
 	const stateModelId = apiConfiguration[getModelIdKey(providerId, mode)]
 	const stateModelInfo = apiConfiguration[modelInfoKey]
-	return stateModelId === modelId && isModelInfo(stateModelInfo) && !isSafeDefaultsSnapshot(stateModelInfo, modelId)
-		? stateModelInfo
-		: undefined
+	if (stateModelId !== modelId || !isModelInfo(stateModelInfo) || isSafeDefaultsSnapshot(stateModelInfo, modelId)) {
+		return undefined
+	}
+	const snapshotId = typeof stateModelInfo.id === "string" ? stateModelInfo.id.trim() : ""
+	if (snapshotId && snapshotId !== modelId) {
+		return undefined
+	}
+	return stateModelInfo
 }
 
 function readSelectionFromState(providerId: ProviderId, mode: Mode): ResolvedModelSelection | undefined {

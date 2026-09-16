@@ -89,7 +89,7 @@ export function getActiveProviderAndModelId(
 export function useNormalizedApiConfiguration(mode: Mode): NormalizedApiConfig {
 	const { apiConfiguration, providerModelsByProvider } = useExtensionState()
 	const { provider, modelId } = getActiveProviderAndModelId(apiConfiguration, mode)
-	const liveCatalogInfo = modelId ? providerModelsByProvider?.[provider]?.models?.[modelId] : undefined
+	const liveCatalogInfo = lookupLiveCatalogInfo(providerModelsByProvider?.[provider]?.models, modelId)
 	const [resolvedInfo, setResolvedInfo] = useState<
 		Awaited<ReturnType<typeof ModelsServiceClient.resolveModelInfo>> | undefined
 	>(undefined)
@@ -149,4 +149,27 @@ export function useNormalizedApiConfiguration(mode: Mode): NormalizedApiConfig {
 			selectedModelInfo: applyGrok46OfficialContextWindow(resolvedModelId, fromProtobufModelInfo(resolvedInfo.modelInfo)),
 		}
 	}, [liveCatalogInfo, provider, modelId, resolvedInfo])
+}
+
+function modelIdSlug(modelId: string): string {
+	return modelId.split("/").at(-1) ?? modelId
+}
+
+function lookupLiveCatalogInfo(
+	models: Record<string, ModelInfo> | undefined,
+	modelId: string | undefined,
+): ModelInfo | undefined {
+	if (!models || !modelId) {
+		return undefined
+	}
+	const exact = models[modelId]
+	if (exact) {
+		return exact
+	}
+	if (!modelId.includes("/")) {
+		return undefined
+	}
+	const slug = modelIdSlug(modelId)
+	const matches = Object.keys(models).filter((id) => modelIdSlug(id) === slug)
+	return matches.length === 1 ? models[matches[0]] : undefined
 }

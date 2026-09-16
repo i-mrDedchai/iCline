@@ -1,4 +1,5 @@
 import type { Mode, ProviderId } from "@/sdk/model-catalog/contracts"
+import { getModelInfoKey } from "@/sdk/model-catalog/store"
 import type { ApiConfiguration } from "@/shared/api"
 import { toLegacyApiProvider } from "@/shared/model-catalog/provider-helpers"
 import { Empty } from "@/shared/proto/cline/common"
@@ -109,6 +110,12 @@ export async function commitModelSelection(
 				[`${targetMode}ModeApiProvider`]: legacyProvider,
 				[getProviderModelIdKey(legacyProvider, targetMode)]: selection.modelId,
 			})
+			const modelInfoKey = getModelInfoKey(providerId, targetMode)
+			if (modelInfoKey) {
+				// Pierce task/session leftover snapshots (DeepSeek 1M / Grok 500k)
+				// so the new id is not paired with the previous model's window.
+				Object.assign(updates, { [modelInfoKey]: undefined })
+			}
 		}
 
 		const taskId = controller.task?.taskId

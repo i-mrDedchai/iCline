@@ -293,4 +293,102 @@ describe("useNormalizedApiConfiguration", () => {
 		expect(result.current.selectedModelId).toBe("cline-free/deepseek-v4.1-flash")
 		expect(result.current.selectedModelInfo.contextWindow).toBeUndefined()
 	})
+
+	it("after switching leftover grok 500k / deepseek 1M snapshot to cline-free/solar-pro4 uses live catalog 524288", async () => {
+		const leftoverSnapshot = {
+			actModeApiProvider: "cline" as const,
+			actModeApiModelId: "grok-4.6",
+			actModeClineModelId: "cline-free/deepseek-v4.1-flash",
+			actModeClineModelInfo: {
+				name: "DeepSeek V4.1 Flash leftover",
+				supportsPromptCache: false,
+				contextWindow: 1_000_000,
+			},
+		}
+		const liveCatalog = {
+			providerModelsByProvider: {
+				cline: {
+					models: {
+						"cline-free/deepseek-v4.1-flash": {
+							name: "DeepSeek V4.1 Flash",
+							supportsPromptCache: false,
+							contextWindow: 1_000_000,
+						},
+						"cline-free/solar-pro4": {
+							name: "Solar Pro 4",
+							supportsPromptCache: false,
+							contextWindow: 524_288,
+						},
+					},
+				},
+			},
+		} as Partial<ReturnType<typeof useExtensionState>>
+		mockResolveModelInfo.mockResolvedValue(modelInfoResponse("xai", "grok-4.6", 500_000))
+		setApiConfiguration(leftoverSnapshot, liveCatalog)
+
+		const { result, rerender } = renderHook(() => useNormalizedApiConfiguration("act"))
+		expect(result.current.selectedModelInfo.contextWindow).toBe(1_000_000)
+
+		setApiConfiguration(
+			{
+				...leftoverSnapshot,
+				actModeClineModelId: "cline-free/solar-pro4",
+			},
+			liveCatalog,
+		)
+		act(() => {
+			rerender()
+		})
+
+		expect(result.current.selectedModelId).toBe("cline-free/solar-pro4")
+		expect(result.current.selectedModelInfo.contextWindow).toBe(524_288)
+		expect(result.current.selectedModelInfo.contextWindow).not.toBe(1_000_000)
+		expect(result.current.selectedModelInfo.contextWindow).not.toBe(500_000)
+	})
+
+	it("does not report grok-4.6 500k when resolvedInfo is stale and modelId is cline-free/solar-pro4", async () => {
+		setApiConfiguration({ actModeApiProvider: "cline", actModeClineModelId: "cline-free/solar-pro4" })
+		mockResolveModelInfo.mockResolvedValue(modelInfoResponse("xai", "grok-4.6", 500_000))
+
+		const { result } = renderHook(() => useNormalizedApiConfiguration("act"))
+
+		await waitFor(() => expect(mockResolveModelInfo).toHaveBeenCalled())
+		expect(result.current.selectedModelId).toBe("cline-free/solar-pro4")
+		expect(result.current.selectedModelInfo.contextWindow).not.toBe(500_000)
+		expect(result.current.selectedModelInfo.contextWindow).not.toBe(1_000_000)
+	})
+
+	it("aliases cline-free/solar-pro4 to the unique OpenRouter slug in the live catalog", async () => {
+		setApiConfiguration({ actModeApiProvider: "cline", actModeClineModelId: "cline-free/solar-pro4" }, {
+			providerModelsByProvider: {
+				cline: {
+					models: {
+						"upstage/solar-pro4": {
+							name: "Solar Pro 4",
+							supportsPromptCache: false,
+							contextWindow: 524_288,
+						},
+						"deepseek/deepseek-v4.1-flash": {
+							name: "DeepSeek V4.1 Flash",
+							supportsPromptCache: false,
+							contextWindow: 1_000_000,
+						},
+						"x-ai/grok-4.6": {
+							name: "Grok 4.6",
+							supportsPromptCache: false,
+							contextWindow: 500_000,
+						},
+					},
+				},
+			},
+		} as Partial<ReturnType<typeof useExtensionState>>)
+		mockResolveModelInfo.mockResolvedValue(modelInfoResponse("cline", "cline-free/solar-pro4", 1_000_000))
+
+		const { result } = renderHook(() => useNormalizedApiConfiguration("act"))
+
+		expect(result.current.selectedModelId).toBe("cline-free/solar-pro4")
+		expect(result.current.selectedModelInfo.contextWindow).toBe(524_288)
+		expect(result.current.selectedModelInfo.contextWindow).not.toBe(1_000_000)
+		expect(result.current.selectedModelInfo.contextWindow).not.toBe(500_000)
+	})
 })
