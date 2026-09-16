@@ -1,10 +1,26 @@
-**Last updated:** 2026-08-05
-**Branch:** `sync/upstream-v4.0.0`
-**HEAD:** (local WIP — xAI OAuth + identity + Quick picker)
-**vsix:** `apps/vscode/dist/i-mrdedchai.iCline-0.1.18-dev.5.vsix` (WIP smoke build 2026-08-05 09:42, ~11.25 MB) — **ยังไม่ commit**
+**Last updated:** 2026-09-16
+**Branch:** `fix/quick-model-picker-activate`
+**HEAD:** `cdd4d139b` (fix.27)
+**vsix:** `apps/vscode/dist/i-mrdedchai.iCline-0.1.18-dev.5-fix.27.vsix` (WIP smoke 2026-09-16, 11.35 MB) — committed locally, **ยังไม่ push / ยังไม่ merge main**
 
+**Release plan:** finish this Quick Picker worktree on **dev.5** → merge to main when ordered → ClinePass after that merge. Dynamic model lists for remaining providers stay **dev.6**.
 
-**Release plan:** finish restore on **dev.5** → then **dev.6** = dynamic model lists for all providers.
+### Worktree smoke (fix.15–27)
+
+| Pack | งาน | Maintainer smoke |
+|------|-----|------------------|
+| fix.15–16 | Picker activate / requested-id | ❌ ไม่ผ่าน |
+| fix.17 | stacked activate | คลิกข้าม provider ดู OK แล้วอาการเดิมกลับหลัง Cline Usage-Billing |
+| fix.18 | Settings = แหล่งความจริงของลิสต์ Cline | ลิสต์ตรงแล้ว |
+| fix.19 | Featured Recommended/Free ใน Picker | ✅ กลุ่ม Free ตรง Settings |
+| fix.20 | เปิด Picker แล้วเลื่อนไป provider ที่ใช้ | ✅ |
+| fix.21 | โมเดลที่เลือกอยู่ตำแหน่ง A–Z เดิม | ✅ |
+| fix.22 | Grok 4.6 = 500k ในตาราง | ❌ ยังขึ้น 2M (แคชสมัครสมาชิก) |
+| fix.23 | บังคับ 500k ทุกเส้นทางแสดง | ✅ Grok 4.6 = 500K |
+| fix.24 | แถบแชทอ่านแคตตาล็อกชุดเดียวกับ Settings | ✅ Laguna 262K; โมเดล Cline อื่นยังเพี้ยน |
+| fix.25 | ห้ามแปะเลขโมเดลก่อน | ❌ Solar/ตัวอื่นยัง 1.0m หรือ 500k |
+| fix.26 | รวม featured เข้าแคตตาล็อก `cline` | ❌ ยัง leftover 1.0m/500k |
+| **fix.27** | ห้ามใช้ snapshot ตอน miss + alias slug | ✅ Solar Pro 4 = **524.3k** (2026-09-16) |
 
 ---
 
@@ -140,7 +156,7 @@
 ### ติดตั้ง smoke (PowerShell)
 
 ```powershell
-code --install-extension "D:\.grok\iCline\cline-temp\apps\vscode\dist\i-mrdedchai.iCline-0.1.18-dev.5.vsix" --force
+code --install-extension "D:\.grok\iCline\cline-wt-quick-model-picker-activate\apps\vscode\dist\i-mrdedchai.iCline-0.1.18-dev.5-fix.27.vsix" --force
 ```
 
 แล้ว **Developer: Reload Window**
@@ -149,9 +165,103 @@ code --install-extension "D:\.grok\iCline\cline-temp\apps\vscode\dist\i-mrdedcha
 
 ---
 
+## 🔧 fix.27 — leftover context window (2026-09-16)
+
+**สถานะ:** ✅ maintainer smoke Solar Pro 4 = **524.3k** (ไม่ใช่ 1.0m / 500k)
+
+**สาเหตุที่ fix.24–26 ยังไม่พอ:** id แท็บ Free ของ Cline เป็น `cline-free/solar-pro4` แต่แคตตาล็อกที่แถบแชทอ่านเป็นคีย์ OpenRouter (`upstage/solar-pro4`). เทสชุดก่อนใส่คีย์ featured ลงแมปล่วงหน้าจึงไม่สะท้อนเคสจริง. ตอน miss โฮสต์คืน `actModeClineModelInfo` ของโมเดลก่อน (DeepSeek 1M / Grok 500k). Laguna ตรงเพราะ featured id **คือ** คีย์ OpenRouter (`poolside/laguna-s-2.1:free`).
+
+**VSIX:** `apps/vscode/dist/i-mrdedchai.iCline-0.1.18-dev.5-fix.27.vsix`  
+**HEAD:** `cdd4d139b`
+
+งานในรอบนี้:
+- `resolveModelInfo`: Cline แคตตาล็อกอุ่นแต่ไม่มี id ที่ขอ → ไม่คืน leftover snapshot; alias last-segment ถ้า unik (`cline-free/solar-pro4` → `upstage/solar-pro4`)
+- `commitModelSelection` write-through ล้าง `*ClineModelInfo` ใน task/session
+- `useNormalizedApiConfiguration` lookup slug เดียวกัน
+
+จุดทดสอบที่เหลือ: สลับ Grok 4.6 (500k) → Laguna (262k) → Solar (524.3k) → โมเดล Free อื่น ห้ามค้างเลขตัวก่อน
+
+---
+
+## 🔧 fix.26 — merge Cline featured into `cline` catalog (2026-09-16)
+
+**สถานะ:** smoke ไม่ผ่าน (Solar ยัง 1.0m / บางที 500k) — ส่งต่อ fix.27
+
+**VSIX:** `apps/vscode/dist/i-mrdedchai.iCline-0.1.18-dev.5-fix.26.vsix`
+
+---
+
+## 🔧 fix.25 — bind context to selected id only (2026-09-16)
+
+**สถานะ:** smoke ไม่ผ่าน (สลับโมเดลแล้วยัง 1.0m / 500k) — ส่งต่อ fix.26
+
+**VSIX:** `apps/vscode/dist/i-mrdedchai.iCline-0.1.18-dev.5-fix.25.vsix`
+
+---
+
+## 🔧 fix.24 — chat bar uses live Settings catalog (2026-09-16)
+
+**สถานะ:** Laguna 262K ตรง Settings — โมเดล Cline อื่นยังเพี้ยน → fix.25
+
+**VSIX:** `apps/vscode/dist/i-mrdedchai.iCline-0.1.18-dev.5-fix.24.vsix`
+
+---
+
+## 🔧 fix.23 — Grok 4.6 500k on every display path (2026-09-16)
+
+**สถานะ:** ✅ Grok 4.6 ขึ้น 500K (ไม่ใช่ 2M)
+
+**VSIX:** `apps/vscode/dist/i-mrdedchai.iCline-0.1.18-dev.5-fix.23.vsix`
+
+---
+
+## 🔧 fix.22 — Grok 4.6 table 500k not 2M (2026-09-16)
+
+**สถานะ:** smoke ไม่ผ่าน (ยัง 2M จากแคชสมัครสมาชิก xAI) — ส่งต่อ fix.23
+
+**VSIX:** `apps/vscode/dist/i-mrdedchai.iCline-0.1.18-dev.5-fix.22.vsix`
+
+---
+
+## 🔧 fix.21 — selected model stays in A–Z place (2026-09-16)
+
+**สถานะ:** ✅ โมเดลที่เลือกอยู่ตำแหน่งเดิม มีแค่เครื่องหมายถูก
+
+**VSIX:** `apps/vscode/dist/i-mrdedchai.iCline-0.1.18-dev.5-fix.21.vsix`
+
+Mock redesign ชะลอ — ล็อกที่ `D:\.grok\iCline\cline-temp\.icline\plans\quick-picker-redesign\mock.v11-locked-2026-09-16.html`
+
+---
+
+## 🔧 fix.20 — scroll picker to active provider (2026-09-16)
+
+**สถานะ:** ✅ เปิดเมนูแล้วโฟกัส provider/โมเดลที่กำลังใช้
+
+**VSIX:** `apps/vscode/dist/i-mrdedchai.iCline-0.1.18-dev.5-fix.20.vsix`
+
+ClinePass ทำหลัง merge สาขานี้เข้า main เท่านั้น
+
+---
+
+## 🔧 fix.19 — Cline featured lists in picker (2026-09-16)
+
+**สถานะ:** ✅ กลุ่ม Recommended/Free ตรง Settings (RPC + badge)
+
+**VSIX:** `apps/vscode/dist/i-mrdedchai.iCline-0.1.18-dev.5-fix.19.vsix`
+
+---
+
+## 🔧 fix.18 — Settings source of truth for Cline list (2026-09-16)
+
+**สถานะ:** ลิสต์ Settings/Picker ใช้ policy ชุดเดียว — อาการ mismatch หลัง Usage-Billing หาย
+
+**VSIX:** `apps/vscode/dist/i-mrdedchai.iCline-0.1.18-dev.5-fix.18.vsix`
+
+---
+
 ## 🔧 fix.17 — stacked Quick Picker activate (2026-09-15)
 
-**สถานะ:** แพ็ก VSIX รอ maintainer smoke — **ยังไม่ปิดรอบ**
+**สถานะ:** คลิกข้าม provider ดู OK แล้วอาการเดิมกลับหลังเลือก Cline Usage-Billing ใน Settings — ส่งต่อ fix.18
 
 **สาเหตุที่ fix.16 ยังไม่พอ:** header/picker อ่านคนละ map; popover Portal ทำให้คลิกถูก dismiss ก่อน commit; host เคย mirror id ลงช่อง generic; hot-swap ไป session เก่าหลัง write-through
 
@@ -181,7 +291,7 @@ code --install-extension "D:\.grok\iCline\cline-temp\apps\vscode\dist\i-mrdedcha
 
 ## 🔧 fix.15 — Quick Picker requested-id invariant (2026-09-15)
 
-**สถานะ:** แพ็ก VSIX รอ maintainer smoke — **ยังไม่ปิดรอบ**
+**สถานะ:** smoke ไม่ผ่าน — ส่งต่อ fix.16
 
 **Branch:** `fix/quick-model-picker-activate`  
 **VSIX:** `apps/vscode/dist/i-mrdedchai.iCline-0.1.18-dev.5-fix.15.vsix`
