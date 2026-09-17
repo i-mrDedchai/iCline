@@ -1,17 +1,18 @@
 **Last updated:** 2026-09-17
 **Branch:** `fix/compact-durable` (from `main` @ `93b60c1b7`)
-**HEAD:** `f213d55b2` (fix.29 — surface compact failure reason in chat)
-**vsix:** `apps/vscode/dist/i-mrdedchai.iCline-0.1.18-dev.5-fix.29.vsix` — awaiting maintainer smoke; do not overwrite `cline-temp` `fix.1`–`fix.9`
+**HEAD:** `8278c6e5a` (fix.30 — Cline identity headers on manual compaction)
+**vsix:** `apps/vscode/dist/i-mrdedchai.iCline-0.1.18-dev.5-fix.30.vsix` — awaiting maintainer smoke; do not overwrite `cline-temp` `fix.1`–`fix.9`
 
 **Release plan:** finish this Quick Picker worktree on **dev.5** → merge to main when ordered → ClinePass after that merge. Dynamic model lists for remaining providers stay **dev.6**.
 
-### Compact durable smoke (fix.28–29, branch `fix/compact-durable`)
+### Compact durable smoke (fix.28–30, branch `fix/compact-durable`)
 
 | Pack | งาน | Maintainer smoke |
 |------|-----|------------------|
-| fix.28 | แถบ context คงค่าหลังปิด/เปิดแชทจาก History (sidecar persist + re-apply estimate) — `094c9166c` | ⏳ ยังไม่ปิด — รายงานอาการล่าสุดอยู่ระหว่างวิเคราะห์ |
+| fix.28 | แถบ context คงค่าหลังปิด/เปิดแชทจาก History (sidecar persist + re-apply estimate) — `094c9166c` | ⏳ ยังไม่ปิด |
 | (packer) | WIP VSIX คอมไพล์ production host (`b1ba27416`) | — |
-| **fix.29** | แชทแสดงสาเหตุเมื่อ compact ล้มเหลว ("Couldn't compact the conversation. (detail)") — `f213d55b2` | ⏳ รอ maintainer รายงานอาการที่ทดสอบล่าสุด |
+| fix.29 | แชทแสดงสาเหตุเมื่อ compact ล้มเหลว — `f213d55b2` | ✅ ใช้งานได้จริง — 403 "product surfaces" ถูกเปิดเผย (นำไปสู่ fix.30) |
+| **fix.30** | manual compact แนบ Cline identity headers เดียวกับแชท (`User-Agent`, `X-CLIENT-*`, `X-Task-ID`) แก้ 403 บน `cline-free/*` + เก็บหนี้ tsc — `8278c6e5a` | ⏳ รอ smoke |
 
 ### Worktree smoke (fix.15–27)
 
@@ -170,6 +171,22 @@ code --install-extension "D:\.grok\iCline\cline-wt-quick-model-picker-activate\a
 แล้ว **Developer: Reload Window**
 
 จุดที่ควรเช็ค: Jan · xAI OAuth+chat · Quick picker (expand/effort) · agent แนะนำตัว iCline · History export/import
+
+---
+
+## 🔧 fix.30 — compact 403 "Cline product surfaces" (2026-09-17)
+
+**สถานะ:** แพ็ก VSIX แล้ว — **รอ maintainer smoke** (ยังไม่ปิดรอบ)
+
+อาการจาก fix.29: compact บน `cline-free/deepseek-v4.1-flash` → `Error 403: ... only available via Cline product surfaces` (Cline Official compact แชทเดียวกันได้)
+
+**Root cause:** manual compact สร้าง provider config ใหม่ที่**ไม่มี headers ระบุตัวตน** (`User-Agent: Cline/<ver>`, `X-CLIENT-*`) ต่างจากแชทที่ bootstrap เติมให้ทุก turn — เซิร์ฟเวอร์บังคับว่าโมเดล `cline-free/*` ต้องมาจาก client ที่ระบุตัวตน (Official ผ่านเพราะใช้ strategy `basic` ซึ่งไม่ยิง network; เคส agentic เป็นบั๊กแฝงของ upstream เอง)
+
+**แก้:** coordinator แนบ headers เดียวกับแชททุก byte ผ่าน `resolveProviderRequestHeaders` (ไม่ปลอมเวอร์ชัน) — non-cline provider ไม่ถูกแตะ + เก็บหนี้ tsc 4 errors จาก fix.26–29 (type-level เท่านั้น)
+
+**วิธี smoke:** แชทยาวด้วย cline-free (agentic) → Compact ต้องสำเร็จ · compact paid model ของ cline · provider อื่น (xAI/OpenRouter) ไม่ regression · auto-compact ปกติ · About ขึ้น `fix.30`
+
+**VSIX:** `apps/vscode/dist/i-mrdedchai.iCline-0.1.18-dev.5-fix.30.vsix` · Commit `8278c6e5a`
 
 ---
 
