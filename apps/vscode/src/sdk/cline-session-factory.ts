@@ -15,15 +15,11 @@ import {
 	type ProviderSettings,
 	readCompactionStrategyGlobally,
 	resolveProviderApiKeyFromSettings,
+	resolveProviderConfig,
 	type StartSessionResult,
 } from "@cline/core"
-import type { ModelInfo as SdkModelInfo } from "@cline/llms"
-import {
-	getGeneratedModelsForProvider,
-	getModelsForProvider,
-	MODEL_COLLECTIONS_BY_PROVIDER_ID,
-	OLLAMA_DEFAULT_CONTEXT_WINDOW,
-} from "@cline/llms"
+import type { ProviderConfig, ModelInfo as SdkModelInfo } from "@cline/llms"
+import { getGeneratedModelsForProvider, MODEL_COLLECTIONS_BY_PROVIDER_ID, OLLAMA_DEFAULT_CONTEXT_WINDOW } from "@cline/llms"
 import { buildClineSystemPrompt } from "@cline/shared"
 import type { ApiConfiguration } from "@shared/api"
 import { ClineClient } from "@shared/cline"
@@ -898,14 +894,27 @@ export async function buildSessionConfig(input: SessionConfigInput): Promise<Cor
 	const sdkProviderId = toSdkProviderId(providerId)
 	const hostIdentity = await resolveHostIdentity()
 	const isMultiRoot = await resolveIsMultiRootWorkspace()
-	let knownModels: Awaited<ReturnType<typeof getModelsForProvider>> | undefined
+	let knownModels: Record<string, SdkModelInfo> | undefined
 	try {
 		// Constructing the settings manager loads providers.json and models.json into
-		// the @cline/llms registry. Reading models from that registry ensures custom
-		// model overrides are included in the inference provider config, not just in
-		// the webview/display path.
+		// the @cline/llms registry, keeping user custom-model overrides in the picture.
 		getProviderSettingsManager(resolveDataDir())
-		knownModels = await getModelsForProvider(sdkProviderId)
+		// Resolve through the same pipeline as the webview picker and the CLI
+		// (generated ∪ bundled ∪ live catalog ∪ private ∪ public ∪ user overrides).
+		// The bare registry lookup misses providers whose models come only from the
+		// live catalog (e.g. cline-free), which left the runtime compaction budget
+		// at the 128k default while the display bar showed the real 1M window.
+		const resolved = await resolveProviderConfig(
+			sdkProviderId,
+			{ loadLatestOnInit: true, loadPrivateOnAuth: true, failOnError: false },
+			{
+				providerId: sdkProviderId,
+				modelId: modelId ?? "",
+				...(apiKey ? { apiKey } : {}),
+				...(baseUrl !== undefined ? { baseUrl } : {}),
+			} as ProviderConfig,
+		)
+		knownModels = resolved?.knownModels
 		// Only inject host-resolved metadata that carries real information
 		// (catalog/state base or user overrides). Pure fallback fabrications
 		// must not reach the runtime; the SDK's own resolution handles those.

@@ -37,6 +37,7 @@ const mocks = vi.hoisted(() => {
 			throw new Error("xAI auth not configured in test")
 		}),
 		assertXaiModelMatchesAuth: vi.fn((_mode?: string, _modelId?: string) => undefined),
+		resolveProviderConfig: vi.fn(),
 
 		stateManager: {
 			getApiConfiguration: vi.fn(() => ({
@@ -71,6 +72,14 @@ vi.mock("./provider-migration", () => ({
 	getProviderSettingsManager: mocks.getProviderSettingsManager,
 }))
 
+vi.mock("@cline/core", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("@cline/core")>()
+	return {
+		...actual,
+		resolveProviderConfig: mocks.resolveProviderConfig,
+	}
+})
+
 vi.mock("@shared/services/Logger", () => ({
 	Logger: {
 		debug: vi.fn(),
@@ -100,6 +109,14 @@ beforeEach(() => {
 	process.env.CLINE_GLOBAL_SETTINGS_PATH = path.join(tempDir, "global-settings.json")
 	vi.clearAllMocks()
 	LlmsModels.resetRegistry()
+	// Default: delegate to the real @cline/llms registry so tests observe the
+	// same knownModels the bare registry lookup used to provide. Individual
+	// tests override this to stub the live catalog pipeline.
+	mocks.resolveProviderConfig.mockReset()
+	mocks.resolveProviderConfig.mockImplementation(async (providerId: string) => ({
+		modelId: "",
+		knownModels: await LlmsModels.getModelsForProvider(providerId),
+	}))
 	mocks.stateManager.getApiConfiguration.mockReturnValue({
 		actModeApiProvider: "anthropic",
 		actModeApiModelId: "claude-sonnet-4-6",
@@ -542,8 +559,8 @@ describe("buildSessionConfig", () => {
 	})
 
 	it("keeps session creation non-fatal when known-model lookup fails", async () => {
-		const lookupError = new Error("registry unavailable")
-		const getModelsSpy = vi.spyOn(LlmsModels, "getModelsForProvider").mockRejectedValueOnce(lookupError)
+		const lookupError = new Error("catalog unavailable")
+		mocks.resolveProviderConfig.mockRejectedValueOnce(lookupError)
 
 		const config = await buildSessionConfig({ cwd: "/tmp/workspace" })
 
@@ -552,7 +569,60 @@ describe("buildSessionConfig", () => {
 			"[SessionFactory] Failed to resolve known models for provider=anthropic:",
 			lookupError,
 		)
-		getModelsSpy.mockRestore()
+	})
+
+	it("resolves runtime knownModels through resolveProviderConfig so live-catalog windows reach compaction", async () => {
+		mocks.stateManager.getApiConfiguration.mockReturnValue({
+			actModeApiProvider: "cline",
+			actModeClineModelId: "cline-free/deepseek-v4.1-flash",
+			clineApiKey: "test-cline-token",
+		} as any)
+		mocks.resolveProviderConfig.mockResolvedValue({
+			modelId: "cline-free/deepseek-v4.1-flash",
+			knownModels: {
+				"cline-free/deepseek-v4.1-flash": {
+					id: "cline-free/deepseek-v4.1-flash",
+					name: "DeepSeek V4.1 Flash (free)",
+					contextWindow: 1_048_576,
+				},
+			},
+		} as any)
+
+		const config = await buildSessionConfig({ cwd: "/tmp/workspace" })
+
+		expect(mocks.resolveProviderConfig).toHaveBeenCalledWith(
+			"cline",
+			expect.objectContaining({ loadLatestOnInit: true, loadPrivateOnAuth: true, failOnError: false }),
+			expect.objectContaining({
+				providerId: "cline",
+				modelId: "cline-free/deepseek-v4.1-flash",
+				apiKey: "test-cline-token",
+			}),
+		)
+		const knownModel = (config.providerConfig as any).knownModels["cline-free/deepseek-v4.1-flash"]
+		expect(knownModel?.contextWindow).toBe(1_048_576)
+	})
+
+	it("still injects committed runtime models the catalog pipeline does not know", async () => {
+		mocks.stateManager.getApiConfiguration.mockReturnValue({
+			actModeApiProvider: "openai",
+			actModeOpenAiModelId: "committed-reasoner",
+			openAiApiKey: "openai-compatible-key",
+			openAiBaseUrl: "https://openai-compatible.example/v1",
+		} as any)
+		createProviderConfigStore().commitSelection(parseProviderId("openai"), "act", {
+			providerId: parseProviderId("openai"),
+			modelId: "committed-reasoner",
+			overrides: {
+				name: "Committed Reasoner",
+				contextWindow: 32_000,
+			},
+		})
+
+		const config = await buildSessionConfig({ cwd: "/tmp/workspace" })
+
+		const knownModel = (config.providerConfig as any).knownModels["committed-reasoner"]
+		expect(knownModel).toMatchObject({ id: "committed-reasoner", contextWindow: 32_000 })
 	})
 
 	it("passes OpenAI Compatible max output tokens as an explicit request limit", async () => {

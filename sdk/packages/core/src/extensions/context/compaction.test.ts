@@ -115,6 +115,14 @@ describe("resolveEffectiveMaxInputTokens", () => {
 		).toBe(360_000);
 	});
 
+	it("derives the cline-free 1M compaction trigger from contextWindow alone", () => {
+		expect(
+			resolveEffectiveMaxInputTokens({
+				contextWindow: 1_048_576,
+			}),
+		).toBeCloseTo(943_718.4, 6);
+	});
+
 	it("does not reserve catalog maxTokens when only contextWindow is available", () => {
 		const modelInfo = {
 			contextWindow: 400_000,
