@@ -2096,6 +2096,14 @@ export class LocalRuntimeHost implements RuntimeHost {
 		}
 		if (!resolved?.apiKey || session.config.apiKey === resolved.apiKey) return;
 		session.config.apiKey = resolved.apiKey;
+		// The compaction summarizer captures config.providerConfig at session
+		// start and re-reads it on every attempt; without this in-place update
+		// it keeps sending the bootstrap token, which the gateway rejects with
+		// 401 once the OAuth token rotates mid-session.
+		const providerConfig = session.config.providerConfig;
+		if (providerConfig && providerConfig.providerId === session.config.providerId) {
+			providerConfig.apiKey = resolved.apiKey;
+		}
 		session.agent.updateConnection({ apiKey: resolved.apiKey });
 		session.runtime.delegatedAgentConfigProvider?.updateConnectionDefaults({
 			apiKey: resolved.apiKey,

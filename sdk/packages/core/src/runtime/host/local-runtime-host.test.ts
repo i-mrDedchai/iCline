@@ -5163,6 +5163,90 @@ describe("LocalRuntimeHost", () => {
 		});
 	});
 
+	it("propagates refreshed OAuth token into the captured providerConfig", async () => {
+		// The compaction summarizer captures config.providerConfig at session
+		// start and re-reads it per attempt. syncOAuthCredentials must update
+		// it in place, or compaction keeps sending the bootstrap token and the
+		// gateway rejects it with 401 once the token rotates mid-session.
+		const sessionId = "sess-oauth-compact-token";
+		const manifest = createManifest(sessionId);
+		const sessionService = {
+			ensureSessionsDir: vi.fn().mockReturnValue("/tmp/sessions"),
+			createRootSessionWithArtifacts: vi.fn().mockResolvedValue({
+				manifestPath: "/tmp/manifest-oauth-compact.json",
+				messagesPath: "/tmp/messages-oauth-compact.json",
+				manifest,
+			}),
+			persistSessionMessages: vi.fn(),
+			updateSessionStatus: vi.fn().mockResolvedValue({ updated: true }),
+			writeSessionManifest: vi.fn(),
+			listSessions: vi.fn().mockResolvedValue([]),
+			deleteSession: vi.fn().mockResolvedValue({ deleted: true }),
+		};
+		const updateConnection = vi.fn();
+		const runtimeBuilder = {
+			build: vi.fn().mockReturnValue({ tools: [], shutdown: vi.fn() }),
+		};
+		const run = vi
+			.fn()
+			.mockRejectedValueOnce(new Error("401 Unauthorized"))
+			.mockResolvedValueOnce(createResult({ text: "retried" }));
+		const manager = new RuntimeHostUnderTest({
+			distinctId,
+			sessionService: sessionService as never,
+			runtimeBuilder,
+			oauthTokenManager: {
+				resolveProviderApiKey: vi
+					.fn()
+					.mockResolvedValue({ apiKey: "cline-access-refreshed", refreshed: true }),
+			} as never,
+			createAgent: () =>
+				({
+					run,
+					continue: vi.fn(),
+					abort: vi.fn(),
+					subscribeEvents: vi.fn().mockReturnValue(() => {}),
+					canStartRun: vi.fn().mockReturnValue(true),
+					getAgentId: vi.fn().mockReturnValue("agent-root-1"),
+					getConversationId: vi.fn().mockReturnValue("conv-root-1"),
+					restore: vi.fn(),
+					updateConnection,
+					shutdown: vi.fn().mockResolvedValue(undefined),
+					getMessages: vi.fn().mockReturnValue([]),
+					messages: [],
+				}) as never,
+		});
+
+		await manager.startSession(
+			normalizeStartInput({
+				config: createConfig({
+					sessionId,
+					providerId: "cline",
+					modelId: "cline-free/deepseek-v4.1-flash",
+					apiKey: "cline-access-bootstrap",
+					providerConfig: {
+						providerId: "cline",
+						apiKey: "cline-access-bootstrap",
+					},
+				}),
+				interactive: true,
+			}),
+		);
+		await manager.runTurn({ sessionId, prompt: "hello" });
+
+		expect(updateConnection).toHaveBeenCalledWith({
+			apiKey: "cline-access-refreshed",
+		});
+		const getSessionOrThrow = Reflect.get(
+			manager as object,
+			"getSessionOrThrow",
+		) as (id: string) => { config: { providerConfig?: { apiKey?: string } } };
+		const session = getSessionOrThrow.call(manager, sessionId);
+		expect(session.config.providerConfig?.apiKey).toBe(
+			"cline-access-refreshed",
+		);
+	});
+
 	it("auto-continues when async teammate runs complete after lead turn", async () => {
 		const sessionId = "sess-team-auto-continue";
 		const manifest = createManifest(sessionId);
