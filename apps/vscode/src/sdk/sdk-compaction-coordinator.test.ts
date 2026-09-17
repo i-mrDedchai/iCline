@@ -9,6 +9,7 @@ vi.mock("@cline/core", () => ({
 		version: 1,
 		messages: input.compactedMessages,
 	})),
+	CORE_BUILD_VERSION: "test-core-version",
 }))
 
 const mockCreateContextCompactionPrepareTurn = createContextCompactionPrepareTurn as unknown as ReturnType<typeof vi.fn>
@@ -220,11 +221,90 @@ describe("SdkCompactionCoordinator", () => {
 			expect.anything(),
 		)
 	})
+
+	it("attaches Cline client identity headers to the manual compaction request config", async () => {
+		const activeSession = makeActiveSession()
+		const { coordinator } = makeCoordinator({
+			activeSession,
+			config: {
+				providerConfig: { providerId: "cline", modelId: "cline-free/deepseek-v4.1-flash" },
+				providerId: "cline",
+				modelId: "cline-free/deepseek-v4.1-flash",
+				extensionContext: {
+					client: {
+						name: "VSCode Extension",
+						version: "0.1.18-dev.5",
+						platform: "win32",
+						platformVersion: "10.0.22631",
+						isMultiRoot: false,
+					},
+				},
+			},
+		})
+		mockCreateContextCompactionPrepareTurn.mockReturnValueOnce(
+			vi.fn().mockResolvedValue({ messages: [{ role: "user", content: "summary" }] }),
+		)
+
+		await coordinator.compactTask()
+
+		const prepareInput = mockCreateContextCompactionPrepareTurn.mock.calls[0]?.[0]
+		expect(prepareInput?.providerConfig?.headers).toMatchObject({
+			"User-Agent": "Cline/0.1.18-dev.5",
+			"X-CLIENT-TYPE": "VSCode Extension",
+			"X-CLIENT-VERSION": "0.1.18-dev.5",
+			"X-PLATFORM": "win32",
+			"X-PLATFORM-VERSION": "10.0.22631",
+			"X-CORE-VERSION": "test-core-version",
+			"X-Task-ID": "old-session",
+		})
+	})
+
+	it("leaves provider headers untouched for non-Cline providers", async () => {
+		const activeSession = makeActiveSession()
+		const { coordinator } = makeCoordinator({ activeSession })
+		mockCreateContextCompactionPrepareTurn.mockReturnValueOnce(
+			vi.fn().mockResolvedValue({ messages: [{ role: "user", content: "summary" }] }),
+		)
+
+		await coordinator.compactTask()
+
+		const prepareInput = mockCreateContextCompactionPrepareTurn.mock.calls[0]?.[0]
+		expect(prepareInput?.providerConfig?.headers).toBeUndefined()
+	})
+
+	it("keeps existing provider headers but lets Cline identity headers win", async () => {
+		const activeSession = makeActiveSession()
+		const { coordinator } = makeCoordinator({
+			activeSession,
+			config: {
+				providerConfig: {
+					providerId: "cline",
+					modelId: "cline-free/deepseek-v4.1-flash",
+					headers: { "X-Custom": "keep-me", "X-CLIENT-VERSION": "custom" },
+				},
+				providerId: "cline",
+				modelId: "cline-free/deepseek-v4.1-flash",
+			},
+		})
+		mockCreateContextCompactionPrepareTurn.mockReturnValueOnce(
+			vi.fn().mockResolvedValue({ messages: [{ role: "user", content: "summary" }] }),
+		)
+
+		await coordinator.compactTask()
+
+		const prepareInput = mockCreateContextCompactionPrepareTurn.mock.calls[0]?.[0]
+		expect(prepareInput?.providerConfig?.headers).toMatchObject({
+			"X-Custom": "keep-me",
+			"X-CLIENT-VERSION": "unknown",
+			"X-Task-ID": "old-session",
+		})
+	})
 })
 
 interface MakeCoordinatorInput {
 	activeSession: ReturnType<typeof makeActiveSession> | undefined
 	clineMessages: Array<{ ts: number; type: "say"; say: string; text?: string }>
+	config?: Record<string, unknown>
 }
 
 function makeCoordinator(input: Partial<MakeCoordinatorInput> = {}) {
@@ -238,6 +318,7 @@ function makeCoordinator(input: Partial<MakeCoordinatorInput> = {}) {
 		logger: undefined,
 		telemetry: undefined,
 		sessionId: undefined as string | undefined,
+		...(input.config ?? {}),
 	}
 	const options = {
 		stateManager: {

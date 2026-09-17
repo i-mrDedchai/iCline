@@ -38,7 +38,7 @@ function modelIdForMode(config: ApiConfiguration, mode: Mode): string | undefine
 		return undefined
 	}
 	const key = getProviderModelIdKey(provider, mode)
-	const value = config[key]
+	const value = (config as Record<string, unknown>)[key]
 	return typeof value === "string" ? value : undefined
 }
 

@@ -13,7 +13,9 @@
 // which the SDK does not treat as a runtime command, so the model improvised a
 // fake "Conversation Summary" instead of compacting (CLINE-2503).
 
+import { CORE_BUILD_VERSION } from "@cline/core"
 import type { Message as SdkMessage } from "@cline/llms"
+import { resolveProviderRequestHeaders } from "@cline/llms"
 import type { ClineMessage } from "@shared/ExtensionMessage"
 import { getLastApiReqTotalTokens } from "@shared/getApiMetrics"
 import type { Mode } from "@shared/storage/types"
@@ -103,6 +105,30 @@ export class SdkCompactionCoordinator {
 		const cwd = await this.options.getWorkspaceRoot()
 		const mode = this.getCurrentMode()
 		const config = await this.options.sessionConfigBuilder.build({ cwd, mode })
+
+		// The agentic summarizer builds its LLM handler from this provider config
+		// alone, so it must carry the same Cline client identity headers the
+		// bootstrap attaches for chat turns — api.cline.bot rejects cline-free
+		// models on headerless requests (403 "only available via Cline product
+		// surfaces"). Chat's exact values already pass the gate; do not invent
+		// different ones.
+		const identityHeaders = resolveProviderRequestHeaders({
+			providerId: config.providerId,
+			sessionId,
+			defaultSource: "vscode",
+			client: {
+				name: config.extensionContext?.client?.name,
+				version: config.extensionContext?.client?.version,
+				platform: config.extensionContext?.client?.platform,
+				platformVersion: config.extensionContext?.client?.platformVersion,
+				isMultiRoot: config.extensionContext?.client?.isMultiRoot,
+			},
+			coreVersion: CORE_BUILD_VERSION,
+			headers: { session: config.providerConfig?.headers },
+		})
+		if (identityHeaders && config.providerConfig) {
+			config.providerConfig.headers = identityHeaders
+		}
 
 		const result = await compactSessionMessages({
 			config: {

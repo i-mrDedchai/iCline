@@ -146,7 +146,7 @@ function modelIdSlug(modelId: string): string {
 	return modelId.split("/").at(-1) ?? modelId
 }
 
-function findUniqueSlugAlias(models: Map<string, ModelInfo>, requestedModelId: string): string | undefined {
+function findUniqueSlugAlias(models: ReadonlyMap<string, ModelInfo>, requestedModelId: string): string | undefined {
 	if (!requestedModelId.includes("/")) {
 		return undefined
 	}

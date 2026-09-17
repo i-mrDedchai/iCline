@@ -883,7 +883,8 @@ function readStateModelInfoHint(providerId: ProviderId, mode: Mode, modelId: str
 	if (stateModelId !== modelId || !isModelInfo(stateModelInfo) || isSafeDefaultsSnapshot(stateModelInfo, modelId)) {
 		return undefined
 	}
-	const snapshotId = typeof stateModelInfo.id === "string" ? stateModelInfo.id.trim() : ""
+	const withId = stateModelInfo as { id?: unknown }
+	const snapshotId = typeof withId.id === "string" ? withId.id.trim() : ""
 	if (snapshotId && snapshotId !== modelId) {
 		return undefined
 	}

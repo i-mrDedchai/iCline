@@ -1018,7 +1018,9 @@ function makeHistory(records: SessionHistoryRecord[], telemetry?: TelemetryServi
 	const getSession = vi.fn(async (sessionId: string) => currentRecords.find((record) => record.sessionId === sessionId))
 	const listHistory = vi.fn(async () => currentRecords)
 	const readMessages = vi.fn(async () => [])
-	const readSessionCompactionState = vi.fn(async () => undefined)
+	const readSessionCompactionState = vi.fn(
+		async (..._args: unknown[]) => undefined as unknown as Record<string, unknown> | undefined,
+	)
 	const startSession = vi.fn(async (input: { config: { sessionId?: string } }) => {
 		currentRecords = [makeSessionRecord(input.config.sessionId ?? "started"), ...currentRecords]
 		return { sessionId: input.config.sessionId }
