@@ -430,6 +430,10 @@ export {
 	CLINE_RUN_AS_HUB_DAEMON_ENV,
 	isHubDaemonProcess,
 } from "./runtime/hub-daemon-env";
+export {
+	disableCurrentDirectoryExecutableSearch,
+	NO_DEFAULT_CURRENT_DIRECTORY_IN_EXE_PATH_ENV,
+} from "./runtime/windows-exe-path";
 export type {
 	CaptureAgentUnexpectedReasoningTokensInput,
 	CaptureSdkErrorInput,
