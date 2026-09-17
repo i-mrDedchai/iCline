@@ -1,9 +1,17 @@
-**Last updated:** 2026-09-16
+**Last updated:** 2026-09-17
 **Branch:** `fix/compact-durable` (from `main` @ `93b60c1b7`)
-**HEAD:** (WIP compact durable)
-**vsix:** `apps/vscode/dist/i-mrdedchai.iCline-0.1.18-dev.5-fix.28.vsix` — pack after tests; do not overwrite `cline-temp` `fix.1`–`fix.9`
+**HEAD:** `f213d55b2` (fix.29 — surface compact failure reason in chat)
+**vsix:** `apps/vscode/dist/i-mrdedchai.iCline-0.1.18-dev.5-fix.29.vsix` — awaiting maintainer smoke; do not overwrite `cline-temp` `fix.1`–`fix.9`
 
 **Release plan:** finish this Quick Picker worktree on **dev.5** → merge to main when ordered → ClinePass after that merge. Dynamic model lists for remaining providers stay **dev.6**.
+
+### Compact durable smoke (fix.28–29, branch `fix/compact-durable`)
+
+| Pack | งาน | Maintainer smoke |
+|------|-----|------------------|
+| fix.28 | แถบ context คงค่าหลังปิด/เปิดแชทจาก History (sidecar persist + re-apply estimate) — `094c9166c` | ⏳ ยังไม่ปิด — รายงานอาการล่าสุดอยู่ระหว่างวิเคราะห์ |
+| (packer) | WIP VSIX คอมไพล์ production host (`b1ba27416`) | — |
+| **fix.29** | แชทแสดงสาเหตุเมื่อ compact ล้มเหลว ("Couldn't compact the conversation. (detail)") — `f213d55b2` | ⏳ รอ maintainer รายงานอาการที่ทดสอบล่าสุด |
 
 ### Worktree smoke (fix.15–27)
 
@@ -162,6 +170,18 @@ code --install-extension "D:\.grok\iCline\cline-wt-quick-model-picker-activate\a
 แล้ว **Developer: Reload Window**
 
 จุดที่ควรเช็ค: Jan · xAI OAuth+chat · Quick picker (expand/effort) · agent แนะนำตัว iCline · History export/import
+
+---
+
+## 🔧 fix.29 — compact failure reason in chat (2026-09-17)
+
+**สถานะ:** แพ็ก VSIX แล้ว — **รอ maintainer รายงานอาการที่ทดสอบล่าสุด** (ยังไม่ปิดรอบ)
+
+ตอน compact ล้มเหลว แชทเคยบอกแค่ "Couldn't compact the conversation." ทำให้วิเคราะห์ไม่ได้ — `SdkCompactionCoordinator.compactTask` ตอนนี้แนบ error message เดิมต่อท้าย `(detail)` เพื่อให้เห็นสาเหตุจริง (เช่น sidecar persist)
+
+**วิธี smoke:** ทำให้ compact ล้มเหลว (หรือรายงานอาการที่เจอ) → ข้อความในแชทต้องแสดงสาเหตุในวงเล็บ ไม่ใช่ข้อความกลาง ๆ
+
+**VSIX:** `apps/vscode/dist/i-mrdedchai.iCline-0.1.18-dev.5-fix.29.vsix` · Commit `f213d55b2`
 
 ---
 
