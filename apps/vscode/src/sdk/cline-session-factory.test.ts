@@ -166,11 +166,11 @@ function makeBaseConfig(overrides: Partial<CoreSessionConfig> = {}): CoreSession
 
 describe("getDefaultModelIdForProvider", () => {
 	it("uses the SDK provider catalog for the Cline default model", () => {
-		expect(getDefaultModelIdForProvider("cline")).toBe("anthropic/claude-sonnet-4.6")
+		expect(getDefaultModelIdForProvider("cline")).toBe("anthropic/claude-sonnet-5")
 	})
 
 	it("falls back to the first generated model when the SDK manifest default is not in the model catalog", () => {
-		expect(getDefaultModelIdForProvider("gemini")).toBe("gemini-3.5-flash")
+		expect(getDefaultModelIdForProvider("gemini")).toBe("gemini-3.8-flash")
 	})
 
 	it("returns undefined for unknown providers", () => {

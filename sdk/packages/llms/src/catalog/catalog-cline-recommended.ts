@@ -5,20 +5,28 @@ export interface ClineRecommendedModelEntry {
 	id: string;
 	name?: string;
 	description?: string;
+	tags?: string[];
 }
 
 export interface ClineRecommendedModelsPayload {
-	clinePass?: ClineRecommendedModelEntry[];
 	recommended?: ClineRecommendedModelEntry[];
+	clinePass?: ClineRecommendedModelEntry[];
 	free?: ClineRecommendedModelEntry[];
+	clineCloud?: ClineRecommendedModelEntry[];
 }
 
 type ModelCapabilities = Pick<
 	ModelInfo,
-	"contextWindow" | "maxInputTokens" | "maxTokens" | "capabilities" | "pricing"
+	| "contextWindow"
+	| "maxInputTokens"
+	| "maxTokens"
+	| "capabilities"
+	| "reasoningOptions"
+	| "pricing"
 >;
 
 const CLINE_PASS_PROVIDER_ID = "cline-pass";
+const CLINE_PROVIDER_ID = "cline";
 
 const CLINE_PASS_MODEL_DEFAULTS = {
 	contextWindow: 128_000,
@@ -65,9 +73,11 @@ function buildModelsNameMap(
 export function normalizeClineRecommendedProviderModels(
 	payload: ClineRecommendedModelsPayload,
 	openRouterModels: Record<string, ModelInfo>,
+	options: { includeClineCloudModels?: boolean } = {},
 ): Record<string, Record<string, ModelInfo>> {
 	const clinePass = payload.clinePass ?? [];
 	const models: Record<string, ModelInfo> = {};
+	const clineModels: Record<string, ModelInfo> = {};
 	const openRouterModelsByName = buildModelsNameMap(openRouterModels);
 
 	clinePass.forEach((entry) => {
@@ -77,60 +87,70 @@ export function normalizeClineRecommendedProviderModels(
 			// We should use the OR name, unless there is not one (like when using defaults)
 			name: entry.name,
 			...capabilities,
+			pricing: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
 			id: entry.id,
 			description: entry.description,
 		};
 	});
 
-	// Cline free models are selectable on the ClinePass provider too (same API
-	// underneath; they ride usage billing at $0 instead of the subscription quota).
-	// Unlike pass models their ids are full OpenRouter-style ids, so look up
-	// capabilities by full id before falling back to the slug map.
-	if (clinePass.length > 0) {
-		(payload.free ?? []).forEach((entry) => {
-			if (models[entry.id]) {
-				return;
-			}
-
-			const capabilities =
-				openRouterModels?.[entry.id] ??
-				findORModelCapabilities(entry, openRouterModelsByName);
-
-			models[entry.id] = {
-				name: entry.name,
-				...capabilities,
-				id: entry.id,
-				description: entry.description,
-				pricing: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-			};
-		});
-	}
-
-	const clineUsage: Record<string, ModelInfo> = {};
-	const addClineUsageModel = (entry: ClineRecommendedModelEntry) => {
-		if (!entry.id || clineUsage[entry.id]) {
-			return;
-		}
+	const addClineModel = (
+		entry: ClineRecommendedModelEntry,
+		includeInClinePass: boolean,
+	) => {
 		const capabilities =
 			openRouterModels?.[entry.id] ??
 			findORModelCapabilities(entry, openRouterModelsByName);
-		clineUsage[entry.id] = {
-			name: entry.name,
+		// The recommended-models endpoint only sends slug-like names (e.g.
+		// "deepseek-v4-flash"), so prefer the OpenRouter catalog's display name
+		// for every free entry. Without this, the free overlay overwrites the
+		// nice OpenRouter names in the merged cline/cline-pass catalogs and the
+		// pickers end up rendering raw model ids for the Free section.
+		const entryName =
+			capabilities.name?.trim() || entry.name?.trim() || entry.id;
+		// The feed bucket determines free access, regardless of the ID namespace.
+		// Keep this visible even when a client has no featured-tier metadata.
+		const name =
+			!includeInClinePass || /\(free\)$/i.test(entryName)
+				? entryName
+				: `${entryName} (free)`;
+
+		const modelInfo = {
 			...capabilities,
+			name,
 			id: entry.id,
 			description: entry.description,
+		};
+
+		clineModels[entry.id] = {
+			...modelInfo,
+			pricing: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+		};
+
+		if (!includeInClinePass || models[entry.id]) {
+			return;
+		}
+
+		models[entry.id] = {
+			...modelInfo,
 			pricing: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
 		};
 	};
-	(payload.recommended ?? []).forEach(addClineUsageModel);
-	(payload.free ?? []).forEach(addClineUsageModel);
+
+	(payload.free ?? []).forEach((entry) => {
+		addClineModel(entry, true);
+	});
+	if (options.includeClineCloudModels) {
+		(payload.clineCloud ?? []).forEach((entry) => {
+			addClineModel(entry, false);
+		});
+	}
 
 	const result: Record<string, Record<string, ModelInfo>> = {};
-	if (Object.keys(models).length > 0) {
-		result[CLINE_PASS_PROVIDER_ID] = models;
+	if (Object.keys(clineModels).length > 0) {
+		result[CLINE_PROVIDER_ID] = clineModels;
 	}
-	if (Object.keys(clineUsage).length > 0) {
-		result.cline = clineUsage;
+	if (clinePass.length > 0) {
+		result[CLINE_PASS_PROVIDER_ID] = models;
 	}
 	return result;
 }

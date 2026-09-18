@@ -40,6 +40,10 @@ export interface TelemetryAgentIdentityProperties {
 }
 
 export const CORE_TELEMETRY_EVENTS = {
+	SCHEDULE: {
+		RUN_STARTED: "schedule.run_started",
+		RUN_FINISHED: "schedule.run_finished",
+	},
 	CLIENT: {
 		EXTENSION_ACTIVATED: "user.extension_activated",
 	},
@@ -99,6 +103,7 @@ export const CORE_TELEMETRY_EVENTS = {
 	SDK: {
 		ERROR: SDK_ERROR_TELEMETRY_EVENT,
 		TOOL_TIMEOUT: "sdk.tool_timeout",
+		PLAN_MODE_COMMAND_BLOCKED: "sdk.plan_mode_command_blocked",
 	},
 	FEATURE_FLAGS: {
 		FLAG_CALLED: "$feature_flag_called",
@@ -250,18 +255,27 @@ export function captureAuthStarted(
 export function captureAuthSucceeded(
 	telemetry: ITelemetryService | undefined,
 	provider?: string,
+	details?: {
+		sessionId?: string;
+		sessionDurationMs?: number;
+	},
 ): void {
-	emit(telemetry, CORE_TELEMETRY_EVENTS.USER.AUTH_SUCCEEDED, { provider });
+	emit(telemetry, CORE_TELEMETRY_EVENTS.USER.AUTH_SUCCEEDED, {
+		provider,
+		...details,
+	});
 }
 
 export function captureAuthFailed(
 	telemetry: ITelemetryService | undefined,
 	provider?: string,
 	errorMessage?: string,
+	details?: { requestId?: string },
 ): void {
 	emit(telemetry, CORE_TELEMETRY_EVENTS.USER.AUTH_FAILED, {
 		provider,
 		errorMessage: truncateErrorMessage(errorMessage),
+		...(details?.requestId ? { request_id: details.requestId } : {}),
 	});
 }
 
@@ -269,13 +283,18 @@ export function captureAuthLoggedOut(
 	telemetry: ITelemetryService | undefined,
 	provider?: string,
 	reason?: string,
-	details?: { status?: number; errorCode?: string },
+	details?: {
+		status?: number;
+		errorCode?: string;
+		sessionId?: string;
+		sessionDurationMs?: number;
+		request_id?: string;
+	},
 ): void {
 	emit(telemetry, CORE_TELEMETRY_EVENTS.USER.AUTH_LOGGED_OUT, {
 		provider,
 		reason,
-		status: details?.status,
-		errorCode: details?.errorCode,
+		...details,
 	});
 }
 
@@ -293,16 +312,16 @@ export function captureAuthRefreshSoftFailure(
 	details?: {
 		status?: number;
 		errorCode?: string;
+		request_id?: string;
 		errorName?: string;
 		tokenExpired?: boolean;
+		sessionId?: string;
+		sessionDurationMs?: number;
 	},
 ): void {
 	emit(telemetry, CORE_TELEMETRY_EVENTS.USER.AUTH_REFRESH_SOFT_FAILURE, {
 		provider,
-		status: details?.status,
-		errorCode: details?.errorCode,
-		errorName: details?.errorName,
-		tokenExpired: details?.tokenExpired,
+		...details,
 	});
 }
 
@@ -376,12 +395,35 @@ export function identifyAccount(
 	});
 }
 
+/**
+ * Restore anonymous process identity after an account signs out.
+ *
+ * Account properties are explicitly set to undefined so they replace values
+ * previously merged into a long-lived telemetry service. Implementations
+ * remove undefined attributes before export.
+ */
+export function clearAccountTelemetryIdentity(
+	telemetry: ITelemetryService | undefined,
+	anonymousDistinctId?: string,
+): void {
+	telemetry?.setDistinctId(anonymousDistinctId?.trim() || undefined);
+	telemetry?.updateCommonProperties({
+		user_id: undefined,
+		account_id: undefined,
+		account_email: undefined,
+		provider: undefined,
+		organization_id: undefined,
+		organization_name: undefined,
+		member_id: undefined,
+	});
+}
+
 export function captureTaskCreated(
 	telemetry: ITelemetryService | undefined,
 	properties: {
 		ulid: string;
-		apiProvider?: string;
-		openAiCompatibleDomain?: string;
+		provider?: string;
+		model?: string;
 	} & Partial<TelemetryAgentIdentityProperties>,
 ): void {
 	emit(telemetry, CORE_TELEMETRY_EVENTS.TASK.CREATED, properties);
@@ -391,8 +433,8 @@ export function captureTaskRestarted(
 	telemetry: ITelemetryService | undefined,
 	properties: {
 		ulid: string;
-		apiProvider?: string;
-		openAiCompatibleDomain?: string;
+		provider?: string;
+		model?: string;
 	} & Partial<TelemetryAgentIdentityProperties>,
 ): void {
 	emit(telemetry, CORE_TELEMETRY_EVENTS.TASK.RESTARTED, properties);
@@ -416,7 +458,7 @@ export function captureTaskCompleted(
 	properties: {
 		ulid: string;
 		provider?: string;
-		modelId?: string;
+		model?: string;
 		mode?: string;
 		durationMs?: number;
 		source?: TaskCompletedSource;
@@ -445,11 +487,14 @@ export function captureTokenUsage(
 	telemetry: ITelemetryService | undefined,
 	properties: {
 		ulid: string;
+		/** Uncached input tokens only — disjoint from the cache buckets. */
 		tokensIn: number;
 		tokensOut: number;
 		cacheWriteTokens?: number;
 		cacheReadTokens?: number;
+		/** This request's cost delta, not a running total. */
 		totalCost?: number;
+		provider?: string;
 		model: string;
 	} & Partial<TelemetryAgentIdentityProperties>,
 ): void {
@@ -552,6 +597,32 @@ export function captureRunCommandsTimeout(
 	emit(
 		telemetry,
 		CORE_TELEMETRY_EVENTS.SDK.TOOL_TIMEOUT,
+		stripUndefinedProperties(properties),
+	);
+}
+
+export interface PlanModeCommandBlockedTelemetryProperties {
+	tool_name: "run_commands";
+	/**
+	 * Short description of the blocked construct (e.g. "`rm`", "`sed -i`
+	 * (in-place edit)"). Never contains raw command content.
+	 */
+	blocked_construct: string;
+	command_count: number;
+	agent_id?: string;
+	conversation_id?: string;
+	run_id?: string;
+	iteration?: number;
+	tool_call_id?: string;
+}
+
+export function capturePlanModeCommandBlocked(
+	telemetry: ITelemetryService | undefined,
+	properties: PlanModeCommandBlockedTelemetryProperties,
+): void {
+	emit(
+		telemetry,
+		CORE_TELEMETRY_EVENTS.SDK.PLAN_MODE_COMMAND_BLOCKED,
 		stripUndefinedProperties(properties),
 	);
 }
@@ -716,8 +787,10 @@ export type TelemetryCompactionStrategy = "basic" | "agentic" | "custom";
  * - `auto`   — fired automatically by `createContextCompactionPrepareTurn`
  *   when input tokens reach the fixed compaction threshold.
  * - `manual` — user-initiated (e.g. CLI `/compact`).
+ * - `overflow_recovery` — forced by the runtime after a provider rejected
+ *   the request as exceeding the model's context window.
  */
-export type TelemetryCompactionMode = "auto" | "manual";
+export type TelemetryCompactionMode = "auto" | "manual" | "overflow_recovery";
 
 export interface CaptureCompactionExecutedProperties {
 	ulid: string;
@@ -808,4 +881,40 @@ export function captureCompactionBudgetEmergency(
 		...properties,
 		timestamp: new Date().toISOString(),
 	});
+}
+
+/** Bounded scheduler diagnostics; never include prompts, paths, or raw errors. */
+export function captureScheduleRun(
+	telemetry: ITelemetryService | undefined,
+	input: {
+		triggerKind: "one_off" | "schedule" | "event" | "manual" | "retry";
+		attemptCount: number;
+		startDelayMs: number;
+	} & (
+		| { phase: "started" }
+		| {
+				phase: "finished";
+				outcome: "success" | "failed" | "timeout" | "superseded" | "cancelled";
+				durationMs: number;
+		  }
+	),
+): void {
+	try {
+		emit(
+			telemetry,
+			input.phase === "started"
+				? CORE_TELEMETRY_EVENTS.SCHEDULE.RUN_STARTED
+				: CORE_TELEMETRY_EVENTS.SCHEDULE.RUN_FINISHED,
+			{
+				triggerKind: input.triggerKind,
+				attemptCount: input.attemptCount,
+				startDelayMs: input.startDelayMs,
+				...(input.phase === "finished"
+					? { outcome: input.outcome, durationMs: input.durationMs }
+					: {}),
+			},
+		);
+	} catch {
+		// Observability must never prevent scheduled work from running or completing.
+	}
 }

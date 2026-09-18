@@ -358,6 +358,9 @@ function toSelectionOverrides(entry: StoredModelEntry | undefined): ModelSelecti
 		return undefined
 	}
 	const apiFormat = fromStoredApiFormat(entry.apiFormat)
+	// The stored models-state entry shape is upstream-owned and drifts
+	// independently of this interface; normalizeModelSelectionOverrides
+	// sanitizes every field individually, so a structural cast is safe here.
 	return normalizeModelSelectionOverrides({
 		...(entry.name !== undefined ? { name: entry.name } : {}),
 		...(entry.maxTokens !== undefined ? { maxTokens: entry.maxTokens } : {}),
@@ -374,7 +377,7 @@ function toSelectionOverrides(entry: StoredModelEntry | undefined): ModelSelecti
 		...(entry.temperature !== undefined ? { temperature: entry.temperature } : {}),
 		...(apiFormat !== undefined ? { apiFormat } : {}),
 		...(entry.isR1FormatRequired !== undefined ? { isR1FormatRequired: entry.isR1FormatRequired } : {}),
-	})
+	} as ModelSelectionOverrides)
 }
 
 function readStoredModelEntry(providerId: ProviderId, modelId: string): { exists: boolean; entry: StoredModelEntry | undefined } {
