@@ -1102,62 +1102,32 @@ const OPENAI_COMPATIBLE_SPEC_OVERRIDES: BuiltinSpecOverride[] = [
 	},
 	// iCline-specific providers
 	{
+		// Sakana models/labels come from the generated models.dev catalog
+		// (7 models incl. fugu-ultra-v2, namazu, prompt-cache capability) —
+		// a static modelsFactory here would shadow that live-truth source.
+		// The `protocol` override stays: Sakana's real API speaks OpenAI
+		// Responses, which the generated spec does not encode.
 		id: "sakana",
 		name: "Sakana.ai",
 		description: "Sakana Fugu agentic coding models",
 		family: "openai-compatible",
 		protocol: "openai-responses",
-		capabilities: ["tools", "reasoning"],
-		defaultModelId: "fugu",
 		apiKeyEnv: ["SAKANA_API_KEY"],
 		docsUrl: "https://console.sakana.ai/get-started",
 		defaults: { baseUrl: "https://api.sakana.ai/v1" },
-		modelsFactory: () => ({
-			fugu: {
-				id: "fugu",
-				name: "Fugu",
-				maxTokens: 32768,
-				contextWindow: 1_000_000,
-				supportsImages: true,
-				supportsPromptCache: false,
-				supportsReasoning: true,
-				inputPrice: 5,
-				outputPrice: 30,
-			},
-			"fugu-ultra": {
-				id: "fugu-ultra",
-				name: "Fugu Ultra",
-				maxTokens: 32768,
-				contextWindow: 1_000_000,
-				supportsImages: true,
-				supportsPromptCache: false,
-				supportsReasoning: true,
-				inputPrice: 5,
-				outputPrice: 30,
-			},
-			"fugu-ultra-20260615": {
-				id: "fugu-ultra-20260615",
-				name: "Fugu Ultra (2026-06-15)",
-				maxTokens: 32768,
-				contextWindow: 1_000_000,
-				supportsImages: true,
-				supportsPromptCache: false,
-				supportsReasoning: true,
-				inputPrice: 5,
-				outputPrice: 30,
-			},
-		}),
 	},
 	{
+		// Jan is iCline-only (not on models.dev). The generic OpenAI-compatible
+		// settings form owns model discovery from the user-configured base URL
+		// (Jan's port is configurable), so no fixed-port modelsSourceUrl here.
 		id: "jan",
 		name: "Jan",
-		description: "Jan Desktop Local API Server",
+		description: "Jan Desktop Local API Server (OpenAI-compatible)",
 		family: "openai-compatible",
 		defaultModelId: "",
 		apiKeyEnv: ["JAN_API_KEY"],
 		docsUrl: "https://www.jan.ai/docs/desktop/api-server",
 		defaults: { baseUrl: "http://127.0.0.1:1337/v1" },
-		modelsSourceUrl: "http://127.0.0.1:1337/v1/models",
 	},
 	{
 		id: "zenmux",
