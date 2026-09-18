@@ -1,7 +1,17 @@
 **Last updated:** 2026-09-18
 **Branch:** `feat/upstream-waves-1-2` (จาก main @ `78ebd0923` — รวม dev.5 แล้ว, tag `pre-merge-dev.5`, ยังไม่ push)
 **HEAD:** `19048718b` (chore @types/archiver — เปิดรอบ dev.6)
-**vsix:** ยังไม่มีในรอบนี้ — แพ็กแรกจะเป็น `0.1.18-dev.6-fix.1` (Wave 1); do not overwrite `cline-temp` `fix.1`–`fix.9`
+**vsix:** `apps/vscode/dist/i-mrdedchai.iCline-0.1.18-dev.6-fix.1.vsix` — awaiting maintainer smoke; do not overwrite `cline-temp` `fix.1`–`fix.9`
+
+### 🔀 dev.6 Wave 1 — SDK fast-forward ถึง upstream Sep-16 (`ce25d8b15`, เปิดรอบ)
+
+| # | งาน | Smoke |
+|---|-----|-------|
+| W1-1 | SDK packages (core/shared/llms/agents) ยกทั้งก้อนถึง upstream `173837314` — ครอบ stream retry, terminal reliability, PowerShell fail-fast, editor/CRLF recovery, MCP hang/stdio/OAuth/timeout, checkpoints perf, CVE axios/js-yaml/mermaid/protobufjs | ⏳ รอ smoke |
+| W1-2 | identity re-applied: builtins Sakana/Jan/ZenMux · fix.26 catalog merge logic · JAN enum · upstream cline-free catalog supersede fix.26 blocks | ⏳ ร่วมกับด้านบน |
+| W1-3 | vscode adapt: ลบ onRetryAttempt pass-through, stored-overrides boundary cast, default models ใหม่ (sonnet-5/gemini-3.8) | ⏳ ร่วมกับด้านบน |
+
+**known-failures (ไม่บล็อก):** llms ollama.wire ×4 (third-party serialization เวอร์ชันลอย) · core ~16–26 (upstream tests flaky บน Windows: cron timers/hub listeners/locale sort/git-init/python/bun-ENOENT)
 **รอบ dev.5 ปิดแล้ว (2026-09-18)** — ตารางด้านล่างคือบันทึกประวัติศาสตร์ของ dev.5
 
 **Release plan:** finish this Quick Picker worktree on **dev.5** → merge to main when ordered → ClinePass after that merge. Dynamic model lists for remaining providers stay **dev.6**.
