@@ -1,7 +1,8 @@
 **Last updated:** 2026-09-18
-**Branch:** `fix/compact-durable` (from `main` @ `93b60c1b7`)
-**HEAD:** `d3619d263` (fix.35 — harness overlay อ้างเฉพาะ SDK runtime tools)
-**vsix:** `apps/vscode/dist/i-mrdedchai.iCline-0.1.18-dev.5-fix.35.vsix` — awaiting maintainer smoke; do not overwrite `cline-temp` `fix.1`–`fix.9`
+**Branch:** `feat/upstream-waves-1-2` (จาก main @ `78ebd0923` — รวม dev.5 แล้ว, tag `pre-merge-dev.5`, ยังไม่ push)
+**HEAD:** `19048718b` (chore @types/archiver — เปิดรอบ dev.6)
+**vsix:** ยังไม่มีในรอบนี้ — แพ็กแรกจะเป็น `0.1.18-dev.6-fix.1` (Wave 1); do not overwrite `cline-temp` `fix.1`–`fix.9`
+**รอบ dev.5 ปิดแล้ว (2026-09-18)** — ตารางด้านล่างคือบันทึกประวัติศาสตร์ของ dev.5
 
 **Release plan:** finish this Quick Picker worktree on **dev.5** → merge to main when ordered → ClinePass after that merge. Dynamic model lists for remaining providers stay **dev.6**.
 
