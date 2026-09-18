@@ -11,7 +11,9 @@
 | W1-2 | identity re-applied: builtins Sakana/Jan/ZenMux · fix.26 catalog merge logic · JAN enum · upstream cline-free catalog supersede fix.26 blocks | ⏳ ร่วมกับด้านบน |
 | W1-3 | vscode adapt: ลบ onRetryAttempt pass-through, stored-overrides boundary cast, default models ใหม่ (sonnet-5/gemini-3.8) | ⏳ ร่วมกับด้านบน |
 
-**known-failures (ไม่บล็อก):** llms ollama.wire ×4 (third-party serialization เวอร์ชันลอย) · core ~16–26 (upstream tests flaky บน Windows: cron timers/hub listeners/locale sort/git-init/python/bun-ENOENT)
+**known-failures (ไม่บล็อก):** llms ollama.wire ×4 (third-party serialization เวอร์ชันลอย) · core ~16–26 (upstream tests flaky บน Windows: cron timers/hub listeners/locale sort/git-init/python/bun-ENONENT) · **suite ต้องรัน `--no-file-parallelism` (OOM บน dists ใหม่)**
+
+| **fix.2** | provider parity กับ official: Sakana ลบ static list → generated 8 โมเดล (fugu-ultra-v2/namazu/prompt-cache) · Jan ย้ายไปฟอร์ม OpenAI-compatible (auto model list จาก Base URL — กลไกเดียวกับ official, Jan = iCline-only) · การ์ดสถิติ Providers/Models/Free ใต้หัวข้อ API Configuration · Wave-2 hand-port ffd6a6b1d (summarizer เคารพ Max Output Tokens) — `4b2aec563` | ⏳ รอ smoke |
 **รอบ dev.5 ปิดแล้ว (2026-09-18)** — ตารางด้านล่างคือบันทึกประวัติศาสตร์ของ dev.5
 
 **Release plan:** finish this Quick Picker worktree on **dev.5** → merge to main when ordered → ClinePass after that merge. Dynamic model lists for remaining providers stay **dev.6**.
