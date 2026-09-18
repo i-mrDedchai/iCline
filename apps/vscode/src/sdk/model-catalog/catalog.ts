@@ -209,6 +209,8 @@ function toProviderListing(provider: ProviderListItem): ProviderListing {
 		// fallback; remove it as soon as upstream exposes the signal.
 		allowsCustomModelIds: providerAllowsCustomModelIds(provider.id),
 		usageCostDisplay: readUsageCostDisplay(provider.id),
+		modelCount: provider.models ?? undefined,
+		freeModelCount: provider.freeModels,
 	}
 }
 

@@ -791,6 +791,9 @@ export async function listLocalProviders(
 						id,
 						name,
 						models: modelList.length,
+						freeModels: modelList.filter(
+							(model) => model.featured?.tier === "free",
+						).length,
 						color: stableColor(id),
 						letter: createLetter(name),
 						enabled: Boolean(directSettings ?? sharedSettings),

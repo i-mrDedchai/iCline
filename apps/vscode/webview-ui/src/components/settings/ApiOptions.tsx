@@ -14,6 +14,7 @@ import { getActiveProviderAndModelId } from "@/hooks/useNormalizedApiConfigurati
 import { useProviderListings } from "@/hooks/useProviderListings"
 import { ModelsServiceClient } from "@/services/grpc-client"
 import { OPENROUTER_MODEL_PICKER_Z_INDEX } from "./OpenRouterModelPicker"
+import { ProviderStatsCard } from "./ProviderStatsCard"
 import { AIhubmixProvider } from "./providers/AihubmixProvider"
 import { AnthropicProvider } from "./providers/AnthropicProvider"
 import { AskSageProvider } from "./providers/AskSageProvider"
@@ -27,7 +28,6 @@ import { GenericProviderSettings } from "./providers/GenericProviderSettings"
 import { GroqProvider } from "./providers/GroqProvider"
 import { HicapProvider } from "./providers/HicapProvider"
 import { HuggingFaceProvider } from "./providers/HuggingFaceProvider"
-import { JanProvider } from "./providers/JanProvider"
 import { LiteLlmProvider } from "./providers/LiteLlmProvider"
 import { LMStudioProvider } from "./providers/LMStudioProvider"
 import { MoonshotProvider } from "./providers/MoonshotProvider"
@@ -302,6 +302,7 @@ const ApiOptions = ({
 				}
 				`}
 			</style>
+			<ProviderStatsCard />
 			<DropdownContainer className="dropdown-container">
 				{remoteConfigSettings?.remoteConfiguredProviders && remoteConfigSettings.remoteConfiguredProviders.length > 0 ? (
 					<Tooltip>
@@ -487,10 +488,6 @@ const ApiOptions = ({
 				<SakanaProvider currentMode={currentMode} isPopup={isPopup} showModelOptions={showModelOptions} />
 			)}
 
-			{apiConfiguration && selectedProvider === "jan" && (
-				<JanProvider currentMode={currentMode} isPopup={isPopup} showModelOptions={showModelOptions} />
-			)}
-
 			{apiConfiguration && selectedProvider === "xai" && (
 				<XaiProvider currentMode={currentMode} isPopup={isPopup} showModelOptions={showModelOptions} />
 			)}
@@ -513,7 +510,7 @@ const ApiOptions = ({
 				<AIhubmixProvider currentMode={currentMode} isPopup={isPopup} showModelOptions={showModelOptions} />
 			)}
 
-			{apiConfiguration && (selectedProvider === "openai" || isCustomProvider) && (
+			{apiConfiguration && (selectedProvider === "openai" || selectedProvider === "jan" || isCustomProvider) && (
 				<OpenAICompatibleProvider
 					currentMode={currentMode}
 					isPopup={isPopup}

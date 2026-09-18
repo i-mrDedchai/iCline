@@ -292,6 +292,10 @@ export interface ProviderListing {
 	 * set `metadata.usageCostDisplay`.
 	 */
 	readonly usageCostDisplay: UsageCostDisplay
+	/** Bundled catalog size for this provider (settings summary card). */
+	readonly modelCount?: number
+	/** Models featured in the feed's "free" tier (cline / cline-pass only). */
+	readonly freeModelCount?: number
 }
 
 // ---------------------------------------------------------------------------

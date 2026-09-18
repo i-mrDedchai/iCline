@@ -211,6 +211,12 @@ export interface ProviderListItem {
 	id: string;
 	name: string;
 	models: number | null;
+	/**
+	 * Models in this provider's list featured as the feed's "free" tier
+	 * (cline / cline-pass only; 0 elsewhere). Drives the settings-page
+	 * catalog summary card.
+	 */
+	freeModels?: number;
 	color: string;
 	letter: string;
 	enabled: boolean;

@@ -175,6 +175,12 @@ message ProviderListing {
   optional string base_url_description = 7;
   bool allows_custom_model_ids = 8;
 
+  // Catalog summary counts for the settings-page stats card. model_count is
+  // the provider's bundled catalog size; free_model_count is the number of
+  // its models featured in the feed's "free" tier (cline / cline-pass only).
+  optional int32 model_count = 12;
+  optional int32 free_model_count = 13;
+
   // SDK-driven hint for cost display. Values: "show" (default) or "hide".
   // Sourced from `resolveProviderUsageCostDisplay(provider.metadata)` in
   // `@cline/llms`. When "hide", consumers must suppress per-token pricing

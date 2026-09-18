@@ -648,7 +648,8 @@ describe("buildSessionConfig", () => {
 		expect(config.modelId).toBe("custom-reasoner")
 		expect(config.knownModels).toBeUndefined()
 		expect((config.providerConfig as any).knownModels).toBeDefined()
-		expect((config.providerConfig as any).maxOutputTokens).toBeUndefined()
+		// Mirrored onto providerConfig for the compaction summarizer (CLINE-2911).
+		expect((config.providerConfig as any).maxOutputTokens).toBe(4_096)
 		expect((config as any).maxTokensPerTurn).toBe(4_096)
 	})
 
@@ -722,6 +723,7 @@ describe("buildSessionConfig", () => {
 		const config = await buildSessionConfig({ cwd: "/tmp/workspace" })
 
 		expect((config as any).maxTokensPerTurn).toBeUndefined()
+		expect((config.providerConfig as any).maxOutputTokens).toBeUndefined()
 		expect((config as any).temperature).toBeUndefined()
 		const knownModel = (config.providerConfig as any).knownModels["custom-reasoner"]
 		expect(knownModel).not.toHaveProperty("maxTokens")

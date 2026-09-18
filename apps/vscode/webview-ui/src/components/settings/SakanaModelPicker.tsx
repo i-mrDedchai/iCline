@@ -1,8 +1,9 @@
 import { type SakanaModelId, sakanaDefaultModelId, sakanaModels } from "@shared/api"
 import type { Mode } from "@shared/storage/types"
 import { VSCodeDropdown, VSCodeOption } from "@vscode/webview-ui-toolkit/react"
-import React from "react"
+import React, { useMemo } from "react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
+import { useProviderModels } from "@/hooks/useProviderModels"
 import { DROPDOWN_Z_INDEX } from "./ApiOptions"
 import { ModelInfoView } from "./common/ModelInfoView"
 import { DropdownContainer, ModelSelector } from "./common/ModelSelector"
@@ -32,13 +33,27 @@ const SakanaModelPicker: React.FC<SakanaModelPickerProps> = ({ isPopup, currentM
 	const { apiConfiguration } = useExtensionState()
 	const { handleModeFieldsChange, handleModeFieldChange } = useApiConfigurationHandlers()
 	const modeFields = getModeSpecificFields(apiConfiguration, currentMode)
+	// Live registry models (generated models.dev catalog — currently 7 entries
+	// incl. fugu-ultra-v2 / namazu with prompt-cache) win per-id; the static
+	// @shared/api table stays as the offline/first-paint fallback.
+	const { models: liveSakanaModels, defaultModelId: liveDefaultModelId } = useProviderModels("sakana")
+	const models = useMemo(() => {
+		if (liveSakanaModels && Object.keys(liveSakanaModels).length > 0) {
+			return { ...sakanaModels, ...liveSakanaModels }
+		}
+		return sakanaModels
+	}, [liveSakanaModels])
+	const defaultModelId =
+		liveSakanaModels && Object.keys(liveSakanaModels).length > 0
+			? liveDefaultModelId || sakanaDefaultModelId
+			: sakanaDefaultModelId
 
-	const selectedModelId = modeFields.sakanaModelId || sakanaDefaultModelId
-	const selectedModelInfo = modeFields.sakanaModelInfo || sakanaModels[selectedModelId as SakanaModelId]
+	const selectedModelId = modeFields.sakanaModelId || defaultModelId
+	const selectedModelInfo = modeFields.sakanaModelInfo || models[selectedModelId as SakanaModelId]
 	const selectedReasoningEffort = normalizeSakanaReasoningEffort(modeFields.reasoningEffort, selectedModelId)
 
 	const handleModelChange = (newModelId: string) => {
-		const modelInfo = sakanaModels[newModelId as SakanaModelId]
+		const modelInfo = models[newModelId as SakanaModelId]
 		handleModeFieldsChange(
 			{
 				sakanaModelId: { plan: "planModeSakanaModelId", act: "actModeSakanaModelId" },
@@ -60,7 +75,7 @@ const SakanaModelPicker: React.FC<SakanaModelPickerProps> = ({ isPopup, currentM
 			<div style={{ marginBottom: 12 }}>
 				<ModelSelector
 					label="Model"
-					models={sakanaModels}
+					models={models}
 					onChange={(e: any) => handleModelChange(e.target.value)}
 					selectedModelId={selectedModelId}
 					zIndex={DROPDOWN_Z_INDEX - 100}
