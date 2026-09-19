@@ -13,6 +13,7 @@ import { parseProviderId } from "./provider-id"
 
 const mocks = vi.hoisted(() => ({
 	resolveProviderConfig: vi.fn(),
+	fetchServerModels: vi.fn(async (): Promise<string[]> => []),
 	listLocalProviders: vi.fn(),
 	getBooleanFlagEnabled: vi.fn(() => false),
 	pollFeatureFlags: vi.fn(async (): Promise<void> => undefined),
@@ -37,6 +38,10 @@ vi.mock("@/services/feature-flags", () => ({
 
 vi.mock("@/services/logging/distinctId", () => ({
 	setDistinctId: vi.fn(),
+}))
+
+vi.mock("./server-models", () => ({
+	fetchServerModels: mocks.fetchServerModels,
 }))
 
 vi.mock("../provider-migration", () => ({
@@ -794,5 +799,42 @@ describe("resolveXaiAuthAwareModels (picker must match Settings list)", () => {
 		const result = await _testing.resolveXaiAuthAwareModels(providerId, {} as Fingerprint, now)
 
 		expect([...result.models.keys()].sort()).toEqual(["grok-build", "grok-composer-2.5-fast"])
+	})
+})
+
+describe("dynamic server-list providers (jan)", () => {
+	beforeEach(() => {
+		mocks.fetchServerModels.mockClear()
+	})
+
+	it("fills an empty catalog from the provider's configured server (picker parity with settings)", async () => {
+		const { createProviderCatalog } = await import("./catalog")
+		mocks.resolveProviderConfig.mockResolvedValue({ modelId: "", knownModels: {} })
+		mocks.fetchServerModels.mockResolvedValue(["ornith-1_0-9b-Q6_K"])
+
+		const providerId = parseProviderId("jan")
+		const result = await createProviderCatalog(
+			makeReader({ providerId, baseUrl: "http://127.0.0.1:6767/v1", apiKey: "k" }),
+		).resolveModels(providerId)
+
+		expect(mocks.fetchServerModels).toHaveBeenCalledWith(
+			expect.objectContaining({ providerId: "jan", baseUrl: "http://127.0.0.1:6767/v1", apiKey: "k" }),
+		)
+		const models = result.ok ? result.models : new Map()
+		expect(models.has("ornith-1_0-9b-Q6_K")).toBe(true)
+		expect(models.get("ornith-1_0-9b-Q6_K")).toMatchObject({ name: "ornith-1_0-9b-Q6_K", supportsPromptCache: false })
+	})
+
+	it("does not hit the server for providers that already have a bundled catalog", async () => {
+		const { createProviderCatalog } = await import("./catalog")
+		mocks.resolveProviderConfig.mockResolvedValue({
+			modelId: "claude-sonnet-5",
+			knownModels: { "claude-sonnet-5": { id: "claude-sonnet-5" } },
+		})
+
+		const providerId = parseProviderId("anthropic")
+		await createProviderCatalog(makeReader({ providerId })).resolveModels(providerId)
+
+		expect(mocks.fetchServerModels).not.toHaveBeenCalled()
 	})
 })

@@ -22,6 +22,7 @@
  */
 
 import { CLINE_RECOMMENDED_MODELS_FALLBACK } from "@shared/cline/recommended-models"
+import { toLegacyApiProvider } from "@shared/model-catalog/provider-helpers"
 import { CommitModelSelectionRequest } from "@shared/proto/cline/models"
 import { isOpenaiReasoningEffort, OPENAI_REASONING_EFFORT_OPTIONS, type OpenaiReasoningEffort } from "@shared/storage/types"
 import { Check, ChevronDown, Pencil, RefreshCw, Search } from "lucide-react"
@@ -170,7 +171,8 @@ function ModelRow({
 
 export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPickerProps) {
 	const { providers, isLoading: providersLoading } = useProviderListings()
-	const { mode, apiConfiguration, providerModelsByProvider } = useExtensionState()
+	const { mode, apiConfiguration, providerModelsByProvider, planActSeparateModelsSetting, applyApiConfigurationPatch } =
+		useExtensionState()
 	const { selectedProvider: currentProvider, selectedModelId: currentModelId } = useNormalizedApiConfiguration(mode)
 	const {
 		recommended: clineRecommendedFeatured,
@@ -264,6 +266,16 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 						mode,
 						modelId,
 					}),
+				)
+				// Optimistic provider echo: reflect the committed selection
+				// immediately instead of waiting for the state push (the display
+				// freeze class). The next push carries the authoritative copy.
+				const legacyProviderId = toLegacyApiProvider(providerId)
+				const providerField = mode === "plan" ? "planModeApiProvider" : "actModeApiProvider"
+				applyApiConfigurationPatch(
+					planActSeparateModelsSetting
+						? { [providerField]: legacyProviderId }
+						: { planModeApiProvider: legacyProviderId, actModeApiProvider: legacyProviderId },
 				)
 				setOpen(false)
 			} catch (err) {

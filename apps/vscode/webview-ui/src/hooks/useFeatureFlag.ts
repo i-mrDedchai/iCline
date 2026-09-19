@@ -9,19 +9,30 @@ import { useExtensionState } from "../context/ExtensionStateContext"
  * functionality can be gated even when telemetry is disabled. In self-hosted
  * mode, PostHog is not initialized, so feature flags are treated as disabled.
  */
+/**
+ * iCline defaults for flags that gate features iCline ships and hardens
+ * itself (the backend payload still wins whenever PostHog answers).
+ */
+const ICLINE_FLAG_DEFAULTS: Record<string, boolean> = {
+	"ext-cline-pass": true,
+}
+
 export const useHasFeatureFlag = (flagName: string): boolean => {
 	const { environment } = useExtensionState()
 	const isSelfHostedOrUnknown = !environment || environment === "selfHosted"
-	const [flagEnabled, setFlagEnabled] = useState(false)
+	const [flagEnabled, setFlagEnabled] = useState(ICLINE_FLAG_DEFAULTS[flagName] === true)
 
 	useEffect(() => {
 		if (isSelfHostedOrUnknown) {
-			setFlagEnabled(false)
+			setFlagEnabled(ICLINE_FLAG_DEFAULTS[flagName] === true)
 			return
 		}
 
 		const readFlag = () => {
-			setFlagEnabled(posthog.isFeatureEnabled(flagName) === true)
+			const enabled = posthog.isFeatureEnabled(flagName)
+			// Undecided (PostHog not initialized / flag absent) falls back to the
+			// iCline default; an explicit backend decision always wins.
+			setFlagEnabled(enabled ?? ICLINE_FLAG_DEFAULTS[flagName] === true)
 		}
 
 		readFlag()
@@ -29,7 +40,7 @@ export const useHasFeatureFlag = (flagName: string): boolean => {
 	}, [flagName, isSelfHostedOrUnknown])
 
 	if (isSelfHostedOrUnknown) {
-		return false
+		return ICLINE_FLAG_DEFAULTS[flagName] === true
 	}
 
 	return flagEnabled

@@ -1,4 +1,5 @@
 import { DEFAULT_AUTO_APPROVAL_SETTINGS } from "@shared/AutoApprovalSettings"
+import type { ApiConfiguration } from "@shared/api"
 import { DEFAULT_BROWSER_SETTINGS } from "@shared/BrowserSettings"
 import { DEFAULT_PLATFORM, type ExtensionState } from "@shared/ExtensionMessage"
 import { DEFAULT_MCP_DISPLAY_MODE } from "@shared/McpDisplayMode"
@@ -46,6 +47,9 @@ interface ProviderModelsState {
 }
 
 export interface ExtensionStateContextType extends ExtensionState {
+	/** Apply a partial api configuration locally (optimistic selection echo —
+	 * the next state push carries the authoritative copy). */
+	applyApiConfigurationPatch: (patch: Partial<ApiConfiguration>) => void
 	/**
 	 * Read the CURRENT state imperatively (event handlers that fire after an
 	 * async commit+push must not build writes from a captured render-time
@@ -342,6 +346,12 @@ export const ExtensionStateContextProvider: React.FC<{
 	const stateRef = useRef(state)
 	stateRef.current = state
 	const getState = useCallback(() => stateRef.current, [])
+	const applyApiConfigurationPatch = useCallback((patch: Partial<ApiConfiguration>) => {
+		setState((prevState) => ({
+			...prevState,
+			apiConfiguration: { ...prevState.apiConfiguration, ...patch },
+		}))
+	}, [])
 
 	const [expandTaskHeader, setExpandTaskHeader] = useState(true)
 	const [didHydrateState, setDidHydrateState] = useState(false)
@@ -945,6 +955,7 @@ export const ExtensionStateContextProvider: React.FC<{
 
 	const contextValue: ExtensionStateContextType = {
 		...state,
+		applyApiConfigurationPatch,
 		getState,
 		didHydrateState,
 		showWelcome,

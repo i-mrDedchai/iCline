@@ -1,3 +1,4 @@
+import { toLegacyApiProvider } from "@shared/model-catalog/provider-helpers"
 import { CommitModelSelectionRequest } from "@shared/proto/cline/models"
 import type { Mode } from "@shared/storage/types"
 import { VSCodeTextField } from "@vscode/webview-ui-toolkit/react"
@@ -93,7 +94,8 @@ const ApiOptions = ({
 	initialModelTab,
 }: ApiOptionsProps) => {
 	// Use full context state for immediate save payload
-	const { apiConfiguration, remoteConfigSettings } = useExtensionState()
+	const { apiConfiguration, remoteConfigSettings, planActSeparateModelsSetting, applyApiConfigurationPatch } =
+		useExtensionState()
 	const isClinePassEnabled = useHasFeatureFlag(CLINE_PASS_FEATURE_FLAG)
 
 	const selectedProviderRaw =
@@ -201,7 +203,19 @@ const ApiOptions = ({
 				providerId: newProvider,
 				mode: currentMode,
 			}),
-		).catch((err) => console.error("Failed to commit provider selection:", err))
+		)
+			.then(() => {
+				// Optimistic provider echo (display-freeze class): reflect the
+				// committed provider immediately; the next state push carries
+				// the authoritative copy including the resolved model id.
+				const legacyProviderId = toLegacyApiProvider(newProvider)
+				applyApiConfigurationPatch(
+					planActSeparateModelsSetting
+						? { [`${currentMode}ModeApiProvider`]: legacyProviderId }
+						: { planModeApiProvider: legacyProviderId, actModeApiProvider: legacyProviderId },
+				)
+			})
+			.catch((err) => console.error("Failed to commit provider selection:", err))
 		setIsDropdownVisible(false)
 		setSelectedIndex(-1)
 	}

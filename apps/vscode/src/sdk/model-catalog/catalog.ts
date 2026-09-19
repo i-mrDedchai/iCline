@@ -26,6 +26,7 @@ import { computeConfigFingerprint } from "./fingerprint"
 import { applyHostModelInfoOverrides } from "./host-overrides"
 import { parseProviderId } from "./provider-id"
 import { toSdkProviderId } from "./sdk-provider-id"
+import { fetchServerModels } from "./server-models"
 import { adaptSdkModelInfo, CatalogShapeError } from "./shape-adapter"
 
 type ProviderModelsRecord = Extract<ProviderModelsResult, { ok: true }>
@@ -320,12 +321,37 @@ async function resolveSdkModels(
 		toSdkProviderConfig(config, selection),
 	)
 	const sdkModels = resolved?.knownModels ?? {}
+
+	// Dynamic-list providers (Jan): neither the bundled catalog nor models.dev
+	// knows their models — the source of truth is the user-configured server
+	// itself. When the catalog comes back empty, ask that server for its
+	// OpenAI-compatible list so the picker matches the Settings page (which
+	// fetches the same endpoint).
+	const DYNAMIC_SERVER_LIST_PROVIDERS = new Set(["jan"])
+	const serverModelIds =
+		Object.keys(sdkModels).length === 0 && DYNAMIC_SERVER_LIST_PROVIDERS.has(providerId.toString())
+			? await fetchServerModels({
+					providerId: providerId.toString(),
+					baseUrl: config.baseUrl,
+					apiKey: config.apiKey,
+				})
+			: []
+
 	const models = new Map(
 		Object.entries(sdkModels).map(([modelId, sdkInfo]) => [
 			modelId,
 			applyHostModelInfoOverrides(providerId, modelId, adaptSdkModelInfo(sdkInfo)),
 		]),
 	)
+	// Server-list entries are already host-shaped minimal ModelInfo records —
+	// they must not go through adaptSdkModelInfo (which validates the SDK
+	// catalog shape and rejects minimal entries).
+	for (const id of serverModelIds) {
+		// ModelInfo carries no `id` field — the map key is the id everywhere.
+		// Server ids are opaque (real model ids from the user's server), so all
+		// capability/pricing fields stay absent rather than guessed.
+		models.set(id, applyHostModelInfoOverrides(providerId, id, { name: id, supportsPromptCache: false }))
+	}
 	return {
 		ok: true,
 		providerId,

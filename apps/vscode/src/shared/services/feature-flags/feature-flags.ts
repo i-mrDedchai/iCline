@@ -29,7 +29,11 @@ export const FeatureFlagDefaultValue: Partial<Record<FeatureFlag, FeatureFlagPay
 	[FeatureFlag.EXTENSION_REMOTE_BANNERS_TTL]: 24 * 60 * 60 * 1000,
 	[FeatureFlag.REMOTE_WELCOME_BANNERS]: process.env.E2E_TEST === "true" || process.env.IS_DEV === "true",
 	[FeatureFlag.EXTENSION_CLINE_MODELS_ENDPOINT]: false,
-	[FeatureFlag.CLINE_PASS]: false,
+	// iCline: ClinePass is a shipped, hardened feature (identity headers,
+	// token rotation, known-models truth). Default ON so it appears in the
+	// provider list without official's rollout flags; an explicit backend
+	// payload still wins over this default.
+	[FeatureFlag.CLINE_PASS]: true,
 	[FeatureFlag.CLINE_RECOMMENDED_MODELS_UPSTREAM]: false,
 	[FeatureFlag.OPENAI_RESPONSES_WEBSOCKET_MODE]: false,
 }
