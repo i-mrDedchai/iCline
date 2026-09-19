@@ -39,9 +39,9 @@ import { OptionsButtons } from "@/components/chat/OptionsButtons"
 import { WithCopyButton } from "@/components/common/CopyButton"
 import McpResponseDisplay from "@/components/mcp/chat-display/McpResponseDisplay"
 import McpResourceRow from "@/components/mcp/configuration/tabs/installed/server-row/McpResourceRow"
-import { AGENT_DISPLAY_NAME } from "@/icline/agent-display-name"
 import McpToolRow from "@/components/mcp/configuration/tabs/installed/server-row/McpToolRow"
 import { useExtensionState } from "@/context/ExtensionStateContext"
+import { AGENT_DISPLAY_NAME } from "@/icline/agent-display-name"
 import { cn } from "@/lib/utils"
 import { FileServiceClient, UiServiceClient } from "@/services/grpc-client"
 import { findMatchingResourceOrTemplate } from "@/utils/mcp"
@@ -320,7 +320,8 @@ export const ChatRowContent = memo(
 							<span className="codicon codicon-server text-foreground mb-[-1.5px]" />
 						),
 						<span className="ph-no-capture font-bold text-foreground break-words">
-							{AGENT_DISPLAY_NAME} wants to {mcpServerUse.type === "use_mcp_tool" ? "use a tool" : "access a resource"} on the{" "}
+							{AGENT_DISPLAY_NAME} wants to{" "}
+							{mcpServerUse.type === "use_mcp_tool" ? "use a tool" : "access a resource"} on the{" "}
 							<code className="break-all">{mcpServerUse.serverName}</code> MCP server:
 						</span>,
 					]
@@ -414,8 +415,8 @@ export const ChatRowContent = memo(
 					const content = tool?.content || ""
 					const isApplyingPatch = content?.startsWith("%%bash") && !content.endsWith("*** End Patch\nEOF")
 					const editToolTitle = isApplyingPatch
-					? `${AGENT_DISPLAY_NAME} is creating patches to edit this file:`
-					: `${AGENT_DISPLAY_NAME} wants to edit this file:`
+						? `${AGENT_DISPLAY_NAME} is creating patches to edit this file:`
+						: `${AGENT_DISPLAY_NAME} wants to edit this file:`
 					return (
 						<div>
 							<div className={HEADER_CLASSNAMES}>
@@ -531,8 +532,8 @@ export const ChatRowContent = memo(
 									toolIcon("sign-out", "yellow", -90, "This is outside of your workspace")}
 								<span style={{ fontWeight: "bold" }}>
 									{message.type === "ask"
-									? `${AGENT_DISPLAY_NAME} wants to view the top level files in this directory:`
-									: `${AGENT_DISPLAY_NAME} viewed the top level files in this directory:`}
+										? `${AGENT_DISPLAY_NAME} wants to view the top level files in this directory:`
+										: `${AGENT_DISPLAY_NAME} viewed the top level files in this directory:`}
 								</span>
 							</div>
 							<CodeAccordian
@@ -553,8 +554,8 @@ export const ChatRowContent = memo(
 									toolIcon("sign-out", "yellow", -90, "This is outside of your workspace")}
 								<span style={{ fontWeight: "bold" }}>
 									{message.type === "ask"
-									? `${AGENT_DISPLAY_NAME} wants to recursively view all files in this directory:`
-									: `${AGENT_DISPLAY_NAME} recursively viewed all files in this directory:`}
+										? `${AGENT_DISPLAY_NAME} wants to recursively view all files in this directory:`
+										: `${AGENT_DISPLAY_NAME} recursively viewed all files in this directory:`}
 								</span>
 							</div>
 							<CodeAccordian
@@ -575,8 +576,8 @@ export const ChatRowContent = memo(
 									toolIcon("sign-out", "yellow", -90, "This file is outside of your workspace")}
 								<span style={{ fontWeight: "bold" }}>
 									{message.type === "ask"
-									? `${AGENT_DISPLAY_NAME} wants to view source code definition names used in this directory:`
-									: `${AGENT_DISPLAY_NAME} viewed source code definition names used in this directory:`}
+										? `${AGENT_DISPLAY_NAME} wants to view source code definition names used in this directory:`
+										: `${AGENT_DISPLAY_NAME} viewed source code definition names used in this directory:`}
 								</span>
 							</div>
 							<CodeAccordian
@@ -595,7 +596,8 @@ export const ChatRowContent = memo(
 								{tool.operationIsLocatedInWorkspace === false &&
 									toolIcon("sign-out", "yellow", -90, "This is outside of your workspace")}
 								<span className="font-bold">
-									{AGENT_DISPLAY_NAME} wants to search this directory for <code className="break-all">{tool.regex}</code>:
+									{AGENT_DISPLAY_NAME} wants to search this directory for{" "}
+									<code className="break-all">{tool.regex}</code>:
 								</span>
 							</div>
 							<SearchResultsDisplay
@@ -657,8 +659,8 @@ export const ChatRowContent = memo(
 									toolIcon("sign-out", "yellow", -90, "This URL is external")}
 								<span className="font-bold">
 									{message.type === "ask"
-									? `${AGENT_DISPLAY_NAME} wants to fetch content from this URL:`
-									: `${AGENT_DISPLAY_NAME} fetched content from this URL:`}
+										? `${AGENT_DISPLAY_NAME} wants to fetch content from this URL:`
+										: `${AGENT_DISPLAY_NAME} fetched content from this URL:`}
 								</span>
 							</div>
 							<div
@@ -686,8 +688,8 @@ export const ChatRowContent = memo(
 									toolIcon("sign-out", "yellow", -90, "This search is external")}
 								<span className="font-bold">
 									{message.type === "ask"
-									? `${AGENT_DISPLAY_NAME} wants to search the web for:`
-									: `${AGENT_DISPLAY_NAME} searched the web for:`}
+										? `${AGENT_DISPLAY_NAME} wants to search the web for:`
+										: `${AGENT_DISPLAY_NAME} searched the web for:`}
 								</span>
 							</div>
 							<div className="bg-code border border-editor-group-border overflow-hidden rounded-xs select-text py-[9px] px-2.5">
@@ -855,25 +857,51 @@ export const ChatRowContent = memo(
 							</div>
 						)
 					case "text": {
+						// fix.6: the FINAL assistant reply renders as a tinted
+						// completion card (COMPLETED header + always-visible copy,
+						// top-right) — official-parity for text-only endings
+						// (deepseek/glm answer conversationally without
+						// attempt_completion). Streaming/older rows stay plain.
+						const isFinalReply = isLast && message.partial !== true && Boolean(message.text)
+						const cardStyle: React.CSSProperties = {
+							borderRadius: 10,
+							border: "1px solid rgba(96,140,255,0.28)",
+							background: "rgba(96,140,255,0.08)",
+							padding: "8px 12px",
+						}
 						return (
-							<WithCopyButton
-								onMouseUp={handleMouseUp}
-								position="bottom-right"
-								ref={contentRef}
-								textToCopy={message.text}>
-								<div className="flex items-center">
-									<div className={cn("flex-1 min-w-0 pl-1")}>
-										<MarkdownRow markdown={message.text} showCursor={false} />
+							<div style={isFinalReply ? cardStyle : undefined}>
+								{isFinalReply && (
+									<div
+										className="flex items-center justify-between mb-1"
+										style={{
+											fontSize: 11,
+											fontWeight: 600,
+											letterSpacing: "0.4px",
+											color: "var(--vscode-descriptionForeground)",
+										}}>
+										<span>COMPLETED</span>
 									</div>
-								</div>
-								{quoteButtonState.visible && (
-									<QuoteButton
-										left={quoteButtonState.left}
-										onClick={handleQuoteClick}
-										top={quoteButtonState.top}
-									/>
 								)}
-							</WithCopyButton>
+								<WithCopyButton
+									onMouseUp={handleMouseUp}
+									position={isFinalReply ? "top-right" : "bottom-right"}
+									ref={contentRef}
+									textToCopy={message.text}>
+									<div className="flex items-center">
+										<div className={cn("flex-1 min-w-0 pl-1")}>
+											<MarkdownRow markdown={message.text} showCursor={false} />
+										</div>
+									</div>
+									{quoteButtonState.visible && (
+										<QuoteButton
+											left={quoteButtonState.left}
+											onClick={handleQuoteClick}
+											top={quoteButtonState.top}
+										/>
+									)}
+								</WithCopyButton>
+							</div>
 						)
 					}
 					case "reasoning": {
@@ -952,8 +980,8 @@ export const ChatRowContent = memo(
 									<TriangleAlertIcon className="mr-2 size-2 stroke-3 text-error" />
 									<span className="font-medium text-foreground">Shell Integration Unavailable</span>
 								</div>
-							<div className="text-foreground opacity-80">
-								{AGENT_DISPLAY_NAME} may have trouble viewing the command's output. Please update VSCode (
+								<div className="text-foreground opacity-80">
+									{AGENT_DISPLAY_NAME} may have trouble viewing the command's output. Please update VSCode (
 									<code>CMD/CTRL + Shift + P</code> → "Update") and make sure you're using a supported shell:
 									zsh, bash, fish, or PowerShell (<code>CMD/CTRL + Shift + P</code> → "Terminal: Select Default
 									Profile").
@@ -1146,7 +1174,9 @@ export const ChatRowContent = memo(
 							<div>
 								<div className={HEADER_CLASSNAMES}>
 									<FilePlus2Icon className="size-2" />
-									<span className="text-foreground font-bold">{AGENT_DISPLAY_NAME} wants to start a new task:</span>
+									<span className="text-foreground font-bold">
+										{AGENT_DISPLAY_NAME} wants to start a new task:
+									</span>
 								</div>
 								<NewTaskPreview context={message.text || ""} />
 							</div>
@@ -1156,7 +1186,9 @@ export const ChatRowContent = memo(
 							<div>
 								<div className={HEADER_CLASSNAMES}>
 									<FilePlus2Icon className="size-2" />
-									<span className="text-foreground font-bold">{AGENT_DISPLAY_NAME} wants to condense your conversation:</span>
+									<span className="text-foreground font-bold">
+										{AGENT_DISPLAY_NAME} wants to condense your conversation:
+									</span>
 								</div>
 								<NewTaskPreview context={message.text || ""} />
 							</div>
@@ -1166,7 +1198,9 @@ export const ChatRowContent = memo(
 							<div>
 								<div className={HEADER_CLASSNAMES}>
 									<FilePlus2Icon className="size-2" />
-									<span className="text-foreground font-bold">{AGENT_DISPLAY_NAME} wants to create a Github issue:</span>
+									<span className="text-foreground font-bold">
+										{AGENT_DISPLAY_NAME} wants to create a Github issue:
+									</span>
 								</div>
 								<ReportBugPreview data={message.text || ""} />
 							</div>
