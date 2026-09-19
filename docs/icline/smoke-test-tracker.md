@@ -1,7 +1,41 @@
 **Last updated:** 2026-09-19
 **Branch:** `feat/upstream-waves-1-2` (จาก main @ `78ebd0923` — รวม dev.5 แล้ว, tag `pre-merge-dev.5`, ยังไม่ push)
 **HEAD:** `19048718b` (chore @types/archiver — เปิดรอบ dev.6)
-**vsix (ล่าสุด):** `apps/vscode/dist/i-mrdedchai.iCline-0.1.18-dev.6-fix.13.vsix` (11,959,968 B @ 2026-09-19 16:05Z · About = `dev build 6 · fix.13`) — ⏳ **รอบนี้คือ fix.13** · do not overwrite `fix.1`–`fix.12` ใน `dist/`
+**vsix (ล่าสุด):** `apps/vscode/dist/i-mrdedchai.iCline-0.1.18-dev.6-fix.14.vsix` (11,961,735 B @ 2026-09-19 16:50Z · About = `dev build 6 · fix.14`) — ⏳ **รอบนี้คือ fix.14** · do not overwrite `fix.1`–`fix.13` ใน `dist/`
+
+---
+
+## 🔎 dev.6-fix.14 — พจนานุกรม Effort เดียวทั้งแอป + ปิดฟอร์ม Settings ของ Sakana ที่ซ้อนกัน (2026-09-19)
+
+**สถานะ:** ✅ แก้แล้ว + unit/e2e ผ่านบน VS Code จริง · ⏳ รอ maintainer smoke (VSIX `dev.6-fix.14`)
+
+**ที่มา (2 เรื่องที่รวมรอบเดียวกัน เพราะแก้ "ค่า/สิ่งที่แสดง ไม่ตรงกับสิ่งที่ทำงานจริง" เหมือนกัน):**
+
+1. **มีพจนานุกรม effort 3 ชุด** — SDK (`REASONING_LEVELS`) รับ `none·minimal·low·medium·high·xhigh·max` / แอปเก็บได้แค่ 5 ตัว (ขาด `minimal`,`max`) / gate ตอนส่ง request ผ่านแค่ `low|medium|high` (fix.13 บันทึกไว้เป็น "ข้อสังเกตที่ยังไม่ได้แก้")
+2. **Settings ของ Sakana.ai มีสองฟอร์มเรนเดอร์ซ้อนกัน** (รายงานจาก maintainer: "UXUI มีส่วนทับซ้อนกัน")
+
+**รากของ (1):** `normalizeOpenaiReasoningEffort()` แปลงค่าที่ไม่อยู่ในลิสต์ 5 ตัวเป็น `medium` และมันถูกเรียกบนเส้นทาง task settings จริง (`updateTaskSettings.ts` · `newTask.ts`) → **`max` ของ Sakana กลายเป็น `medium` เงียบ ๆ** ส่วน `xhigh` รอดชั้นนั้นแต่ถูกทิ้งที่ gate (`sdk-api-handler.ts` + `cline-session-factory.isReasoningEffort`)
+
+**วิธีแก้ (1):**
+- `src/shared/storage/types.ts` — `OPENAI_REASONING_EFFORT_OPTIONS` = พจนานุกรมเดียวของแอป ตรงกับ SDK เป๊ะ + `isReasoningEffortValue()` (ค่าที่ forward ได้ = ทั้งชุดยกเว้น `none`)
+- **เทสต์กันหลุด:** `src/shared/storage/__tests__/reasoning-effort-parity.test.ts` — assert ว่าลิสต์ของแอป **เท่ากับ `REASONING_LEVELS` ของ `@cline/shared`** (deep equal ทั้งค่าและลำดับ) → หลุดกันอีกไม่ได้
+- gate ทั้งสองชั้นใช้ `isReasoningEffortValue` ตัวเดียวกัน (`sdk-api-handler.ts` · `cline-session-factory.ts` ลบ `isReasoningEffort` ที่ฮาร์ดโค้ด 4 ค่า)
+- **UI อ่านพจนานุกรมเดียวกัน:** `OPENAI_EFFORT_LEVELS` สร้างจาก `OPENAI_REASONING_EFFORT_OPTIONS` (ไม่ใช่ลิสต์ที่เขียนซ้ำ) + ตาราง label `Record<OpenaiReasoningEffort, …>` ⇒ เพิ่มค่าใหม่ที่ storage แล้ว **คอมไพเลอร์บังคับให้ใส่ label**
+- **catalog ชนะชุด generic:** ถ้า `modelInfo.reasoningEffortOptions` มีค่า ใช้ชุดนั้น **ทุก provider** (เดิมจำกัดที่ OCA) และ label ของค่าที่ catalog เผยแพร่ใช้คำเดียวกับพจนานุกรม (`xhigh` → "X-High") + ค่า `none` ที่ catalog เผยแพร่ถูกทำเป็น off ⇒ ไม่โผล่เป็นปุ่มข้างสวิตช์ Thinking
+- ค่าคอมเมนต์ที่ค้างชี้ 5 ค่า: `proto/cline/models.proto` · `src/sdk/model-catalog/contracts.ts` อัปเดตแล้ว
+
+**รากของ (2):** SDK builtin ของ Sakana ประกาศ `protocol: "openai-responses"` (+ generated catalog ว่า `openai-chat`) ซึ่ง**ทั้งคู่อยู่ใน allowlist ของฟอร์ม generic** → `isGenericProviderListing()` เป็น true → `ApiOptions` เรนเดอร์ `GenericProviderSettings` **และ** `SakanaProvider` พร้อมกัน (API key 2 ช่อง · model picker 2 ตัว)
+
+**วิธีแก้ (2):** ลงทะเบียน `sakana` ใน `CUSTOM_PROVIDER_SETTINGS_IDS` (มีฟอร์มของตัวเอง) → generic form หาย · เทสต์ใหม่ `providerSettingsRegistry.test.ts` ปักว่า `isGenericProviderListing(sakana) === false` และ getter ทั้งสองคืน `undefined` · ลบ `<VSCodeLink>` ไปหน้า /pricing ที่ซ้ำสองอันในย่อหน้า (ปุ่ม Pay-as-you-go / Subscription เป็นเจ้าของ action นั้น)
+
+**หลักฐานที่ยืนยันด้วยรันจริง:** `getProviderCollectionSync("sakana")` รายงาน `{ id: sakana, name: "Sakana AI", protocol: "openai-chat" }` — ยืนยันว่าก่อนแก้ predicate ของฟอร์ม generic จับ Sakana จริง
+
+**ผลตรวจ:** webview vitest **453/453** · `tsc -b` (webview) · extension `tsc --noEmit` · extension vitest (935/937 — 2 เคส timeout จาก lazy import หนัก ๆ เมื่อรันพร้อมกัน, ผ่านเมื่อรันไฟล์เดียว) · bun unit ใหม่ผ่าน 2/2 · biome · **e2e บน VS Code จริง 2/2** (`quick-picker-hover`: แผงต้องอ่านได้ `Minimal/Low/Medium/High/X-High/Max` และ Sakana `High/X-High/Max`)
+**VSIX:** `dev.6-fix.14` มี marker ใน bundle จริง (webview มี `X-High`/`Minimal` · host มี `["none","minimal","low","medium","high","xhigh","max"]` 12 จุด)
+
+**เปลี่ยนแปลงพฤติกรรมที่ตั้งใจ:** (1) dropdown Effort ของทุกฟอร์มมี 7 ระดับเท่ากับที่แอปเก็บได้ (เดิม 5) — ค่าที่โมเดลไม่รับจะถูก SDK clamp ไม่ใช่ถูก UI ตัด (2) `xhigh` ใน Quick Picker เปลี่ยนจาก "Max" เป็น **X-High** ให้ตรง Settings เพราะ `max` เป็นระดับจริงอีกตัวแล้ว (เฉพาะคำที่แสดง ค่าที่เก็บไม่กระทบ) (3) สวิตช์ Thinking ที่เปิดกลับใช้ระดับแรกจริง = `minimal` แทน `low`
+
+**ยังเหลือ (ต่อจากรอบนี้):** cloud/routing layer ตัวแทน provider ที่รับ `xhigh`/`max` ไม่ได้ถูกตรวจซ้ำ — SDK เป็นผู้ clamp ให้แล้ว แต่ถ้าอยากให้ผู้ใช้เห็น "ขอ Max แต่ได้ X-High" ต้องมี surface แจ้ง (ยังไม่มี)
 
 ---
 
@@ -25,10 +59,10 @@
 **กันถอยหลัง:**
 - unit: `modelThinkingOptions.test.ts` +5 เทสต์ (ชุด openai ตรงกับ enum ที่เก็บจริง · adaptive label/off · Sakana 3 ระดับ + default ต่อโมเดล + badge `M` · OCA ตาม catalog และ `declaredEffortDefault` = ค่าแรก/undefined · openai-compatible ว่างเปล่า = `none` และ `firstOnEffortValue` = `low`) และการ์ดใหม่ "ห้ามไฟล์ใน `components/settings` มี array literal ของ level" — **พิสูจน์แล้วว่าฟ้องจริง** ด้วยไฟล์ probe (fail) แล้วลบออก (pass)
 - jsdom: `QuickModelPickerRealPopover.test.tsx` เพิ่มเทสต์ provider Sakana — แผงต้องมี `[high, xhigh, max]`, ไม่มี `none`, `data-icline-effort-set=sakana`, ชิปแถว = `M`
-- e2e `quick-picker-hover.test.ts` บน VS Code จริง: อ่าน `data-icline-effort-set` ของแผงแล้ว assert ชุดค่าตรงของจริง (openai/adaptive = Low/Medium/High/Max · sakana = High/X-High/Max) และกฎร่วม (ไม่มี None, ไม่ซ้ำ, ไม่ว่าง) — ผ่าน 2/2
+- e2e `quick-picker-hover.test.ts` บน VS Code จริง: อ่าน `data-icline-effort-set` ของแผงแล้ว assert ชุดค่าตรงของจริง (sakana = High/X-High/Max) และกฎร่วม (ไม่มี None, ไม่ซ้ำ, ไม่ว่าง) — ผ่าน 2/2 (ชุด openai/adaptive ถูกขยายเป็น Minimal/Low/Medium/High/X-High/Max ใน **fix.14**)
 - ผ่าน: webview `tsc -b` · vitest ทั้งชุด **449/449** · extension `tsc --noEmit` · biome lint · VSIX fix.13 มี marker `data-icline-effort-set`
 
-**ข้อสังเกตที่ยังไม่ได้แก้ (คนละชั้น):** `src/sdk/sdk-api-handler.ts` ส่งต่อ effort แค่ `low|medium|high` → ค่า `xhigh` (มีให้เลือกใน Settings) และ `max` (Sakana) ถูกตัดเงียบ ๆ ก่อนถึง provider อาการคลาสเดียวกับ "ไอคอน/ค่าที่ตั้งไม่ตรงกับที่ทำงานจริง" แต่ต้องเป็นการตัดสินใจเรื่อง protocol ไม่ใช่ UI
+**ข้อสังเกต (ปิดใน fix.14 แล้ว):** `src/sdk/sdk-api-handler.ts` ส่งต่อ effort แค่ `low|medium|high` → `xhigh` และ `max` ถูกตัดเงียบ ๆ — fix.14 ขยายพจนานุกรมแอปให้ตรง SDK และให้ gate ทั้งสองชั้นใช้ตัวเดียวกัน
 
 **เปลี่ยนแปลงพฤติกรรมที่ตั้งใจ:** (1) คอนโทรล Effort ของ Sakana แสดงตลอด (เดิม gate ด้วย `effortIsSet` → ต้องมีค่าตั้งค้างอยู่ก่อน) (2) label ของ `xhigh` ใน Settings เป็น `X-High` แทน `Xhigh` (config เดิมไม่กระทบ)
 
