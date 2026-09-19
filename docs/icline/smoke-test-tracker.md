@@ -13,7 +13,8 @@
 
 **known-failures (ไม่บล็อก):** llms ollama.wire ×4 (third-party serialization เวอร์ชันลอย) · core ~16–26 (upstream tests flaky บน Windows: cron timers/hub listeners/locale sort/git-init/python/bun-ENONENT) · **suite ต้องรัน `--no-file-parallelism` (OOM บน dists ใหม่)**
 
-| **fix.2** | provider parity กับ official: Sakana ลบ static list → generated 8 โมเดล (fugu-ultra-v2/namazu/prompt-cache) · Jan ย้ายไปฟอร์ม OpenAI-compatible (auto model list จาก Base URL — กลไกเดียวกับ official, Jan = iCline-only) · การ์ดสถิติ Providers/Models/Free ใต้หัวข้อ API Configuration · Wave-2 hand-port ffd6a6b1d (summarizer เคารพ Max Output Tokens) — `4b2aec563` | ⏳ รอ smoke |
+| **fix.2** | provider parity กับ official: Sakana ลบ static list → generated 8 โมเดล (fugu-ultra-v2/namazu/prompt-cache) · Jan ย้ายไปฟอร์ม OpenAI-compatible (auto model list จาก Base URL — กลไกเดียวกับ official, Jan = iCline-only) · การ์ดสถิติ Providers/Models/Free · Wave-2 hand-port ffd6a6b1d (summarizer เคารพ Max Output Tokens) — `4b2aec563` | ❌ smoke เจอ P0: เลือก/สลับ provider+model ไม่ติด (รากมาจาก fix.1 + trigger ใหม่ — → fix.3) |
+| **fix.3** | P0 selection stuck — ราก 3 ชั้น: (1) stale write-back race (effort apply หลัง commit ส่ง snapshot เก่าแทนที่ config — trigger = official บันทึก reasoning ลง shared providers.json 9 ตัว) → effort ก่อน commit + handlers อ่าน state สด (getState) (2) push delivery แตกเงียบ → host retry + webview re-subscribe (3) debounce กลืนคีย์แรก → user edit เคลียร์ skip flag · + model leakage fix + การ์ดย้ายไปชิดขวาแถวหัวข้อ — `de487d3e8` | ⏳ รอ smoke |
 **รอบ dev.5 ปิดแล้ว (2026-09-18)** — ตารางด้านล่างคือบันทึกประวัติศาสตร์ของ dev.5
 
 **Release plan:** finish this Quick Picker worktree on **dev.5** → merge to main when ordered → ClinePass after that merge. Dynamic model lists for remaining providers stay **dev.6**.
