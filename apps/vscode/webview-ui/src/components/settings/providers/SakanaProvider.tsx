@@ -6,8 +6,8 @@ import { AccountServiceClient } from "@/services/grpc-client"
 import { DROPDOWN_Z_INDEX } from "../ApiOptions"
 import { AuthConnectionBadge } from "../common/AuthConnectionBadge"
 import { DebouncedTextField } from "../common/DebouncedTextField"
-import SakanaModelPicker from "../SakanaModelPicker"
 import { DropdownContainer } from "../common/ModelSelector"
+import SakanaModelPicker from "../SakanaModelPicker"
 import { useApiConfigurationHandlers } from "../utils/useApiConfigurationHandlers"
 
 interface SakanaProviderProps {
@@ -49,11 +49,11 @@ export const SakanaProvider = ({ showModelOptions, currentMode }: SakanaProvider
 					color: "var(--vscode-descriptionForeground)",
 					marginBottom: 10,
 				}}>
-				Sakana Fugu uses the OpenAI-compatible API at <code>https://api.sakana.ai/v1</code>. Sign in with Google or
-				email, then create an API key for{" "}
-				<VSCodeLink href="https://console.sakana.ai/pricing">Pay-as-you-go</VSCodeLink> (consumption billing) or a{" "}
-				<VSCodeLink href="https://console.sakana.ai/pricing">Subscription plan</VSCodeLink> (Standard / Pro / Max).{" "}
+				Sakana Fugu uses the OpenAI-compatible API at <code>https://api.sakana.ai/v1</code>. Sign in with Google or email,
+				then create an API key for pay-as-you-go (consumption billing) or a subscription plan (Standard / Pro / Max).{" "}
 				<VSCodeLink href="https://console.sakana.ai/get-started">Docs</VSCodeLink>
+				{/* The pricing links that used to sit here pointed at the same /pricing page twice and
+				    duplicated the Pay-as-you-go / Subscription buttons below — one action, one control. */}
 			</p>
 
 			<div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>

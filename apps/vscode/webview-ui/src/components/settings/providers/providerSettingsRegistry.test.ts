@@ -55,6 +55,17 @@ describe("providerSettingsRegistry", () => {
 		expect(getGenericProviderSettings("openai", listing({ id: "openai", name: "OpenAI" }))).toBeUndefined()
 	})
 
+	it("does not stack the generic form on a provider that ships its own", () => {
+		// Sakana declares the `openai-responses` protocol in its SDK listing, which
+		// used to make it look like a generic provider — so Settings rendered the
+		// generic form AND SakanaProvider (two API keys, two model pickers).
+		const sakana = listing({ id: "sakana", name: "Sakana.ai", protocol: "openai-responses" })
+		expect(hasCustomProviderSettings("sakana")).toBe(true)
+		expect(isGenericProviderListing(sakana)).toBe(false)
+		expect(getGenericProviderSettings("sakana", sakana)).toBeUndefined()
+		expect(getFallbackGenericProviderSettings("sakana")).toBeUndefined()
+	})
+
 	it("allows migrated simple SDK providers to use the generic fallback", () => {
 		const migratedProviders = [
 			["baseten", "Baseten", "https://app.baseten.co/settings/api_keys"],

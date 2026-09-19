@@ -149,7 +149,9 @@ e2e("Quick Picker — Options panel appears on hover and tracks the row", async 
 		expect(new Set(labels).size).toBe(labels.length)
 		expect(labels.every((label) => label.length > 0)).toBe(true)
 		if (measured.panelEffortSet === "openai" || measured.panelEffortSet === "adaptive-thinking") {
-			expect(labels).toEqual(["Low", "Medium", "High", "Max"])
+			// Every value the app can store, in shared-vocabulary order. `xhigh` reads
+			// "X-High" (not mock v11's "Max") because `max` is a real level of its own now.
+			expect(labels).toEqual(["Minimal", "Low", "Medium", "High", "X-High", "Max"])
 		}
 		if (measured.panelEffortSet === "sakana") {
 			expect(labels).toEqual(["High", "X-High", "Max"])

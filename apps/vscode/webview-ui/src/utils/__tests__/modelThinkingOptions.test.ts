@@ -201,7 +201,34 @@ describe("effort LEVELS are provider metadata", () => {
 		const levels = levelsFor(OPENAI_COMPATIBLE_POLICY_ID, "anything-at-all")
 		expect(levels.default).toBe("none")
 		// Switching reasoning ON must land on a real level, never back on the off state.
+		// The set starts at `minimal` now that the app stores the SDK's full vocabulary.
+		expect(firstOnEffortValue(levels)).toBe("minimal")
+	})
+
+	it("a catalog that publishes the levels wins over the generic set, whatever the provider", () => {
+		const info = { supportsReasoning: true, reasoningEffortOptions: ["minimal", "low", "high", "xhigh"] }
+		const levels = levelsFor("openrouter", "some-gateway-model", info)
+		expect(levels.id).toBe("model-declared")
+		expect(levels.levels.map((level) => level.value)).toEqual(["minimal", "low", "high", "xhigh"])
+		// Published values are presented with the shared wording, not raw ids.
+		expect(levels.levels.map((level) => level.label)).toEqual(["Minimal", "Low", "High", "X-High"])
+	})
+
+	it("a published `none` stays the OFF level, so the panel never offers it as a button", () => {
+		const levels = levelsFor("openrouter", "some-gateway-model", {
+			supportsReasoning: true,
+			reasoningEffortOptions: ["none", "low", "high"],
+		})
+		expect(levels.levels.filter((level) => level.isOff).map((level) => level.value)).toEqual(["none"])
 		expect(firstOnEffortValue(levels)).toBe("low")
+	})
+
+	it("Sakana's own vocabulary is a provider contract, so a catalog does not replace it", () => {
+		const levels = levelsFor("sakana", "fugu", {
+			supportsReasoning: true,
+			reasoningEffortOptions: ["low", "medium"],
+		})
+		expect(levels.id).toBe("sakana")
 	})
 })
 

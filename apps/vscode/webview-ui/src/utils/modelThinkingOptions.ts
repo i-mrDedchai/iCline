@@ -23,6 +23,7 @@
  *
  * `source` fields exist for tests and bug reports: they say *why* a control appeared.
  */
+import { isOpenaiReasoningEffort, OPENAI_REASONING_EFFORT_OPTIONS, type OpenaiReasoningEffort } from "@shared/storage/types"
 import { isClaudeOpusAdaptiveThinkingModel, supportsReasoningEffortForModel } from "@shared/utils/reasoning-support"
 
 /** Structural subset of `ModelInfo` the policy reads. */
@@ -84,7 +85,7 @@ export interface EffortLevel {
 	value: string
 	/** Label the Settings dropdown shows ("X-High", not "Xhigh"). */
 	label: string
-	/** Single-character badge the Quick Picker row shows ("" = no badge). */
+	/** Compact badge the Quick Picker row shows ("" = no badge). */
 	short: string
 	/** The level that means "reasoning off" — surfaces with their own switch skip it. */
 	isOff?: boolean
@@ -107,14 +108,32 @@ export interface ProviderEffortLevels {
 	description: string
 }
 
-/** The OpenAI-style set: what most endpoints and gateways accept. */
-export const OPENAI_EFFORT_LEVELS: readonly EffortLevel[] = [
-	{ value: "none", label: "None", short: "—", isOff: true },
-	{ value: "low", label: "Low", short: "L" },
-	{ value: "medium", label: "Medium", short: "M" },
-	{ value: "high", label: "High", short: "H" },
-	{ value: "xhigh", label: "X-High", short: "X" },
-]
+/**
+ * How each stored value is presented. Typed as a `Record` over the shared
+ * vocabulary, so a level added on the storage/SDK side cannot reach the UI without
+ * a label here — the compiler asks for one.
+ */
+const EFFORT_LEVEL_PRESENTATION: Record<OpenaiReasoningEffort, Omit<EffortLevel, "value">> = {
+	none: { label: "None", short: "—", isOff: true },
+	minimal: { label: "Minimal", short: "Min" },
+	low: { label: "Low", short: "L" },
+	medium: { label: "Medium", short: "M" },
+	high: { label: "High", short: "H" },
+	xhigh: { label: "X-High", short: "X" },
+	max: { label: "Max", short: "Max" },
+}
+
+/**
+ * The OpenAI-style set: every value the app can store, built from the shared
+ * vocabulary rather than a second hand-written list. Offering the full set here is
+ * deliberate — the SDK clamps a level the selected model does not advertise, and a
+ * narrower list would hide levels the user can legitimately store (Sakana's `max`,
+ * a catalog's `minimal`) or invent a second vocabulary for the same field.
+ */
+export const OPENAI_EFFORT_LEVELS: readonly EffortLevel[] = OPENAI_REASONING_EFFORT_OPTIONS.map((value) => ({
+	value,
+	...EFFORT_LEVEL_PRESENTATION[value],
+}))
 
 /** Sakana maps three levels itself (`high`/`xhigh`/`max`) — its own vocabulary. */
 export const SAKANA_EFFORT_LEVELS: readonly EffortLevel[] = [
@@ -149,8 +168,22 @@ const EFFORT_LEVEL_SETS: Record<Exclude<EffortLevelSetId, "model-declared">, Pro
 }
 
 /**
- * OCA publishes the levels each model accepts; the catalog IS the metadata here, so
- * the labels are derived from the published values rather than kept in a second list.
+ * One level a catalog published, presented the same way the shared vocabulary is — a
+ * published `xhigh` reads "X-High" (not "Xhigh") and a published `none` stays the OFF
+ * level, so the panel does not offer "None" as a button next to the Thinking switch.
+ */
+function catalogEffortLevel(value: string): EffortLevel {
+	if (isOpenaiReasoningEffort(value)) {
+		return { value, ...EFFORT_LEVEL_PRESENTATION[value] }
+	}
+	const capitalized = value.charAt(0).toUpperCase() + value.slice(1)
+	return { value, label: capitalized, short: capitalized }
+}
+
+/**
+ * OCA (and, through `resolveEffortLevels`, any provider whose catalog publishes them)
+ * declares the levels each model accepts; the catalog IS the metadata here, so the
+ * labels are derived from the published values rather than kept in a second list.
  */
 function declaredEffortLevels(info?: ModelThinkingInfo | null): ProviderEffortLevels | null {
 	const values = (info?.reasoningEffortOptions ?? []).filter((value): value is string => typeof value === "string")
@@ -159,11 +192,7 @@ function declaredEffortLevels(info?: ModelThinkingInfo | null): ProviderEffortLe
 	}
 	return {
 		id: "model-declared",
-		levels: values.map((value) => ({
-			value,
-			label: value.charAt(0).toUpperCase() + value.slice(1),
-			short: value.charAt(0).toUpperCase(),
-		})),
+		levels: values.map(catalogEffortLevel),
 		default: values[0],
 		label: "Reasoning Effort",
 		description: "Higher effort improves depth, but uses more tokens.",
@@ -234,6 +263,15 @@ export function resolveEffortLevels(input: ModelThinkingInput): ProviderEffortLe
 		policy.effort?.(ctx) === "adaptive-thinking"
 			? EFFORT_LEVEL_SETS["adaptive-thinking"]
 			: EFFORT_LEVEL_SETS[policy.effortLevelSet ?? "openai"]
+	// The catalog beats the generic set: when the model publishes the levels it
+	// accepts, show those instead of guessing. This only refines the OpenAI-style
+	// set — `adaptive-thinking` and Sakana's set are the provider's own contract.
+	if (base.id === "openai") {
+		const fromCatalog = declaredEffortLevels(ctx.info)
+		if (fromCatalog) {
+			return fromCatalog
+		}
+	}
 	return policy.effortDefault ? { ...base, default: policy.effortDefault } : base
 }
 

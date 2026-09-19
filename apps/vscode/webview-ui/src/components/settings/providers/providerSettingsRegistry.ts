@@ -29,6 +29,11 @@ const CUSTOM_PROVIDER_SETTINGS_IDS = new Set([
 	"qwen",
 	"qwen-code",
 	"requesty",
+	// Sakana has a dedicated form (`SakanaProvider`). Its SDK listing declares the
+	// `openai-responses` protocol, so without this entry `isGenericProviderListing`
+	// matched and ApiOptions rendered the generic OpenAI-compatible form ON TOP of
+	// the Sakana one — two API-key fields and two model pickers in one pane.
+	"sakana",
 	"sapaicore",
 	"vertex",
 	"vscode-lm",

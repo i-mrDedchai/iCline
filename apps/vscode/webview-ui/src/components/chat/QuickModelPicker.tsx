@@ -107,11 +107,13 @@ const OPTIONS_PANEL_CLOSE_DELAY_MS = 260
 
 /**
  * Wording for the levels the provider metadata names. The VALUES come from
- * `resolveEffortLevels` (OpenAI's None/Low/Medium/High/X-High, Sakana's High/X-High/Max,
- * whatever OCA publishes) — only the translation lives here, because mock v11 spells
- * `xhigh` "Max" in the picker (its wording, not the metadata's).
+ * `resolveEffortLevels` (every level the app can store, Sakana's High/X-High/Max,
+ * whatever OCA publishes) — only the translation lives here. Mock v11 called `xhigh`
+ * "Max"; now that `xhigh` and `max` are both real, separately storeable levels, the
+ * picker uses the same wording as Settings so the two buttons cannot read alike.
  */
 const EFFORT_LABEL_KEYS: Record<string, PickerStringKey> = {
+	minimal: "effortMinimal",
 	low: "effortLow",
 	medium: "effortMedium",
 	high: "effortHigh",

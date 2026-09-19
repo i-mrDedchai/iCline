@@ -225,14 +225,17 @@ describe("QuickModelPicker real Popover", () => {
 
 		const panel = () => document.querySelector("[data-icline-picker-options]")
 		await waitFor(() => expect(panel()).not.toBeNull())
-		// Title + model id + the Thinking switch + the four Effort levels.
+		// Title + model id + the Thinking switch + the Effort levels (every value the
+		// app can store, minus the OFF level the switch owns).
 		expect(panel()?.textContent).toContain("Options")
 		expect(panel()?.querySelector("[data-icline-options-model-id]")?.textContent).toBe("jan-reasoner")
 		expect(panel()?.querySelector("[data-icline-thinking-switch]")).not.toBeNull()
 		expect([...panel()!.querySelectorAll("[data-icline-effort-option]")].map((el) => el.textContent)).toEqual([
+			"Minimal",
 			"Low",
 			"Medium",
 			"High",
+			"X-High",
 			"Max",
 		])
 		// The reasoning model offers levels; a model without any declared capability does not.

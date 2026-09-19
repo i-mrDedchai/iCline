@@ -66,12 +66,15 @@ const en = {
 	optionsNoEffort: "No effort options for this model",
 	optionsNoCaps: "No capability data",
 	optionsToggleThinking: "Toggle thinking mode",
-	// Effort labels — mock v11's wording for the shared levels ("Max" is xhigh) plus
-	// the fifth value providers like Sakana use.
+	// Effort labels for the shared levels. Mock v11 spelled `xhigh` "Max", but the
+	// vocabulary now holds `xhigh` AND `max` as separate values, so the picker uses
+	// the same wording as Settings ("X-High" / "Max") instead of two buttons that
+	// read identically.
+	effortMinimal: "Minimal",
 	effortLow: "Low",
 	effortMedium: "Medium",
 	effortHigh: "High",
-	effortXhigh: "Max",
+	effortXhigh: "X-High",
 	effortMax: "Max",
 	// Footer
 	footerRefreshTooltip: "Refresh the model list",
@@ -119,11 +122,12 @@ const th: Record<PickerStringKey, string> = {
 	optionsNoEffort: "โมเดลนี้ไม่มีตัวเลือก Effort",
 	optionsNoCaps: "ไม่มีข้อมูล capability",
 	optionsToggleThinking: "เปิด/ปิดโหมด Thinking",
-	// ชื่อระดับ Effort คงไว้เป็นอังกฤษเหมือน mock v11 ทั้งสองภาษา
+	// ชื่อระดับ Effort คงไว้เป็นอังกฤษทั้งสองภาษา (xhigh = X-High, max = Max)
+	effortMinimal: "Minimal",
 	effortLow: "Low",
 	effortMedium: "Medium",
 	effortHigh: "High",
-	effortXhigh: "Max",
+	effortXhigh: "X-High",
 	effortMax: "Max",
 	footerRefreshTooltip: "โหลดรายชื่อโมเดลใหม่",
 	footerEditTooltip: "แก้ไข provider นี้ใน Settings",
