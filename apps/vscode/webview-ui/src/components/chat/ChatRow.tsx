@@ -865,29 +865,30 @@ export const ChatRowContent = memo(
 						const isFinalReply = isLast && message.partial !== true && Boolean(message.text)
 						const cardStyle: React.CSSProperties = {
 							borderRadius: 10,
-							border: "1px solid rgba(96,140,255,0.28)",
-							background: "rgba(96,140,255,0.08)",
+							border: "1px solid rgba(99,102,241,0.3)",
+							background: "rgba(99,102,241,0.07)",
 							padding: "8px 12px",
 						}
 						return (
 							<div style={isFinalReply ? cardStyle : undefined}>
-								{isFinalReply && (
-									<div
-										className="flex items-center justify-between mb-1"
-										style={{
-											fontSize: 11,
-											fontWeight: 600,
-											letterSpacing: "0.4px",
-											color: "var(--vscode-descriptionForeground)",
-										}}>
-										<span>COMPLETED</span>
-									</div>
-								)}
 								<WithCopyButton
+									copyButtonClassname={isFinalReply ? "opacity-100" : undefined}
 									onMouseUp={handleMouseUp}
 									position={isFinalReply ? "top-right" : "bottom-right"}
 									ref={contentRef}
 									textToCopy={message.text}>
+									{isFinalReply && (
+										<div
+											className="mb-1 flex items-center justify-between pr-8"
+											style={{
+												fontSize: 11,
+												fontWeight: 600,
+												letterSpacing: "0.4px",
+												color: "var(--vscode-charts-blue, #4c8dff)",
+											}}>
+											<span>COMPLETED</span>
+										</div>
+									)}
 									<div className="flex items-center">
 										<div className={cn("flex-1 min-w-0 pl-1")}>
 											<MarkdownRow markdown={message.text} showCursor={false} />
@@ -919,7 +920,7 @@ export const ChatRowContent = memo(
 									reasoningContent={message.text}
 									showChevron={!isReasoningStreaming || hasReasoningText}
 									showTitle={true}
-									title={isReasoningStreaming ? "Thinking..." : "Thinking"}
+									title={isReasoningStreaming ? "Thinking..." : "Thought"}
 								/>
 								{isReasoningStreaming && showFeatureTips !== false && <FeatureTip />}
 							</div>
