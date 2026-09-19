@@ -1,7 +1,238 @@
-**Last updated:** 2026-09-18
+**Last updated:** 2026-09-19
 **Branch:** `feat/upstream-waves-1-2` (จาก main @ `78ebd0923` — รวม dev.5 แล้ว, tag `pre-merge-dev.5`, ยังไม่ push)
 **HEAD:** `19048718b` (chore @types/archiver — เปิดรอบ dev.6)
-**vsix:** `apps/vscode/dist/i-mrdedchai.iCline-0.1.18-dev.6-fix.1.vsix` — awaiting maintainer smoke; do not overwrite `cline-temp` `fix.1`–`fix.9`
+**vsix (ล่าสุด):** `apps/vscode/dist/i-mrdedchai.iCline-0.1.18-dev.6-fix.13.vsix` (11,959,968 B @ 2026-09-19 16:05Z · About = `dev build 6 · fix.13`) — ⏳ **รอบนี้คือ fix.13** · do not overwrite `fix.1`–`fix.12` ใน `dist/`
+
+---
+
+## 🔎 dev.6-fix.13 — ชุดค่า Effort ต่อ provider ย้ายขึ้นเป็น metadata ของ provider (2026-09-19)
+
+**สถานะ:** ✅ refactor เสร็จ + unit/e2e ผ่านบน VS Code จริง · ⏳ รอ maintainer smoke (VSIX `dev.6-fix.13`)
+
+**ที่มา:** ต่อจาก fix.12 ที่ยก "นโยบายว่าอะไรตั้งได้" ขึ้นเป็นโมดูลกลาง — แต่ **"ชุดค่าที่ตั้งได้"** ยังเป็นความรู้ของ UI: ชุด adaptive (`["none","low","medium","high","xhigh"]`) ถูกเขียนซ้ำใน 6 คอมโพเนนต์ และ Sakana มี `SAKANA_REASONING_EFFORTS = ["high","xhigh","max"]` + default ต่อโมเดลของตัวเอง ขณะที่ Quick Picker มีสูตรที่สี่ (`OPENAI_REASONING_EFFORT_OPTIONS` ตัด `none` ออก)
+
+**วิธีแก้:** ใน `webview-ui/src/utils/modelThinkingOptions.ts` เพิ่ม metadata ของ **levels** ต่อ provider
+- `EffortLevel { value, label, short, isOff }` · `ProviderEffortLevels { id, levels, default, defaultFor?, label, description }`
+- ชุดที่นิยามไว้: `openai` (None/Low/Medium/High/X-High — ค่าตรงกับ `OPENAI_REASONING_EFFORT_OPTIONS` เป๊ะ), `adaptive-thinking` (ชุดเดียวกัน label "Adaptive Thinking" + คำอธิบาย "Use None…"), `sakana` (High/X-High/Max + `defaultFor`: `fugu-ultra*` → X-High) และ `model-declared` (OCA — สร้างจาก `reasoningEffortOptions` ที่ catalog เผยแพร่จริง)
+- `resolveEffortLevels({ providerId, modelId, modelInfo })` เป็นทางเดียวที่ทุก dropdown ใช้ — เลือกชุดจาก **policy ตัวเดียวกับที่ตัดสินว่ามีคอนโทรลหรือไม่** (`adaptive-thinking` → ชุด adaptive, ที่เหลือ → ชุดของ provider, `effortDefault` ของ provider เช่น openai-compatible ที่ว่างเปล่า = `none` ไม่ใช่ `medium`)
+- helper ประกอบ: `defaultEffortValue` (default ต่อโมเดล), `firstOnEffortValue` (สวิตช์เปิดกลับไประดับจริง ไม่ใช่ off), `normalizeEffortValue`, `effortBadge`, `declaredEffortDefault`
+- **`ReasoningEffortSelector`** เลิกรับ `allowedEfforts`/`defaultEffort`/`label`/`description` ทั้งหมด — รับ `providerId`/`modelId`/`modelInfo` แล้วอ่าน metadata (รวมกรณี adaptive ที่ default มาจากค่าที่ "มีผลจริง" ผ่าน `resolveClaudeOpusAdaptiveThinking` → ลบโค้ดซ้ำใน 6 ฟอร์ม)
+- **SakanaModelPicker** สร้าง `VSCodeOption` จาก levels + ใช้ `description` จาก metadata (ลบ `SAKANA_REASONING_EFFORTS`/`defaultSakanaReasoningEffort`/`normalizeSakanaReasoningEffort`)
+- **OcaModelPicker** ทั้งการ render และค่า default ตอนเปลี่ยนโมเดลอ่าน metadata ตัวเดียวกัน (ลบ `reasoningEffortOptions[0]` ที่เขียนซ้ำสองที่)
+- **QuickModelPicker** ดึง levels ของ **โมเดลที่ hover** (ไม่ใช่ชุดเดียวตายตัว) → Sakana ใน picker แสดง High/X-High/Max, OCA แสดงค่าที่ catalog เผยแพร่ · label แปลตาม i18n ยังอยู่ (`effortMax` เพิ่มใหม่) · `pickerCapabilities` ตัดตาราง badge ซ้ำ (`MODEL_EFFORT_SHORT`) ทิ้ง ใช้ `effortBadge` และรับค่า `max` ได้ (เดิม `isOpenaiReasoningEffort` กรองทิ้ง)
+- `ChatModelPreference.reasoningEffort` กว้างเป็น `string` (ค่า `max` ของ Sakana ต้องเก็บได้)
+
+**กันถอยหลัง:**
+- unit: `modelThinkingOptions.test.ts` +5 เทสต์ (ชุด openai ตรงกับ enum ที่เก็บจริง · adaptive label/off · Sakana 3 ระดับ + default ต่อโมเดล + badge `M` · OCA ตาม catalog และ `declaredEffortDefault` = ค่าแรก/undefined · openai-compatible ว่างเปล่า = `none` และ `firstOnEffortValue` = `low`) และการ์ดใหม่ "ห้ามไฟล์ใน `components/settings` มี array literal ของ level" — **พิสูจน์แล้วว่าฟ้องจริง** ด้วยไฟล์ probe (fail) แล้วลบออก (pass)
+- jsdom: `QuickModelPickerRealPopover.test.tsx` เพิ่มเทสต์ provider Sakana — แผงต้องมี `[high, xhigh, max]`, ไม่มี `none`, `data-icline-effort-set=sakana`, ชิปแถว = `M`
+- e2e `quick-picker-hover.test.ts` บน VS Code จริง: อ่าน `data-icline-effort-set` ของแผงแล้ว assert ชุดค่าตรงของจริง (openai/adaptive = Low/Medium/High/Max · sakana = High/X-High/Max) และกฎร่วม (ไม่มี None, ไม่ซ้ำ, ไม่ว่าง) — ผ่าน 2/2
+- ผ่าน: webview `tsc -b` · vitest ทั้งชุด **449/449** · extension `tsc --noEmit` · biome lint · VSIX fix.13 มี marker `data-icline-effort-set`
+
+**ข้อสังเกตที่ยังไม่ได้แก้ (คนละชั้น):** `src/sdk/sdk-api-handler.ts` ส่งต่อ effort แค่ `low|medium|high` → ค่า `xhigh` (มีให้เลือกใน Settings) และ `max` (Sakana) ถูกตัดเงียบ ๆ ก่อนถึง provider อาการคลาสเดียวกับ "ไอคอน/ค่าที่ตั้งไม่ตรงกับที่ทำงานจริง" แต่ต้องเป็นการตัดสินใจเรื่อง protocol ไม่ใช่ UI
+
+**เปลี่ยนแปลงพฤติกรรมที่ตั้งใจ:** (1) คอนโทรล Effort ของ Sakana แสดงตลอด (เดิม gate ด้วย `effortIsSet` → ต้องมีค่าตั้งค้างอยู่ก่อน) (2) label ของ `xhigh` ใน Settings เป็น `X-High` แทน `Xhigh` (config เดิมไม่กระทบ)
+
+---
+
+## 🔎 dev.6-fix.12 — นโยบาย Effort/Thinking เป็นโมดูลกลางตัวเดียวที่ Settings และ Quick Picker เรียกใช้ (2026-09-19)
+
+**สถานะ:** ✅ refactor เสร็จ + unit ทั้งชุดผ่าน · ⏳ รอ maintainer smoke (VSIX `dev.6-fix.12`)
+
+**ที่มา:** คำถาม "ระหว่าง Settings กับ Quick Picker ใครถือแหล่งความจริงเดียว" → คำตอบคือ **ค่าจริง (value truth) เป็นของ host config** (`planMode/actModeReasoningEffort`, `...ThinkingBudgetTokens`) แต่ **นโยบายว่าอะไร "ตั้งได้"** ยังตัดสินซ้ำกันหลายที่: Settings มีกฎกระจายอยู่ในฟอร์ม provider ~15 แห่ง (บางที่ดูจาก id, บางที่ดู metadata, บางที่มีรายการโมเดลฮาร์ดโค้ดของตัวเอง) ส่วน Quick Picker มีสูตรที่สี่ของตัวเอง → สองหน้าจอตอบไม่ตรงกันได้ทั้งที่ค่าจริงถูกต้อง
+
+**โมดูลกลาง:** `webview-ui/src/utils/modelThinkingOptions.ts` → `resolveModelThinkingOptions({ providerId, modelId, modelInfo, effortIsSet, budgetIsSet })` คืน `{ showEffort, showThinkingBudget, builtinReasoning, effortSource, budgetSource }`
+- ตาราง `POLICIES` ต่อ provider — แต่ละแถบบันทึกว่าจำลองมาจากฟอร์ม Settings ตัวไหน (xai / anthropic / bedrock / claude-code / qwen / qwen-code / openrouter / vercel-ai-gateway / requesty / zenmux / cline / vertex / oca / litellm / openai-native / openai-codex / openai-compatible) ที่เหลือใช้ `DEFAULT_POLICY` (heuristic เดิมของ picker)
+- หลักการ 2 ข้อ: (1) กฎต่อ provider ต้อง**ซื่อตรงกับของเดิม** — รายการโมเดลฮาร์ดโค้ดยังอยู่ (`ANTHROPIC_THINKING_BUDGET_MODELS`, `BEDROCK_…`, `CLAUDE_CODE_…`, `QWEN_…`, fragment ของ gateway) แต่ย้ายมาอยู่ที่เดียว และให้ metadata (`thinkingConfig`, `supportsThinkingLevel`) ชนะเมื่อ catalog รู้จักโมเดลนั้น (2) **คอนโทรลต้องเข้าถึงได้เสมอ** — ค่าที่ตั้งไว้แล้วทำให้คอนโทรลของค่านั้นยังโผล่ (`stored-preference`) โดย budget ที่ค้างอยู่ไม่กลายเป็นคอนโทรล effort
+- `effortSource`/`budgetSource` มีไว้ให้เทสต์และรายงานบั๊ก — บอกว่า "ทำไมคอนโทรลนี้โผล่"
+
+**ย้ายเข้าโมดูลกลางรอบนี้ (ปิดงานที่ค้างจากรอบก่อน):**
+- `providers/AnthropicProvider.tsx` — เลิกรายการ `SUPPORTED_ANTHROPIC_THINKING_MODELS` ในคอมโพเนนต์ + ใช้ policy
+- `providers/BedrockProvider.tsx` — เลิกรายการ `SUPPORTED_BEDROCK_THINKING_MODELS` · โมเดล custom ถูกตัดสินด้วย **base model id** เหมือนเดิม
+- `providers/VertexProvider.tsx` — ใช้ policy และแยก "สองหน้าตา" ของ effort ด้วย `effortSource` (`adaptive-thinking` = ตัวมี label/None, `thinking-level` = ตัวธรรมดา)
+- `providers/OcaModelPicker.tsx` — ทั้ง dropdown Effort และ budget slider อ่าน policy เดียวกัน (effort = ต้องมี `reasoningEffortOptions` จริง)
+- `SakanaModelPicker.tsx` — ให้ policy ตัดสินว่าโมเดลไหนมีคอนโทรล Effort (ระดับ `high/xhigh/max` ยังเป็นของ Sakana ตามที่ provider map เอง)
+- `utils/pricingUtils.ts` — `hasThinkingBudget` ย้ายไปเรียก `hasThinkingBudgetConfig` ตัวเดียวกัน
+- `utils/providerUtils.ts` — ลบ `supportsReasoningEffortForModelId` ที่ตายแล้วทิ้ง พร้อมคอมเมนต์กันคนกลับมาเขียน helper ซ้ำ
+
+**กันถอยหลัง (สำคัญ):** เพิ่มเทสต์ใน `utils/__tests__/modelThinkingOptions.test.ts`
+- คู่เทียบ "Settings กับ Quick Picker ตอบเหมือนกัน" — รวมเคสที่เคยขัดกัน (Claude id ที่ Settings ให้เป็น budget แต่ heuristic เดิมของ picker เรียกร้อง effort)
+- เทสต์การ์ดกันซ้ำ (สแกนไฟล์ใน `components/settings` จริง): ไฟล์ไหนเรนเดอร์ `ThinkingBudgetSlider`/`ReasoningEffortSelector` ต้อง import `@/utils/modelThinkingOptions` · และห้ามมีไฟล์ไหนเก็บรายการโมเดล thinking ฮาร์ดโค้ดของตัวเองอีก — **พิสูจน์แล้วว่าเทสต์ฟ้องจริง** โดยวางไฟล์ probe ที่ผิดกฎชั่วคราว (fail) แล้วลบออก (pass)
+
+**ผลตรวจ:** webview `tsc -b` · vitest ทั้งชุด **442/442** · extension `tsc --noEmit` · biome — ผ่านทั้งหมด
+
+**ยังเหลือ (Settings-only, ยังไม่ย้าย):** ฟอร์มที่ถือ "ค่าที่รองรับ" ของตัวเองเป็นชุด dropdown แบบ provider-specific (เช่น Sakana `high/xhigh/max`) — ถ้าจะให้จบในชั้นเดียว ต้องยกชุดค่าพร้อม mapping ขึ้นเป็น metadata ของ provider
+
+---
+
+## 🔎 dev.6-fix.11 — Quick Picker: แผง Options ตรง mock v11 + ไอคอน/สถานะตรงกับค่าที่ตั้งจริง (2026-09-19)
+
+**สถานะ:** ✅ แก้แล้ว + unit/e2e ผ่านบน VS Code จริง · ⏳ รอ maintainer smoke (VSIX `dev.6-fix.11`)
+
+**อาการ:**
+1. เนื้อหาแผง Options ไม่ตรง design lock — mock v11 มีหัวข้อ "Options" + บรรทัด model id + สวิตช์ Thinking + ปุ่ม Effort ชื่อ Low/Medium/High/Max (ไม่มี Off) และรายการ capability ส่วนล่างเป็นไอคอนเทา ๆ ส่วนของเราหัวเป็นชื่อโมเดล + label "Reasoning effort"/"Capabilities" + ชิป Off/Low/Med/High/Max
+2. ทดสอบ fix.10 แล้วพบว่า "การตั้งค่าและไอคอนแสดงสถานะไม่สอดคล้องกัน" — แผงบอกว่าตั้ง Effort ไว้ ขณะที่แถวโมเดลไม่แสดงสถานะอะไรเลย
+
+**ต้นตอ (ข้อ 2 — ปมหลัก):** แถวโมเดล**ไม่ได้รับค่าจริงเลย** — `renderModelSections` เรียก `<ModelRow>` โดยไม่ส่ง prop `effort` ขณะที่แผงคำนวณค่าของตัวเองแยก → สองฝ่ายอ่าน input คนละชุด จึงตรงกันไม่ได้เลยแม้จะไม่มีบั๊กอื่น นอกจากนี้ค่าที่ตั้งใหม่จะยังไม่ขึ้นจนกว่า state push จาก host จะมาถึง (`handleModeFieldChange` ไม่ได้ optimistic update) จึงเห็น "ตั้งค่าแล้วไอคอนไม่ขยับ"
+
+**วิธีแก้:**
+- เพิ่ม `resolveModelStatus()` + `resolveModelOptionSupport()` ใน `icline/pickerCapabilities.ts` — แหล่งความจริงเดียวที่**ทั้งแถวและแผง**อ่านร่วมกัน: อะไรที่ตั้งได้ (พอร์ตตรรกะ `getModelOptionSupport` จาก picker 0.1.17 ตัวที่ shipped: xAI 3-mini = effort, xAI non-reasoning = ไม่มีอะไรให้ตั้ง, xAI reasoning/multi-agent = คิดในตัว, อื่น ๆ = effort เมื่อ `supportsReasoningEffortForModel`/`supportsReasoning` หรือ thinking budget เมื่อมี `thinkingConfig`) + สถานะเปิด/ปิดจริง + ชิปตัวอักษร L/M/H/X
+- ไอคอน Reasoning/Thinking บนแถวใช้**สีตามสถานะจริง** (สีประจำความสามารถเมื่อเปิด, จาง 50% เมื่อปิด) พร้อม tooltip บอกระดับจริง — ส่วน Vision ยังเป็นสีความสามารถล้วน (ไม่มีสถานะ)
+- เก็บค่าใหม่ที่ผู้ใช้เพิ่งแก้ไว้ใน session (`sessionThinking`) เพื่อให้แถวกับแผงขยับพร้อมกันทันทีโดยไม่รอ push และล้างเมื่อเปิด picker ใหม่ (ตอนนั้น config คือความจริง)
+- สวิตช์ Thinking เขียนค่าจริงแบบเดียวกับ Settings: โมเดลแบบ effort → กลับไประดับเดิม (ดีฟอลต์ `medium`) หรือ `none`; โมเดลแบบ budget → `ANTHROPIC_MIN_THINKING_BUDGET` หรือ 0
+- ปิดช่องที่เจอระหว่างทาง: ค่า thinking budget ที่เก็บรายโมเดล (localStorage) เคยไม่ถูกนำกลับเข้า config ตอนเลือกโมเดล — ตอนนี้ `applyStoredThinking()` เขียน effort + budget **ในการเรียกเดียว** (`handleModeFieldsChange`) เพราะสองครั้งเรียงกันจะแข่งกับ state push แล้วตัวหลังเขียนทับด้วย snapshot เก่า (คลาสเดียวกับบั๊ก stale write-back ของ fix.9)
+- แผง Options ปรับโครงตาม mock v11: หัวข้อ Options → บรรทัด model id → สวิตช์ Thinking → ปุ่ม Effort Low/Medium/High/Max (มี ✓ ที่ระดับที่เลือก) หรือข้อความ "No effort options for this model" → รายการ capability (ไอคอนเทาแบบ mock) หรือ "No capability data" และเว้นวรรค/ขนาดให้ตรง mock (py 10 / px 12, gap 4px, กว้าง 236px, max-height 320px)
+
+**กันถอยหลัง:**
+- unit: `pickerCapabilities.test.ts` ครอบกฎ option support + สถานะ (off จนกว่าจะตั้ง, budget เก่า + ไม่มี effort → `high` ตาม `resolveClaudeOpusAdaptiveThinking`, `none` = ปิดจริง, โมเดลไม่มีอะไรให้ตั้ง = ไม่มีคอนโทรล); `QuickModelPickerRealPopover.test.tsx` เพิ่ม 2 เทสต์: โครงแผง mock v11 (Options + model id + สวิตช์ + Low/Medium/High/Max) และ "แถวกับแผงต้องตรงกัน" (ชิป `H` + ไอคอน on + สวิตช์ on + ระดับที่เลือก ตรงกันหมด แล้วสลับปิด/เปิดกลับมาระดับเดิม)
+- e2e `quick-picker-hover.test.ts` ยืนยันบน VS Code จริง: แผงเป็นผิว mock v11 (Options/Effort/สวิตช์ 1 ตัว) และไล่ hover สูงสุด 12 แถว ตรวจว่าทุกแถวที่ hover มี model id + สถานะไอคอน + ชิป effort **ตรงกับแผงทุกแถว**
+- ผ่าน: webview `tsc -b` + vitest ทั้งชุด 427/427 · extension `tsc --noEmit` · biome · e2e 2/2
+
+**หมายเหตุ:** ชื่อระดับ Effort คงเป็นอังกฤษ (Low/Medium/High/Max) ทั้งสองภาษาเหมือน mock v11 — และไอคอนสีบอกสถานะเป็นพฤติกรรมที่ตั้งใจให้ต่างจาก mock (mock เป็นภาพนิ่ง) ตามข้อ "ไอคอนต้องตรงกับการทำงานจริง"
+
+---
+
+## 🔎 dev.6-fix.10 — Quick Picker: แผง Options ตามแถวได้แค่ไม่กี่แถวบน (ต่อจาก fix.9) (2026-09-19)
+
+**สถานะ:** ✅ ต้นตอพิสูจน์จาก mock v11 จริง + แก้แล้ว + e2e ตรวจสูตรตรง mock · ⏳ รอ maintainer smoke (VSIX `dev.6-fix.10`)
+
+**อาการ:** แผง Options โผล่แล้ว (fix.9) แต่ขยับตามเมาส์แค่รายการช่วงบน ๆ — พอเลื่อนลงต่ำแผงหยุดค้าง
+
+**ต้นตอ:** สูตรจัดตำแหน่งของ mock v11 (`.icline/plans/quick-picker-redesign/mock.v11-locked-2026-09-16.html`) คือ
+
+```js
+const desiredTop = rr.top - pr.top - 6;
+const maxTop = pr.height - options.offsetHeight - 10;   // ← ความสูง “จริง” ของแผง
+options.style.top = Math.max(38, Math.min(desiredTop, maxTop)) + "px";
+```
+
+แต่โค้ดจริงใช้ `OPTIONS_PANEL_MAX_HEIGHT_PX` (320 ค่าคงที่) แทน `options.offsetHeight` → `maxTop` = 422−10−320 = **92px** → ทุกแถวที่ต่ำกว่า ~92px ถูก pin ที่ค่าเดียว (แผงดูเหมือนตามได้แค่ 3 แถวแรก)
+
+**วิธีแก้:**
+- ย้าย geometry + สูตร clamp เป็น pure helper `computeOptionsPanelTop()` ใน `quickModelPickerList.ts` (unit-test ได้)
+- วัดความสูงจริงของแผง (ซึ่งแปรตามโมเดล 157–264px) ใน `useLayoutEffect` หลังเรนเดอร์ แล้วค่อยใส่ `top`
+- ปรับค่าอื่นให้ตรง mock: gap 4px (จาก 6), กว้าง 236px (จาก 232), min-top 38px (กันทับช่องค้นหา), nudge 6px, margin ล่าง 10px
+- side flip: ไปขวาเป็นหลักเหมือน mock — จะพลิกซ้ายเมื่อด้านขวาไม่พอ **และ** ด้านซ้ายมีที่จริง (กันเคส sidebar แคบดันแผงหลุดจอ)
+
+**กันถอยหลัง:** unit test ของ `computeOptionsPanelTop` ใช้ตัวเลขที่วัดจาก mock จริง (row 311/panel 227 → 267; row 352/panel 157 → 337; row 439/panel 260 → 234) + e2e `quick-picker-hover.test.ts` ยืนยันว่าตำแหน่งแผงตรงสูตร (±1.5px) และยังตามแถวล่างได้
+
+**หมายเหตุ (แก้แล้วใน fix.11):** เทียบ mock แล้ว เนื้อหาแผงยังต่างกัน — mock มีหัวข้อ "Options" + บรรทัด model id + สวิตช์ Thinking และปุ่ม Effort ใช้ชื่อ Low/Medium/High/Max (ไม่มี Off) ขณะที่ของเรามีหัวเป็นชื่อโมเดล + label "Reasoning effort"/"Capabilities" + ชิป Off/Low/Med/High/Max → ยกไปทำใน `dev.6-fix.11`
+
+---
+
+## 🔎 dev.6-fix.9 — Quick Picker: เมนู Options ไม่ขึ้นตอน hover (regression ของ fix.8) (2026-09-19)
+
+**สถานะ:** ✅ ต้นตอพิสูจน์บน VS Code จริง + แก้แล้ว + มี e2e กันถอยหลัง · ⏳ รอ maintainer smoke (VSIX `dev.6-fix.9`)
+
+**อาการ:** เปิด Quick Picker แล้ว hover รายการโมเดล — แผง Options ไม่โผล่เลย (fix.8)
+
+**ต้นตอ:** แผงผูกกับ event ผ่าน `list.addEventListener("pointermove", …)` ที่ใส่ใน `useEffect` โดยมี deps `[open, handleModelHover, scheduleOptionsClose]` ฝั่ง Radix `Presence` **mount เนื้อหา popover หลัง commit ที่ `open` กลายเป็น true หนึ่งจังหวะ** (layout effect ยิง `send("MOUNT")` แล้ว setState) ลำดับจึงเป็น:
+
+1. commit A — `open=true` แต่ content ยังไม่ mount → effect รัน → `listRef.current === null` → `return` (ไม่มี cleanup)
+2. commit B — `send("MOUNT")` → ลิสต์ mount จริง, `listRef.current` ถูกตั้งค่า
+3. deps ไม่เปลี่ยนอีก → **effect ไม่ re-run → listener ไม่เคยถูก attach** → hover ตาย
+
+พิสูจน์ด้วย e2e probe บน VS Code จริง: ไม่มี `pointermove` listener ถูก attach เลย; อ่าน React fiber ได้ hook effect (deps=3) `ran=false` ขณะ `open=true` และ `listRef.current` ชี้ div จริง (`rowMetaRef` มี 291 แถว) — และเป็นเหตุผลที่ scroll-pin ยังทำงาน เพราะ effect นั้นอ่าน `listRef` ข้างใน rAF
+
+**วิธีแก้:** เปลี่ยนเป็น **React prop `onPointerMove` บนลิสต์** (`handleListPointerMove`) ซึ่งผูกตอน render จึงไม่มีทางพลาดจังหวะ mount — ลบ effect แบบ native listener ทิ้ง
+
+**กันถอยหลัง:** unit test (จริง Radix Popover ตัวจริง) "hovering a model row mounts the Options panel and follows the hovered row" + e2e `src/test/e2e/quick-picker-hover.test.ts` (ไดรฟ์เมาส์จริงบน VS Code: แผงโผล่วันแรกที่ hover และขยับตามแถวที่สอง)
+
+---
+
+## 🔎 dev.6-fix.8 — e2e บน VS Code จริง: `editor` เขียนเกินขีดจำกัด ต้องขึ้นล้มเหลวพร้อมข้อความจริง (2026-09-19)
+
+**สถานะ:** ✅ รันผ่านบน VS Code จริง (ยืนยันซ้ำ 2026-09-19) · ⏳ ยังไม่ commit
+
+**ที่มา:** รอบ fix.7 พิสูจน์ "editor create รายงานสำเร็จแต่ไฟล์ไม่ลงดิสก์" ด้วย core script (`bun run repro:editor-write`) + vitest เท่านั้น — ยังไม่มีหลักฐานในหน้าต่าง VS Code จริงว่าปลายทางผู้ใช้เห็นอะไร
+
+**ทำอะไร:** harness e2e ที่ให้ mock server stream tool call `editor` ขนาดเกินขีดจำกัด (6,000 ตัวอักษรต่อการเรียก) แล้วยืนยันว่าแถว tool ในแชทขึ้น **ล้มเหลวพร้อมข้อความจริงจาก runtime** (ไม่ใช่ `ENOENT` ซึ่งเป็นอาการเดิมที่ทับหลักฐาน)
+
+**ไฟล์:** `src/test/e2e/oversized-editor-write.test.ts` (ใหม่) · `src/test/e2e/fixtures/server/{api,index}.ts` (mock stream tool call + model list) · `scripts/repro-editor-write.ts` + `src/sdk/tool-write-pipeline.test.ts` + `src/icline/harness/tool-trace.ts(+test)` (ชั้น core/observability ของ fix.7)
+
+**หลักฐาน:** `bun run test:e2e:build && node src/test/e2e/utils/build.mjs && npx playwright test oversized-editor-write` → **3 passed** (setup + Single Root + Multi-Roots, ~36s)
+
+---
+
+## 🔎 dev.6-fix.7 — ไล่ "editor create รายงานสำเร็จแต่ไฟล์ไม่ลงดิสก์" (2026-09-19)
+
+**สถานะ:** ✅ ต้นตอพิสูจน์แล้ว + แก้แล้ว · ⏳ รอ maintainer smoke (VSIX `dev.6-fix.7`)
+
+### กองที่ 1 — บั๊กของเรา (iCline): guardrail เขียนทับหลักฐาน
+
+`runIclinePostWriteVerification` (`apps/vscode/src/sdk/hooks-adapter.ts`) เดิมตัดสินว่าสำเร็จ/ล้มเหลวจาก **ธง `isError` เท่านั้น** แต่ฝั่ง SDK คืน "การปฏิเสธระดับ input" มาเป็น **envelope ที่ return กลับมา** — `{ query, result: "", error, success: false }` — โดย **ไม่ throw** ดังนั้น `isError` จึงว่างเสมอ
+
+ผลลัพธ์เป็นสองหน้าตาที่ไม่สมมาตรกัน:
+
+| เคส | สิ่งที่เกิดก่อนแก้ | สิ่งที่โมเดลเห็น |
+|---|---|---|
+| `editor` **สร้างไฟล์ใหม่** oversized (ไฟล์ยังไม่มี) | guardrail เข้าใจว่าสำเร็จ → `verifyWrittenFile` stat ไฟล์ที่ไม่มีวันมี → **เขียนทับข้อความจริงด้วย ENOENT** | "ไฟล์หาย" → เดา → ส่งคำสั่งเดิมซ้ำ |
+| `editor` **แก้ไฟล์เดิม** oversized (ไฟล์มีอยู่) | guardrail ตรวจผ่านเงียบ ๆ → envelope ยังอยู่ครบ | ข้อความจริงอยู่ แต่ **ไม่ถูกทำเครื่องหมายว่าล้มเหลว** → โมเดลเล็กส่งซ้ำอยู่ดี |
+
+**แก้แล้ว:** ตรวจ envelope **ก่อน** การ verify (เก็บข้อความของ executor ไว้), คืน `isError: true`, เติมสูตรที่ลงมือได้จริง (แยกก้อน + `insert_line` สำหรับต่อท้าย), และในเส้นทาง verify-fail จะแนบ "The tool reported: …" กลับไปด้วย หลักฐานจึงไม่หายอีก — ดู "ทางป้องกัน/ทางกู้" ท้ายหัวข้อ
+
+### กองที่ 2 — ขีดจำกัดของ runtime (ไม่ใช่บั๊ก iCline แต่ต้องรู้)
+
+| ข้อจำกัด | ค่าจริง | หลักฐาน |
+|---|---|---|
+| `editor` จำกัด `new_text`/`old_text` **ต่อการเรียก 1 ครั้ง** | 6000 ตัวอักษร (`INPUT_ARG_CHAR_LIMIT`, `@cline/core` `extensions/tools/schemas.ts`) | `bun run repro:editor-write`: 6000 → ลงดิสก์, 6001 → ถูกปฏิเสธ (envelope) |
+| `insert_line` ต้องอยู่ในช่วง 1..(บรรทัดสุดท้าย) ของไฟล์ | ปฏิเสธพร้อมข้อความบอกช่วงที่ถูก | session ล่าสุด msg#31 (`insert_line: 21` แต่ไฟล์มี 18 บรรทัด) |
+| `old_text` ไม่ตรงเป๊ะ | "No replacement performed" | 40 เคสใน 47 session iCline — **พฤติกรรมโมเดล** ไม่ใช่บั๊ก |
+
+เส้นแบ่ง 6000 ยืนยันจากคลัง session (ตัวเลขจากตาราง size bucket ด้านล่าง): `create` ที่ **>6000 ล้ม 28 จาก 28** (`ok` 0) · `create` ที่ **≤6000 สำเร็จ 56 จาก 65** — และ 9 เคสที่ล้มนั้นเป็น `Editor operation failed: Parameter \`old_text\`` ทั้งหมด (โมเดลส่งคำสั่งแก้ไฟล์ที่ยังไม่มี) **ไม่เกี่ยวกับขนาด** · `edit` ที่ **>6000 ล้ม 23 จาก 23**
+
+### กองที่ 3 — observability: envelope ไม่เคยถูกทำเครื่องหมายเป็น error เลย
+
+สแกน `~/.cline/data/sessions` ด้วย `.icline/scratch/analyze-session.mjs --envelope`:
+
+```
+envelope rejections flagged as errors  : 0
+envelope rejections reported as SUCCESS: 74  {"ENVELOPE_FAILURE_UNFLAGGED":11,"SIZE_REJECTED_UNFLAGGED":23,"NO_MATCH_UNFLAGGED":40}
+by session (14)  — new_text ที่ถูกปฏิเสธเพราะใหญ่เกิน: 6044…26310 (23 ค่า)
+```
+
+**74/74 ไม่เคยถูก flag** — ไม่มีแม้แต่ครั้งเดียวที่การปฏิเสธระดับ input กลายเป็น error ที่ UI/ลูปมองเห็น จึงไม่แปลกที่รอบก่อน ๆ สรุปว่า "ข้อความ `Editor input too large` ไม่เคยถึงโมเดล"
+
+> **ตัววิเคราะห์เองก็มองไม่เห็นบั๊กนี้** — `classifyResult` เดิมแยกชนิดจาก `is_error` อย่างเดียว เคส envelope จึงถูกนับเป็น `ok` ต้องแก้เป็นอ่าน payload (`success: false` + `error`) ก่อน ตัวเลข "23/23 ไม่มี flag" จึงโผล่
+
+### สิ่งที่แก้/เพิ่มในรอบนี้
+
+| # | ไฟล์ | ทำอะไร |
+|---|---|---|
+| 1 | `src/sdk/hooks-adapter.ts` | ตรวจ failure envelope ก่อน verify · เก็บข้อความ executor · เติมสูตรแยกก้อน · คืน `isError: true` · ส่ง `apply_patch` ด้วย |
+| 2 | `src/icline/harness/guardrails.ts` | `EDITOR_INPUT_CHAR_LIMIT` (สะท้อนค่าจริง 6000) + `getLargeWriteGuidance()` ใช้ร่วมกันทั้ง overlay และ guardrail · overlay สอนวิธีเขียนไฟล์ใหญ่ก่อนล้ม |
+| 3 | `src/icline/harness/tool-trace.ts` | แหล่งหลักฐาน JSONL (`~/.cline/data/logs/icline-tool-trace.jsonl`): tool name / call id / path / คำอ้างของ tool / ผล verify · เขียนเฉพาะตอนล้มเหลวในบิลด์ปกติ, เปิดทั้งหมดด้วย `ICLINE_TOOL_TRACE=1` · จำกัดขนาด 2 MB · ห้าม throw เข้าลูป |
+| 4 | `apps/vscode/scripts/repro-editor-write.ts` | harness กับ **core จริง** (`bun run repro:editor-write`) — vitest alias `@cline/core` เป็น stub จึงพิสูจน์ไม่ได้ชั้นนั้น |
+
+**ทางป้องกัน:** overlay ของ harness บอกทุก session ว่ารอบเดียวรับได้ ~6000 ตัวอักษร และให้แยกก้อน + ต่อด้วย `insert_line`
+**ทางกู้:** ถ้าโดนปฏิเสธ guardrail ส่งข้อความจริงของ executor + สูตรที่ลงมือได้กลับไปพร้อม `isError: true` แทน ENOENT ที่ทำให้เข้าใจผิด
+
+### เทสต์กันถอยหลัง
+
+| ไฟล์ | คุมอะไร |
+|---|---|
+| `src/sdk/tool-write-pipeline.test.ts` | สัญญาของ guardrail (envelope ใหญ่/ไม่ใหญ่, เก็บคำอ้าง, เงียบเมื่อสำเร็จจริง, ไม่แตะเมื่อ tool throw แล้ว) |
+| `src/sdk/hooks-adapter.test.ts` | +4 เคส: envelope → error จริง · เติมสูตรเมื่อ oversized · envelope ที่ `error: ""` ยังต้อง verify · `apply_patch` ไม่เติมสูตรของ editor |
+| `src/icline/harness/tool-trace.test.ts` | เงียบในบิลด์ปกติ · เก็บเคสล้มเหลวเสมอ · เขียนพร้อมกันไม่ปนบรรทัด · ตัด backlog เมื่อเกิน 2 MB |
+
+### 🧪 วิธี smoke fix.7
+
+| # | ทดสอบ | คาดหวัง |
+|---|-------|--------|
+| 1 | About | `dev build 6 · fix.7` |
+| 2 | สั่งให้เขียนไฟล์ใหญ่ (> 6000 ตัวอักษร) ในคำสั่งเดียว | โมเดลต้อง**ไม่**รายงานว่าสำเร็จลอย ๆ — ถ้าโดนปฏิเสธต้องเห็นข้อความ `Editor input too large` **พร้อมสูตรแยกก้อน** และแถว tool ต้องเป็นสีแดง (ไม่ใช่เขียว) |
+| 3 | ให้โมเดลสร้างไฟล์ 2 ไฟล์พร้อมกันโดยไฟล์หนึ่งใหญ่เกิน | ไฟล์เล็กต้องลงครบ · ไฟล์ใหญ่ต้องรายงานเหตุผลจริง |
+| 4 | `ICLINE_TOOL_TRACE=1` แล้วลองซ้ำข้อ 2 | มีบรรทัดใหม่ใน `~/.cline/data/logs/icline-tool-trace.jsonl` ที่มี `event` / `toolName` / `newTextChars` |
+| 5 | Quick Picker: เปิดจากแถบหัวแชท | กว้าง 320px · กลุ่ม **Free ก่อน Standard** + จำนวน · badge FREE · ไอคอน capability มี tooltip (บอลลูน **ด้านบน** ไม่ใช่ title เนทีฟ) · chevron ตัวเดียว**หน้า**ชื่อ provider ยุบแล้วชี้ขวา |
+| 6 | hover แถวโมเดล | มี Options panel โผล่**ด้านขวา** ขอบบนตรงกับแถว · เดินเมาส์เข้าไปกด Effort ได้โดย panel ไม่หาย · **scroll ลิสต์แล้ว panel ต้องปิด** |
+| 7 | ตั้ง General Settings → Preferred Language = `Thai - ไทย` แล้วเปิด picker | ข้อความใน picker เป็นไทย (ช่องค้นหา / Free / ใช้งานอยู่) |
+| 8 | Settings → provider `jan` (หรือ custom ที่ใช้ฟอร์ม OpenAI-compatible) | dropdown **Model ID** ต้องเข้าธีม (ไม่ใช่สีขาวของเบราว์เซอร์) |
+
+### คิวถัดไปที่ยังค้างจากรอบนี้
+
+- **e2e บน VS Code จริง** ผ่าน mock server ที่ stream tool call `editor` ขนาดใหญ่ — เลย์เอาต์ที่พิสูจน์ได้ตอนนี้คือ `bun run repro:editor-write` (real core) + vitest (เลเยอร์เรา); debugger F5 ใช้ได้ แต่ `debug-harness` ของ upstream เป็น macOS-only
+- `old_text` ไม่ตรง 40 เคส = คุณภาพโมเดล ไม่ใช่บั๊ก — ถ้าจะลด ต้องแก้ที่ prompt/overlay ไม่ใช่โค้ดเครื่องมือ
+
+---
 
 ### 🔀 dev.6 Wave 1 — SDK fast-forward ถึง upstream Sep-16 (`ce25d8b15`, เปิดรอบ)
 
@@ -19,7 +250,7 @@
 | **หมายเหตุ fix.4 smoke** | (a) ลิสต์ jan = จาก `{baseUrl}/models` ของ Jan server ผู้ใช้เอง — server รายงาน**ไฟล์ทั้งหมดที่เสิร์ฟได้** (ทุก quant + embedding) ขณะที่ Jan app UI คัดเฉพาะ chat models → ไม่ตรงกัน = พฤติกรรม Jan server ไม่ใช่บั๊ก iCline (official จะเห็นลิสต์เดียวกัน) (b) glm-5.3-flash (free) พิมพ์ tool XML เป็น**ข้อความล้วน** (transcript: text-only, ไม่มี tool_use แม้ชิ้นเดียว; deepseek รอบเดียวกันปกติ) = ขีดจำกัดของโมเดล ไม่ใช่บั๊ก iCline | 📝 บันทึกไว้ |
 | **fix.6** | การ์ดคำตอบสุดท้ายแบบ official: แถว text สุดท้าย → การ์ด COMPLETED + copy ขวาบน (mock: plans/completion-card/) — `8440e4bb6` | ⏳ รอ smoke |
 | **fix.6 v2** (repack) | ปรับตาม feedback: tint **คราม/ฟ้าจาง** (rgba(99,102,241,.07)) · **copy ย้ายเข้าแถว COMPLETED ขวาบน แสดงตลอด** · **COMPLETED สีน้ำเงิน** (charts-blue) · **Thinking → Thought** เมื่อจบคิด — repack ทับ `dev.6-fix.6` (11,948,077 B @ 09-19 08:02) — `9702f2191` | ⏳ รอ smoke (ติดตั้งตัวใหม่ 15:02 น.) |
-| **คิวถัดไป** | Quick Picker redesign (mock รอบ 11) + restyle dropdown ดิบ (jan Model ID) — จัดคิวใน STATUS แล้ว ทำหลังปิด smoke | 📋 คิว |
+| **คิวถัดไป** | Quick Picker redesign (mock รอบ 11) + restyle dropdown ดิบ (jan Model ID) — จัดคิวใน STATUS แล้ว ทำหลังปิด smoke | ✅ **ทำใน fix.7** (พร้อมงานไล่บั๊ก editor) ⏳ รอ smoke |
 | **fix.5** | glm-5.3-flash พิมพ์ tool XML เป็นข้อความ — **รากฝั่งเรายืนยันด้วย prompt diff**: overlay ของเราสั่ง "must use a tool" ขณะ official ไม่มีคำสั่งนี้เลย (glm เจอคำสั่งขัดแย้งกับ base จึงเขียน markup ลง text) → overlay ใหม่ห้าม fabricate markup + guard เทส — `f05e92253` | ⏳ รอ smoke |
 **รอบ dev.5 ปิดแล้ว (2026-09-18)** — ตารางด้านล่างคือบันทึกประวัติศาสตร์ของ dev.5
 

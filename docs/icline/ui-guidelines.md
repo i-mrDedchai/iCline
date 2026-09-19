@@ -26,13 +26,20 @@
 
 ## Quick Picker (ออกแบบล็อกแล้ว — สรุป)
 
-- ความกว้าง popover 320px · hover Options panel 232px ด้านขวา (top-align กับแถว ถ้าล้นขอบล่างเลื่อนขึ้นพอดีขอบ + max-height 320px)
+- ความกว้าง popover 320px · hover Options panel **236px** ด้านขวา (top-align กับแถว ถ้าล้นขอบล่างเลื่อนขึ้นพอดีขอบ margin 10px + max-height 320px · gap 4px · ไม่ต่ำกว่า 38px จากขอบบนของ picker เพื่อไม่ทับช่องค้นหา) — สูตรจริงอยู่ใน `computeOptionsPanelTop` (`quickModelPickerList.ts`) และ mock ที่ล็อก
 - จัดกลุ่มโมเดล: **Free ก่อน Standard** (A–Z, Active บนสุดของกลุ่ม) · badge FREE เขียว
 - Search ค้นทั้งชื่อ provider และโมเดล · footer เป็นไอคอนล้วน + balloon tooltip · ข้อความ "Active ·" สีเขียว
 - Chevron provider: ลูกศรเส้น (Lucide `ChevronDown`) ตัวเดียวหน้าชื่อ หมุนรอบจุดกึ่งกลาง · subtitle (เช่น SuperGrok / Premium+) แสดงเฉพาะตอนขยาย
 - ภาษา: Free/Standard + tooltip ทุกข้อความ ผูกกับ Language setting (General Settings, default ตามภาษา VS Code)
 
+### แผง Options ตอน hover (ล็อกจาก mock v11 — implement แล้วใน fix.11–fix.13)
+
+- เนื้อหา: หัวข้อ **Options** → บรรทัด model id → สวิตช์ **Thinking** (on/off = ค่าจริงที่เขียนได้) → ปุ่ม **Effort** (มี ✓ ที่ระดับที่เลือก) หรือข้อความ "No effort options for this model" → รายการ capability (ไอคอนเทา)
+- **ระดับ Effort และชุดค่ามาจาก metadata ของ provider** ไม่ใช่ชุดตายตัว: `openai` = Low/Medium/High/Max (xhigh) · `sakana` = High/X-High/Max + default ต่อโมเดล · provider ที่ catalog เผยแพร่ระดับเอง (OCA) ก็แสดงตามนั้น — นิยามที่เดียวใน `webview-ui/src/utils/modelThinkingOptions.ts` (`resolveEffortLevels`) และ Settings ใช้ตัวเดียวกัน
+- ห้ามมีปุ่ม "None/Off" ในแผง — การปิดเป็นหน้าที่ของสวิตช์ Thinking
+- ไอคอน capability บนแถวใช้**สีตามสถานะจริง** (ม่วง reasoning · ทอง thinking: สว่างเมื่อเปิด, จาง 50% เมื่อปิด) + tooltip บอกระดับที่ใช้จริง ส่วน vision/audio/video/training เป็นสีประจำความสามารถล้วน
+
 ## ขอบเขตการ implement
 
-1. **fix.9** — QuickModelPicker ตามสเปกนี้ + reusable tooltip component (วางกลาง เช่น `webview-ui/src/icline/BalloonTooltip.tsx`)
+1. ~~fix.9 — QuickModelPicker ตามสเปกนี้ + reusable tooltip component~~ ✅ ปิดแล้ว (fix.9–fix.13: แผง Options ตามแถว · เนื้อหาตรง mock v11 · สถานะ/ไอคอนตรงกับค่าที่ตั้ง · นโยบาย + ชุดค่า Effort เป็น metadata กลาง)
 2. รอบหลัง — ขยายคลุม surface อื่นของ iCline (แทน native title ที่เหลือทั้งแอป) ทีละส่วน
