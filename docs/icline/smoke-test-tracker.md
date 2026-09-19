@@ -1,6 +1,6 @@
 **Last updated:** 2026-09-19
 **Branch:** `feat/upstream-waves-1-2` (จาก main @ `78ebd0923` — รวม dev.5 แล้ว, tag `pre-merge-dev.5`, ยังไม่ push)
-**HEAD:** `c5412e9c5` (docs fix.14 · fix.7–fix.14 commit แล้ว 6 commits — ยังไม่ push)
+**HEAD:** ดู `git log` (ไม่ตรึง hash ไว้ตรงนี้ — มันตกหล่นทุกครั้งที่มี commit เอกสารตามหลัง) · commit สุดท้ายที่แตะโค้ด = `bde5f2df1` · **fix.7–fix.14 commit แล้ว ยังไม่ push**
 **vsix (ล่าสุด):** `apps/vscode/dist/i-mrdedchai.iCline-0.1.18-dev.6-fix.14.vsix` (11,962,218 B @ 2026-09-19 16:57Z · About = `dev build 6 · fix.14`) — ⏳ **รอบนี้คือ fix.14** · do not overwrite `fix.1`–`fix.13` ใน `dist/` (repack ทับ fix.14 หลัง lint-staged จัดรูปแบบ 3 ไฟล์ ⇒ bundle ต่างจาก pack แรก 483 B — ของเดิมยังทำงานเหมือนกัน แต่ repack เพื่อให้ artefact ตรงกับ commit)
 
 ---
