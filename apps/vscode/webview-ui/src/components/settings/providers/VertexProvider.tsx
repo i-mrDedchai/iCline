@@ -1,6 +1,5 @@
 import VertexData from "@shared/providers/vertex.json"
 import type { Mode } from "@shared/storage/types"
-import { isClaudeOpusAdaptiveThinkingModel, resolveClaudeOpusAdaptiveThinking } from "@shared/utils/reasoning-support"
 import { VSCodeDropdown, VSCodeLink, VSCodeOption } from "@vscode/webview-ui-toolkit/react"
 import { useMemo } from "react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
@@ -8,6 +7,7 @@ import { useProviderConfig } from "@/hooks/useProviderConfig"
 import { useProviderModelSelection } from "@/hooks/useProviderModelSelection"
 import { useProviderModels } from "@/hooks/useProviderModels"
 import { useProviderUsageCostDisplay } from "@/hooks/useProviderUsageCostDisplay"
+import { resolveModelThinkingOptions } from "@/utils/modelThinkingOptions"
 import { DROPDOWN_Z_INDEX, DropdownContainer } from "../ApiOptions"
 import { DebouncedTextField } from "../common/DebouncedTextField"
 import { ModelInfoView } from "../common/ModelInfoView"
@@ -15,7 +15,6 @@ import { ModelSelector } from "../common/ModelSelector"
 import { LockIcon, RemotelyConfiguredInputWrapper } from "../common/RemotelyConfiguredInputWrapper"
 import ReasoningEffortSelector from "../ReasoningEffortSelector"
 import ThinkingBudgetSlider from "../ThinkingBudgetSlider"
-import { getModeSpecificFields } from "../utils/providerUtils"
 
 /**
  * Props for the VertexProvider component
@@ -46,7 +45,6 @@ export const VertexProvider = ({ showModelOptions, isPopup, currentMode }: Verte
 		},
 	)
 	const hideUsageCost = useProviderUsageCostDisplay("vertex") === "hide"
-	const modeFields = getModeSpecificFields(apiConfiguration, currentMode)
 	const vertexProjectId = config?.gcp?.projectId ?? apiConfiguration?.vertexProjectId ?? ""
 	const vertexRegion = config?.gcp?.region ?? config?.region ?? apiConfiguration?.vertexRegion ?? ""
 
@@ -79,13 +77,16 @@ export const VertexProvider = ({ showModelOptions, isPopup, currentMode }: Verte
 		}
 		return Object.fromEntries(Object.entries(allVertexModels).filter(([, info]) => info.supportsGlobalEndpoint === true))
 	}, [allVertexModels, vertexRegion])
-	const isAdaptiveThinkingModel = isClaudeOpusAdaptiveThinkingModel(selectedModelId)
-	const supportsThinkingBudget =
-		selectedModelInfo.supportsReasoning === true &&
-		selectedModelInfo.thinkingConfig !== undefined &&
-		selectedModelInfo.thinkingConfig.supportsThinkingLevel !== true
-	const adaptiveThinkingDefaultEffort =
-		resolveClaudeOpusAdaptiveThinking(modeFields.reasoningEffort, modeFields.thinkingBudgetTokens).effort ?? "none"
+	// Vertex's control choice is the shared policy's
+	// (`@/utils/modelThinkingOptions`), the same one the Quick Picker uses. `effortSource`
+	// still tells the two EFFORT variants apart: adaptive-thinking models keep the
+	// labelled selector with None, thinking-level models keep the plain one.
+	const thinkingOptions = resolveModelThinkingOptions({
+		providerId: "vertex",
+		modelId: selectedModelId ?? "",
+		modelInfo: selectedModelInfo,
+	})
+	const isAdaptiveThinkingModel = thinkingOptions.effortSource === "adaptive-thinking"
 
 	return (
 		<div
@@ -171,18 +172,22 @@ export const VertexProvider = ({ showModelOptions, isPopup, currentMode }: Verte
 
 					{isAdaptiveThinkingModel ? (
 						<ReasoningEffortSelector
-							allowedEfforts={["none", "low", "medium", "high", "xhigh"] as const}
 							currentMode={currentMode}
-							defaultEffort={adaptiveThinkingDefaultEffort}
-							description="Use None to disable adaptive thinking. Higher effort increases response detail and token usage."
-							label="Adaptive Thinking"
+							modelId={selectedModelId ?? ""}
+							modelInfo={selectedModelInfo}
+							providerId="vertex"
 						/>
-					) : supportsThinkingBudget ? (
+					) : thinkingOptions.showThinkingBudget ? (
 						<ThinkingBudgetSlider currentMode={currentMode} maxBudget={selectedModelInfo.thinkingConfig?.maxBudget} />
 					) : null}
 
-					{selectedModelInfo.thinkingConfig?.supportsThinkingLevel && (
-						<ReasoningEffortSelector currentMode={currentMode} />
+					{thinkingOptions.effortSource === "thinking-level" && (
+						<ReasoningEffortSelector
+							currentMode={currentMode}
+							modelId={selectedModelId ?? ""}
+							modelInfo={selectedModelInfo}
+							providerId="vertex"
+						/>
 					)}
 
 					<ModelInfoView

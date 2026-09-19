@@ -4,12 +4,13 @@ import { ApiFormat, OpenAiModelsRequest } from "@shared/proto/cline/models"
 import { fromProtobufModelInfo } from "@shared/proto-conversions/models/typeConversion"
 import type { Mode } from "@shared/storage/types"
 import { VSCodeButton, VSCodeCheckbox } from "@vscode/webview-ui-toolkit/react"
-import { useCallback, useEffect, useRef, useState } from "react"
+import { type CSSProperties, useCallback, useEffect, useRef, useState } from "react"
 import { Tooltip } from "@/components/ui/tooltip"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useDynamicProviderSelection } from "@/hooks/useDynamicProviderSelection"
 import { fromProtobufProviderModelOverrides, type ProviderModelOverrides, useProviderConfig } from "@/hooks/useProviderConfig"
 import { ModelsServiceClient } from "@/services/grpc-client"
+import { OPENAI_COMPATIBLE_POLICY_ID, resolveModelThinkingOptions } from "@/utils/modelThinkingOptions"
 import { getAsVar, VSC_DESCRIPTION_FOREGROUND } from "@/utils/vscStyles"
 import { ApiKeyField } from "../common/ApiKeyField"
 import { BaseUrlField } from "../common/BaseUrlField"
@@ -18,6 +19,24 @@ import { ModelInfoView } from "../common/ModelInfoView"
 import ReasoningEffortSelector from "../ReasoningEffortSelector"
 import { useApiConfigurationHandlers } from "../utils/useApiConfigurationHandlers"
 import { useProviderApiKeyField } from "../utils/useProviderApiKeyField"
+
+/**
+ * The model list below is a plain `<select>` (not a VS Code toolkit dropdown), so it
+ * has to be themed by hand. Unstyled it renders in the browser default white, which
+ * read as a broken control in the dark theme — the "jan Model ID หลุดดีไซน์" report.
+ * Every token has a fallback because not all themes define the dropdown set.
+ */
+const MODEL_ID_SELECT_STYLE: CSSProperties = {
+	width: "100%",
+	background: "var(--vscode-dropdown-background, var(--vscode-input-background))",
+	color: "var(--vscode-dropdown-foreground, var(--vscode-input-foreground))",
+	border: "1px solid var(--vscode-dropdown-border, var(--vscode-input-border, var(--vscode-editorGroup-border)))",
+	borderRadius: 2,
+	padding: "4px 6px",
+	fontFamily: "var(--vscode-font-family)",
+	fontSize: 12,
+	outline: "none",
+}
 
 /**
  * Props for the OpenAICompatibleProvider component
@@ -341,7 +360,7 @@ export const OpenAICompatibleProvider = ({
 							setIsCustomOpenAiModelEntryVisible(false)
 							handleOpenAiModelSelection(modelId)
 						}}
-						style={{ width: "100%" }}
+						style={MODEL_ID_SELECT_STYLE}
 						value={selectedModelId && availableOpenAiModels.includes(selectedModelId) ? selectedModelId : ""}>
 						{selectedModelId && !availableOpenAiModels.includes(selectedModelId) && (
 							<option value="">{selectedModelId} (not in current list)</option>
@@ -607,18 +626,31 @@ export const OpenAICompatibleProvider = ({
 
 			{showModelOptions && (
 				<>
-					<ReasoningEffortSelector
-						currentMode={currentMode}
-						defaultEffort="none"
-						onEffortChange={(effort) => {
-							void write({
-								reasoning: {
-									enabled: effort !== "none",
-									effort: effort !== "none" ? effort : undefined,
-								},
-							}).catch((err) => console.error("Failed to update OpenAI Compatible reasoning effort:", err))
-						}}
-					/>
+					{/*
+					 * This form serves user-configured endpoints, so the shared policy's
+					 * `OPENAI_COMPATIBLE_POLICY_ID` rule is "always offer effort" — the app cannot
+					 * know what an arbitrary endpoint supports. One policy table, no local rule.
+					 */}
+					{resolveModelThinkingOptions({
+						providerId: OPENAI_COMPATIBLE_POLICY_ID,
+						modelId: selectedModelId,
+						modelInfo: selectedModelInfo,
+					}).showEffort && (
+						<ReasoningEffortSelector
+							currentMode={currentMode}
+							modelId={selectedModelId}
+							modelInfo={selectedModelInfo}
+							onEffortChange={(effort) => {
+								void write({
+									reasoning: {
+										enabled: effort !== "none",
+										effort: effort !== "none" ? effort : undefined,
+									},
+								}).catch((err) => console.error("Failed to update OpenAI Compatible reasoning effort:", err))
+							}}
+							providerId={OPENAI_COMPATIBLE_POLICY_ID}
+						/>
+					)}
 					<ModelInfoView isPopup={isPopup} modelInfo={selectedModelInfo} selectedModelId={selectedModelId} />
 				</>
 			)}

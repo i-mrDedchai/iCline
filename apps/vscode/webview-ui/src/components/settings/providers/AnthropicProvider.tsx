@@ -1,10 +1,10 @@
 import { openAiModelInfoSafeDefaults } from "@shared/api"
 import type { Mode } from "@shared/storage/types"
-import { isClaudeOpusAdaptiveThinkingModel, resolveClaudeOpusAdaptiveThinking } from "@shared/utils/reasoning-support"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useProviderConfig } from "@/hooks/useProviderConfig"
 import { useProviderModelSelection } from "@/hooks/useProviderModelSelection"
 import { useStaticProviderSelection } from "@/hooks/useStaticProviderSelection"
+import { resolveModelThinkingOptions } from "@/utils/modelThinkingOptions"
 import { ApiKeyField } from "../common/ApiKeyField"
 import { BaseUrlField } from "../common/BaseUrlField"
 import { ModelInfoView } from "../common/ModelInfoView"
@@ -12,21 +12,9 @@ import { ModelSelector } from "../common/ModelSelector"
 import { RemotelyConfiguredInputWrapper } from "../common/RemotelyConfiguredInputWrapper"
 import ReasoningEffortSelector from "../ReasoningEffortSelector"
 import ThinkingBudgetSlider from "../ThinkingBudgetSlider"
-import { getModeSpecificFields } from "../utils/providerUtils"
 import { useProviderApiKeyField } from "../utils/useProviderApiKeyField"
 
-// Anthropic models that support thinking/reasoning mode
 const PROVIDER_ID = "anthropic"
-
-export const SUPPORTED_ANTHROPIC_THINKING_MODELS = [
-	"claude-sonnet-4-6",
-	"claude-3-7-sonnet-20250219",
-	"claude-sonnet-4-20250514",
-	"claude-opus-4-20250514",
-	"claude-opus-4-1-20250805",
-	"claude-sonnet-4-5-20250929",
-	"claude-haiku-4-5-20251001",
-]
 
 /**
  * Props for the AnthropicProvider component
@@ -42,7 +30,6 @@ interface AnthropicProviderProps {
  */
 export const AnthropicProvider = ({ showModelOptions, isPopup, currentMode }: AnthropicProviderProps) => {
 	const { apiConfiguration, remoteConfigSettings } = useExtensionState()
-	const modeFields = getModeSpecificFields(apiConfiguration, currentMode)
 	const { config, write, commitSelection } = useProviderConfig(PROVIDER_ID)
 
 	// Get the normalized configuration
@@ -65,9 +52,15 @@ export const AnthropicProvider = ({ showModelOptions, isPopup, currentMode }: An
 		providerName: "Anthropic",
 		write,
 	})
-	const isAdaptiveThinkingModel = isClaudeOpusAdaptiveThinkingModel(selectedModelId)
-	const adaptiveThinkingDefaultEffort =
-		resolveClaudeOpusAdaptiveThinking(modeFields.reasoningEffort, modeFields.thinkingBudgetTokens).effort ?? "none"
+	// Which control this model gets is the shared policy's call
+	// (`@/utils/modelThinkingOptions`) — the same one the Quick Picker and every other
+	// provider form uses, so Settings and the picker cannot disagree. Its thinking-budget
+	// list lives there as `ANTHROPIC_THINKING_BUDGET_MODELS`.
+	const thinkingOptions = resolveModelThinkingOptions({
+		providerId: PROVIDER_ID,
+		modelId: selectedModelId ?? "",
+		modelInfo: selectedModelInfo,
+	})
 
 	const handleBaseUrlChange = (value: string) => {
 		void write({ baseUrl: value }).catch((err) => console.error("Failed to update Anthropic base URL:", err))
@@ -121,16 +114,15 @@ export const AnthropicProvider = ({ showModelOptions, isPopup, currentMode }: An
 						selectedModelId={selectedModelId}
 					/>
 
-					{isAdaptiveThinkingModel ? (
+					{thinkingOptions.showEffort ? (
 						<ReasoningEffortSelector
-							allowedEfforts={["none", "low", "medium", "high", "xhigh"] as const}
 							currentMode={currentMode}
-							defaultEffort={adaptiveThinkingDefaultEffort}
-							description="Use None to disable adaptive thinking. Higher effort increases response detail and token usage."
-							label="Adaptive Thinking"
+							modelId={selectedModelId ?? ""}
+							modelInfo={selectedModelInfo}
 							onEffortChange={handleAdaptiveThinkingChange}
+							providerId={PROVIDER_ID}
 						/>
-					) : SUPPORTED_ANTHROPIC_THINKING_MODELS.includes(selectedModelId) ? (
+					) : thinkingOptions.showThinkingBudget ? (
 						<ThinkingBudgetSlider currentMode={currentMode} maxBudget={selectedModelInfo.thinkingConfig?.maxBudget} />
 					) : null}
 

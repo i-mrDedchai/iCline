@@ -8,6 +8,7 @@ import { useNormalizedApiConfiguration } from "@/hooks/useNormalizedApiConfigura
 import { useProviderListings } from "@/hooks/useProviderListings"
 import { useProviderModels } from "@/hooks/useProviderModels"
 import { ModelsServiceClient } from "@/services/grpc-client"
+import { setChatModelPreference } from "./chatModelPreferences"
 import { QuickModelPicker } from "./QuickModelPicker"
 
 const CLINE_BILLING_CATALOG_IDS = [
@@ -44,10 +45,13 @@ vi.mock("@/hooks/useProviderModels", () => ({
 	useProviderModels: vi.fn(),
 }))
 
+const configHandlers = vi.hoisted(() => ({
+	handleModeFieldChange: vi.fn(async () => {}),
+	handleModeFieldsChange: vi.fn(async () => {}),
+}))
+
 vi.mock("@/components/settings/utils/useApiConfigurationHandlers", () => ({
-	useApiConfigurationHandlers: () => ({
-		handleModeFieldChange: vi.fn(),
-	}),
+	useApiConfigurationHandlers: () => configHandlers,
 }))
 
 vi.mock("@/services/grpc-client", () => ({
@@ -81,7 +85,13 @@ function mockProviderModels(providerId: string) {
 	if (providerId === "jan") {
 		return {
 			models: {
-				[JAN_MODEL_ID]: { name: "Jan Local 7B", supportsPromptCache: false },
+				// Declared capabilities so the row's icons are exercised end to end.
+				[JAN_MODEL_ID]: {
+					name: "Jan Local 7B",
+					supportsImages: true,
+					supportsReasoning: true,
+					supportsPromptCache: false,
+				},
 			},
 			defaultModelId: JAN_MODEL_ID,
 			isLoading: false,
@@ -153,6 +163,7 @@ function pointerDown(target: HTMLElement, button: number) {
 describe("QuickModelPicker", () => {
 	beforeEach(() => {
 		vi.clearAllMocks()
+		localStorage.clear()
 		vi.mocked(ModelsServiceClient.commitModelSelection).mockResolvedValue({})
 		vi.mocked(useProviderListings).mockReturnValue({
 			providers: [
@@ -206,6 +217,80 @@ describe("QuickModelPicker", () => {
 		pointerDown(janModel, 2)
 
 		expect(ModelsServiceClient.commitModelSelection).not.toHaveBeenCalled()
+	})
+
+	/** iCline UI Guidelines กฎที่ 1: hover text is a balloon, never a native `title`. */
+	it("uses no native title attributes anywhere in the picker", async () => {
+		const { container } = render(<QuickModelPicker modelDisplayName={LEFTOVER_XAI_MODEL_ID} />)
+		fireEvent.click(screen.getByRole("button", { name: "Jan" }))
+		await screen.findByRole("button", { name: "Jan Local 7B" })
+
+		expect(container.querySelectorAll("[title]")).toHaveLength(0)
+	})
+
+	/** กฎที่ 2: only capabilities backed by real metadata get an icon, in guideline colours. */
+	it("shows exactly the declared capability icons on a model row", async () => {
+		render(<QuickModelPicker modelDisplayName={LEFTOVER_XAI_MODEL_ID} />)
+		fireEvent.click(screen.getByRole("button", { name: "Jan" }))
+		const janModel = await screen.findByRole("button", { name: "Jan Local 7B" })
+
+		const shown = [...janModel.querySelectorAll("[data-icline-capability]")].map((el) =>
+			el.getAttribute("data-icline-capability"),
+		)
+		// supportsReasoning + supportsImages are declared; nothing claims audio/video/training.
+		expect(shown.sort()).toEqual(["reasoning", "vision"])
+	})
+
+	/**
+	 * The picker remembers thinking/effort per model in localStorage. Selecting such a
+	 * model must put those values back into the running configuration — including the
+	 * thinking BUDGET, which the panel can set for a model that is not active yet
+	 * (`applyStoredThinking`), in ONE atomic write so the state push cannot revert it.
+	 */
+	it("restores a model's stored thinking budget and effort in one atomic write on select", async () => {
+		setChatModelPreference("jan", JAN_MODEL_ID, { reasoningEffort: "high", thinkingBudgetTokens: 4096 })
+
+		render(<QuickModelPicker modelDisplayName={LEFTOVER_XAI_MODEL_ID} />)
+		fireEvent.click(screen.getByRole("button", { name: "Jan" }))
+		// The stored effort also puts the row's one-letter badge in the accessible name.
+		const janModel = await screen.findByRole("button", { name: /Jan Local 7B/ })
+		pointerDown(janModel, 0)
+
+		await waitFor(() => expect(configHandlers.handleModeFieldsChange).toHaveBeenCalledTimes(1))
+		expect(configHandlers.handleModeFieldsChange).toHaveBeenCalledWith(
+			{
+				reasoningEffort: { plan: "planModeReasoningEffort", act: "actModeReasoningEffort" },
+				thinkingBudgetTokens: { plan: "planModeThinkingBudgetTokens", act: "actModeThinkingBudgetTokens" },
+			},
+			{ reasoningEffort: "high", thinkingBudgetTokens: 4096 },
+			"act",
+		)
+		// Not two separate writes: the second would carry a pre-push snapshot.
+		expect(configHandlers.handleModeFieldChange).not.toHaveBeenCalled()
+	})
+
+	it("keeps the footer icon-only and still names each action", async () => {
+		render(<QuickModelPicker modelDisplayName={LEFTOVER_XAI_MODEL_ID} />)
+		expect(screen.getByRole("button", { name: "Refresh the model list" })).toHaveTextContent("")
+		expect(screen.getByRole("button", { name: "Edit this provider in Settings" })).toHaveTextContent("")
+	})
+
+	it("renders Thai copy when the language setting is Thai", async () => {
+		vi.mocked(useExtensionState).mockReturnValue({
+			mode: "act",
+			apiConfiguration: {
+				actModeApiProvider: "xai",
+				actModeApiModelId: LEFTOVER_XAI_MODEL_ID,
+			},
+			providerModelsByProvider: {},
+			preferredLanguage: "Thai - ไทย",
+		} as ReturnType<typeof useExtensionState>)
+
+		render(<QuickModelPicker modelDisplayName={LEFTOVER_XAI_MODEL_ID} />)
+
+		expect(screen.getByPlaceholderText("ค้นหา provider หรือโมเดล…")).toBeInTheDocument()
+		expect(screen.getByText(/ใช้งานอยู่/)).toBeInTheDocument()
+		expect(screen.getByRole("button", { name: "โหลดรายชื่อโมเดลใหม่" })).toBeInTheDocument()
 	})
 })
 

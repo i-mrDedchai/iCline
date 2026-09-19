@@ -8,6 +8,7 @@ import React, { KeyboardEvent, useEffect, useMemo, useRef, useState } from "reac
 import { useMount } from "react-use"
 import styled from "styled-components"
 import { useDynamicProviderSelection } from "@/hooks/useDynamicProviderSelection"
+import { resolveModelThinkingOptions } from "@/utils/modelThinkingOptions"
 import { useExtensionState } from "../../context/ExtensionStateContext"
 import { ModelsServiceClient } from "../../services/grpc-client"
 import { highlight } from "../history/HistoryView"
@@ -170,9 +171,11 @@ const RequestyModelPicker: React.FC<RequestyModelPickerProps> = ({ isPopup, base
 		}
 	}, [selectedIndex])
 
-	const showBudgetSlider = useMemo(() => {
-		return selectedModelId?.includes("claude-3-7-sonnet")
-	}, [selectedModelId])
+	const thinkingOptions = resolveModelThinkingOptions({
+		providerId: "requesty",
+		modelId: selectedModelId ?? "",
+		modelInfo: selectedModelInfo,
+	})
 
 	return (
 		<div style={{ width: "100%" }}>
@@ -248,7 +251,7 @@ const RequestyModelPicker: React.FC<RequestyModelPickerProps> = ({ isPopup, base
 
 			{hasInfo ? (
 				<>
-					{showBudgetSlider && <ThinkingBudgetSlider currentMode={currentMode} />}
+					{thinkingOptions.showThinkingBudget && <ThinkingBudgetSlider currentMode={currentMode} />}
 					<ModelInfoView isPopup={isPopup} modelInfo={selectedModelInfo} selectedModelId={selectedModelId} />
 				</>
 			) : (

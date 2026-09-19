@@ -3,7 +3,6 @@ import { StringRequest } from "@shared/proto/cline/common"
 import { type ClineRecommendedModel } from "@shared/proto/cline/models"
 import { fromProtobufModelInfo } from "@shared/proto-conversions/models/typeConversion"
 import type { Mode } from "@shared/storage/types"
-import { isClaudeOpusAdaptiveThinkingModel, resolveClaudeOpusAdaptiveThinking } from "@shared/utils/reasoning-support"
 import { VSCodeTextField } from "@vscode/webview-ui-toolkit/react"
 import Fuse from "fuse.js"
 import type React from "react"
@@ -14,6 +13,7 @@ import { useDynamicProviderSelection } from "@/hooks/useDynamicProviderSelection
 import { useProviderConfig } from "@/hooks/useProviderConfig"
 import { useProviderModels } from "@/hooks/useProviderModels"
 import { StateServiceClient } from "@/services/grpc-client"
+import { resolveModelThinkingOptions } from "@/utils/modelThinkingOptions"
 import { highlight } from "../history/HistoryView"
 import { ModelInfoView } from "./common/ModelInfoView"
 import FeaturedModelCard from "./FeaturedModelCard"
@@ -318,16 +318,16 @@ const ClineModelPicker: React.FC<ClineModelPickerProps> = ({ isPopup, currentMod
 		}
 	}, [selectedIndex])
 
-	const showAdaptiveThinkingEffort = useMemo(() => isClaudeOpusAdaptiveThinkingModel(selectedModelId), [selectedModelId])
-	const adaptiveThinkingDefaultEffort = useMemo(
-		() => resolveClaudeOpusAdaptiveThinking(modeFields.reasoningEffort, modeFields.thinkingBudgetTokens).effort ?? "none",
-		[modeFields.reasoningEffort, modeFields.thinkingBudgetTokens],
-	)
-	// Show reasoning effort selector for all models that support reasoning,
-	// using the SDK catalog's supportsReasoning capability flag.
+	// Effort vs budget is the shared policy's call (`@/utils/modelThinkingOptions`),
+	// the same one the Quick Picker and the other provider forms use.
 	const showReasoningEffort = useMemo(
-		() => showAdaptiveThinkingEffort || selectedModelInfo?.supportsReasoning === true,
-		[showAdaptiveThinkingEffort, selectedModelInfo?.supportsReasoning],
+		() =>
+			resolveModelThinkingOptions({
+				providerId: "cline",
+				modelId: selectedModelId ?? "",
+				modelInfo: selectedModelInfo,
+			}).showEffort,
+		[selectedModelId, selectedModelInfo],
 	)
 
 	return (
@@ -478,17 +478,9 @@ const ClineModelPicker: React.FC<ClineModelPickerProps> = ({ isPopup, currentMod
 				<>
 					{showReasoningEffort && (
 						<ReasoningEffortSelector
-							allowedEfforts={
-								showAdaptiveThinkingEffort ? (["none", "low", "medium", "high", "xhigh"] as const) : undefined
-							}
 							currentMode={currentMode}
-							defaultEffort={showAdaptiveThinkingEffort ? adaptiveThinkingDefaultEffort : "medium"}
-							description={
-								showAdaptiveThinkingEffort
-									? "Use None to disable adaptive thinking. Higher effort increases response detail and token usage."
-									: undefined
-							}
-							label={showAdaptiveThinkingEffort ? "Adaptive Thinking" : undefined}
+							modelId={selectedModelId}
+							modelInfo={selectedModelInfo}
 							onEffortChange={(effort) => {
 								writeProviderConfig({
 									reasoning: {
@@ -497,6 +489,7 @@ const ClineModelPicker: React.FC<ClineModelPickerProps> = ({ isPopup, currentMod
 									},
 								})
 							}}
+							providerId="cline"
 						/>
 					)}
 

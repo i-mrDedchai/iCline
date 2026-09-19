@@ -4,15 +4,26 @@
  * Kept free of React for vitest.
  */
 
-/** Minimal shape for search/display — ModelInfo structurally satisfies this. */
-export type ModelInfoLike = { name?: string }
+/**
+ * Minimal shape for search/display — ModelInfo structurally satisfies this. The
+ * capability fields are carried through (not just `name`) so the model row and the
+ * Options panel can resolve real status without casting at every call site.
+ */
+export type ModelInfoLike = {
+	name?: string
+	supportsImages?: boolean
+	supportsReasoning?: boolean
+	thinkingConfig?: { supportsThinkingLevel?: boolean; maxBudget?: number } | null
+	/** OCA publishes the Effort levels a model accepts — the panel lists them as published. */
+	reasoningEffortOptions?: readonly string[]
+}
 
 export type ModelEntry = [string, ModelInfoLike]
 
 export type ProviderLike = { id: string; name?: string }
 
 /** Accepts `Record<string, ModelInfo>` / warm map slices without casts. */
-export type ModelsById = { readonly [id: string]: { name?: string } | undefined }
+export type ModelsById = { readonly [id: string]: ModelInfoLike | undefined }
 
 /** Warm catalog slice: provider id → cached models (may be missing until expand/Refresh). */
 export type WarmModelsByProvider = {
@@ -21,6 +32,44 @@ export type WarmModelsByProvider = {
 
 export const ACTIVE_PROVIDER_ATTR = "data-icline-provider"
 export const ACTIVE_MODEL_ATTR = "data-icline-current-model"
+
+/**
+ * Options-panel geometry, locked in mock v11
+ * (`.icline/plans/quick-picker-redesign/mock.v11-locked-2026-09-16.html`).
+ * Kept here (React-free) so the clamp maths is unit-testable.
+ */
+export const OPTIONS_PANEL_WIDTH_PX = 236
+export const OPTIONS_PANEL_GAP_PX = 4
+export const OPTIONS_PANEL_MAX_HEIGHT_PX = 320
+/** Never above this: keeps the panel clear of the picker's search row. */
+export const OPTIONS_PANEL_MIN_TOP_PX = 38
+/** Top-align nudge applied to the hovered row. */
+export const OPTIONS_PANEL_ROW_NUDGE_PX = 6
+/** Breathing room kept between the panel's bottom edge and the picker's. */
+export const OPTIONS_PANEL_BOTTOM_MARGIN_PX = 10
+
+/**
+ * Panel top for the hovered row — the mock's exact rule:
+ *
+ *   desiredTop = rowTop - pickerTop - 6
+ *   maxTop     = pickerHeight - panelHeight - 10
+ *   top        = max(38, min(desiredTop, maxTop))
+ *
+ * `panelHeight` must be the panel's REAL height, not its 320px max-height:
+ * content varies per model (157–264px in mock v11), and clamping against the
+ * max-height pinned every row past ~90px to a single top — so the panel only
+ * appeared to follow the first few rows (fix.9 report).
+ */
+export function computeOptionsPanelTop(params: {
+	rowTop: number
+	pickerTop: number
+	pickerHeight: number
+	panelHeight: number
+}): number {
+	const desiredTop = params.rowTop - params.pickerTop - OPTIONS_PANEL_ROW_NUDGE_PX
+	const maxTop = params.pickerHeight - params.panelHeight - OPTIONS_PANEL_BOTTOM_MARGIN_PX
+	return Math.max(OPTIONS_PANEL_MIN_TOP_PX, Math.min(desiredTop, maxTop))
+}
 
 function escapeAttrSelector(value: string): string {
 	if (typeof CSS !== "undefined" && typeof CSS.escape === "function") {

@@ -4,6 +4,12 @@ import { VSCodeDropdown, VSCodeOption } from "@vscode/webview-ui-toolkit/react"
 import React, { useMemo } from "react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useProviderModels } from "@/hooks/useProviderModels"
+import {
+	defaultEffortValue,
+	normalizeEffortValue,
+	resolveEffortLevels,
+	resolveModelThinkingOptions,
+} from "@/utils/modelThinkingOptions"
 import { DROPDOWN_Z_INDEX } from "./ApiOptions"
 import { ModelInfoView } from "./common/ModelInfoView"
 import { DropdownContainer, ModelSelector } from "./common/ModelSelector"
@@ -13,20 +19,6 @@ import { useApiConfigurationHandlers } from "./utils/useApiConfigurationHandlers
 export interface SakanaModelPickerProps {
 	isPopup?: boolean
 	currentMode: Mode
-}
-
-const SAKANA_REASONING_EFFORTS = ["high", "xhigh", "max"] as const
-type SakanaReasoningEffort = (typeof SAKANA_REASONING_EFFORTS)[number]
-
-function defaultSakanaReasoningEffort(modelId: string): SakanaReasoningEffort {
-	return modelId === "fugu-ultra" || modelId.startsWith("fugu-ultra") ? "xhigh" : "high"
-}
-
-function normalizeSakanaReasoningEffort(value: string | undefined, modelId: string): SakanaReasoningEffort {
-	if (value && SAKANA_REASONING_EFFORTS.includes(value as SakanaReasoningEffort)) {
-		return value as SakanaReasoningEffort
-	}
-	return defaultSakanaReasoningEffort(modelId)
 }
 
 const SakanaModelPicker: React.FC<SakanaModelPickerProps> = ({ isPopup, currentMode }) => {
@@ -50,7 +42,25 @@ const SakanaModelPicker: React.FC<SakanaModelPickerProps> = ({ isPopup, currentM
 
 	const selectedModelId = modeFields.sakanaModelId || defaultModelId
 	const selectedModelInfo = modeFields.sakanaModelInfo || models[selectedModelId as SakanaModelId]
-	const selectedReasoningEffort = normalizeSakanaReasoningEffort(modeFields.reasoningEffort, selectedModelId)
+	// WHICH models get an effort control, WHICH levels it offers and its default are all
+	// provider metadata (`@/utils/modelThinkingOptions`) — the same table the Quick Picker
+	// and every other provider form reads. Sakana's three levels (high/xhigh/max) and the
+	// per-model default (Fugu Ultra → X-High) live there, not in this component.
+	const thinkingOptions = resolveModelThinkingOptions({
+		providerId: "sakana",
+		modelId: selectedModelId,
+		modelInfo: selectedModelInfo,
+	})
+	const effortLevels = resolveEffortLevels({
+		providerId: "sakana",
+		modelId: selectedModelId,
+		modelInfo: selectedModelInfo,
+	})
+	const selectedReasoningEffort = normalizeEffortValue(
+		effortLevels,
+		modeFields.reasoningEffort,
+		defaultEffortValue(effortLevels, selectedModelId),
+	)
 
 	const handleModelChange = (newModelId: string) => {
 		const modelInfo = models[newModelId as SakanaModelId]
@@ -82,7 +92,7 @@ const SakanaModelPicker: React.FC<SakanaModelPickerProps> = ({ isPopup, currentM
 				/>
 			</div>
 
-			{selectedModelInfo?.supportsReasoning && (
+			{selectedModelInfo && thinkingOptions.showEffort && (
 				<div style={{ marginTop: 4, marginBottom: 12 }}>
 					<label htmlFor="sakana-reasoning-effort">
 						<span style={{ fontWeight: 500 }}>Reasoning Effort</span>
@@ -99,13 +109,15 @@ const SakanaModelPicker: React.FC<SakanaModelPickerProps> = ({ isPopup, currentM
 							}
 							style={{ width: "100%", marginTop: 3 }}
 							value={selectedReasoningEffort}>
-							<VSCodeOption value="high">High</VSCodeOption>
-							<VSCodeOption value="xhigh">X-High</VSCodeOption>
-							<VSCodeOption value="max">Max</VSCodeOption>
+							{effortLevels.levels.map((level) => (
+								<VSCodeOption key={level.value} value={level.value}>
+									{level.label}
+								</VSCodeOption>
+							))}
 						</VSCodeDropdown>
 					</DropdownContainer>
 					<p style={{ fontSize: "12px", color: "var(--vscode-descriptionForeground)", marginTop: 5 }}>
-						Fugu Ultra defaults to X-High. Higher effort improves depth but uses more tokens.
+						{effortLevels.description}
 					</p>
 				</div>
 			)}

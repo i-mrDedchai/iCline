@@ -12,6 +12,7 @@ import { useProviderConfig } from "@/hooks/useProviderConfig"
 import { useProviderModelSelection } from "@/hooks/useProviderModelSelection"
 import { useProviderModels } from "@/hooks/useProviderModels"
 import { ModelsServiceClient } from "@/services/grpc-client"
+import { resolveModelThinkingOptions } from "@/utils/modelThinkingOptions"
 import { ClineAccountInfoCard } from "../ClineAccountInfoCard"
 import { ModelInfoView } from "../common/ModelInfoView"
 import FeaturedModelCard from "../FeaturedModelCard"
@@ -220,9 +221,15 @@ export const ClinePassProvider = ({ showModelOptions, isPopup, currentMode }: Cl
 						selectedModel={selectedModel}
 					/>
 
-					{selectedModel.modelInfo.supportsReasoning === true && (
+					{resolveModelThinkingOptions({
+						providerId: CLINE_PASS_PROVIDER_ID,
+						modelId: selectedModel.modelId,
+						modelInfo: selectedModel.modelInfo,
+					}).showEffort && (
 						<ReasoningEffortSelector
 							currentMode={currentMode}
+							modelId={selectedModel.modelId}
+							modelInfo={selectedModel.modelInfo}
 							onEffortChange={(effort) => {
 								void write({
 									reasoning: {
@@ -231,6 +238,7 @@ export const ClinePassProvider = ({ showModelOptions, isPopup, currentMode }: Cl
 									},
 								}).catch((err) => console.error("Failed to update ClinePass reasoning effort:", err))
 							}}
+							providerId={CLINE_PASS_PROVIDER_ID}
 						/>
 					)}
 

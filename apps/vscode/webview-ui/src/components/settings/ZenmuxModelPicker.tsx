@@ -7,11 +7,12 @@ import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react"
 import { useMount } from "react-use"
 import styled from "styled-components"
 import { useExtensionState } from "@/context/ExtensionStateContext"
+import { resolveModelThinkingOptions } from "@/utils/modelThinkingOptions"
 import { highlight } from "../history/HistoryView"
 import { ModelInfoView } from "./common/ModelInfoView"
 import ReasoningEffortSelector from "./ReasoningEffortSelector"
 import ThinkingBudgetSlider from "./ThinkingBudgetSlider"
-import { getModeSpecificFields, supportsReasoningEffortForModelId } from "./utils/providerUtils"
+import { getModeSpecificFields } from "./utils/providerUtils"
 import { useApiConfigurationHandlers } from "./utils/useApiConfigurationHandlers"
 
 export interface ZenmuxModelPickerProps {
@@ -51,6 +52,11 @@ const ZenmuxModelPicker: React.FC<ZenmuxModelPickerProps> = ({ isPopup, currentM
 			selectedModelInfo: modeFields.zenmuxModelInfo as ModelInfo | undefined,
 		}
 	}, [modeFields.zenmuxModelId, modeFields.zenmuxModelInfo])
+	const thinkingOptions = resolveModelThinkingOptions({
+		providerId: "zenmux",
+		modelId: selectedModelId,
+		modelInfo: selectedModelInfo,
+	})
 
 	useMount(refreshZenmuxModels)
 
@@ -149,14 +155,14 @@ const ZenmuxModelPicker: React.FC<ZenmuxModelPickerProps> = ({ isPopup, currentM
 						) : (
 							modelSearchResults.slice(0, 100).map((item, index) => (
 								<DropdownItem
-									key={item.id}
-									ref={(el) => {
-										itemRefs.current[index] = el
-									}}
 									$isSelected={index === selectedIndex}
+									key={item.id}
 									onMouseDown={() => {
 										handleModelChange(item.id)
 										setIsDropdownVisible(false)
+									}}
+									ref={(el) => {
+										itemRefs.current[index] = el
 									}}>
 									<span dangerouslySetInnerHTML={{ __html: item.html }} />
 								</DropdownItem>
@@ -167,17 +173,21 @@ const ZenmuxModelPicker: React.FC<ZenmuxModelPickerProps> = ({ isPopup, currentM
 			</ModelPickerContainer>
 
 			<p style={{ fontSize: "12px", marginTop: 5, color: "var(--vscode-descriptionForeground)" }}>
-				Pin a provider with <code>model:provider-slug</code> (e.g.{" "}
-				<code>anthropic/claude-sonnet-4.5:anthropic</code>).{" "}
+				Pin a provider with <code>model:provider-slug</code> (e.g. <code>anthropic/claude-sonnet-4.5:anthropic</code>).{" "}
 				<VSCodeLink href="https://docs.zenmux.ai/guide/advanced/provider-routing">Routing docs</VSCodeLink>
 			</p>
 
 			{selectedModelInfo && (
 				<>
-					{supportsReasoningEffortForModelId(selectedModelId) && (
-						<ReasoningEffortSelector currentMode={currentMode} />
+					{thinkingOptions.showEffort && (
+						<ReasoningEffortSelector
+							currentMode={currentMode}
+							modelId={selectedModelId}
+							modelInfo={selectedModelInfo}
+							providerId="zenmux"
+						/>
 					)}
-					{selectedModelInfo.thinkingConfig && <ThinkingBudgetSlider currentMode={currentMode} />}
+					{thinkingOptions.showThinkingBudget && <ThinkingBudgetSlider currentMode={currentMode} />}
 					<ModelInfoView isPopup={isPopup} modelInfo={selectedModelInfo} selectedModelId={selectedModelId} />
 				</>
 			)}

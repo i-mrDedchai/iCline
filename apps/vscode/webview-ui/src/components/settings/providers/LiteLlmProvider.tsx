@@ -6,6 +6,7 @@ import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useProviderConfig } from "@/hooks/useProviderConfig"
 import { useProviderModelSelection } from "@/hooks/useProviderModelSelection"
 import { useProviderModels } from "@/hooks/useProviderModels"
+import { resolveModelThinkingOptions } from "@/utils/modelThinkingOptions"
 import { DebouncedTextField } from "../common/DebouncedTextField"
 import { ModelAutocomplete } from "../common/ModelAutocomplete"
 import { ModelInfoView } from "../common/ModelInfoView"
@@ -46,6 +47,11 @@ export const LiteLlmProvider = ({ showModelOptions, isPopup, currentMode }: Lite
 			customModelInfo,
 		},
 	)
+	const thinkingOptions = resolveModelThinkingOptions({
+		providerId: LITELLM_PROVIDER_ID,
+		modelId: selectedModelId,
+		modelInfo: selectedModelInfo,
+	})
 	const { savedApiKeyMask, handleApiKeyChange } = useProviderApiKeyField({
 		apiKeyLength: config?.apiKeyLength,
 		canWrite: config !== undefined,
@@ -126,7 +132,7 @@ export const LiteLlmProvider = ({ showModelOptions, isPopup, currentMode }: Lite
 						)}
 					</VSCodeButton>
 
-					{selectedModelInfo?.supportsReasoning && <ThinkingBudgetSlider currentMode={currentMode} />}
+					{thinkingOptions.showThinkingBudget && <ThinkingBudgetSlider currentMode={currentMode} />}
 
 					<ModelInfoView isPopup={isPopup} modelInfo={selectedModelInfo} selectedModelId={selectedModelId} />
 				</>

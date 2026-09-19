@@ -3,25 +3,13 @@ import { Mode } from "@shared/storage/types"
 import { VSCodeDropdown, VSCodeOption } from "@vscode/webview-ui-toolkit/react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useStaticProviderSelection } from "@/hooks/useStaticProviderSelection"
+import { resolveModelThinkingOptions } from "@/utils/modelThinkingOptions"
 import { DROPDOWN_Z_INDEX } from "../ApiOptions"
 import { ApiKeyField } from "../common/ApiKeyField"
 import { ModelInfoView } from "../common/ModelInfoView"
 import { DropdownContainer, ModelSelector } from "../common/ModelSelector"
 import ThinkingBudgetSlider from "../ThinkingBudgetSlider"
 import { useApiConfigurationHandlers } from "../utils/useApiConfigurationHandlers"
-
-const SUPPORTED_THINKING_MODELS = [
-	"qwen3-235b-a22b",
-	"qwen3-32b",
-	"qwen3-30b-a3b",
-	"qwen3-14b",
-	"qwen3-8b",
-	"qwen3-4b",
-	"qwen3-1.7b",
-	"qwen3-0.6b",
-	"qwen-plus-latest",
-	"qwen-turbo-latest",
-]
 
 /**
  * Props for the QwenProvider component
@@ -51,6 +39,11 @@ export const QwenProvider = ({ showModelOptions, isPopup, currentMode }: QwenPro
 		apiConfiguration,
 		currentMode,
 	)
+	const thinkingOptions = resolveModelThinkingOptions({
+		providerId: "qwen",
+		modelId: selectedModelId,
+		modelInfo: selectedModelInfo,
+	})
 
 	return (
 		<div>
@@ -106,7 +99,7 @@ export const QwenProvider = ({ showModelOptions, isPopup, currentMode }: QwenPro
 						zIndex={DROPDOWN_Z_INDEX - 2}
 					/>
 
-					{SUPPORTED_THINKING_MODELS.includes(selectedModelId) && (
+					{thinkingOptions.showThinkingBudget && (
 						<ThinkingBudgetSlider currentMode={currentMode} maxBudget={selectedModelInfo.thinkingConfig?.maxBudget} />
 					)}
 

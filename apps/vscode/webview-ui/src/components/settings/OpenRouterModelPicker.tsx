@@ -1,7 +1,6 @@
 import { openAiModelInfoSafeDefaults, openRouterDefaultModelId } from "@shared/api"
 import { StringRequest } from "@shared/proto/cline/common"
 import type { Mode } from "@shared/storage/types"
-import { isClaudeOpusAdaptiveThinkingModel, resolveClaudeOpusAdaptiveThinking } from "@shared/utils/reasoning-support"
 import { VSCodeLink, VSCodeTextField } from "@vscode/webview-ui-toolkit/react"
 import Fuse from "fuse.js"
 import type React from "react"
@@ -12,11 +11,12 @@ import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useDynamicProviderSelection } from "@/hooks/useDynamicProviderSelection"
 import { useProviderConfig } from "@/hooks/useProviderConfig"
 import { StateServiceClient } from "@/services/grpc-client"
+import { resolveModelThinkingOptions } from "@/utils/modelThinkingOptions"
 import { highlight } from "../history/HistoryView"
 import { ModelInfoView } from "./common/ModelInfoView"
 import ReasoningEffortSelector from "./ReasoningEffortSelector"
 import ThinkingBudgetSlider from "./ThinkingBudgetSlider"
-import { filterOpenRouterModelIds, getModeSpecificFields, supportsReasoningEffortForModelId } from "./utils/providerUtils"
+import { filterOpenRouterModelIds, getModeSpecificFields } from "./utils/providerUtils"
 import { useApiConfigurationHandlers } from "./utils/useApiConfigurationHandlers"
 
 // Star icon for favorites
@@ -202,37 +202,21 @@ const OpenRouterModelPicker: React.FC<OpenRouterModelPickerProps> = ({ isPopup, 
 		}
 	}, [selectedIndex])
 
-	const selectedModelIdLower = selectedModelId?.toLowerCase() || ""
-	const showAdaptiveThinkingEffort = useMemo(() => isClaudeOpusAdaptiveThinkingModel(selectedModelId), [selectedModelId])
-	const adaptiveThinkingDefaultEffort = useMemo(
-		() => resolveClaudeOpusAdaptiveThinking(modeFields.reasoningEffort, modeFields.thinkingBudgetTokens).effort ?? "none",
-		[modeFields.reasoningEffort, modeFields.thinkingBudgetTokens],
+	// Which controls this model gets is decided by the shared policy
+	// (`@/utils/modelThinkingOptions`) — the same one the Quick Picker and every other
+	// provider form uses, so a model cannot be an "effort model" in one place and a
+	// "budget model" in another.
+	const thinkingOptions = useMemo(
+		() =>
+			resolveModelThinkingOptions({
+				providerId: "openrouter",
+				modelId: selectedModelId ?? "",
+				modelInfo: openRouterModels?.[selectedModelId ?? ""] ?? selectedModelInfo,
+			}),
+		[openRouterModels, selectedModelId, selectedModelInfo],
 	)
-	const showReasoningEffort = useMemo(
-		() => showAdaptiveThinkingEffort || supportsReasoningEffortForModelId(selectedModelId),
-		[selectedModelId, showAdaptiveThinkingEffort],
-	)
-
-	const showBudgetSlider = useMemo(() => {
-		if (showReasoningEffort) {
-			return false
-		}
-		return (
-			Object.entries(openRouterModels)?.some(([id, m]) => id === selectedModelId && m.thinkingConfig) ||
-			selectedModelIdLower.includes("claude-haiku-4.5") ||
-			selectedModelIdLower.includes("claude-4.5-haiku") ||
-			selectedModelIdLower.includes("claude-sonnet-4.6") ||
-			selectedModelIdLower.includes("claude-sonnet-4-6") ||
-			selectedModelIdLower.includes("claude-4.6-sonnet") ||
-			selectedModelIdLower.includes("claude-sonnet-4.5") ||
-			selectedModelIdLower.includes("claude-sonnet-4") ||
-			selectedModelIdLower.includes("claude-opus-4.1") ||
-			selectedModelIdLower.includes("claude-opus-4") ||
-			selectedModelIdLower.includes("claude-3-7-sonnet") ||
-			selectedModelIdLower.includes("claude-3.7-sonnet") ||
-			selectedModelIdLower.includes("claude-3.7-sonnet:thinking")
-		)
-	}, [openRouterModels, selectedModelId, selectedModelIdLower, showReasoningEffort])
+	const showReasoningEffort = thinkingOptions.showEffort
+	const showBudgetSlider = thinkingOptions.showThinkingBudget
 
 	return (
 		<div style={{ width: "100%", paddingBottom: 2 }}>
@@ -329,17 +313,10 @@ const OpenRouterModelPicker: React.FC<OpenRouterModelPickerProps> = ({ isPopup, 
 					{showBudgetSlider && <ThinkingBudgetSlider currentMode={currentMode} />}
 					{showReasoningEffort && (
 						<ReasoningEffortSelector
-							allowedEfforts={
-								showAdaptiveThinkingEffort ? (["none", "low", "medium", "high", "xhigh"] as const) : undefined
-							}
 							currentMode={currentMode}
-							defaultEffort={showAdaptiveThinkingEffort ? adaptiveThinkingDefaultEffort : "medium"}
-							description={
-								showAdaptiveThinkingEffort
-									? "Use None to disable adaptive thinking. Higher effort increases response detail and token usage."
-									: undefined
-							}
-							label={showAdaptiveThinkingEffort ? "Adaptive Thinking" : undefined}
+							modelId={selectedModelId}
+							modelInfo={selectedModelInfo}
+							providerId="openrouter"
 						/>
 					)}
 

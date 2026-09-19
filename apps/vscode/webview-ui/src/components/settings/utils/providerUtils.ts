@@ -1,10 +1,10 @@
 import type { ApiConfiguration, ApiProvider, ModelInfo } from "@shared/api"
 import type { Mode } from "@shared/storage/types"
-import * as reasoningSupport from "@shared/utils/reasoning-support"
 
-export function supportsReasoningEffortForModelId(modelId?: string, _allowShortOpenAiIds = false): boolean {
-	return reasoningSupport.supportsReasoningEffortForModel(modelId)
-}
+// Reason/effort policy for a model lives in exactly one place:
+// `@/utils/modelThinkingOptions` (`resolveModelThinkingOptions`). Do not add a
+// per-component "does this model support effort?" helper again — that is how
+// Settings and the Quick Picker drifted apart.
 
 // Webview components must source provider models via
 // `useProviderModels(providerId)`, which talks to the extension over

@@ -1,4 +1,5 @@
 import type { ModelInfo } from "@shared/api"
+import { hasThinkingBudgetConfig } from "@/utils/modelThinkingOptions"
 
 /**
  * Formats a price as a currency string
@@ -13,11 +14,13 @@ export const formatPrice = (price: number) => {
 }
 
 /**
- * Helper function to determine if a model supports thinking budget
+ * Helper function to determine if a model supports thinking budget.
+ *
+ * Strict form of the shared policy's check: it answers "is there a real budget in
+ * here?", which is what a price readout needs. Control decisions go through
+ * `resolveModelThinkingOptions` instead.
  */
-export const hasThinkingBudget = (modelInfo: ModelInfo): boolean => {
-	return !!modelInfo.thinkingConfig && Object.keys(modelInfo.thinkingConfig).length > 0
-}
+export const hasThinkingBudget = (modelInfo: ModelInfo): boolean => hasThinkingBudgetConfig(modelInfo)
 
 /**
  * Helper function to check if a model supports images

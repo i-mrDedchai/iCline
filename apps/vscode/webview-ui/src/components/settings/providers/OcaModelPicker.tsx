@@ -3,6 +3,7 @@ import { Mode } from "@shared/storage/types"
 import { VSCodeButton, VSCodeDropdown, VSCodeOption } from "@vscode/webview-ui-toolkit/react"
 import React, { useMemo } from "react"
 import { useDynamicProviderSelection } from "@/hooks/useDynamicProviderSelection"
+import { declaredEffortDefault, resolveEffortLevels, resolveModelThinkingOptions } from "@/utils/modelThinkingOptions"
 import { VSC_BUTTON_BACKGROUND, VSC_BUTTON_FOREGROUND, VSC_DESCRIPTION_FOREGROUND, VSC_FOREGROUND } from "@/utils/vscStyles"
 import { ModelInfoView } from "../common/ModelInfoView"
 import ThinkingBudgetSlider from "../ThinkingBudgetSlider"
@@ -49,10 +50,7 @@ const OcaModelPicker: React.FC<OcaModelPickerProps> = ({
 					{
 						ocaModelId: newModelId,
 						ocaModelInfo: ocaModels[newModelId],
-						ocaReasoningEffort:
-							ocaModels[newModelId].reasoningEffortOptions.length > 0
-								? ocaModels[newModelId].reasoningEffortOptions[0]
-								: undefined,
+						ocaReasoningEffort: declaredEffortDefault("oca", newModelId, ocaModels[newModelId]),
 					},
 					currentMode,
 				)
@@ -83,10 +81,7 @@ const OcaModelPicker: React.FC<OcaModelPickerProps> = ({
 				{
 					ocaModelId: pendingModelId,
 					ocaModelInfo: ocaModels[pendingModelId],
-					ocaReasoningEffort:
-						ocaModels[pendingModelId].reasoningEffortOptions.length > 0
-							? ocaModels[pendingModelId].reasoningEffortOptions[0]
-							: undefined,
+					ocaReasoningEffort: declaredEffortDefault("oca", pendingModelId, ocaModels[pendingModelId]),
 				},
 				currentMode,
 			)
@@ -108,17 +103,32 @@ const OcaModelPicker: React.FC<OcaModelPickerProps> = ({
 		return apiConfiguration?.actModeOcaReasoningEffort
 	}, [apiConfiguration, currentMode])
 
-	const reasoningEffortOptions = selectedModelInfo ? (selectedModelInfo as OcaModelInfo).reasoningEffortOptions : []
-
 	const modelIds = useMemo(() => {
 		return Object.keys(ocaModels || []).sort((a, b) => a.localeCompare(b))
 	}, [ocaModels])
 
-	const showBudgetSlider = useMemo(() => {
-		if (ocaModels && selectedModelId && ocaModels[selectedModelId]?.thinkingConfig) {
-			return true
-		}
-	}, [selectedModelId, ocaModels])
+	// Effort and budget are the shared policy's call (`@/utils/modelThinkingOptions`),
+	// the same one the Quick Picker and every other provider form uses.
+	const thinkingOptions = useMemo(
+		() =>
+			resolveModelThinkingOptions({
+				providerId: "oca",
+				modelId: selectedModelId ?? "",
+				modelInfo: ocaModels?.[selectedModelId] ?? selectedModelInfo,
+			}),
+		[selectedModelId, ocaModels, selectedModelInfo],
+	)
+	// The levels come from OCA's own catalog entries (the shared metadata reads them),
+	// so the dropdown cannot offer a level the published model does not list.
+	const effortLevels = useMemo(
+		() =>
+			resolveEffortLevels({
+				providerId: "oca",
+				modelId: selectedModelId ?? "",
+				modelInfo: ocaModels?.[selectedModelId] ?? selectedModelInfo,
+			}),
+		[selectedModelId, ocaModels, selectedModelInfo],
+	)
 
 	const lastRefreshedText = useMemo(() => {
 		return typeof lastRefreshedAt === "number" ? new Date(lastRefreshedAt).toLocaleTimeString() : null
@@ -188,7 +198,7 @@ const OcaModelPicker: React.FC<OcaModelPickerProps> = ({
 					Last refreshed at {lastRefreshedText}
 				</div>
 			) : null}
-			{!loading && selectedModelInfo && selectedModelInfo.supportsReasoning && reasoningEffortOptions.length > 0 && (
+			{!loading && selectedModelInfo && thinkingOptions.showEffort && (
 				<React.Fragment>
 					<label className="font-medium text-[12px] mt-[10px] mb-[2px]">Reasoning Effort</label>
 					<div className="flex items-center gap-2 mb-1">
@@ -200,9 +210,9 @@ const OcaModelPicker: React.FC<OcaModelPickerProps> = ({
 								const newValue = e.target.currentValue
 								handleReasoningEffortChange(newValue)
 							}}>
-							{reasoningEffortOptions.map((reasoningEffort) => (
+							{effortLevels.levels.map((level) => (
 								<VSCodeOption
-									key={reasoningEffort}
+									key={level.value}
 									style={{
 										padding: "4px 8px",
 										cursor: "pointer",
@@ -210,8 +220,8 @@ const OcaModelPicker: React.FC<OcaModelPickerProps> = ({
 										maxWidth: "100%",
 										fontSize: 12,
 									}}
-									value={reasoningEffort}>
-									{reasoningEffort}
+									value={level.value}>
+									{level.label}
 								</VSCodeOption>
 							))}
 						</VSCodeDropdown>
@@ -220,7 +230,7 @@ const OcaModelPicker: React.FC<OcaModelPickerProps> = ({
 			)}
 			{selectedModelInfo && (
 				<>
-					{showBudgetSlider && <ThinkingBudgetSlider currentMode={currentMode} />}
+					{thinkingOptions.showThinkingBudget && <ThinkingBudgetSlider currentMode={currentMode} />}
 					<ModelInfoView isPopup={isPopup} modelInfo={selectedModelInfo} selectedModelId={selectedModelId} />
 				</>
 			)}

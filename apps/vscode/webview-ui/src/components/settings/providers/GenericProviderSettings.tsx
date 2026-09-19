@@ -3,6 +3,7 @@ import { type ProviderId } from "@/context/ExtensionStateContext"
 import { useProviderConfig } from "@/hooks/useProviderConfig"
 import { useProviderModelSelection } from "@/hooks/useProviderModelSelection"
 import { useProviderModels } from "@/hooks/useProviderModels"
+import { resolveModelThinkingOptions } from "@/utils/modelThinkingOptions"
 import { ApiKeyField } from "../common/ApiKeyField"
 import { BaseUrlField } from "../common/BaseUrlField"
 import { ModelInfoView } from "../common/ModelInfoView"
@@ -97,9 +98,15 @@ export const GenericProviderSettings = ({
 						selectedModel={selectedModel}
 					/>
 
-					{selectedModel.modelInfo.supportsReasoning === true && (
+					{resolveModelThinkingOptions({
+						providerId,
+						modelId: selectedModel.modelId,
+						modelInfo: selectedModel.modelInfo,
+					}).showEffort && (
 						<ReasoningEffortSelector
 							currentMode={currentMode}
+							modelId={selectedModel.modelId}
+							modelInfo={selectedModel.modelInfo}
 							onEffortChange={(effort) => {
 								void write({
 									reasoning: {
@@ -108,6 +115,7 @@ export const GenericProviderSettings = ({
 									},
 								}).catch((err) => console.error(`Failed to update ${providerName} reasoning effort:`, err))
 							}}
+							providerId={providerId}
 						/>
 					)}
 

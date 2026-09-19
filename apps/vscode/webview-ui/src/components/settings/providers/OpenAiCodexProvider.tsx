@@ -5,10 +5,10 @@ import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useProviderConfig } from "@/hooks/useProviderConfig"
 import { useStaticProviderSelection } from "@/hooks/useStaticProviderSelection"
 import { AccountServiceClient } from "@/services/grpc-client"
+import { resolveModelThinkingOptions } from "@/utils/modelThinkingOptions"
 import { ModelInfoView } from "../common/ModelInfoView"
 import { ModelSelector } from "../common/ModelSelector"
 import ReasoningEffortSelector from "../ReasoningEffortSelector"
-import { supportsReasoningEffortForModelId } from "../utils/providerUtils"
 
 const OPENAI_CODEX_PROVIDER_ID = "openai-codex"
 
@@ -44,7 +44,11 @@ export const OpenAiCodexProvider = ({ showModelOptions, isPopup, currentMode }: 
 		? fromProtobufModelInfo(committedSelection.modelInfo)
 		: legacySelectedModelInfo
 
-	const showReasoningEffort = supportsReasoningEffortForModelId(selectedModelId, true)
+	const showReasoningEffort = resolveModelThinkingOptions({
+		providerId: OPENAI_CODEX_PROVIDER_ID,
+		modelId: selectedModelId,
+		modelInfo: selectedModelInfo,
+	}).showEffort
 
 	const handleModelChange = (modelId: string) => {
 		if (!modelId) {
@@ -111,7 +115,14 @@ export const OpenAiCodexProvider = ({ showModelOptions, isPopup, currentMode }: 
 						onChange={(event: Event) => handleModelChange((event.target as HTMLSelectElement | null)?.value ?? "")}
 						selectedModelId={selectedModelId}
 					/>
-					{showReasoningEffort && <ReasoningEffortSelector currentMode={currentMode} />}
+					{showReasoningEffort && (
+						<ReasoningEffortSelector
+							currentMode={currentMode}
+							modelId={selectedModelId}
+							modelInfo={selectedModelInfo}
+							providerId="openai-codex"
+						/>
+					)}
 
 					<ModelInfoView
 						hideUsageCost={hideUsageCost}

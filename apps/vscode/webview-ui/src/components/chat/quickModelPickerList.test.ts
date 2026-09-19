@@ -5,10 +5,12 @@ import {
 	ACTIVE_MODEL_ATTR,
 	ACTIVE_PROVIDER_ATTR,
 	compareModelEntries,
+	computeOptionsPanelTop,
 	filterModelsByQuery,
 	isFreeModel,
 	type ModelEntry,
 	modelsMatchQuery,
+	OPTIONS_PANEL_MIN_TOP_PX,
 	partitionFreeStandard,
 	pickAutoExpandProvider,
 	providersMatchingModelQuery,
@@ -267,5 +269,45 @@ describe("queryActivePickerScrollTarget", () => {
 		`
 		expect(queryActivePickerScrollTarget(root, "xai")?.id).toBe("xai-group")
 		expect(queryActivePickerScrollTarget(root, "zai")).toBeNull()
+	})
+})
+
+/**
+ * Options-panel placement, pinned against measurements taken from the locked
+ * mock v11 (picker height 504px). Expected values are the mock's own rendered
+ * `options.style.top` for the same row/panel-height pairs.
+ */
+describe("computeOptionsPanelTop", () => {
+	const PICKER_HEIGHT = 504
+	const place = (rowTop: number, panelHeight: number) =>
+		computeOptionsPanelTop({ rowTop, pickerTop: 0, pickerHeight: PICKER_HEIGHT, panelHeight })
+
+	it("top-aligns the panel with the row (mock nudge of 6px)", () => {
+		// Mock: row 109px, panel 264px → top 103 (rendered 104 after rounding).
+		expect(place(109, 264)).toBe(103)
+		// Mock: row 132px, panel 171px → top 126.
+		expect(place(132, 171)).toBe(126)
+	})
+
+	it("keeps following lower rows while the panel fits (uses the REAL panel height)", () => {
+		// Mock: row 311px, panel 227px → top 267 (the panel would end 10px above 504).
+		expect(place(311, 227)).toBe(267)
+		// Regression for the fix.9 report: clamping against the 320px max-height
+		// instead gave 504 - 10 - 320 = 174 for every row, so the panel stopped
+		// tracking after the first ~90px of list.
+		expect(place(311, 227)).not.toBe(174)
+		expect(place(500, 227)).toBe(267)
+	})
+
+	it("pins a taller panel higher up — the pin depends on the model's own height", () => {
+		// Mock: row 439px with a 260px panel → top 234, while the same row with a
+		// 157px panel would still follow to 337.
+		expect(place(439, 260)).toBe(234)
+		expect(place(352, 157)).toBe(337)
+	})
+
+	it("never rises above the minimum top, even for a row at the very top", () => {
+		expect(place(10, 264)).toBe(OPTIONS_PANEL_MIN_TOP_PX)
+		expect(place(0, 264)).toBe(OPTIONS_PANEL_MIN_TOP_PX)
 	})
 })

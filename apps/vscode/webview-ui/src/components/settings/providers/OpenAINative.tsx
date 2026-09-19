@@ -1,11 +1,11 @@
 import { Mode } from "@shared/storage/types"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useStaticProviderSelection } from "@/hooks/useStaticProviderSelection"
+import { resolveModelThinkingOptions } from "@/utils/modelThinkingOptions"
 import { ApiKeyField } from "../common/ApiKeyField"
 import { ModelInfoView } from "../common/ModelInfoView"
 import { ModelSelector } from "../common/ModelSelector"
 import ReasoningEffortSelector from "../ReasoningEffortSelector"
-import { supportsReasoningEffortForModelId } from "../utils/providerUtils"
 import { useApiConfigurationHandlers } from "../utils/useApiConfigurationHandlers"
 
 /**
@@ -30,7 +30,11 @@ export const OpenAINativeProvider = ({ showModelOptions, isPopup, currentMode }:
 		apiConfiguration,
 		currentMode,
 	)
-	const showReasoningEffort = supportsReasoningEffortForModelId(selectedModelId, true)
+	const showReasoningEffort = resolveModelThinkingOptions({
+		providerId: "openai-native",
+		modelId: selectedModelId,
+		modelInfo: selectedModelInfo,
+	}).showEffort
 
 	return (
 		<div>
@@ -55,7 +59,14 @@ export const OpenAINativeProvider = ({ showModelOptions, isPopup, currentMode }:
 						}
 						selectedModelId={selectedModelId}
 					/>
-					{showReasoningEffort && <ReasoningEffortSelector currentMode={currentMode} />}
+					{showReasoningEffort && (
+						<ReasoningEffortSelector
+							currentMode={currentMode}
+							modelId={selectedModelId}
+							modelInfo={selectedModelInfo}
+							providerId="openai-native"
+						/>
+					)}
 
 					<ModelInfoView
 						hideUsageCost={hideUsageCost}

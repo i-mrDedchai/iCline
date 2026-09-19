@@ -4,7 +4,13 @@ import { isOpenaiReasoningEffort, normalizeOpenaiReasoningEffort } from "@shared
 const STORAGE_KEY = "icline-chat-model-preferences-v1"
 
 export interface ChatModelPreference {
-	reasoningEffort?: OpenaiReasoningEffort
+	/**
+	 * Effort level remembered for this model. Deliberately `string` and not
+	 * `OpenaiReasoningEffort`: a provider may use its own vocabulary (Sakana stores
+	 * `max`), and which levels are valid is provider metadata — see
+	 * `@/utils/modelThinkingOptions`.
+	 */
+	reasoningEffort?: string
 	thinkingBudgetTokens?: number
 }
 

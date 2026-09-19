@@ -1,7 +1,6 @@
 import { openAiModelInfoSafeDefaults } from "@shared/api"
 import BedrockData from "@shared/providers/bedrock.json"
 import type { Mode } from "@shared/storage/types"
-import { isClaudeOpusAdaptiveThinkingModel, resolveClaudeOpusAdaptiveThinking } from "@shared/utils/reasoning-support"
 import {
 	VSCodeCheckbox,
 	VSCodeDropdown,
@@ -18,6 +17,7 @@ import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useProviderConfig } from "@/hooks/useProviderConfig"
 import { useProviderModelSelection } from "@/hooks/useProviderModelSelection"
 import { useProviderModels } from "@/hooks/useProviderModels"
+import { resolveModelThinkingOptions } from "@/utils/modelThinkingOptions"
 import { ApiKeyField } from "../common/ApiKeyField"
 import { DebouncedTextField } from "../common/DebouncedTextField"
 import { ModelInfoView } from "../common/ModelInfoView"
@@ -26,16 +26,6 @@ import ReasoningEffortSelector from "../ReasoningEffortSelector"
 import ThinkingBudgetSlider from "../ThinkingBudgetSlider"
 import { getSavedApiKeyMask, sanitizeMaskedApiKeyInput } from "../utils/apiKeyMasking"
 import { useProviderApiKeyField } from "../utils/useProviderApiKeyField"
-
-const SUPPORTED_BEDROCK_THINKING_MODELS = [
-	"anthropic.claude-sonnet-4-6",
-	"anthropic.claude-3-7-sonnet-20250219-v1:0",
-	"anthropic.claude-sonnet-4-20250514-v1:0",
-	"anthropic.claude-sonnet-4-5-20250929-v1:0",
-	"anthropic.claude-opus-4-1-20250805-v1:0",
-	"anthropic.claude-opus-4-20250514-v1:0",
-	"anthropic.claude-haiku-4-5-20251001-v1:0",
-]
 
 const AWS_REGIONS = BedrockData.regions
 
@@ -69,24 +59,18 @@ export const BedrockProvider = ({ showModelOptions, isPopup, currentMode }: Bedr
 	const customBaseModelId = config?.aws?.customModelBaseId || bedrockFallbackModelId
 	const isCustomModelSelected = Boolean(config?.aws?.customModelBaseId)
 	const customModelInputInitialValue = isCustomModelSelected && !bedrockModels[selectedModelId] ? selectedModelId : ""
-	const isAdaptiveThinkingModel =
-		isClaudeOpusAdaptiveThinkingModel(selectedModelId) || isClaudeOpusAdaptiveThinkingModel(customBaseModelId)
+	// Adaptive-thinking ids decide Effort vs. budget through the shared policy
+	// (`@/utils/modelThinkingOptions`), the same one the Quick Picker uses. A custom
+	// Application Inference Profile is judged by its BASE model id, as before.
+	const thinkingOptions = resolveModelThinkingOptions({
+		providerId: "bedrock",
+		modelId: isCustomModelSelected ? customBaseModelId : selectedModelId,
+		modelInfo: selectedModelInfo,
+	})
 	const supportsGlobalInferenceProfile =
 		selectedModelInfo.supportsGlobalEndpoint ||
 		selectedModelId.startsWith("global.") ||
 		Boolean(bedrockModels[`global.${selectedModelId}`])
-	const modeFields =
-		currentMode === "plan"
-			? {
-					reasoningEffort: apiConfiguration?.planModeReasoningEffort,
-					thinkingBudgetTokens: apiConfiguration?.planModeThinkingBudgetTokens,
-				}
-			: {
-					reasoningEffort: apiConfiguration?.actModeReasoningEffort,
-					thinkingBudgetTokens: apiConfiguration?.actModeThinkingBudgetTokens,
-				}
-	const adaptiveThinkingDefaultEffort =
-		resolveClaudeOpusAdaptiveThinking(modeFields.reasoningEffort, modeFields.thinkingBudgetTokens).effort ?? "none"
 	const awsAuthentication =
 		config?.aws?.authentication === "iam"
 			? "credentials"
@@ -604,18 +588,14 @@ export const BedrockProvider = ({ showModelOptions, isPopup, currentMode }: Bedr
 						</div>
 					)}
 
-					{isAdaptiveThinkingModel ? (
+					{thinkingOptions.showEffort ? (
 						<ReasoningEffortSelector
-							allowedEfforts={["none", "low", "medium", "high", "xhigh"] as const}
 							currentMode={currentMode}
-							defaultEffort={adaptiveThinkingDefaultEffort}
-							description="Use None to disable adaptive thinking. Higher effort increases response detail and token usage."
-							label="Adaptive Thinking"
+							modelId={isCustomModelSelected ? customBaseModelId : selectedModelId}
+							modelInfo={selectedModelInfo}
+							providerId="bedrock"
 						/>
-					) : SUPPORTED_BEDROCK_THINKING_MODELS.includes(selectedModelId) ||
-						(isCustomModelSelected &&
-							customBaseModelId &&
-							SUPPORTED_BEDROCK_THINKING_MODELS.includes(customBaseModelId)) ? (
+					) : thinkingOptions.showThinkingBudget ? (
 						<ThinkingBudgetSlider currentMode={currentMode} />
 					) : null}
 
