@@ -1,7 +1,7 @@
 {
 	"name": "iCline",
 	"displayName": "%extension.displayName%",
-	"description": "%extension.description%",
+	"description": "Standalone Cline fork for VS Code — no official Cline required. Supports Grok, ZenMux, OpenRouter, and other providers.",
 	"version": "0.1.18-dev.6",
 	"icon": "assets/icons/icon.png",
 	"engines": {
