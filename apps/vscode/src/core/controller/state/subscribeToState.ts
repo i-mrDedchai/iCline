@@ -73,15 +73,43 @@ export async function sendStateUpdate(state: ExtensionState): Promise<void> {
 	// and postMessage can hang or resolve false). The webview reconciles convergently from
 	// whatever state snapshots it receives, gated by stateVersion/epoch.
 	for (const responseStream of activeStateSubscriptions) {
-		responseStream(
-			{
-				stateJson,
-			},
-			false, // Not the last message
-		).catch((error) => {
-			Logger.error("Error sending state update:", error)
-			activeStateSubscriptions.delete(responseStream)
-		})
+		void deliverStateWithRetry(responseStream, stateJson)
+	}
+}
+
+/**
+ * Deliver one state snapshot with a short retry ladder before dropping the
+ * subscriber. A single transient postMessage failure (webview hidden/throttled,
+ * reload race) used to permanently silence the subscription — the host kept
+ * "succeeding" into a dead stream while the webview froze on stale state
+ * (provider/model selections appeared to never stick). Retries heal the
+ * transient case; a webview that is really gone re-subscribes on mount.
+ */
+async function deliverStateWithRetry(responseStream: StreamingResponseHandler<State>, stateJson: string): Promise<void> {
+	const retryDelaysMs = [0, 250, 1_000]
+	for (let attempt = 0; attempt < retryDelaysMs.length; attempt++) {
+		if (retryDelaysMs[attempt] > 0) {
+			await new Promise((resolve) => setTimeout(resolve, retryDelaysMs[attempt]))
+		}
+		if (!activeStateSubscriptions.has(responseStream)) {
+			return
+		}
+		try {
+			await responseStream(
+				{
+					stateJson,
+				},
+				false, // Not the last message
+			)
+			return
+		} catch (error) {
+			if (attempt === retryDelaysMs.length - 1) {
+				Logger.error("Error sending state update after retries — dropping subscriber:", error)
+				activeStateSubscriptions.delete(responseStream)
+			} else {
+				Logger.warn(`State push attempt ${attempt + 1} failed — retrying:`, error)
+			}
+		}
 	}
 }
 

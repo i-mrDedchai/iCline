@@ -6,7 +6,7 @@ import { useExtensionState } from "@/context/ExtensionStateContext"
 import { ModelsServiceClient } from "@/services/grpc-client"
 
 export const useApiConfigurationHandlers = () => {
-	const { apiConfiguration, planActSeparateModelsSetting } = useExtensionState()
+	const { getState, planActSeparateModelsSetting } = useExtensionState()
 
 	/**
 	 * Updates a single field in the API configuration.
@@ -19,8 +19,12 @@ export const useApiConfigurationHandlers = () => {
 	 * @param value - The new value for the field
 	 */
 	const handleFieldChange = async <K extends keyof ApiConfiguration>(field: K, value: ApiConfiguration[K]) => {
+		// Read the CURRENT state at call time — handlers fire after async
+		// commit+push cycles, and a render-time snapshot carries the
+		// pre-commit provider/model (the fix.9-class stale write-back that
+		// wholesale-replaced fresh selections via updateApiConfigurationProto).
 		const updatedConfig = {
-			...apiConfiguration,
+			...getState().apiConfiguration,
 			[field]: value,
 		}
 
@@ -42,8 +46,9 @@ export const useApiConfigurationHandlers = () => {
 	 * @param updates - An object containing the fields to update and their new values
 	 */
 	const handleFieldsChange = async (updates: Partial<ApiConfiguration>) => {
+		// Same fresh-read rule as handleFieldChange (see above).
 		const updatedConfig = {
-			...apiConfiguration,
+			...getState().apiConfiguration,
 			...updates,
 		}
 
@@ -81,6 +86,7 @@ export const useApiConfigurationHandlers = () => {
 	 * @param values - Object with values for each key
 	 * @param currentMode - The current mode being targeted
 	 */
+	// biome-ignore lint/suspicious/noExplicitAny: field-key-to-value pairs keyed by dynamic ApiConfiguration keys
 	const handleModeFieldsChange = async <T extends Record<string, any>>(
 		fieldPairs: { [K in keyof T]: { plan: keyof ApiConfiguration; act: keyof ApiConfiguration } },
 		values: T,

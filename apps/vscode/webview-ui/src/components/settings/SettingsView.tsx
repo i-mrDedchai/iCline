@@ -22,6 +22,7 @@ import { StateServiceClient } from "@/services/grpc-client"
 import { isAdminOrOwner } from "../account/helpers"
 import { Tab, TabContent, TabList, TabTrigger } from "../common/Tab"
 import ViewHeader from "../common/ViewHeader"
+import { ProviderStatsCard } from "./ProviderStatsCard"
 import SectionHeader from "./SectionHeader"
 import AboutSection from "./sections/AboutSection"
 import ApiConfigurationSection from "./sections/ApiConfigurationSection"
@@ -112,6 +113,21 @@ const renderSectionHeader = (tabId: string) => {
 		return null
 	}
 
+	if (tabId === "api-config") {
+		// Title left, catalog summary chips right — one row (maintainer layout).
+		return (
+			<SectionHeader>
+				<div className="flex items-center justify-between gap-3 w-full">
+					<h2 className="m-0 text-base flex items-center gap-2">
+						<tab.icon className="w-4" />
+						<span>{tab.headerText}</span>
+					</h2>
+					<ProviderStatsCard />
+				</div>
+			</SectionHeader>
+		)
+	}
+
 	return (
 		<SectionHeader>
 			<div className="flex items-center gap-2">
@@ -124,6 +140,7 @@ const renderSectionHeader = (tabId: string) => {
 
 const SettingsView = ({ onDone, targetSection }: SettingsViewProps) => {
 	// Memoize to avoid recreation
+	// biome-ignore lint/suspicious/noExplicitAny: section components have heterogeneous prop shapes
 	const TAB_CONTENT_MAP: Record<SettingsTabID, React.FC<any>> = useMemo(
 		() => ({
 			"api-config": ApiConfigurationSection,
@@ -235,6 +252,7 @@ const SettingsView = ({ onDone, targetSection }: SettingsViewProps) => {
 		}
 
 		// Special props for specific components
+		// biome-ignore lint/suspicious/noExplicitAny: section props vary per tab
 		const props: any = { renderSectionHeader }
 		if (activeTab === "debug") {
 			props.onResetState = handleResetState

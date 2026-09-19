@@ -240,6 +240,24 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 			setCommitError(null)
 			try {
 				const saved = getChatModelPreference(providerId, modelId)
+				// Apply the saved reasoning effort BEFORE the commit, not after:
+				// the effort write sends the full api configuration, and doing it
+				// post-commit raced the incoming state push with a pre-click
+				// snapshot — wholesale-reverting the fresh selection (fix.9-class
+				// stale write-back; the trigger — saved reasoning settings — is
+				// now common via the shared providers.json). Best-effort: a thrown
+				// effort change must not block the selection itself.
+				if (saved?.reasoningEffort !== undefined) {
+					try {
+						await handleModeFieldChange(
+							{ plan: "planModeReasoningEffort", act: "actModeReasoningEffort" },
+							saved.reasoningEffort,
+							mode,
+						)
+					} catch (effortError) {
+						console.error("QuickModelPicker: failed to apply saved reasoning effort:", effortError)
+					}
+				}
 				await ModelsServiceClient.commitModelSelection(
 					CommitModelSelectionRequest.create({
 						providerId,
@@ -247,17 +265,7 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 						modelId,
 					}),
 				)
-				// Close before applying the effort preference: a thrown effort change must
-				// not leave the popover stuck open over an already-committed selection.
 				setOpen(false)
-				// Apply saved reasoning effort preference if any
-				if (saved?.reasoningEffort !== undefined) {
-					await handleModeFieldChange(
-						{ plan: "planModeReasoningEffort", act: "actModeReasoningEffort" },
-						saved.reasoningEffort,
-						mode,
-					)
-				}
 			} catch (err) {
 				console.error("QuickModelPicker: failed to commit model selection:", err)
 				setCommitError(err instanceof Error ? err.message : "Could not activate this model.")
@@ -437,6 +445,7 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 			})
 		})
 		return () => window.cancelAnimationFrame(frame)
+		// biome-ignore lint/correctness/useExhaustiveDependencies: re-pinning intentionally follows the loader/entry counters, not every referenced value
 	}, [open, searchTrimmed, currentProvider, currentModelId, expandedProvider, modelsLoading, filteredModelEntries.length])
 
 	const showEffortBar = useMemo(() => {
@@ -556,6 +565,7 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 					{/* Search bar */}
 					<div className="flex items-center gap-2 px-3 py-2 border-b border-(--vscode-editorGroup-border)">
 						<Search className="text-(--vscode-descriptionForeground) shrink-0" size={13} />
+						{/* biome-ignore lint/a11y/noAutofocus: focusing the search field on popover open is the intended picker UX */}
 						<input
 							autoFocus
 							className="flex-1 bg-transparent border-none outline-none text-xs text-(--vscode-foreground) placeholder:text-(--vscode-descriptionForeground)"

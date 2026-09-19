@@ -47,7 +47,7 @@ export const ProviderStatsCard: React.FC = () => {
 	}
 
 	return (
-		<div data-testid="provider-stats-card" style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
+		<div data-testid="provider-stats-card" style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
 			<div style={chipStyle} title="Providers available in the catalog">
 				<span style={dotStyle("#5ec8ff")} />
 				<span style={valueStyle}>{stats.providerCount.toLocaleString()}</span>

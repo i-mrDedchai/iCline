@@ -1,4 +1,3 @@
-import type { ApiProvider } from "@shared/api"
 import { CommitModelSelectionRequest } from "@shared/proto/cline/models"
 import type { Mode } from "@shared/storage/types"
 import { VSCodeTextField } from "@vscode/webview-ui-toolkit/react"
@@ -10,11 +9,9 @@ import { PLATFORM_CONFIG, PlatformType } from "@/config/platform.config"
 import { CLINE_PASS_FEATURE_FLAG } from "@/constants/featureFlags"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useHasFeatureFlag } from "@/hooks/useFeatureFlag"
-import { getActiveProviderAndModelId } from "@/hooks/useNormalizedApiConfiguration"
 import { useProviderListings } from "@/hooks/useProviderListings"
 import { ModelsServiceClient } from "@/services/grpc-client"
 import { OPENROUTER_MODEL_PICKER_Z_INDEX } from "./OpenRouterModelPicker"
-import { ProviderStatsCard } from "./ProviderStatsCard"
 import { AIhubmixProvider } from "./providers/AihubmixProvider"
 import { AnthropicProvider } from "./providers/AnthropicProvider"
 import { AskSageProvider } from "./providers/AskSageProvider"
@@ -195,21 +192,14 @@ const ApiOptions = ({
 	}, [searchableItems, searchTerm, fuse, currentProviderLabel])
 
 	const handleProviderChange = (newProvider: string) => {
-		// Dedicated field for the TARGET provider (or omit so host uses that
-		// provider's default). Never pass leftover *ModeApiModelId from xAI
-		// when switching to cline/jan/etc.
-		const patchedConfiguration = {
-			...apiConfiguration,
-			...(currentMode === "plan"
-				? { planModeApiProvider: newProvider as ApiProvider }
-				: { actModeApiProvider: newProvider as ApiProvider }),
-		}
-		const { modelId } = getActiveProviderAndModelId(patchedConfiguration, currentMode)
+		// Omit modelId so the host's resolveCommitModelId picks the TARGET
+		// provider's dedicated slot → remembered selection → default. Sending a
+		// webview-resolved id here used to forward the generic slot's leftover
+		// (e.g. a zenmux model id) into a custom provider's commit.
 		void ModelsServiceClient.commitModelSelection(
 			CommitModelSelectionRequest.create({
 				providerId: newProvider,
 				mode: currentMode,
-				modelId: modelId?.trim() || undefined,
 			}),
 		).catch((err) => console.error("Failed to commit provider selection:", err))
 		setIsDropdownVisible(false)
@@ -302,7 +292,6 @@ const ApiOptions = ({
 				}
 				`}
 			</style>
-			<ProviderStatsCard />
 			<DropdownContainer className="dropdown-container">
 				{remoteConfigSettings?.remoteConfiguredProviders && remoteConfigSettings.remoteConfiguredProviders.length > 0 ? (
 					<Tooltip>
@@ -351,6 +340,13 @@ const ApiOptions = ({
 									setSearchTerm("")
 									setIsDropdownVisible(true)
 								}}
+								onKeyDown={(event) => {
+									if (event.key === "Enter" || event.key === " ") {
+										setSearchTerm("")
+										setIsDropdownVisible(true)
+									}
+								}}
+								role="button"
 								slot="end"
 								style={{
 									display: "flex",
@@ -358,6 +354,7 @@ const ApiOptions = ({
 									alignItems: "center",
 									height: "100%",
 								}}
+								tabIndex={0}
 							/>
 						)}
 					</VSCodeTextField>

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { useDebounceEffect } from "@/utils/useDebounceEffect"
 
 /**
@@ -29,6 +29,16 @@ export function useDebouncedInput<T>(
 	// value arrives later via a prop update.
 	const skipNextFireRef = useRef(true)
 
+	// User-initiated edits own the next pending debounce fire: the scheduled
+	// timer now carries the user's value, so a mount/external-sync skip flag
+	// must not consume it. (Without this, the mount timer cancelled by the
+	// first keystroke never consumes the flag itself — useDebounceEffect's
+	// cleanup clears it — and the user's first change is silently dropped.)
+	const setValue = useCallback((value: T | ((prev: T) => T)) => {
+		skipNextFireRef.current = false
+		setLocalValue(value)
+	}, [])
+
 	// Sync local state when initialValue changes externally (e.g., when switching Plan/Act tabs)
 	useEffect(() => {
 		if (prevInitialValueRef.current !== initialValue) {
@@ -52,5 +62,5 @@ export function useDebouncedInput<T>(
 		[localValue],
 	)
 
-	return [localValue, setLocalValue]
+	return [localValue, setValue]
 }

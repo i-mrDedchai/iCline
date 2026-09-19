@@ -46,6 +46,12 @@ interface ProviderModelsState {
 }
 
 export interface ExtensionStateContextType extends ExtensionState {
+	/**
+	 * Read the CURRENT state imperatively (event handlers that fire after an
+	 * async commit+push must not build writes from a captured render-time
+	 * snapshot — the fix.9-class stale write-back reverted fresh selections).
+	 */
+	getState: () => ExtensionState
 	didHydrateState: boolean
 	showWelcome: boolean
 	onboardingModels: OnboardingModelGroup | undefined
@@ -331,6 +337,12 @@ export const ExtensionStateContextProvider: React.FC<{
 		multiRootSetting: { user: false, featureFlag: false },
 		hooksEnabled: false,
 	})
+	// Always-current mirror of `state` for getState() — assigned during render
+	// so event callbacks always observe the latest applied push.
+	const stateRef = useRef(state)
+	stateRef.current = state
+	const getState = useCallback(() => stateRef.current, [])
+
 	const [expandTaskHeader, setExpandTaskHeader] = useState(true)
 	const [didHydrateState, setDidHydrateState] = useState(false)
 
@@ -422,6 +434,13 @@ export const ExtensionStateContextProvider: React.FC<{
 
 	// References to store subscription cancellation functions
 	const stateSubscriptionRef = useRef<(() => void) | null>(null)
+	// Self-healing state stream: a host-side push failure used to drop the
+	// subscriber silently and the webview froze on stale state (selections
+	// appeared not to stick). On a stream error we tear the whole subscription
+	// effect down and re-subscribe after a short delay (capped per failure
+	// streak; the counter resets on every successfully applied snapshot).
+	const [stateStreamEpoch, setStateStreamEpoch] = useState(0)
+	const stateStreamFailuresRef = useRef(0)
 
 	const marketplaceButtonUnsubscribeRef = useRef<(() => void) | null>(null)
 	const mcpButtonUnsubscribeRef = useRef<(() => void) | null>(null)
@@ -456,6 +475,7 @@ export const ExtensionStateContextProvider: React.FC<{
 	useEffect(() => {
 		// Set up state subscription
 		stateSubscriptionRef.current = StateServiceClient.subscribeToState(EmptyRequest.create({}), {
+			// biome-ignore lint/suspicious/noExplicitAny: decoded stream payload
 			onResponse: (response: any) => {
 				if (response.stateJson) {
 					try {
@@ -501,6 +521,7 @@ export const ExtensionStateContextProvider: React.FC<{
 							}
 
 							setDidHydrateState(true)
+							stateStreamFailuresRef.current = 0
 
 							return newState
 						})
@@ -511,8 +532,13 @@ export const ExtensionStateContextProvider: React.FC<{
 				}
 				console.log('[DEBUG] ended "got subscribed state"')
 			},
+			// biome-ignore lint/suspicious/noExplicitAny: stream error payload is untyped
 			onError: (error: any) => {
 				console.error("Error in state subscription:", error)
+				stateStreamFailuresRef.current += 1
+				if (stateStreamFailuresRef.current <= 5) {
+					setTimeout(() => setStateStreamEpoch((epoch) => epoch + 1), 1_000)
+				}
 			},
 			onComplete: () => {
 				console.log("State subscription completed")
@@ -527,6 +553,7 @@ export const ExtensionStateContextProvider: React.FC<{
 					console.log("[DEBUG] Received mcpButtonClicked event from gRPC stream")
 					navigateToMarketplace()
 				},
+				// biome-ignore lint/suspicious/noExplicitAny: stream error payload is untyped
 				onError: (error: any) => {
 					console.error("Error in mcpButtonClicked subscription:", error)
 				},
@@ -803,7 +830,7 @@ export const ExtensionStateContextProvider: React.FC<{
 				mcpServersSubscriptionRef.current = null
 			}
 		}
-	}, [])
+	}, [stateStreamEpoch])
 
 	const refreshOpenRouterModels = useCallback(() => {
 		ModelsServiceClient.refreshOpenRouterModelsRpc(EmptyRequest.create({}))
@@ -918,6 +945,7 @@ export const ExtensionStateContextProvider: React.FC<{
 
 	const contextValue: ExtensionStateContextType = {
 		...state,
+		getState,
 		didHydrateState,
 		showWelcome,
 		onboardingModels,
