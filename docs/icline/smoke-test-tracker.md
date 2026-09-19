@@ -1,7 +1,7 @@
 **Last updated:** 2026-09-19
 **Branch:** `feat/upstream-waves-1-2` (จาก main @ `78ebd0923` — รวม dev.5 แล้ว, tag `pre-merge-dev.5`, ยังไม่ push)
 **HEAD:** `c5412e9c5` (docs fix.14 · fix.7–fix.14 commit แล้ว 6 commits — ยังไม่ push)
-**vsix (ล่าสุด):** `apps/vscode/dist/i-mrdedchai.iCline-0.1.18-dev.6-fix.14.vsix` (11,961,735 B @ 2026-09-19 16:50Z · About = `dev build 6 · fix.14`) — ⏳ **รอบนี้คือ fix.14** · do not overwrite `fix.1`–`fix.13` ใน `dist/`
+**vsix (ล่าสุด):** `apps/vscode/dist/i-mrdedchai.iCline-0.1.18-dev.6-fix.14.vsix` (11,962,218 B @ 2026-09-19 16:57Z · About = `dev build 6 · fix.14`) — ⏳ **รอบนี้คือ fix.14** · do not overwrite `fix.1`–`fix.13` ใน `dist/` (repack ทับ fix.14 หลัง lint-staged จัดรูปแบบ 3 ไฟล์ ⇒ bundle ต่างจาก pack แรก 483 B — ของเดิมยังทำงานเหมือนกัน แต่ repack เพื่อให้ artefact ตรงกับ commit)
 
 ---
 
@@ -31,7 +31,7 @@
 **หลักฐานที่ยืนยันด้วยรันจริง:** `getProviderCollectionSync("sakana")` รายงาน `{ id: sakana, name: "Sakana AI", protocol: "openai-chat" }` — ยืนยันว่าก่อนแก้ predicate ของฟอร์ม generic จับ Sakana จริง
 
 **ผลตรวจ:** webview vitest **453/453** · `tsc -b` (webview) · extension `tsc --noEmit` · extension vitest (935/937 — 2 เคส timeout จาก lazy import หนัก ๆ เมื่อรันพร้อมกัน, ผ่านเมื่อรันไฟล์เดียว) · bun unit ใหม่ผ่าน 2/2 · biome · **e2e บน VS Code จริง 2/2** (`quick-picker-hover`: แผงต้องอ่านได้ `Minimal/Low/Medium/High/X-High/Max` และ Sakana `High/X-High/Max`)
-**VSIX:** `dev.6-fix.14` มี marker ใน bundle จริง (webview มี `X-High`/`Minimal` · host มี `["none","minimal","low","medium","high","xhigh","max"]` 12 จุด)
+**VSIX:** `dev.6-fix.14` มี marker ใน bundle จริง (webview มี `X-High`/`Minimal` · host มี `["none","minimal","low","medium","high","xhigh","max"]` 12 จุด) — repack ครั้งสุดท้าย 2026-09-19 16:57Z ให้ตรงกับ commit ที่ลงแล้ว
 
 **เปลี่ยนแปลงพฤติกรรมที่ตั้งใจ:** (1) dropdown Effort ของทุกฟอร์มมี 7 ระดับเท่ากับที่แอปเก็บได้ (เดิม 5) — ค่าที่โมเดลไม่รับจะถูก SDK clamp ไม่ใช่ถูก UI ตัด (2) `xhigh` ใน Quick Picker เปลี่ยนจาก "Max" เป็น **X-High** ให้ตรง Settings เพราะ `max` เป็นระดับจริงอีกตัวแล้ว (เฉพาะคำที่แสดง ค่าที่เก็บไม่กระทบ) (3) สวิตช์ Thinking ที่เปิดกลับใช้ระดับแรกจริง = `minimal` แทน `low`
 
