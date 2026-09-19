@@ -7,6 +7,7 @@ import {
 	E2E_MOCK_CLINE_MODELS,
 	E2E_MOCK_CLINE_RECOMMENDED_MODELS,
 	E2E_MOCK_EDITOR_TOOL_CALL,
+	E2E_MOCK_OVERSIZED_EDITOR_TOOL_CALL,
 	E2E_REGISTERED_MOCK_ENDPOINTS,
 } from "./api"
 import { ClineDataMock } from "./data"
@@ -482,19 +483,30 @@ export class ClineApiServerMock {
 						// conversation history of the follow-up request, so order matters.
 						// Scoped to edit_request conversations so tool results from other
 						// (future) scenarios don't mis-route to EDIT_REQUEST_COMPLETE.
+						const isOversizedRequest = body.includes("oversized_request")
 						const hasToolResult =
-							body.includes("edit_request") &&
+							(body.includes("edit_request") || isOversizedRequest) &&
 							Array.isArray(messages) &&
 							messages.some((m: { role?: string }) => m?.role === "tool")
 
 						let responseText = E2E_MOCK_API_RESPONSES.DEFAULT
 						let includeEditorToolCall = false
+						let includeOversizedEditorToolCall = false
 						log("Chat completion mock selection:", {
 							isEditRequest: body.includes("edit_request"),
+							isOversizedRequest,
 							hasToolResult,
 						})
-						if (hasToolResult) {
+						if (hasToolResult && isOversizedRequest) {
+							responseText = E2E_MOCK_API_RESPONSES.OVERSIZED_REQUEST_COMPLETE
+						} else if (hasToolResult) {
 							responseText = E2E_MOCK_API_RESPONSES.EDIT_REQUEST_COMPLETE
+						} else if (isOversizedRequest) {
+							// Stream lead-in text followed by a structured `editor` tool
+							// call whose new_text exceeds the runtime's per-call input
+							// limit — the exact shape from the dev.6 smoke failures.
+							responseText = E2E_MOCK_API_RESPONSES.OVERSIZED_REQUEST_LEAD_IN
+							includeOversizedEditorToolCall = true
 						} else if (body.includes("edit_request")) {
 							// Stream lead-in text followed by a structured `editor` tool
 							// call (OpenAI tool_calls deltas) — the only tool-call syntax
@@ -523,32 +535,36 @@ export class ClineApiServerMock {
 							// for a tool_calls index must carry `id` + `function.name`;
 							// `function.arguments` accumulates as string fragments. Split
 							// the arguments JSON to exercise fragment reassembly.
-							const argumentsJson = JSON.stringify(E2E_MOCK_EDITOR_TOOL_CALL.arguments)
+							const toolCallSource = includeOversizedEditorToolCall
+								? E2E_MOCK_OVERSIZED_EDITOR_TOOL_CALL
+								: E2E_MOCK_EDITOR_TOOL_CALL
+							const argumentsJson = JSON.stringify(toolCallSource.arguments)
 							const argsSplitAt = Math.floor(argumentsJson.length / 2)
-							const toolCallDeltas = includeEditorToolCall
-								? [
-										[
-											{
-												index: 0,
-												id: E2E_MOCK_EDITOR_TOOL_CALL.id,
-												type: "function",
-												function: { name: E2E_MOCK_EDITOR_TOOL_CALL.name, arguments: "" },
-											},
-										],
-										[
-											{
-												index: 0,
-												function: { arguments: argumentsJson.slice(0, argsSplitAt) },
-											},
-										],
-										[
-											{
-												index: 0,
-												function: { arguments: argumentsJson.slice(argsSplitAt) },
-											},
-										],
-									]
-								: []
+							const toolCallDeltas =
+								includeEditorToolCall || includeOversizedEditorToolCall
+									? [
+											[
+												{
+													index: 0,
+													id: toolCallSource.id,
+													type: "function",
+													function: { name: toolCallSource.name, arguments: "" },
+												},
+											],
+											[
+												{
+													index: 0,
+													function: { arguments: argumentsJson.slice(0, argsSplitAt) },
+												},
+											],
+											[
+												{
+													index: 0,
+													function: { arguments: argumentsJson.slice(argsSplitAt) },
+												},
+											],
+										]
+									: []
 							let toolCallDeltaIndex = 0
 
 							const sendChunk = () => {

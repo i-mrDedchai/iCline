@@ -16,6 +16,7 @@ export type LanguageKey =
 	| "zh-CN"
 	| "es"
 	| "zh-TW"
+	| "th"
 	| "tr"
 
 export type LanguageDisplay =
@@ -36,6 +37,7 @@ export type LanguageDisplay =
 	| "Simplified Chinese - 简体中文"
 	| "Spanish - Español"
 	| "Traditional Chinese - 繁體中文"
+	| "Thai - ไทย"
 	| "Turkish - Türkçe"
 
 export const DEFAULT_LANGUAGE_SETTINGS: LanguageKey = "en"
@@ -58,6 +60,7 @@ const languageOptions: { key: LanguageKey; display: LanguageDisplay }[] = [
 	{ key: "zh-CN", display: "Simplified Chinese - 简体中文" },
 	{ key: "es", display: "Spanish - Español" },
 	{ key: "zh-TW", display: "Traditional Chinese - 繁體中文" },
+	{ key: "th", display: "Thai - ไทย" },
 	{ key: "tr", display: "Turkish - Türkçe" },
 ]
 

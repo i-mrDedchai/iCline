@@ -50,6 +50,23 @@ export const E2E_MOCK_EDITOR_TOOL_CALL = {
 	},
 }
 
+/**
+ * Structured `editor` tool call whose new_text exceeds the runtime's per-call
+ * input limit (INPUT_ARG_CHAR_LIMIT = 6000 chars). The real tool rejects it
+ * BEFORE touching disk by RETURNING a failure envelope
+ * (`{ success: false, error: "Editor input too large …" }`) instead of
+ * throwing, and the iCline post-write guardrail must surface that message to
+ * the model with `isError: true` — never as a phantom ENOENT.
+ */
+export const E2E_MOCK_OVERSIZED_EDITOR_TOOL_CALL = {
+	id: "call_e2e_oversized_1",
+	name: "editor",
+	arguments: {
+		path: "oversized-repro.txt",
+		new_text: "x".repeat(7020),
+	},
+}
+
 const edit_request_complete = `I successfully replaced "john" with "cline" in the test.ts file. The change has been completed and the file now contains:
 
 \`\`\`typescript
@@ -64,6 +81,10 @@ export const E2E_MOCK_API_RESPONSES = {
 	EDIT_REQUEST_LEAD_IN: `I'll replace "john" with "cline" in the test.ts file.`,
 	/** Turn-ending text streamed after the SDK reports the editor tool result. */
 	EDIT_REQUEST_COMPLETE: edit_request_complete,
+	/** Assistant text streamed before the oversized editor tool call. */
+	OVERSIZED_REQUEST_LEAD_IN: `I'll create oversized-repro.txt with the full content in a single editor call.`,
+	/** Turn-ending text streamed after the rejected oversized call is reported back. */
+	OVERSIZED_REQUEST_COMPLETE: `The editor call was rejected because the content exceeded the per-call input limit, so nothing was written to oversized-repro.txt.`,
 }
 
 export const E2E_MOCK_CLINE_RECOMMENDED_MODELS = {

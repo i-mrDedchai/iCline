@@ -26,7 +26,8 @@ import { HookFactory } from "@/core/hooks/hook-factory"
 import { getHooksEnabledSafe } from "@/core/hooks/hooks-utils"
 import type { StateManager } from "@/core/storage/StateManager"
 import { HostProvider } from "@/hosts/host-provider"
-import { verifyWrittenFile } from "@/icline/harness/guardrails"
+import { EDITOR_INPUT_CHAR_LIMIT, getLargeWriteGuidance, verifyWrittenFile } from "@/icline/harness/guardrails"
+import { recordToolTrace } from "@/icline/harness/tool-trace"
 import { isIclineBuild } from "@/registry"
 
 export type HookMessageEmitter = (message: ClineMessage) => void
@@ -379,16 +380,83 @@ async function runUserPromptSubmit(
 // ---------------------------------------------------------------------------
 //
 // Re-applies the legacy WriteToFileToolHandler guardrail in the SDK hook
-// architecture. After a successful `editor` / `apply_patch` tool call, the
-// written file(s) are checked against filesystem reality (exists, non-empty
-// when content was expected). On mismatch the tool result is replaced with an
-// error so the model cannot claim a write that did not land.
+// architecture. After an `editor` / `apply_patch` tool call, the written file(s)
+// are checked against filesystem reality (exists, non-empty when content was
+// expected) and any mismatch is reported as a failure so the model cannot claim a
+// write that did not land.
+//
+// "The tool did not throw" is NOT a success signal, for two upstream reasons:
+//   1. Input-level failures (e.g. `new_text` beyond INPUT_ARG_CHAR_LIMIT) come back
+//      as a failure ENVELOPE — `{ success: false, error }` — and the agent runtime
+//      only sets `isError` for THROWN errors, so such results arrive looking fine.
+//   2. Running verification on those results stats a file that was never meant to
+//      be written, then replaces the real, actionable message with a misleading
+//      ENOENT. That is the "success reported, file missing" loop from the dev.6
+//      smoke tests: the model never learned the call was rejected for its size.
+// So: detect the envelope first, keep its message, and never discard evidence.
 
 const WRITE_TOOL_NAMES = new Set(["editor", "apply_patch"])
 
 interface WriteTarget {
 	absolutePath: string
 	expectedMinBytes: number
+}
+
+/**
+ * Failure text carried by a RETURNED (not thrown) tool envelope. Upstream edit
+ * tools signal input-level rejection this way, with `success: false` and/or a
+ * non-empty `error` string. A successful envelope carries neither.
+ */
+function readToolEnvelopeFailure(output: unknown): string | undefined {
+	if (output == null || typeof output !== "object" || Array.isArray(output)) {
+		return undefined
+	}
+	const record = output as Record<string, unknown>
+	const error = typeof record.error === "string" ? record.error.trim() : ""
+	if (record.success === false) {
+		return error || "The tool reported success: false"
+	}
+	return error || undefined
+}
+
+/** Short single-line rendering of the tool's own output, for the model and the trace. */
+function describeToolOutput(output: unknown): string {
+	if (typeof output === "string") {
+		return output.trim()
+	}
+	try {
+		const text = JSON.stringify(output)
+		return text && text.length > 400 ? `${text.slice(0, 400)}...` : (text ?? "")
+	} catch {
+		return String(output)
+	}
+}
+
+/**
+ * Actionable guidance when the rejected call exceeded the runtime's per-call input
+ * limit — by far the most common cause of "the write reported success but nothing
+ * is on disk". Without this the model can only guess (dev.6 smoke: it guessed
+ * "race" and re-sent the identical oversized call).
+ */
+function describeOversizeInput(input: unknown): string | undefined {
+	const newText = (input as { new_text?: unknown } | undefined)?.new_text
+	if (typeof newText !== "string" || newText.length <= EDITOR_INPUT_CHAR_LIMIT) {
+		return undefined
+	}
+	return `The call carried ${newText.length} characters of new_text, above the runtime's ${EDITOR_INPUT_CHAR_LIMIT}-character per-call limit, so it was rejected before touching disk. ${getLargeWriteGuidance()}`
+}
+
+/** Trace-safe summary of a write input — never the payload itself. */
+function traceInputShape(input: unknown): Record<string, unknown> {
+	const record = (input ?? {}) as Record<string, unknown>
+	const text = (value: unknown) => (typeof value === "string" ? value.length : undefined)
+	return {
+		path: typeof record.path === "string" ? record.path : undefined,
+		newTextChars: text(record.new_text),
+		oldTextChars: text(record.old_text),
+		insertLine: record.insert_line ?? undefined,
+		patchChars: text(record.input),
+	}
 }
 
 async function runIclinePostWriteVerification(ctx: AgentAfterToolContext): Promise<AgentAfterToolResult | undefined> {
@@ -400,6 +468,33 @@ async function runIclinePostWriteVerification(ctx: AgentAfterToolContext): Promi
 		if (!WRITE_TOOL_NAMES.has(toolName)) {
 			return undefined
 		}
+
+		const envelopeFailure = readToolEnvelopeFailure(ctx.result.output)
+		if (envelopeFailure) {
+			const guidance = describeOversizeInput(ctx.input)
+			Logger.log(
+				`[HooksAdapter] iCline guardrail: ${toolName} returned a failure envelope without the error flag; surfacing it to the model: ${envelopeFailure.slice(0, 200)}`,
+			)
+			recordToolTrace(
+				{
+					event: "write-tool-failure-envelope",
+					toolName,
+					toolCallId: ctx.toolCall.toolCallId,
+					message: envelopeFailure,
+					...traceInputShape(ctx.input),
+				},
+				{ force: true },
+			)
+			// Marked as an error so the loop and the UI treat it as a failed tool
+			// call, but with the tool's own message preserved verbatim.
+			return {
+				result: {
+					output: guidance ? `${envelopeFailure}\n${guidance}` : envelopeFailure,
+					isError: true,
+				},
+			}
+		}
+
 		if (ctx.result.isError) {
 			// The write already failed — nothing to verify, and replacing the
 			// error would hide the real failure from the model.
@@ -410,15 +505,40 @@ async function runIclinePostWriteVerification(ctx: AgentAfterToolContext): Promi
 		for (const target of targets) {
 			const verification = await verifyWrittenFile(target)
 			if (!verification.ok) {
+				const claimed = describeToolOutput(ctx.result.output)
+				const guidance = describeOversizeInput(ctx.input)
 				Logger.warn(`[HooksAdapter] iCline post-write verification failed: ${verification.message}`)
+				recordToolTrace(
+					{
+						event: "post-write-verification-failed",
+						toolName,
+						toolCallId: ctx.toolCall.toolCallId,
+						absolutePath: target.absolutePath,
+						expectedMinBytes: target.expectedMinBytes,
+						verification: verification.message,
+						toolClaim: claimed,
+						...traceInputShape(ctx.input),
+					},
+					{ force: true },
+				)
+				// Keep what the tool claimed: it names the path the executor believed it
+				// wrote, which is exactly the evidence earlier rounds lost.
 				return {
 					result: {
-						output: verification.message,
+						output: [verification.message, claimed && `The tool reported: ${claimed}`, guidance]
+							.filter((line): line is string => !!line)
+							.join("\n"),
 						isError: true,
 					},
 				}
 			}
 		}
+		recordToolTrace({
+			event: "post-write-verified",
+			toolName,
+			toolCallId: ctx.toolCall.toolCallId,
+			...traceInputShape(ctx.input),
+		})
 		return undefined
 	} catch (error) {
 		// Never block a successful tool call on a verifier bug.

@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
 	getWorkspacePaths: vi.fn(async () => ({ paths: ["/workspace"] })),
 	getHooksEnabledSafe: vi.fn(() => false),
 	hasHook: vi.fn(async () => false),
+	recordToolTrace: vi.fn(),
 }))
 
 vi.mock("@/registry", () => ({
@@ -19,6 +20,12 @@ vi.mock("@/registry", () => ({
 
 vi.mock("@/icline/harness/guardrails", () => ({
 	verifyWrittenFile: mocks.verifyWrittenFile,
+	EDITOR_INPUT_CHAR_LIMIT: 6000,
+	getLargeWriteGuidance: () => "Write it in chunks: create the file with a first chunk, then append with `insert_line`.",
+}))
+
+vi.mock("@/icline/harness/tool-trace", () => ({
+	recordToolTrace: mocks.recordToolTrace,
 }))
 
 vi.mock("@/hosts/host-provider", () => ({
@@ -50,6 +57,7 @@ function makeAfterToolCtx(overrides: {
 	toolName?: string
 	input?: unknown
 	isError?: boolean
+	output?: unknown
 }): AgentAfterToolContext {
 	const { toolName = "editor", input = { path: "/workspace/file.ts", new_text: "content" }, isError = false } = overrides
 	return {
@@ -66,7 +74,7 @@ function makeAfterToolCtx(overrides: {
 		tool: { name: toolName },
 		toolCall: { toolName, toolCallId: "call-1" },
 		input,
-		result: { output: "write ok", isError },
+		result: { output: overrides.output ?? "write ok", isError },
 		startedAt: new Date(),
 		endedAt: new Date(),
 		durationMs: 5,
@@ -92,16 +100,93 @@ describe("hooks-adapter iCline post-write verification", () => {
 		})
 	})
 
-	it("replaces the tool result with an error when verification fails", async () => {
+	it("fails the tool call but keeps what the tool claimed", async () => {
 		mocks.verifyWrittenFile.mockResolvedValue({ ok: false, message: "Verification failed: file.ts is empty" })
 		const hooks = buildAgentHooks(makeStateManager())
 		const result = await hooks.afterTool?.(makeAfterToolCtx({}))
 		expect(result).toEqual({
 			result: {
-				output: "Verification failed: file.ts is empty",
+				output: "Verification failed: file.ts is empty\nThe tool reported: write ok",
 				isError: true,
 			},
 		})
+	})
+
+	// dev.6-fix.7 root cause: upstream edit tools report input-level rejection by
+	// RETURNING `{ success: false, error }`, and the agent runtime only flags THROWN
+	// errors — so `isError` is undefined. Verifying such a result stats a file that
+	// was never written and replaces the real cause with a phantom ENOENT, which is
+	// what made small models loop on oversized writes.
+	it("surfaces a returned failure envelope instead of verifying a file that was never written", async () => {
+		const hooks = buildAgentHooks(makeStateManager())
+		const result = await hooks.afterTool?.(
+			makeAfterToolCtx({
+				output: {
+					query: "edit:/workspace/file.ts",
+					result: "",
+					error: "Editor input too large: new_text was 7000 characters",
+					success: false,
+				},
+			}),
+		)
+		expect(mocks.verifyWrittenFile).not.toHaveBeenCalled()
+		expect(result).toEqual({
+			result: {
+				output: "Editor input too large: new_text was 7000 characters",
+				isError: true,
+			},
+		})
+	})
+
+	it("adds the chunked-write recipe when the rejected call was oversized", async () => {
+		const hooks = buildAgentHooks(makeStateManager())
+		const result = await hooks.afterTool?.(
+			makeAfterToolCtx({
+				input: { path: "/workspace/file.ts", new_text: "x".repeat(7020) },
+				output: {
+					query: "edit:/workspace/file.ts",
+					result: "",
+					error: "Editor input too large: new_text was 7020 characters",
+					success: false,
+				},
+			}),
+		)
+		expect(mocks.verifyWrittenFile).not.toHaveBeenCalled()
+		const output = (result?.result as { output: string; isError: boolean }).output
+		expect(output).toContain("Editor input too large")
+		expect(output).toContain("7020 characters of new_text")
+		expect(output).toContain("Write it in chunks")
+		expect((result?.result as { isError: boolean }).isError).toBe(true)
+	})
+
+	it("still verifies a successful envelope that carries an empty error field", async () => {
+		const hooks = buildAgentHooks(makeStateManager())
+		const result = await hooks.afterTool?.(
+			makeAfterToolCtx({
+				output: {
+					query: "edit:/workspace/file.ts",
+					result: "File created successfully at: /workspace/file.ts",
+					error: "",
+					success: true,
+				},
+			}),
+		)
+		expect(result).toBeUndefined()
+		expect(mocks.verifyWrittenFile).toHaveBeenCalledTimes(1)
+	})
+
+	it("reports the envelope failure for apply_patch without appending editor guidance", async () => {
+		const hooks = buildAgentHooks(makeStateManager())
+		const patch = ["*** Begin Patch", "*** Add File: /workspace/new.ts", "+const x = 1", "*** End Patch"].join("\n")
+		const result = await hooks.afterTool?.(
+			makeAfterToolCtx({
+				toolName: "apply_patch",
+				input: { input: patch },
+				output: { query: "apply_patch", result: "", error: "apply_patch failed: hunk mismatch", success: false },
+			}),
+		)
+		expect(mocks.verifyWrittenFile).not.toHaveBeenCalled()
+		expect(result).toEqual({ result: { output: "apply_patch failed: hunk mismatch", isError: true } })
 	})
 
 	it("skips verification when the tool call already errored", async () => {
@@ -199,7 +284,7 @@ describe("hooks-adapter iCline post-write verification", () => {
 		const result = await hooks.afterTool?.(makeAfterToolCtx({ toolName: "apply_patch", input: { input: patch } }))
 		expect(result).toEqual({
 			result: {
-				output: "Verification failed: existing.ts missing",
+				output: "Verification failed: existing.ts missing\nThe tool reported: write ok",
 				isError: true,
 			},
 		})

@@ -442,6 +442,7 @@
 		"test:vitest:watch": "vitest --config vitest.config.ts",
 		"test:bun": "bun scripts/run-bun-tests.ts",
 		"test:bun:unit": "bun scripts/run-bun-unit-tests.ts",
+		"repro:editor-write": "bun scripts/repro-editor-write.ts",
 		"test:coverage": "bun run compile-tests && vscode-test --coverage",
 		"test:sca-server": "bun --watch scripts/test-standalone-core-api-server.ts",
 		"test:tp-orchestrator": "bun scripts/testing-platform-orchestrator.ts",

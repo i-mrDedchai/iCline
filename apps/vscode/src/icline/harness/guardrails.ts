@@ -43,6 +43,25 @@ export function normalizeCompactionThreshold(raw?: number): number {
 	return raw
 }
 
+/**
+ * Per-call input limit of the runtime's `editor` tool. Mirrors the upstream
+ * `INPUT_ARG_CHAR_LIMIT` (@cline/core `extensions/tools/schemas.ts`), which is not
+ * re-exported from the package entry point. The upstream tool rejects a larger
+ * `new_text` before anything reaches disk, so we mirror the number only to emit an
+ * actionable message instead of a phantom filesystem failure — the parity test in
+ * `src/sdk/tool-write-pipeline.test.ts` fails if upstream ever changes it.
+ */
+export const EDITOR_INPUT_CHAR_LIMIT = 6000
+
+/**
+ * The recipe for writing a file that does not fit in a single tool call. Shared by
+ * the harness overlay (prevention) and the post-write guardrail (recovery) so both
+ * surfaces tell the model the same thing.
+ */
+export function getLargeWriteGuidance(): string {
+	return `Write it in chunks: create the file with a first chunk of at most ${EDITOR_INPUT_CHAR_LIMIT} characters of new_text, then append the remaining chunks with \`insert_line\` (line_count + 1 appends at EOF). Do not re-send the oversized call unchanged.`
+}
+
 export interface PostWriteVerificationResult {
 	ok: boolean
 	message: string
@@ -86,6 +105,7 @@ export function getIclineHarnessOverlay(): string {
 - On ambiguous requests: ask one focused clarifying question OR proceed with the safest minimal assumption and state it.
 - On partial progress: summarize what changed, what remains, and the next concrete step.
 - Prefer small, verifiable edits over large speculative rewrites.
+- Writing large files: one \`editor\` call accepts at most ~${EDITOR_INPUT_CHAR_LIMIT} characters of new_text; a larger call is rejected before anything is written. Create the file with a first chunk, then append the rest with \`insert_line\` (line_count + 1 = append at EOF).
 - When context is tight: preserve task goal, recent decisions, and file paths touched.`
 }
 
