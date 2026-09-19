@@ -34,10 +34,14 @@ describe("getIclineHarnessOverlay", () => {
 		expect(overlay).toContain("# Current Time")
 	})
 
-	it("requires ACT MODE conversational replies to use runtime tools", () => {
+	it("never demands tool usage in a way that induces fabricated tool markup", () => {
 		const overlay = getIclineHarnessOverlay()
-		expect(overlay).toContain("attempt_completion")
-		expect(overlay).toContain("ask_question")
+		// fix.5 lesson: demanding "must use a tool (attempt_completion or …)"
+		// made weak models write the tool call as plain-text XML (their runtime
+		// may not support native tool calls), producing raw markup soup in the
+		// chat. The overlay guides behavior, it does not command tool usage.
+		expect(overlay).not.toContain("must use a tool")
+		expect(overlay).toContain("do not fabricate tool-call markup")
 	})
 
 	it("never references tools that do not exist in the SDK runtime", () => {
