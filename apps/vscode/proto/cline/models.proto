@@ -278,7 +278,9 @@ message CommittedModelSelection {
 
 message ProviderReasoningPatch {
   optional bool enabled = 1;
-  optional string effort = 2; // "none" | "low" | "medium" | "high" | "xhigh"
+  // Keep in step with OPENAI_REASONING_EFFORT_OPTIONS / the SDK's REASONING_LEVELS
+  // (src/shared/storage/types.ts, guarded by reasoning-effort-parity.test.ts).
+  optional string effort = 2; // "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max"
   optional int32 budget_tokens = 3;
 }
 

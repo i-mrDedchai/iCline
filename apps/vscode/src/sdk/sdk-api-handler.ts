@@ -9,7 +9,7 @@
 
 import { type ApiHandler, createHandler, type ProviderConfig } from "@cline/llms"
 import type { ApiConfiguration } from "@shared/api"
-import type { Mode } from "@shared/storage/types"
+import { isReasoningEffortValue, type Mode } from "@shared/storage/types"
 import { fetch } from "@/shared/net"
 import { buildBedrockProviderConfig } from "./bedrock-config"
 import { resolveApiKey, resolveBaseUrl, resolveModelId, resolveVertexProviderConfig } from "./cline-session-factory"
@@ -83,7 +83,12 @@ export function buildSdkProviderConfig(
 	if (thinkingBudgetTokens && thinkingBudgetTokens > 0) {
 		return { ...base, thinkingBudgetTokens }
 	}
-	if (reasoningEffort === "low" || reasoningEffort === "medium" || reasoningEffort === "high") {
+	// Forward the full SDK vocabulary (minimal/low/medium/high/xhigh/max) rather
+	// than a 3-value subset: the SDK gateway normalizes the effort against the
+	// controls the model advertises (clamping `xhigh`/`max`→`high` for a model that
+	// only takes High), so anything narrower here just drops the user's choice
+	// silently. `none` is not forwarded — it means "no reasoning field at all".
+	if (isReasoningEffortValue(reasoningEffort)) {
 		return { ...base, reasoningEffort }
 	}
 	return base

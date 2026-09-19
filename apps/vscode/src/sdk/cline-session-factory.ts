@@ -27,7 +27,7 @@ import type { HistoryItem } from "@shared/HistoryItem"
 import { DEFAULT_LANGUAGE_SETTINGS, getLanguageKey, type LanguageDisplay } from "@shared/Languages"
 import { Logger } from "@shared/services/Logger"
 import type { Settings } from "@shared/storage/state-keys"
-import type { Mode } from "@shared/storage/types"
+import { isReasoningEffortValue, type Mode } from "@shared/storage/types"
 import { stringifyVsCodeLmModelSelector } from "@shared/vsCodeSelectorUtils"
 import { StateManager } from "@/core/storage/StateManager"
 import { HostProvider } from "@/hosts/host-provider"
@@ -141,8 +141,15 @@ type ReasoningEffort = NonNullable<CoreSessionConfig["reasoningEffort"]>
 type ProviderReasoningSettings = NonNullable<ProviderSettings["reasoning"]>
 type SessionReasoningConfig = Pick<CoreSessionConfig, "thinking" | "reasoningEffort">
 
+/**
+ * Session-boundary gate for an effort value. It used to list `low|medium|high|xhigh`
+ * inline, which meant `minimal` and `max` were dropped on the way into a session
+ * while the same values were still selectable in Settings. The vocabulary now comes
+ * from the shared storage module (asserted equal to the SDK's `REASONING_LEVELS`),
+ * so this gate can only ever reject a value the SDK would also reject.
+ */
 function isReasoningEffort(value: unknown): value is ReasoningEffort {
-	return value === "low" || value === "medium" || value === "high" || value === "xhigh"
+	return isReasoningEffortValue(value)
 }
 
 function hasStaleDisabledReasoningFields(reasoning: ProviderReasoningSettings | undefined): boolean {

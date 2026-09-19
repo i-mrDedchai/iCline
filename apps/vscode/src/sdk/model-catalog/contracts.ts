@@ -134,7 +134,7 @@ export interface EffectiveProviderConfig {
  */
 interface ProviderReasoningPatch {
 	readonly enabled?: boolean
-	readonly effort?: string // "none" | "low" | "medium" | "high" | "xhigh"
+	readonly effort?: string // "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max"
 	readonly budgetTokens?: number
 }
 
