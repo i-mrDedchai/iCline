@@ -39,6 +39,8 @@ export type PaneLocation = "sidebar" | "auxiliarybar" | "panel"
 
 /** VS Code's own words for the flow `moveToAuxiliaryBar` drives. */
 const COMMAND_PALETTE_PLACEHOLDER = "Type the name of a command to run"
+/** The palette's mode prefix. `fill("")` drops it and the palette becomes the file picker. */
+const COMMAND_PALETTE_PREFIX = ">"
 const MOVE_VIEW_QUERY = "Move View"
 const MOVE_VIEW_LABEL = "View: Move View"
 /** The activity bar container the chat's view is contributed into (`viewsContainers`). */
@@ -46,6 +48,9 @@ const CHAT_VIEW_CONTAINER = "iCline"
 const PICK_A_VIEW_PLACEHOLDER = "Select a View to Move"
 const PICK_A_DESTINATION_PLACEHOLDER = "Select a Destination for the View"
 const NEW_SECONDARY_SIDE_BAR_ENTRY = "New Secondary Side Bar Entry"
+
+/** How long the webview's focus grab takes to land (measured ~500ms after a turn ends). */
+const FOCUS_GRAB_WINDOW_MS = 800
 
 export interface PaneController {
 	/** Current inner width of the webview pane, in CSS px. */
@@ -65,6 +70,9 @@ export interface PaneController {
 	 */
 	moveToAuxiliaryBar(): Promise<Frame>
 }
+
+/** Escapes a label before it goes into a `RegExp` built from it. */
+const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
 
 export function createPaneController({
 	app,
@@ -199,27 +207,83 @@ export function createPaneController({
 	}
 
 	/**
-	 * Types into the open quick input. Never clears it first: the command palette's filter IS
-	 * its `>` prefix, and emptying the box drops it back to the file search.
+	 * Writes `text` into the open quick input.
+	 *
+	 * `fill`, not keystrokes: VS Code hides its quick input when that input loses focus, and the
+	 * chat webview reaches for focus on its own — on a run where a turn had just completed, a
+	 * `pressSequentially("Move View")` query came out as `>Move V` with the palette already closed,
+	 * so the step timed out looking for a row that was never filtered in. A real user never sees
+	 * this (their keystrokes follow the OS focus; ours are addressed to an element). `fill` writes
+	 * the whole value in one event, so the query cannot be cut short.
+	 *
+	 * The value has to carry what the user would have typed: the palette's own `>` prefix is its
+	 * mode, so the caller passes it and nothing ever fills an empty string.
 	 */
-	const type = (input: Locator, text: string) => input.pressSequentially(text, { delay: 25 })
+	const type = (input: Locator, text: string) => input.fill(text)
+
+	/** True while the quick input is actually on screen — VS Code hides it but keeps the DOM. */
+	const quickInputIsShown = () =>
+		page
+			.locator(".quick-input-widget")
+			.evaluate((widget) => (widget as HTMLElement).offsetParent !== null)
+			.catch(() => false)
 
 	/**
-	 * Clicks the quick pick row labelled exactly `label`. Accepting the top match is not the
-	 * same thing: typing `Move View` ranks `Move Panel Views To Secondary Side Bar` and
-	 * `Move Secondary Side Bar Views To Panel` above `View: Move View`.
+	 * Opens the command palette with `query` written into it and returns its input, re-opening it
+	 * while the chat webview takes focus back.
+	 *
+	 * VS Code hides its quick input the moment that input loses focus, and the chat's composer
+	 * re-focuses itself whenever a turn ends (`ChatView`, ~50ms after the turn goes idle) so a
+	 * user can keep typing. A palette opened inside that window closes on its own with the query
+	 * sitting in a hidden box — measured on a real run: the webview's `<iframe>` held focus and
+	 * the widget was hidden within 500ms of the query being written, which is what made this step
+	 * time out looking for a row that had been filtered in correctly. A user would just press F1
+	 * again; this does the same until the palette stays put.
 	 */
+	const typeInPalette = async (query: string) => {
+		for (let attempt = 1; attempt <= 3; attempt++) {
+			await page.keyboard.press("F1")
+			const input = await quickInput(COMMAND_PALETTE_PLACEHOLDER)
+			await type(input, query)
+			await page.waitForTimeout(FOCUS_GRAB_WINDOW_MS)
+			if (await quickInputIsShown()) {
+				return input
+			}
+		}
+		throw new Error(`the command palette would not stay open with "${query}" in it`)
+	}
+
+	/** The rows of the open quick pick, for failure messages. */
+	const visibleRows = async () =>
+		page
+			.locator('.monaco-list-row[role="option"]')
+			.evaluateAll((rows) => rows.map((row) => row.getAttribute("aria-label") ?? "").filter(Boolean))
+
 	/**
-	 * Clicks the list row whose own label is exactly `label` — the label wrapper, not the list
-	 * item, because the item's text also carries the group separator it starts
-	 * ("New Secondary Side Bar Entry, Secondary Side Bar", for instance).
+	 * Clicks the quick pick row whose accessible name starts with `label` — the list ITEM, not
+	 * the label element inside it. VS Code renders two `.quick-input-list-row` elements per item
+	 * (one of them zero-height, with a content-sized width), which is not reliably clickable; the
+	 * `role="option"` row carries the whole hit area and the label as its name.
+	 *
+	 * Matched at the start rather than exactly, because a row that opens a group carries the
+	 * group's separator too ("New Secondary Side Bar Entry, Secondary Side Bar"). Accepting the
+	 * top match instead is not the same thing: a `Move View` query ranks
+	 * `Move Panel Views To Secondary Side Bar` and `Move Secondary Side Bar Views To Panel`
+	 * above `View: Move View`.
+	 *
+	 * A row that is missing fails with what the picker did show: a filtered-out row is otherwise
+	 * a bare timeout that says nothing about why.
 	 */
-	const acceptRow = async (label: string) => {
-		await page
-			.locator(".quick-input-list-row")
-			.filter({ hasText: new RegExp(`^${label}$`) })
-			.first()
-			.click()
+	const clickRow = async (label: string) => {
+		const row = page.getByRole("option", { name: new RegExp(`^${escapeRegExp(label)}(,|$)`) })
+		try {
+			await row.first().click({ timeout: 10_000 })
+		} catch (error) {
+			const reason = error instanceof Error ? error.message.split("\n")[0] : String(error)
+			throw new Error(
+				`no quick pick row named "${label}" (${reason}). The picker showed: ${JSON.stringify(await visibleRows())}`,
+			)
+		}
 	}
 
 	/**
@@ -279,15 +343,14 @@ export function createPaneController({
 			// pickers. The keyboard goes to whatever has focus and the previous step clicked inside
 			// the webview, so hand focus back to the workbench chrome before pressing F1.
 			await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
-			await page.keyboard.press("F1")
-			await type(await quickInput(COMMAND_PALETTE_PLACEHOLDER), MOVE_VIEW_QUERY)
-			await acceptRow(MOVE_VIEW_LABEL)
+			await typeInPalette(COMMAND_PALETTE_PREFIX + MOVE_VIEW_QUERY)
+			await clickRow(MOVE_VIEW_LABEL)
 
 			await quickInput(PICK_A_VIEW_PLACEHOLDER)
 			await acceptUnlabelledViewRow(CHAT_VIEW_CONTAINER)
 			const destination = await quickInput(PICK_A_DESTINATION_PLACEHOLDER)
 			await type(destination, NEW_SECONDARY_SIDE_BAR_ENTRY)
-			await acceptRow(NEW_SECONDARY_SIDE_BAR_ENTRY)
+			await clickRow(NEW_SECONDARY_SIDE_BAR_ENTRY)
 
 			// The move is only real once the part hosting the webview changed. The webview can be
 			// rebuilt on the way, so re-resolve the frame while polling rather than once after.

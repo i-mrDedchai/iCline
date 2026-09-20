@@ -139,10 +139,31 @@ The test fixtures provide the following objects:
   extension edits real files in the open folder, so a copy is what keeps parallel tests apart)
 - **`pane`** - Width/location controller for the pane the chat lives in (`utils/pane.ts`):
   `measure()`, `widenTo(px)` (drags VS Code's own sash), `location()` and
-  `moveToAuxiliaryBar()` (drives VS Code's own `View: Move View` flow)
+  `moveToAuxiliaryBar()` (drives VS Code's own `View: Move View` flow). The move returns the
+  frame the chat lives in afterwards, because moving between parts re-creates the webview
 - **`widePane`** - A REQUEST, not an assertion: naming it in a test widens the pane to
   `PANE_WIDE_WIDTH_PX` (900) before the body runs and resolves to the width reached. VS Code's
   default sidebar (~300px) is narrower than the composer row needs
+
+### Driving VS Code's own UI from a test
+
+Two hazards cost a debugging session each; both are handled inside `utils/pane.ts`, so use its
+helpers rather than re-deriving them:
+
+1. **The chat webview takes focus back.** The composer re-focuses itself whenever a turn ends
+   (`ChatView`, ~50ms after the turn goes idle) so the user can keep typing, and VS Code hides
+   its quick input the moment that input loses focus. A palette opened in that window closes on
+   its own with the query sitting in a hidden box (measured: focus was on the webview `<iframe>`
+   and the widget hidden within 500ms). Hence `typeInPalette()` re-opens the palette until it
+   stays, and queries are written with `fill` — a `pressSequentially` query got cut to `>Move V`
+   when the widget vanished mid-word. The palette's `>` prefix is its mode: never fill an empty
+   string into it.
+2. **A quick pick row is two elements.** VS Code renders a `.quick-input-list-row` label wrapper
+   (content-sized, and duplicated by a zero-height sibling) inside a `.monaco-list-row[role="option"]`
+   that carries the hit area and the accessible name — click the `option`. `clickRow()` matches
+   that name at the start, because a row that opens a group carries its group's separator too
+   ("New Secondary Side Bar Entry, Secondary Side Bar"), and it reports the rows that WERE shown
+   when the one you asked for is missing.
 
 ### Common Patterns
 

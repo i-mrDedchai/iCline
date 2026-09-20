@@ -9,16 +9,21 @@ import { e2e } from "./utils/helpers"
  *
  * The move is driven through VS Code's own UI (`pane.moveToAuxiliaryBar()`: command palette →
  * `View: Move View` → `New Secondary Side Bar Entry`), not by moving DOM nodes, so what is
- * tested is the thing a user does when they drag the view to the secondary side bar. Two
- * claims follow from it, on a real window:
+ * tested is the thing a user does when they drag the view to the secondary side bar. The
+ * claims that follow from it, on a real window:
  *
- *   1. **the pane fixture follows the view.** The width controller finds the sash by tracing
- *      the frame stack back to the workbench part that hosts the webview, so it keeps working
- *      after the move — the width is measured (and changed) in the new part.
- *   2. **the moved chat is a working chat.** A full turn goes through it (the mock's answer
+ *   1. **the moved chat is the SAME session.** A turn is taken in the sidebar first, and the
+ *      conversation is still on screen afterwards — VS Code disposes and re-resolves the view
+ *      on a move, and `resolveWebviewView()` used to treat every resolve as "the extension is
+ *      starting a new session" and clear the task, so moving the view wiped the chat. What
+ *      the user sees here is their messages, not the welcome screen.
+ *   2. **the moved chat is a working chat.** A second turn goes through it (the mock's answer
  *      arrives where the view now lives), and the picker's popover still obeys the shared
  *      anchoring rule (left edge of the trigger while the part can hold the menu, right edge
  *      when it cannot) instead of being placed against coordinates from the old part.
+ *   3. **the pane fixture follows the view.** The width controller finds the sash by tracing
+ *      the frame stack back to the workbench part that hosts the webview, so it keeps working
+ *      after the move — the width is measured (and changed) in the new part.
  */
 
 /** The picker body's own width (`PICKER_WIDTH_PX`), used by the anchoring rule before render. */
@@ -27,6 +32,8 @@ const PICKER_WIDTH_PX = 320
 const MENU_MARGIN_PX = 8
 /** How much wider the secondary side bar is asked to become — enough to prove the drag works. */
 const AUX_BAR_GROWTH_PX = 120
+/** What the mock Cline API answers with, once per turn (see `fixtures/server`). */
+const MOCK_REPLY = "mock Cline API response"
 
 e2e(
 	"Secondary Side Bar — the chat keeps working after the view is moved there",
@@ -39,23 +46,40 @@ e2e(
 		// sits once the view lives in the secondary side bar, on top of the send button.
 		await toggleNotifications(page)
 
+		// A turn taken in the sidebar, so the move below has a conversation to preserve. The
+		// reply count is the marker: one reply means the session is on screen, zero means the
+		// moved view came up on the welcome screen instead of the session.
+		const sidebarInput = sidebar.getByTestId("chat-input")
+		await expect(sidebarInput).toBeVisible({ timeout: 10_000 })
+		await sidebarInput.fill("Remember this conversation")
+		await expect(sidebarInput).toHaveValue("Remember this conversation")
+		await sidebar.getByTestId("send-button").click({ delay: 50 })
+		await expect(sidebar.getByText(MOCK_REPLY)).toHaveCount(1, { timeout: 20_000 })
+
 		const moved = await pane.moveToAuxiliaryBar()
 		expect(await pane.location(), "the chat view should be in the secondary side bar now").toBe("auxiliarybar")
 
-		// 1) The pane the fixture measures and drags is the one the chat landed in.
+		// 1) The moved view continues the same session: the turn taken in the sidebar is intact.
+		const movedInput = moved.getByTestId("chat-input")
+		await expect(movedInput).toBeVisible({ timeout: 10_000 })
+		await expect(moved.getByText("Remember this conversation").first()).toBeVisible({ timeout: 10_000 })
+		await expect(
+			moved.getByText(MOCK_REPLY),
+			"the conversation taken in the sidebar should survive the move (an empty chat means the session was cleared)",
+		).toHaveCount(1, { timeout: 10_000 })
+
+		// 2) The pane the fixture measures and drags is the one the chat landed in.
 		const before = await pane.measure()
 		const after = await pane.widenTo(before + AUX_BAR_GROWTH_PX)
 		expect(after, `the secondary side bar should widen from ${before}px`).toBeGreaterThanOrEqual(before + AUX_BAR_GROWTH_PX)
 
-		// 2) A whole turn still goes through where the view now lives.
-		const inputbox = moved.getByTestId("chat-input")
-		await expect(inputbox).toBeVisible({ timeout: 10_000 })
-		await inputbox.fill("Hello from the secondary side bar")
-		await expect(inputbox).toHaveValue("Hello from the secondary side bar")
+		// 3) A second turn still goes through where the view now lives.
+		await movedInput.fill("And this one from the secondary side bar")
+		await expect(movedInput).toHaveValue("And this one from the secondary side bar")
 		await moved.getByTestId("send-button").click({ delay: 50 })
-		await expect(moved.getByText("mock Cline API response")).toBeVisible({ timeout: 20_000 })
+		await expect(moved.getByText(MOCK_REPLY)).toHaveCount(2, { timeout: 20_000 })
 
-		// 3) And the popover still decides its own edge in the new part, by the shared rule.
+		// 4) And the popover still decides its own edge in the new part, by the shared rule.
 		const trigger = moved.locator("[data-icline-model-trigger]")
 		await expect(trigger).toBeVisible({ timeout: 10_000 })
 		await trigger.click({ delay: 30 })
