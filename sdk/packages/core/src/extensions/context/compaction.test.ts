@@ -1515,6 +1515,80 @@ describe("createContextCompactionPrepareTurn", () => {
 		});
 	});
 
+	it("logs why an auto compaction was skipped, not only the status notice", async () => {
+		// Already folded up to the cut boundary: the summary sits directly below the
+		// preserved tail, so this turn has nothing new to summarize while the
+		// estimate is still over the trigger. The old code emitted only the
+		// ephemeral notice, which is how a per-turn compaction storm stayed
+		// invisible in the Cline output channel (dev.6 fix.21 smoke).
+		const messages: MessageWithMetadata[] = [
+			{
+				role: "user",
+				content: [{ type: "text", text: "Context summary:\n\nalready folded" }],
+				metadata: {
+					kind: "compaction_summary",
+					displayRole: "system",
+					userRunSpan: 1,
+					summary: "already folded",
+					details: { readFiles: [], modifiedFiles: [] },
+					tokensBefore: 100,
+					generatedAt: 1,
+				},
+			},
+			{ role: "user", content: `Latest request ${"x".repeat(500)}` },
+			{ role: "assistant", content: "answer" },
+		];
+		const debug = vi.fn();
+		const log = vi.fn();
+		const emitStatusNotice = vi.fn();
+		const prepareTurn = createContextCompactionPrepareTurn({
+			providerId: "anthropic",
+			modelId: "mock-model",
+			providerConfig: {
+				providerId: "anthropic",
+				modelId: "mock-model",
+			} as LlmsProviders.ProviderConfig,
+			compaction: {
+				enabled: true,
+				strategy: "agentic",
+				preserveRecentTokens: 1,
+			},
+			logger: { debug, log },
+		});
+
+		const result = await prepareTurn?.({
+			agentId: "agent-1",
+			conversationId: "conv-1",
+			parentAgentId: null,
+			iteration: 1,
+			abortSignal: new AbortController().signal,
+			systemPrompt: "You are helpful.",
+			tools: [],
+			messages,
+			apiMessages: messages,
+			model: {
+				id: "mock-model",
+				provider: "anthropic",
+				info: { id: "mock-model", maxInputTokens: 10 },
+			},
+			emitStatusNotice,
+		});
+
+		expect(result).toBeUndefined();
+		expect(emitStatusNotice).toHaveBeenCalledWith(
+			"auto-compaction-skipped",
+			expect.objectContaining({ kind: "auto_compaction", phase: "skipped" }),
+		);
+		expect(debug).toHaveBeenCalledWith(
+			"Skipped agentic compaction: nothing new above the cut to fold",
+			expect.objectContaining({ cutIndex: 1, latestSummaryIndex: 0 }),
+		);
+		expect(debug).toHaveBeenCalledWith(
+			"Skipped compaction: strategy returned no result",
+			expect.objectContaining({ strategy: "agentic", reason: "no_result" }),
+		);
+	});
+
 	it("falls back to basic compaction when the agentic request fails", async () => {
 		const providerError = new Error("temporary summarizer failure");
 		createHandlerMock.mockReturnValue({

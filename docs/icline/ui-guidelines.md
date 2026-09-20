@@ -50,7 +50,8 @@
 - กฎอยู่ที่เดียว: `webview-ui/src/icline/recentGrid.ts` — `recentColumnCount(width)` คืนจำนวนคอลัมน์จากความกว้างที่วัดได้ (อย่างน้อย 240px ต่อการ์ด + gap 8px · สูงสุด 3) ⇒ ยังเห็นแค่ **3 แถวเสมอ** แต่ได้ 3 / 6 / 9 เซสชันตามความกว้างที่ทำงานจริง (แถบข้างปริยาย ~300px = 1 คอลัมน์เหมือนเดิม · pane ~875px อย่างที่ maintainer ใช้ = 3 คอลัมน์) ส่วนที่เกินไปพึ่ง **View All**
 - **ความสูงของแถวไม่ใช่ตัวแปร** — เพิ่มคอลัมน์ได้ แต่ห้ามทำให้การ์ดสูงขึ้น (ชื่อเรื่องยัง clamp 2 บรรทัดเท่าเดิม) และการ์ดในแถวเดียวกันสูงเท่ากัน (`align-items: stretch`) ⇒ กริดใช้ `grid-template-columns: repeat(var(--history-columns), minmax(0, 1fr))` โดยตั้ง `--history-columns` จากจำนวนคอลัมน์ที่ตัดสินได้
 - **วัดที่ตัวกริด ไม่ใช่ที่หน้าต่าง** — และต้องรองรับกริดที่ "เพิ่งเกิด" (ประวัติมาถึงหลัง paint แรก) ∴ ฮุก `useRecentColumnCount(element)` รับ **element ผ่าน callback ref** ไม่ใช่ ref object (ref object ที่ caller สร้างใหม่ทุก render จะทำให้วัดซ้ำแล้วตกกลับไป 1 คอลัมน์) + ใช้ `ResizeObserver` เมื่อมี (jsdom ไม่มี ⇒ ถอยไปฟัง `resize` ของ window)
-- เทสต์ที่ปักกฎ: `src/icline/recentGrid.test.ts` (สูตร + การวัด + กริดที่เกิดทีหลัง) · `components/history/HistoryPreview.test.tsx` (1→2→3 คอลัมน์ ⇒ 3/6/9 การ์ด · 3 คอลัมน์คือเพดาน · View All ยังอยู่)
+- **การ์ดต้องบอกลำดับได้ด้วยตัวเอง** — แชทหลายอันของวันเดียวกันเคยดูเหมือนกันหมด ∴ ป้ายเวลามาจาก `recentTime.ts`: `just now` → `14:32` (วันนี้) → `Yesterday` → `Fri` (ใน 7 วัน) → `Sep 10` และ hover (`title`) ต้องเป็นวันเวลาเต็ม · ห้ามเพิ่มความสูงการ์ดหรือเพิ่มบรรทัดเพื่อสิ่งนี้
+- เทสต์ที่ปักกฎ: `src/icline/recentGrid.test.ts` (สูตร + การวัด + กริดที่เกิดทีหลัง) · `src/icline/recentTime.test.ts` (ป้ายเวลา/วันเต็ม) · `components/history/HistoryPreview.test.tsx` (1→2→3 คอลัมน์ ⇒ 3/6/9 การ์ด · 3 คอลัมน์คือเพดาน · คลิกเปิดแชท · ลำดับด้วยป้ายเวลา · View All ยังอยู่)
 
 ## Quick Picker (ออกแบบล็อกแล้ว — สรุป)
 

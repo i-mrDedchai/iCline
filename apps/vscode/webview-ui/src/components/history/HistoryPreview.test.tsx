@@ -84,6 +84,26 @@ describe("HistoryPreview", () => {
 		expect(grid()?.getAttribute("data-columns")).toBe("3")
 	})
 
+	it("labels each card with its recency so same-day sessions have an order", () => {
+		vi.useFakeTimers()
+		vi.setSystemTime(new Date(2026, 8, 20, 15, 4, 0))
+		const at = (hour: number, minute: number, day = 20) => new Date(2026, 8, day, hour, minute, 0).getTime()
+		mocks.taskHistory = [
+			{ id: "newest", ts: at(14, 32), task: "Newest session", totalCost: 0 },
+			{ id: "older", ts: at(9, 5), task: "Older session", totalCost: 0 },
+			{ id: "yesterday", ts: at(23, 59, 19), task: "Yesterday session", totalCost: 0 },
+		]
+
+		render(<HistoryPreview showHistoryView={vi.fn()} />)
+		const labelFor = (task: string) =>
+			screen.getByText(task).closest(".history-preview-item")?.querySelector(".history-date")?.textContent
+
+		expect(labelFor("Newest session")).toBe("14:32")
+		expect(labelFor("Older session")).toBe("09:05")
+		expect(labelFor("Yesterday session")).toBe("Yesterday")
+		vi.useRealTimers()
+	})
+
 	it("renders the sessions it has, and only those", () => {
 		mocks.taskHistory = history(4)
 

@@ -2,6 +2,7 @@ import type { ModelInfo, ToolResultContent } from "@cline/llms";
 import {
 	CHARS_PER_TOKEN,
 	estimateTokens,
+	estimateValueTokens,
 	type MessageWithMetadata,
 } from "@cline/shared";
 
@@ -189,13 +190,10 @@ export function createTokenEstimator(): EstimateMessageTokens {
 		if (typeof cached === "number") {
 			return cached;
 		}
-		let serialized: string;
-		try {
-			serialized = JSON.stringify(message);
-		} catch {
-			serialized = serializeMessage(message);
-		}
-		const value = estimateTokens(serialized.length);
+		// Image-bearing messages must be charged per image, not per base64
+		// character: a screenshot read would otherwise count as ~300k tokens and
+		// blow the trigger/skew the preserved tail.
+		const value = estimateValueTokens(message);
 		cache.set(ref, value);
 		return value;
 	};

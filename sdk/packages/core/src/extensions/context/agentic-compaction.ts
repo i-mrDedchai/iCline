@@ -123,6 +123,10 @@ export async function runAgenticCompaction(options: {
 }): Promise<CoreCompactionResult | undefined> {
 	const messages = options.context.messages;
 	if (messages.length < 2) {
+		options.logger?.debug(
+			"Skipped agentic compaction: transcript too short to fold",
+			{ messageCount: messages.length },
+		);
 		return undefined;
 	}
 
@@ -132,6 +136,14 @@ export async function runAgenticCompaction(options: {
 		options.estimateMessageTokens,
 	);
 	if (cutIndex <= 0 || cutIndex >= messages.length) {
+		options.logger?.debug(
+			"Skipped agentic compaction: no safe cut boundary for the preserved tail",
+			{
+				cutIndex,
+				messageCount: messages.length,
+				preserveRecentTokens: options.preserveRecentTokens,
+			},
+		);
 		return undefined;
 	}
 
@@ -147,6 +159,18 @@ export async function runAgenticCompaction(options: {
 			? messagesToSummarize.slice(latestSummaryIndex + 1)
 			: messagesToSummarize;
 	if (newMessagesToFold.length === 0) {
+		// Expected right after a compaction that already folded everything above
+		// the cut; it repeats every turn while the estimate stays over the trigger,
+		// so it must be visible in the log instead of only in a status notice.
+		options.logger?.debug(
+			"Skipped agentic compaction: nothing new above the cut to fold",
+			{
+				cutIndex,
+				messageCount: messages.length,
+				latestSummaryIndex,
+				preservedMessages: messages.length - cutIndex,
+			},
+		);
 		return undefined;
 	}
 

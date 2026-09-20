@@ -2,6 +2,7 @@ import { StringRequest } from "@shared/proto/cline/common"
 import { type CSSProperties, memo, useMemo, useState } from "react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { sliceRecentTasks, useRecentColumnCount } from "@/icline/recentGrid"
+import { formatRecentTimestamp, formatRecentTimestampTitle } from "@/icline/recentTime"
 import { TaskServiceClient } from "@/services/grpc-client"
 
 type HistoryPreviewProps = {
@@ -20,14 +21,6 @@ const HistoryPreview = ({ showHistoryView }: HistoryPreviewProps) => {
 		TaskServiceClient.showTaskWithId(StringRequest.create({ value: id })).catch((error) =>
 			console.error("Error showing task:", error),
 		)
-	}
-
-	const formatDate = (timestamp: number) => {
-		const date = new Date(timestamp)
-		return date?.toLocaleString("en-US", {
-			month: "short",
-			day: "numeric",
-		})
 	}
 
 	return (
@@ -180,7 +173,10 @@ const HistoryPreview = ({ showHistoryView }: HistoryPreviewProps) => {
 										{item.isLegacy && <span className="history-cost-chip">Legacy</span>}
 									</div>
 									<div className="history-meta-stack">
-										<span className="history-date">{formatDate(item.ts)}</span>
+										{/* Recency, not just a date: same-day sessions need an order. */}
+										<span className="history-date" title={formatRecentTimestampTitle(item.ts)}>
+											{formatRecentTimestamp(item.ts)}
+										</span>
 										{item.totalCost != null && (
 											<span className="history-cost-chip">${item.totalCost.toFixed(2)}</span>
 										)}

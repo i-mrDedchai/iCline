@@ -1,7 +1,55 @@
 **Last updated:** 2026-09-20
 **Branch:** `feat/upstream-waves-1-2` (จาก main @ `78ebd0923` — รวม dev.5 แล้ว, tag `pre-merge-dev.5`, ยังไม่ push)
-**HEAD:** ดู `git log` (ไม่ตรึง hash ไว้ตรงนี้ — มันตกหล่นทุกครั้งที่มี commit เอกสารตามหลัง) · **fix.7–fix.20 commit แล้ว ยังไม่ push** (`88ff6028b` fix lifecycle ของวิว · `29c24e71c` e2e ขนาน + fixture auxiliary bar + เทสต์ใหม่) · **fix.21 ยังไม่ commit** (รอบปัจจุบัน — pack จาก working tree)
+**HEAD:** ดู `git log` (ไม่ตรึง hash ไว้ตรงนี้ — มันตกหล่นทุกครั้งที่มี commit เอกสารตามหลัง) · **fix.7–fix.21 commit แล้ว ยังไม่ push** (`88ff6028b` fix lifecycle ของวิว · `29c24e71c` e2e ขนาน + fixture auxiliary bar + เทสต์ใหม่ · `af58ebbad`/`8aec05f6c` เอกสาร fix.20 · fix.21 Recent หลายคอลัมน์ + draft รอดการย้ายวิว) · **fix.22 ยังไม่ commit** (รอบปัจจุบัน — เตรียมแพ็กเป็น `fix.22`)
 **vsix (ล่าสุดที่มีอยู่):** `apps/vscode/dist/i-mrdedchai.iCline-0.1.18-dev.6-fix.21.vsix` (12,085,311 B @ 2026-09-20T10:04:27Z · 60 files · About = `dev build 6 · fix.21` — ตรวจแล้วว่าสตริงอยู่ในบันเดิล webview จริง) — ⏳ รอ maintainer smoke · **รอบนี้แก้ webview จริง (Recent หลายคอลัมน์ + draft) ⇒ `fix.20` และก่อนหน้าไม่มีสิ่งเหล่านี้** · do not overwrite `fix.1`–`fix.20` ใน `dist/` (fix.20 = 12,084,123 B @ 2026-09-20T09:28:31Z · fix.19 = 11,967,453 B @ 2026-09-20T06:07:27Z · fix.18 = 11,967,298 B @ 2026-09-20 05:36:02Z)
+
+---
+
+## 🔬 dev.6-fix.22 — ตรวจแชท smoke จริงของ fix.21 → รากของ "auto-compacting ถี่ + ช้าลง" คือ **base64 ของรูปใน `read_files`** (2026-09-20)
+
+**สถานะ:** ⏳ รอบนี้ยังไม่แพ็ก VSIX · เทสต์ที่รัน: shared `436` (ใหม่ `tokens` 10) · core `extensions/context` **92** (ใหม่ skip-log 1) · llms `gateway` **156** · webview vitest **545/545** (ใหม่ `recentTime` 7 + `HistoryPreview` 1) · extension bun unit `Logger` **4** · `tsc` สะอาด (app · webview · shared · core) · biome ไม่มี error ใหม่ (เหลือ a11y info เดิม 4 ตัว) · **ยังไม่ commit**
+
+### หลักฐานที่อ่านมา (ไม่ใช่การเดา)
+
+ตรวจจากของจริงบนเครื่องผู้ใช้ ไม่ได้ดูแค่ภาพหน้าจอ:
+- **ทรานสคริปต์ของ session จริง:** `~/.cline/data/sessions/1789900461463_19uqa/` — `การทดสอบ Dev.6-fix.21 รอบที่ 1 (DeepSeek-v4.1-Flash)` · 246 ข้อความ · 108 คำขอ · 75 นาที · `inputTokens` รวม **15.08M** · `inputTokens` ต่อคำขอโตจาก 4,413 → **166,027** · กลางทางมี **สองจุดที่ prompt ลดฮวบ** (220,329 → 114,060 ตอน +53 นาที · 252,871 → 91,449 ตอน +66 นาที)
+- **sidecar ของการ compact:** `…compaction.json` (ตัด 177 ข้อความ → เหลือ 65) · **log ของ VS Code:** `%APPDATA%/Code/logs/20260919T193604/window1/exthost/output_logging_20260920T170810/1-Cline.log` (9 MB · `Context compaction diagnostics` 110 ครั้ง · `Performed agentic compaction` **1 ครั้ง** ที่ 11:40:11Z)
+- **ขนาดข้อความในทรานสคริปต์:** 4 ข้อความกินพื้นที่ **~3.96 MB จาก 5.26 MB ทั้งหมด** และทั้งสี่คือ `tool_result` ของ **`read_files` ที่อ่านไฟล์ `.png`** (`nodal-hero-1440` 987k ตัวอักษร · `nodal-gallery` 1.16M · `nodal-physics` 891k · `nodal-thai-drum` 918k — เวลา 11:39:55 / 11:40:05 / 11:41:23 / 11:44:56 น. ซึ่งคือ **นาทีก่อนและหลังการ compact ครั้งเดียวที่สำเร็จ**)
+
+### คำตอบ 4 ข้อที่ maintainer ถาม
+
+**1) ข้อความสีส้ม = tool ล้มเหลวจริง ไม่ใช่บั๊ก และไม่ใช่ Error ของแอป**
+ทั้ง 9 ครั้งเป็นผลลัพธ์ของเครื่องมือที่ล้มเหลวและถูกทำเครื่องหมาย `is_error` อย่างถูกต้อง ⇒ สีส้มคือความหมาย "เครื่องมือนี้ล้มเหลว" ที่ควรมี · **แต่วิธีแสดงซ้ำซ้อนเกินไป** — ข้อความเดียวกันโผล่สองที่ (ผลลัพธ์ของ tool + แถวสรุป `1 tool call(s) failed: [editor] …` ซึ่งมาจาก MistakeTracker ใน `session-runtime-orchestrator.ts`) · และ 6 ใน 9 ครั้งเป็นเรื่องเดียวกัน: **`editor` รับ `new_text` ได้ไม่เกิน 6,000 ตัวอักษรต่อการเรียก** (`INPUT_ARG_CHAR_LIMIT` ใน `sdk/packages/core/src/extensions/tools/schemas.ts`) ซึ่งชนกับงานเขียนไฟล์ HTML/CSS/JS ทั้งไฟล์ทันที (6079 · 8181 · 6113 · 6729 · 7144 ตัวอักษร) ⇒ โมเดลต้องฉีกเป็น 2–4 คำขอเพิ่มทุกครั้ง (นี่คือสาเหตุหลักของ "คำขอเยอะขึ้น" ไม่ใช่บั๊กของ UI)
+
+**2) `auto-compacting` / `auto-compaction-skipped` ถี่ = compaction ถูกกระตุ้นด้วย "ขนาด base64 ของรูป" ไม่ใช่จำนวน token จริง**
+- เกณฑ์กระตุ้นคือ `estimated request ≥ 90% × maxInputTokens` และตัวประเมินคือ `estimateRequestInputTokens` = `JSON.stringify(ทั้งคำขอ).length / 3` (`CHARS_PER_TOKEN = 3`) — **ไม่มีกรณีพิเศษสำหรับบล็อกรูป** ⇒ รูป 1 ใบ ~0.9–1.2 MB ถูกคิด **~300,000 token** แทนที่จะเป็น ~1,600 token ที่ผู้ให้บริการคิดจริง (สูงเกิน ~200 เท่า)
+- พอโมเดลอ่านภาพ 2 ใบ (11:39:55 + 11:40:05) ตัวเลขประเมินก็กระโดดข้ามเกณฑ์ 90% ทันที ⇒ `auto-compacting` แล้วจึงสำเร็จ 1 ครั้ง ⇒ **จากนั้นอ่านรูปเพิ่มอีก 2 ใบ** (11:41:23 + 11:44:56) ⇒ กลับไปเกินเกณฑ์อีก ⇒ **คู่ `auto-compacting`/`auto-compaction-skipped` ทุกตา** และคิวที่ "ยากขึ้นเรื่อย ๆ" = งานที่ต้อง compact ถูกยกขึ้นเป็นคำขอเพิ่ม (prompt พา base64 ไปด้วยทุกคำขอ) — ตรงกับที่ maintainer เห็น
+- **ทำไม log เงียบ:** (ก) `Logger` ของ extension จะต่อท้าย payload ให้ **เฉพาะเมื่อ `IS_DEV=true`** ⇒ ใน VSIX (`1-Cline.log` 9 MB) คำว่า `requestInputTokens`/`maxInputTokens` **ไม่ปรากฏเลยแม้แต่ครั้งเดียว** (ข) เส้นทาง `return undefined` ของการ compact (มี 3 จุด: ทรานสคริปต์สั้นเกินไป / ไม่มีจุดตัดที่ปลอดภัย / ไม่มีอะไรใหม่เหนือจุดตัด) **ไม่ log อะไรเลย** ⇒ เห็นแต่ข้อความ notice บนจอที่ไม่ได้ถูกเก็บลงทรานสคริปต์
+- **สาเหตุที่ไม่ใช่ "compact เร็วเกิน" แบบ fix.32/33:** รอบนั้นแก้เรื่องหน้าต่างของโมเดล (1.0M) ให้ runtime รู้จัก (fix.33 เป็นบรรพบุรุษของ HEAD นี้แล้ว) · รอบนี้คือ **ตัวประเมินนับรูปผิด** ซึ่งทำให้เกินเกณฑ์ได้แม้หน้าต่างจริงยังห่างไกล (จริง ๆ prompt อยู่ที่ 166k / 1.0M = 17%)
+
+**3) ลำดับของประวัติแชท** → เพิ่ม **ป้ายบอกความใหม่** บนการ์ด (ข้อ 3 ของรายการที่ทำด้านล่าง)
+
+**4) ทำงานเบื้องหลัง + Working badge** → **ยังไม่ทำในรอบนี้** เพราะเป็นการเปลี่ยนสถาปัตยกรรม (iCline ถือ session เดียวต่อ view) · ต้องออกแบบก่อน (ดู "คิวถัดไป")
+
+### สิ่งที่แก้ในรอบนี้ (ราก+การมองเห็น)
+
+- **`sdk/packages/shared/src/llms/tokens.ts` (รากของเรื่อง):** เพิ่ม `IMAGE_TOKEN_ESTIMATE = 1_600` และ `estimateValueTokens(value)` ที่ **พับ payload ของรูปทิ้งก่อนคิดขนาด** (คืน `[image]` แล้วบวก 1,600 token ต่อรูป) ครอบคลุมทั้ง `{type:'image',data}` · `{type:'image',source:{data}}` (สไตล์ Anthropic) · `{type:'image_url',image_url:{url:'data:image/…'}}` (สไตล์ OpenAI) และ data URL ที่ลอยอยู่ทั่วไป · **`estimateRequestInputTokens` และ `createTokenEstimator` ของ compaction ใช้ตัวเดียวกัน** ⇒ เกณฑ์กระตุ้น, หน้าต่าง `preserveRecentTokens`, และสูตรจุดตัด อ่านหน่วยเดียวกันหมด (เดิมตัวประเมินเองก็เป็นเหตุให้ "โซนเก็บท้าย" ยุบเหลือ 1–2 ข้อความเมื่อมีรูป ⇒ บางตาก็ไม่มีอะไรให้ fold ⇒ skip)
+- **การมองเห็น:** `apps/vscode/src/shared/services/Logger.ts` — payload ถูกเก็บไว้เสมอสำหรับข้อความวินิจฉัยที่ตั้งใจให้อ่านในสนาม (`Context compaction diagnostics` · `Context compaction completed` · `Skipped compaction…` · `Agentic compaction …` · `Agent model request diagnostics`) และมี `CLINE_LOG_PAYLOADS=true` เป็นสวิตช์เปิดทั้งหมด (พร้อมตัดที่ 2,000 ตัวอักษรต่อ payload กัน log บวม)
+- **เหตุผลของ skip ถูกบันทึกแล้ว:** `agentic-compaction.ts` ทั้ง 3 จุดที่เคย `return undefined` เงียบ ๆ + จุดที่ wrapper เห็นว่าไม่ได้ผล ⇒ `Skipped agentic compaction: …` / `Skipped compaction: strategy returned no result`
+- **Recent บอกลำดับได้:** `webview-ui/src/icline/recentTime.ts` — ป้ายบอกความใหม่ "just now" → "14:32" (วันเดียวกัน) → "Yesterday" → "Fri" → "Sep 10" + `title` เป็นวันเวลาเต็ม · **ไม่เพิ่มความสูงการ์ด** และไม่แตะกริด/จำนวนคอลัมน์
+
+### จุด smoke (fix.22)
+
+- **รูปไม่ทำ compaction พัง:** แชทที่ `cline-free/*` (หน้าต่าง 1.0M) → ให้ agent อ่าน **ไฟล์ภาพ 3–4 ใบ** ผ่าน `read_files` ⇒ **ต้องไม่เห็น `auto-compacting` เลย** (ก่อนแก้: 1–2 ใบก็กระตุ้นแล้ว) และ `1-Cline.log` ต้องมี `Context compaction diagnostics` **พร้อมตัวเลข** (`requestInputTokens`, `maxInputTokens ~1,048,576`, `shouldCompact=false`)
+- **ถ้ามี skip ต้องรู้สาเหตุ:** ถ้าเห็น `auto-compaction-skipped` ให้เปิด `1-Cline.log` ต้องเจอบรรทัด `Skipped agentic compaction: …` หรือ `Skipped compaction: strategy returned no result` ระบุเหตุผล
+- **Recent อ่านลำดับออก:** หน้าแรกที่มีแชทวันนี้ ≥ 3 แชทและของเมื่อวาน ⇒ การ์ดบนสุดต้องเป็น **เวลา** (เช่น `14:32`) เรียงลงมา แล้วจึงเป็น `Yesterday` · hover ต้องเห็นวันที่เต็ม
+- ของเดิมทั้งหมดของ fix.21/20/19/18 ยังใช้ได้
+
+### คิวถัดไปที่โผล่จากรอบนี้ (ยังไม่ทำ — รออนุมัติ)
+
+1. **งานเดินต่อได้ขณะออกจากหน้าแชท (หลาย session พร้อมกัน) + Working badge บนการ์ด Recent** — สถาปัตยกรรมวันนี้ถือ session เดียวต่อ view (`SdkController` + lifecycle ของวิว); ต้องมีโมเดล "หลาย task ที่ยัง active" ฝั่ง host ก่อน จึงจะใส่ badge ได้ · ขนาดงาน: ใหญ่ (proto/state/host + UI) ⇒ ต้องตกลงขอบเขตก่อน
+2. **เพดาน 6,000 ตัวอักษรต่อการเรียกของ `editor`** — เป็นขีดจำกัดของ runtime (`INPUT_ARG_CHAR_LIMIT`) ที่กินคำขอเพิ่ม 2–4 ครั้งทุกไฟล์ที่ยาวกว่านี้ · ทางเลือก: ยกเพดานเฉพาะ `new_text` หรือให้ runtime **ฉีกเป็นชิ้นให้เอง** แล้วสรุปผลเป็นครั้งเดียว ⇒ ต้องเลือกนโยบาย
+3. **ย้าย "N tool call(s) failed" ให้เป็นบรรทัดเดียวกับการ์ดผลลัพธ์** (ตอนนี้ข้อความเดียวกันขึ้นสองที่) — เล็ก แต่แตะ MistakeTracker/UI
 
 ---
 

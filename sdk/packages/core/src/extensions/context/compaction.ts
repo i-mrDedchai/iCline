@@ -614,6 +614,20 @@ export function createContextCompactionPrepareTurn(
 				});
 			}
 		} else {
+			// The status notice is ephemeral (it is not part of the persisted
+			// transcript), so record why the strategy declined here as well; without
+			// this a compaction storm is invisible in the Cline output channel.
+			config.logger?.debug("Skipped compaction: strategy returned no result", {
+				mode: effectiveMode,
+				strategy: executedStrategy,
+				iteration: context.iteration,
+				reason: "no_result",
+				requestInputTokens,
+				triggerTokens: requestTriggerTokens,
+				maxInputTokens,
+				messageCount: beforeMessageCount,
+				durationMs,
+			});
 			context.emitStatusNotice?.(`${noticePrefix}compaction-skipped`, {
 				kind: statusReason,
 				reason: statusReason,
