@@ -28,6 +28,27 @@ mock.module("node:fs", fsMock)
 
 import { getShell } from "@utils/shell"
 
+/**
+ * Sets an environment variable the way the code under test reads it.
+ *
+ * On Windows the SUT resolves names case-INSENSITIVELY (`getEnvironmentVariable`), and the host
+ * running the suite already defines some of these: a real Windows box has `WINDIR=C:\WINDOWS`.
+ * Writing a differently-spelled key would leave BOTH in `process.env` — and because `afterEach`
+ * restores a snapshot (`{ ...process.env }`), the host's spelling is in the copy — so the lookup
+ * found the HOST's value instead of the one the test wrote. That is what made "expands and
+ * selects the first configured profile path when it exists" fail on Windows only: it read
+ * `C:\WINDOWS\Sysnative\cmd.exe`, the host's own `windir`. Dropping the other spellings first
+ * makes the value deterministic on every host.
+ */
+function setEnv(name: string, value: string): void {
+	for (const key of Object.keys(process.env)) {
+		if (key.toLowerCase() === name.toLowerCase()) {
+			delete process.env[key]
+		}
+	}
+	process.env[name] = value
+}
+
 describe("Shell Detection Tests", () => {
 	let originalPlatform: string
 	let originalEnv: NodeJS.ProcessEnv
@@ -97,7 +118,7 @@ describe("Shell Detection Tests", () => {
 		})
 
 		it("expands and selects the first configured profile path when it exists", () => {
-			process.env.windir = "C:\\Windows"
+			setEnv("windir", "C:\\Windows")
 			existsSyncImpl = (() => true) as typeof actualFs.existsSync
 			mockVsCodeConfig("windows", "Command Prompt", {
 				"Command Prompt": {
@@ -109,7 +130,7 @@ describe("Shell Detection Tests", () => {
 		})
 
 		it("falls through configured profile paths in order", () => {
-			process.env.windir = "C:\\Windows"
+			setEnv("windir", "C:\\Windows")
 			existsSyncImpl = ((candidate: actualFs.PathLike) =>
 				candidate === "C:\\Windows\\System32\\cmd.exe") as typeof actualFs.existsSync
 			mockVsCodeConfig("windows", "Command Prompt", {
@@ -124,7 +145,7 @@ describe("Shell Detection Tests", () => {
 		it("skips profile paths with variable references it cannot expand", () => {
 			existsSyncImpl = ((candidate: actualFs.PathLike) =>
 				candidate === "C:\\Windows\\System32\\cmd.exe") as typeof actualFs.existsSync
-			process.env.windir = "C:\\Windows"
+			setEnv("windir", "C:\\Windows")
 			mockVsCodeConfig("windows", "Command Prompt", {
 				"Command Prompt": {
 					path: [`\${workspaceFolder}\\tools\\cmd.exe`, `\${env:windir}\\System32\\cmd.exe`],
@@ -135,7 +156,7 @@ describe("Shell Detection Tests", () => {
 		})
 
 		it("resolves a configured executable name from PATH", () => {
-			process.env.PATH = "C:\\Tools;C:\\Windows\\System32"
+			setEnv("PATH", "C:\\Tools;C:\\Windows\\System32")
 			existsSyncImpl = ((candidate: actualFs.PathLike) =>
 				candidate === "C:\\Windows\\System32\\cmd.exe") as typeof actualFs.existsSync
 			mockVsCodeConfig("windows", "Command Prompt", {
@@ -187,7 +208,7 @@ describe("Shell Detection Tests", () => {
 
 		it("defaults to PowerShell 7 when no profile is configured and pwsh is installed", () => {
 			vscode.workspace.getConfiguration = () => ({ get: () => undefined }) as any
-			process.env.ProgramW6432 = "C:\\Program Files"
+			setEnv("ProgramW6432", "C:\\Program Files")
 			existsSyncImpl = (() => true) as any
 
 			expect(getShell()).to.equal("C:\\Program Files\\PowerShell\\7\\pwsh.exe")
@@ -195,7 +216,7 @@ describe("Shell Detection Tests", () => {
 
 		it("defaults to Store-installed pwsh when that is the only pwsh present", () => {
 			vscode.workspace.getConfiguration = () => ({ get: () => undefined }) as any
-			process.env.LOCALAPPDATA = "C:\\Users\\Test\\AppData\\Local"
+			setEnv("LOCALAPPDATA", "C:\\Users\\Test\\AppData\\Local")
 			const storePwsh = "C:\\Users\\Test\\AppData\\Local\\Microsoft\\WindowsApps\\pwsh.exe"
 			existsSyncImpl = ((path: string) => path === storePwsh) as any
 
@@ -212,7 +233,7 @@ describe("Shell Detection Tests", () => {
 		it("ignores userInfo() and COMSPEC — VS Code's default terminal ignores them too", () => {
 			vscode.workspace.getConfiguration = () => ({ get: () => undefined }) as any
 			userInfoImpl = () => ({ shell: "C:\\Custom\\OtherShell.exe" }) as any
-			process.env.COMSPEC = "D:\\CustomCmd\\cmd.exe"
+			setEnv("COMSPEC", "D:\\CustomCmd\\cmd.exe")
 
 			expect(getShell()).to.equal("C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe")
 		})
@@ -261,7 +282,7 @@ describe("Shell Detection Tests", () => {
 
 		it("falls back to SHELL env var if no userInfo shell is found", () => {
 			vscode.workspace.getConfiguration = () => ({ get: () => undefined }) as any
-			process.env.SHELL = "/usr/local/bin/zsh"
+			setEnv("SHELL", "/usr/local/bin/zsh")
 
 			expect(getShell()).to.equal("/usr/local/bin/zsh")
 		})
@@ -298,7 +319,7 @@ describe("Shell Detection Tests", () => {
 		})
 
 		it("resolves a bare executable name from PATH without PATHEXT probing", () => {
-			process.env.PATH = "/opt/tools:/usr/bin"
+			setEnv("PATH", "/opt/tools:/usr/bin")
 			existsSyncImpl = ((candidate: actualFs.PathLike) => candidate === "/usr/bin/fish") as typeof actualFs.existsSync
 			mockVsCodeConfig("linux", "CustomProfile", {
 				CustomProfile: { path: "fish" },
@@ -315,7 +336,7 @@ describe("Shell Detection Tests", () => {
 
 		it("falls back to SHELL env var if no userInfo shell is found", () => {
 			vscode.workspace.getConfiguration = () => ({ get: () => undefined }) as any
-			process.env.SHELL = "/usr/bin/fish"
+			setEnv("SHELL", "/usr/bin/fish")
 
 			expect(getShell()).to.equal("/usr/bin/fish")
 		})
@@ -354,7 +375,7 @@ describe("Shell Detection Tests", () => {
 			userInfoImpl = () => {
 				throw new Error("userInfo error")
 			}
-			process.env.SHELL = "/bin/zsh"
+			setEnv("SHELL", "/bin/zsh")
 
 			expect(getShell()).to.equal("/bin/zsh")
 		})
