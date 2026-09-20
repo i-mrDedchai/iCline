@@ -88,11 +88,20 @@ export class VscodeWebviewProvider extends WebviewProvider implements vscode.Web
 			this.disposables,
 		)
 
-		// Listen for when the view is disposed
-		// This happens when the user closes the view or when the view is closed programmatically
+		// Listen for when the view is disposed.
+		//
+		// A view can be disposed while its session lives on: MOVING it to another part (the
+		// Secondary Side Bar, the panel) disposes this instance and resolves a fresh one in the new
+		// part. Disposing the CONTROLLER here left that fresh view wired to a dead controller — the
+		// moved chat came up blank and the host logged `SdkTaskHistory has been disposed` — so only
+		// the view-scoped reference is dropped. The controller is torn down when the extension
+		// deactivates (`WebviewProvider.disposeAllInstances()`), which is also when the session
+		// actually ends.
 		webviewView.onDidDispose(
-			async () => {
-				await this.dispose()
+			() => {
+				if (this.webview === webviewView) {
+					this.webview = undefined
+				}
 			},
 			null,
 			this.disposables,
