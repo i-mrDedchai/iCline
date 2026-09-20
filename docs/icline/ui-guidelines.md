@@ -88,11 +88,13 @@
 - การเขียน API configuration ทั่วไป **ห้าม** ป้อนค่าเข้า remote cache — เคยทำแล้วกลายเป็น "pin ปลอม": provider ที่เป็นอยู่ตอนนั้นถูกปักถาวร ทำให้การเลือกโมเดลของ provider อื่น commit สำเร็จแค่โมเดล (หน้า Settings เด้งกลับ provider เดิม)
 - ถ้าจะ "เจาะ" ชั้นเพื่อให้ค่าที่ผู้ใช้เลือกมีผล ต้องเจาะแค่ session/task — remote ไม่เจาะ
 
-## วงจรชีวิตของวิว (host) — `dispose` ของวิว ≠ จบ session
+## วงจรชีวิตของวิว (host) — `resolve` ของวิวคือ "วิวใหม่" ไม่ใช่ "เซสชันใหม่"
 
 - **การย้ายวิวไป part อื่น** (Secondary Side Bar / panel / แถบข้างอีกด้าน) = VS Code dispose วิวเดิม **แล้ว resolve วิวใหม่** ในที่ใหม่ — ไม่ใช่การปิดงาน
-- จึงห้ามผูกการทิ้ง controller (task history/session) กับ `webviewView.onDidDispose` — เคยทำแล้วผู้ใช้ที่ย้ายวิวเห็น **หน้าแชทว่างเปล่า** และ host ล็อก `SdkTaskHistory has been disposed` · `onDidDispose` ให้ทิ้งแค่ reference ของวิว; controller ถูกทิ้งตอน **extension deactivate** (`WebviewProvider.disposeAllInstances()`) ซึ่งเป็นตอนที่ session จบจริง
-- กติกาตรวจ: ทุกอย่างที่ผูกกับ "วิว" (เช่น focus, visibility, ตัวชี้ webview) ต้องพร้อมถูกสร้างใหม่หลังย้าย โดยไม่ต้อง reload หน้าต่าง · เทสต์ `secondary-side-bar.test.ts` ย้ายวิวแล้วต้องส่งข้อความได้และป็อปโอเวอร์เกาะขอบตามกฎ
+- **`dispose` ของวิว ≠ จบ session:** ห้ามผูกการทิ้ง controller (task history/session) กับ `webviewView.onDidDispose` — เคยทำแล้วผู้ใช้ที่ย้ายวิวเห็น **หน้าแชทว่างเปล่า** และ host ล็อก `SdkTaskHistory has been disposed` · `onDidDispose` ให้ทิ้งแค่ reference ของวิว; controller ถูกทิ้งตอน **extension deactivate** (`WebviewProvider.disposeAllInstances()`) ซึ่งเป็นตอนที่ session จบจริง
+- **`resolve` ของวิว ≠ เริ่ม session:** ห้ามทำอะไรที่ "รีเซ็ตงาน" ใน `resolveWebviewView()` แบบไม่เช็คว่าเป็นครั้งแรกของ session หรือไม่ — เคยทำแล้ว (เรียก `controller.clearTask()` ทุกครั้ง) ผู้ใช้ที่ย้ายวิว **ขณะมีบทสนทนาอยู่ เห็นแชทหายทั้งเธรด** (วิวใหม่ยังต่อกับ controller ที่ยังมีชีวิต แต่ task ถูกเคลียร์ทิ้ง) ⇒ ตอนนี้ทำเฉพาะ `resolve` ครั้งแรกของ session (`hasResolvedView`) · วิวที่ย้ายมาใหม่ได้สถานะปัจจุบันเองผ่าน `subscribeToState` ตอน mount
+- **ตัวสดับที่ผูกกับวิวต้องมีอายุเท่าวิว:** `viewDisposables` (ไม่ใช่ `disposables`) แล้วทิ้งตอนวิวถูก dispose / ตอน re-resolve / ตอน extension deactivate (`disposeViewScope()`) ไม่งั้นทุกการย้ายจะทิ้งตัวสดับของวิวที่ตายแล้วค้างไว้ชุดหนึ่ง
+- กติกาตรวจ: ทุกอย่างที่ผูกกับ "วิว" (เช่น focus, visibility, ตัวชี้ webview) ต้องพร้อมถูกสร้างใหม่หลังย้าย โดยไม่ต้อง reload หน้าต่าง · เทสต์ `secondary-side-bar.test.ts` ส่งข้อความหนึ่งเทิร์นในแถบข้าง → ย้ายวิว → **บทสนทนาต้องยังอยู่** → ส่งเทิร์นที่สองได้ และป็อปโอเวอร์เกาะขอบตามกฎ
 - **`view.name` ของ iCline เป็นค่าว่าง** ⇒ อย่าอ้างวิวด้วยชื่อใน UI ของ VS Code (palette/quick pick ออกมาเป็นแถวเปล่า ๆ) ต้องอ้างด้วยตำแหน่ง/บริบท
 
 ## ขอบเขตการ implement

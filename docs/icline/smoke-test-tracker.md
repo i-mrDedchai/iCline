@@ -1,13 +1,13 @@
 **Last updated:** 2026-09-20
 **Branch:** `feat/upstream-waves-1-2` (จาก main @ `78ebd0923` — รวม dev.5 แล้ว, tag `pre-merge-dev.5`, ยังไม่ push)
 **HEAD:** ดู `git log` (ไม่ตรึง hash ไว้ตรงนี้ — มันตกหล่นทุกครั้งที่มี commit เอกสารตามหลัง) · **fix.7–fix.20 commit แล้ว ยังไม่ push** (`88ff6028b` fix lifecycle ของวิว · `29c24e71c` e2e ขนาน + fixture auxiliary bar + เทสต์ใหม่)
-**vsix (ต่อรอบ fix.20):** ต้องแพ็กใหม่ — `cd apps/vscode && bun scripts/package-vsix-wip.mjs --fix 20` (ยังไม่ได้สั่ง) · **vsix (ล่าสุดที่มีอยู่):** `apps/vscode/dist/i-mrdedchai.iCline-0.1.18-dev.6-fix.19.vsix` (11,967,453 B @ 2026-09-20T06:07:27Z · About = `dev build 6 · fix.19`) — ⏳ รอ maintainer smoke · ⚠️ **รอบ fix.20 (แก้ lifecycle ของวิวครั้งย้าย part + e2e ขนาน) ยังไม่แพ็ก** ⇒ `fix.19` ยัง**มีบั๊กย้ายวิวแล้วแชทหาย** อยู่ (ไม่ตรงกับ HEAD) · do not overwrite `fix.1`–`fix.18` ใน `dist/` (ของ fix.18 = 11,967,298 B @ 2026-09-20 05:36:02Z · fix.17 = 11,966,957 B @ 2026-09-20 03:45:49Z)
+**vsix (ล่าสุดที่มีอยู่):** `apps/vscode/dist/i-mrdedchai.iCline-0.1.18-dev.6-fix.20.vsix` (12,084,123 B @ 2026-09-20T09:28:31Z · 60 files · About = `dev build 6 · fix.20`) — ⏳ รอ maintainer smoke · แพ็กจาก HEAD ปัจจุบัน (รอบแรกของ fix.20 ไม่เคยแพ็ก ⇒ artefact ใบนี้ครอบทั้ง 2 รอบ) ⇒ **อย่าใช้ `fix.19` smoke เคสย้ายวิว** เพราะยังมีบั๊กทั้งสองส่วน (controller ตาย + task ถูกเคลียร์) · do not overwrite `fix.1`–`fix.19` ใน `dist/` (fix.19 = 11,967,453 B @ 2026-09-20T06:07:27Z · fix.18 = 11,967,298 B @ 2026-09-20 05:36:02Z)
 
 ---
 
-## 🧰 dev.6-fix.20 — e2e รันขนานได้ + fixture ย้ายวิวไป Secondary Side Bar + **แก้บั๊ก: ย้ายวิวแล้วแชทหาย** (2026-09-20)
+## 🧰 dev.6-fix.20 — e2e รันขนานได้ + fixture ย้ายวิวไป Secondary Side Bar + **แก้บั๊ก: ย้ายวิวแล้วแชทหาย** (ทั้ง "หน้าจอว่าง" และ "task ถูกเคลียร์") (2026-09-20)
 
-**สถานะ:** ✅ เสร็จ · e2e บน VS Code จริง **16/16 ทั้งชุด × 3 รอบติดกัน ไม่มี retry** (2m19s / 2m17s / 2m21s ที่ 3 worker เทียบกับ **4m24s** ตอน `workers: 1` — เร็วขึ้น ~1.9 เท่า) · unit tests ฝั่ง extension **1031 pass / 1 fail** — ตัวที่ fail คือ `src/test/shell.test.ts` › "expands and selects the first configured profile path when it exists" ซึ่ง **พังมาก่อนรอบนี้และไม่เกี่ยวกับรอบนี้เลย**: รอบนี้ไม่ได้แตะ `shell.test.ts` หรือซอร์สของ shell (ดู `git status`) และเป็นเทสต์ที่พึ่ง `%windir%` ของเครื่อง ⇒ ต้องแยกดูว่าเป็นเพราะ env ของเครื่องนี้ หรือเป็นบั๊กจริงของ env expansion · `tsc` สะอาดทั้ง app และ e2e (`tsconfig.test.generated.json`) · biome: **ไม่มี warning ใหม่** — เหลือ 2 warning เดิมที่ `src/__tests__/config.test.ts` (บรรทัดที่รอบนี้ไม่ได้แตะ) และรอบนี้ **_ลบ_ warning เดิมออก 1 ตัว** (`helpers.ts` ตัวแปรตายของ fixture `clineTestDir`) พร้อมปิด warning ของ fixture param ที่เพิ่มเข้ามาด้วย `biome-ignore` ที่อธิบายเหตุผล · ❗ **ยังไม่แพ็ก VSIX** — รอบนี้แก้ **extension host** (`VscodeWebviewProvider`) ⇒ **ต้องแพ็ก artefact ใหม่ (fix.20) ก่อน smoke** (ของเดิม `fix.19` ยังมีบั๊กย้ายวิว)
+**สถานะ:** ✅ เสร็จ (รวม **รอบเสริม 2** ด้านล่าง: ปิดเคส "ย้ายวิวกลางบทสนทนา" + ล้างเทสต์ที่พังเพราะ env ของเครื่อง) · e2e บน VS Code จริง **16/16 ทั้งชุด × 5 รอบติดกัน ไม่มี retry** (3 รอบแรกหลังทำขนาน: 2m19s / 2m17s / 2m21s · 2 รอบหลังรอบเสริม 2: **2m07s / 2m04s** ที่ 3 worker เทียบกับ **4m24s** ตอน `workers: 1` — เร็วขึ้น ~2 เท่า) · unit tests ฝั่ง extension **1032 pass / 0 fail** (69 ไฟล์ — ตัวที่เคย fail คือ `shell.test.ts` › "expands and selects the first configured profile path when it exists" ตอนนี้ผ่านแล้ว ดู "รอบเสริม 2") · `tsc` สะอาดทั้ง app และ e2e (`tsconfig.test.generated.json`) · biome: **ไม่มี warning ใหม่** — รอบแรก **ลบ warning เดิมออก 1 ตัว** (`helpers.ts` ตัวแปรตายของ fixture `clineTestDir`) และที่เหลือ 2 ตัวเป็น warning เดิมของ `src/__tests__/config.test.ts` · **แพ็กแล้ว:** `apps/vscode/dist/i-mrdedchai.iCline-0.1.18-dev.6-fix.20.vsix` (12,084,123 B @ 2026-09-20T09:28:31Z · 60 files · About = `dev build 6 · fix.20`) — ⏳ รอ maintainer smoke
 
 **ที่มา (maintainer อนุมัติ 2 ข้อ):**
 1. แยกชุด e2e ให้รัน **หลาย worker** เพื่อให้รอบต่อไปเร็วขึ้น (โดยไม่ให้ fixture ที่แชร์กันทำเทสต์ล้มกัน)
@@ -37,6 +37,34 @@
 **จุด smoke (fix.20):** ของเดิมทั้งหมดของ fix.18/19 ยังใช้ได้ + เพิ่ม 2 ข้อ:
 - **ย้ายวิว:** เปิดแชทให้ล็อกอินแล้ว ⇒ ลาก/ย้ายวิว iCline ไป **Secondary Side Bar** (หรือ `F1` → `View: Move View` → `New Secondary Side Bar Entry`) ⇒ แชทต้องกลับมาแสดง **พร้อมประวัติเดิม** (ไม่ว่างเปล่า) ส่งข้อความได้ และเปิด Quick Picker/แผง Options ได้ตามปกติ (ป็อปโอเวอร์ยังเกาะขอบตามกฎ)
 - **ย้ายกลับ:** ย้ายวิวกลับไปแถบข้างเดิม ⇒ ต้องยังทำงานเหมือนเดิม ไม่ต้อง reload หน้าต่าง และไม่มีข้อความ error ใหม่ใน Notification
+
+### รอบเสริม 2 (2026-09-20, รอบที่สองของ fix.20) — "ย้ายวิวกลางบทสนทนา" + เทสต์ shell ที่พังเพราะ env ของเครื่อง
+
+**สถานะ:** ✅ e2e บน VS Code จริง **16/16 × 2 รอบ** (2m07s / 2m04s) · unit **1032/0** · `tsc` + biome สะอาด · **แพ็ก fix.20 จาก HEAD นี้แล้ว** — รอบนี้แก้ **extension host** อีก ⇒ `fix.19` ไม่ครอบทั้งสองบั๊กของเรื่องย้ายวิว
+
+**ที่มา (maintainer อนุมัติ 2 ข้อ + "แก้ตัวที่ fail ถ้าจำเป็น"):** ต่อจากบั๊กที่เทสต์ย้ายวิวเจอในรอบก่อน — "ย้ายวิวแล้วแชทหาย" แก้ไปแล้วครึ่งเดียว (controller ไม่ตายแล้ว) ∴ ให้ตรวจว่ายังมีที่ไหนที่ **คิดว่าอายุของวิว = อายุของเซสชัน** อีกไหม แล้วแก้ `shell.test.ts` ถ้าจำเป็น
+
+**บั๊กที่สองของเรื่องเดียวกัน:** `resolveWebviewView()` เรียก `controller.clearTask()` **ทุกครั้งที่ resolve** (คอมเมนต์เดิม: "if the extension is starting a new session, clear previous task state") — แต่ **การย้ายวิวก็ resolve วิวใหม่** ⇒ ผู้ใช้ที่ย้ายวิวระหว่างมีบทสนทนาอยู่ **เห็นแชทหายทั้งเธรด** (ไม่ใช่แค่หน้าจอว่าง: `taskControl.clearTask()` → `sessions.endActiveSession("clearTask")` + state กลับเป็น idle จริง)
+- **แก้:** เคลียร์เฉพาะ `resolve` **ครั้งแรกของ session** (`hasResolvedView`) ⇒ วิวที่ย้ายมาใหม่ได้ state ปัจจุบันเองผ่าน `subscribeToState` ตอน mount (มันส่ง state ก้อนแรกให้ subscriber ใหม่เสมอ) ⇒ บทสนทนากลับมาครบ
+- **หลักฐานก่อน/หลัง (เทสต์เดียวกัน บน VS Code จริง):** **ก่อนแก้** หลังย้ายวิว `getByText("mock Cline API response")` ได้ **0 ตัว** (แชทว่าง) · **หลังแก้** ผ่าน — บทสนทนาอยู่ครบ + ส่งเทิร์นที่สองใน part ใหม่ได้
+
+**ผลการ audit (รอบนี้):**
+- **ตัวสดับของ "วิว" อยู่ในถังของ "extension"** — `onDidChangeVisibility` / `onDidDispose` / `onDidReceiveMessage` ถูก push เข้า `this.disposables` ซึ่งถูกล้างตอน extension deactivate เท่านั้น ⇒ ทุกการย้ายทิ้งตัวสดับของวิวที่ตายแล้วค้างไว้ชุดหนึ่ง · แยกเป็น `viewDisposables` + `disposeViewScope()` ที่ถูกเรียก (1) ตอนวิวถูก dispose (2) ตอน re-resolve ก่อนลงทะเบียนชุดใหม่ (3) ตอน extension deactivate · คง **identity ของ array** ไว้เพราะ VS Code ถือเป็นถัง disposable ของ listener ที่มันลงทะเบียนไว้
+- **ไม่ได้แก้ (บันทึกไว้):** `telemetryService.capturePanelOpened("sidebar_resolved")` ยังนับ 1 ครั้งต่อการ resolve ⇒ การย้ายวิวจะนับ "panel opened" เพิ่ม 1 ครั้งต่อการย้าย (ไม่กระทบผู้ใช้ ⇒ ปล่อยไว้โดยเจตนา)
+- **ไม่ได้แก้ (บันทึกไว้):** ระหว่างย้ายวิว **ข้อความ/ไฟล์ที่พิมพ์ค้างแต่ยังไม่ส่งในช่องแชทหายไป** เพราะ VS Code สร้าง webview ใหม่ทั้งใบ ⇒ ถ้าจะให้รอดต้องเก็บ draft ไว้ฝั่ง host (คนละเรื่องกับ lifecycle · ยังไม่มีใครขอ)
+
+**เทสต์เข้มขึ้น (`secondary-side-bar.test.ts`):** ของเดิมย้ายวิว **ก่อน** ส่งข้อความ ⇒ แยกไม่ออกระหว่าง "เซสชันเดิม" กับ "เซสชันใหม่" · เปลี่ยนเป็น: ส่ง 1 เทิร์นในแถบข้าง → ยืนยันข้อความตอบ **1 ตัว** → ย้ายวิว → ยืนยันบทสนทนายังอยู่และพิมพ์ข้อความเดิม (ที่ส่งไปแล้ว) ยังเห็น **1 ตัว** → ส่งเทิร์นที่สอง → ข้อความตอบเป็น **2 ตัว** → ตรวจป็อปโอเวอร์เกาะขอบตามสูตรกลาง ⇒ ครอบทั้ง "session รอด" และ "วิวใหม่ทำงานได้"
+
+**กับดักของ fixture (`utils/pane.ts`) ที่กินเวลารอบละหนึ่งตัว:**
+1. **composer แย่งโฟกัสกลับ** — `ChatView` โฟกัสช่องพิมพ์เองทุกครั้งที่เทิร์นจบ (~50ms หลัง turn เป็น idle) และ VS Code **ซ่อน quick input ทันทีที่ input นั้นเสียโฟกัส** ⇒ palette ที่เปิดในจังหวะนั้นปิดตัวเองโดยที่คำสั่งยังอยู่ในกล่องที่ถูกซ่อน (วัดได้: `document.activeElement` เป็น `<iframe>` ของ webview และ widget ถูกซ่อนภายใน 500ms หลังเขียน query) ⇒ เพิ่ม `typeInPalette()` ที่เปิด palette ซ้ำจนกว่าจะอยู่ · และเขียน query ด้วย `fill` ไม่ใช่ `pressSequentially` (ของเดิมถูกตัดเหลือ `>Move V` แล้วขั้นถัดไป timeout) · **ห้าม `fill("")`** เพราะ `>` คือโหมดของ palette (ว่างแล้วกลายเป็น file picker)
+2. **แถวของ quick pick มีสองชั้น** — `.quick-input-list-row` ที่คลิกอยู่ข้างในเป็น label wrapper (กว้างตามเนื้อหา + มีพี่น้องสูง 0px) ⇒ คลิกไม่ติด · เปลี่ยนไปคลิก `.monaco-list-row[role="option"]` (ตัวที่มี hit area + accessible name) และ `clickRow()` match **ชื่อขึ้นต้น** ไม่ใช่เป๊ะ เพราะแถวที่เปิดกลุ่มมีชื่อกลุ่มต่อท้าย ("New Secondary Side Bar Entry, Secondary Side Bar") · แถวที่ไม่มีจะรายงานแถวที่ picker แสดงจริงแทน timeout เปล่า ๆ
+
+**`shell.test.ts` — พังเพราะ env ของเครื่อง ไม่ใช่บั๊กของ env expansion:** เทสต์ตั้ง `process.env.windir = "C:\Windows"` แต่บน Windows จริงมี `WINDIR=C:\WINDOWS` อยู่ก่อนแล้ว และ SUT อ่านชื่อ env **แบบไม่สนตัวพิมพ์** (`getEnvironmentVariable`) · `afterEach` คืนค่า `process.env` จาก snapshot (`{ ...process.env }`) ⇒ สำเนามีคีย์สะกดของโฮสต์ติดมาด้วย ⇒ `Object.entries().find()` เจอ `WINDIR` (ของโฮสต์) ก่อน ⇒ ได้ `C:\WINDOWS\Sysnative\cmd.exe` ไม่ตรงกับที่เทสต์เขียน ⇒ fail เฉพาะบน Windows · แก้ด้วย `setEnv()` ที่ลบสะกดอื่นก่อนเขียน (ใช้กับทุกตัวที่เทสต์ตั้ง: `windir`/`PATH`/`ProgramW6432`/`LOCALAPPDATA`/`COMSPEC`/`SHELL`) ⇒ **31/31** · ผลพลอยได้: เทสต์ "falls through configured profile paths in order" ที่ก่อนหน้านี้ผ่านแบบบังเอิญ (ได้ `SHELL_PATHS.CMD` เพราะ resolve ไม่เจออะไรเลย) ตอนนี้ผ่านด้วยเหตุผลจริง
+
+**จุด smoke เพิ่ม (รอบเสริม 2):**
+- **ย้ายวิวกลางบทสนทนา (เคสหลักของรอบนี้):** ส่งข้อความให้ได้คำตอบ 1 เทิร์น → **ขณะที่แชทมีบทสนทนาอยู่** ย้ายวิวไป Secondary Side Bar → ต้องยังเห็นบทสนทนาเดิมครบ (ไม่ใช่หน้า welcome) → พิมพ์ต่อได้และได้คำตอบที่สอง
+- **ย้ายไป-กลับ:** ย้ายวิวกลับแถบข้างเดิม ⇒ ยังเห็นบทสนทนาเดิมและทำงานได้ ไม่ต้อง reload หน้าต่าง
+- (ของเดิม) จุด smoke ของ fix.18/19 ยังใช้ได้ทั้งหมด
 
 ---
 
