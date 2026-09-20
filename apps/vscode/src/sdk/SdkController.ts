@@ -343,8 +343,22 @@ export class Controller {
 		})
 		this.interactions = new SdkInteractionCoordinator({
 			messages: this.messages,
-			getSessionId: () => this.sessions.getActiveSession()?.sessionId ?? "",
+			// The session that is alive here: the displayed one, or the one parked in the
+			// background. Both can mint an ask while the other is on screen.
+			getSessionId: () => this.sessions.getLiveSession()?.sessionId ?? "",
 			postStateToWebview: () => this.postStateToWebview(),
+			// An ask from a session the user is not looking at is held, not shown: it must not
+			// appear inside another task's transcript, and it re-surfaces on return.
+			shouldDeferInteraction: (sessionId) => {
+				const parkedSession = this.sessions.getParkedSession()
+				if (!parkedSession) {
+					return false
+				}
+				// An ask that names no session can only have come from the pinned session host with
+				// nothing displayed, and the parked one is then the only candidate.
+				return sessionId === undefined || sessionId === parkedSession.sessionId
+			},
+			getBackgroundSessionId: () => this.sessions.getParkedSession()?.sessionId,
 			// Share the single id/seq/epoch authority so interaction-minted ids (tool-approval
 			// asks, ask_question, user_feedback) never collide with translator-minted ids.
 			getMinter: () => this.messageTranslatorState.getMinter(),
@@ -376,7 +390,15 @@ export class Controller {
 					Logger.error("[SdkController] Failed to handle session event:", err)
 				})
 			},
-			onDidBecomeIdle: () => this.handleSessionBecameIdle(),
+			onDidBecomeIdle: () => {
+				// A queued task takes over the display, so the displayed session's pending mode
+				// change would only be applied to a session that is about to be replaced.
+				if (this.maybeStartQueuedTask()) {
+					return
+				}
+				this.handleSessionBecameIdle()
+			},
+			onParkedSessionIdle: () => this.maybeStartQueuedTask(),
 			getRemoteConfigIntegration: () => this.remoteConfigCoreIntegration,
 			foregroundCommands: this.foregroundCommands,
 			getTerminalManager: () => {
@@ -578,6 +600,8 @@ export class Controller {
 				this.messageTranslatorState.clearApprovedToolMessageTs()
 				this.messageTranslatorState.getMinter().bumpEpoch()
 			},
+			bumpConversationFence: () => this.bumpConversationFence(),
+			onParkedSessionStopped: () => this.maybeStartQueuedTask(),
 			postStateToWebview: () => this.postStateToWebview(),
 		})
 		this.taskStart = new SdkTaskStartCoordinator({
@@ -604,6 +628,13 @@ export class Controller {
 			isClineManagedProviderActive: () => this.isClineManagedProviderActive(),
 			emitClineAuthError: (task) => this.emitClineAuthErrorWithTelemetry(task),
 			captureProviderApiError: (event) => this.captureProviderFailure(event),
+			getWorkingBackgroundSessionId: () => {
+				const parkedSession = this.sessions?.getParkedSession()
+				// Only a session still executing a turn blocks a new task. One that merely waits for
+				// the user is not going anywhere on its own, and making the user's next task wait for
+				// an answer they have not given would strand both.
+				return parkedSession?.isRunning ? parkedSession.sessionId : undefined
+			},
 			postStateToWebview: () => this.postStateToWebview(),
 		})
 		this.compaction = new SdkCompactionCoordinator({
@@ -621,6 +652,7 @@ export class Controller {
 			taskHistory: this.taskHistory,
 			stateManager: this.stateManager,
 			getTask: () => this.task,
+			getParkedTask: () => this.taskControl?.getParkedTask(),
 			postStateToWebview: () => this.postStateToWebview(),
 			setTurnPhase: (phase, anchorTs) => this.turnStateTracker.set(phase, anchorTs),
 			captureProviderApiError: (event) => this.captureProviderFailure(event),
@@ -1272,6 +1304,22 @@ export class Controller {
 		await this.compaction.compactTask()
 	}
 
+	/**
+	 * Start the task that was waiting for the background one to finish.
+	 *
+	 * @returns true when a queued task was started, so an idle signal that is only about the
+	 * parked session does not also trigger work aimed at the displayed one.
+	 */
+	private maybeStartQueuedTask(): boolean {
+		if (!this.taskStart?.hasQueuedTask()) {
+			return false
+		}
+		void this.taskStart.startQueuedTask().catch((error) => {
+			Logger.error("[SdkController] Failed to start the queued task:", error)
+		})
+		return true
+	}
+
 	async clearTask(): Promise<void> {
 		this.pendingClineAuthRetryPrompt = undefined
 		// No active task — UI returns to idle (input enabled, no buttons/thinking).
@@ -1921,6 +1969,34 @@ export class Controller {
 		this.messageTranslatorState.getMinter().bumpEpoch()
 	}
 
+	/**
+	 * Raise ONLY the conversation fence (epoch), leaving the translator's in-flight stream
+	 * pointers alone. Used when another conversation takes over the display while a session is
+	 * parked mid-turn: the webview must replace the transcript, but the parked session's next
+	 * delta has to continue the message bubble it already started (see
+	 * `SdkTaskControlCoordinator.fenceConversation`).
+	 */
+	bumpConversationFence(): void {
+		this.messageTranslatorState.getMinter().bumpEpoch()
+	}
+
+	/**
+	 * Describe the session that is still alive in the background, for its Recent card's badge.
+	 * Undefined when there is none — the badge must never claim a task is working when it isn't.
+	 */
+	private describeBackgroundTask(taskHistory: HistoryItem[]): ExtensionState["backgroundTask"] {
+		const parkedSession = this.sessions?.getParkedSession()
+		if (!parkedSession) {
+			return undefined
+		}
+		return {
+			taskId: parkedSession.sessionId,
+			title: taskHistory.find((item) => item.id === parkedSession.sessionId)?.task,
+			isRunning: parkedSession.isRunning,
+			awaitingApproval: this.interactions?.isAwaitingApproval(parkedSession.sessionId) ?? false,
+		}
+	}
+
 	async getStateToPostToWebview(): Promise<ExtensionState> {
 		// Build the base ExtensionState from StateManager, then layer the SDK's
 		// task history on top.
@@ -2003,6 +2079,8 @@ export class Controller {
 				taskHistory: processedTaskHistory,
 				turnState: this.turnStateTracker.get(),
 				queuedPrompts,
+				backgroundTask: this.describeBackgroundTask(processedTaskHistory),
+				queuedTask: this.taskStart?.hasQueuedTask() ?? false,
 				stateVersion: minter.nextSeq(),
 				epoch: minter.epoch,
 			}

@@ -178,6 +178,94 @@ describe("SdkSessionLifecycle", () => {
 		expect(onDidBecomeIdle).toHaveBeenCalledOnce()
 	})
 
+	describe("parking a working session", () => {
+		async function startedLifecycle(overrides: Parameters<typeof makeLifecycle>[0] = {}) {
+			const sdkHost = makeSdkHost({ stop: vi.fn().mockResolvedValue(undefined) })
+			mockCreateSessionHost.mockResolvedValueOnce(sdkHost)
+			const lifecycle = makeLifecycle(overrides)
+			await lifecycle.startNewSession({} as StartInput)
+			return { lifecycle, sdkHost }
+		}
+
+		it("moves a running session out of the display without stopping it", async () => {
+			const { lifecycle, sdkHost } = await startedLifecycle()
+
+			const parked = lifecycle.parkActiveSession("test")
+
+			expect(parked?.sessionId).toBe("session-123")
+			expect(sdkHost.stop).not.toHaveBeenCalled()
+			expect(lifecycle.getActiveSession()).toBeUndefined()
+			expect(lifecycle.getParkedSession()?.sessionId).toBe("session-123")
+			// The session is still alive here, so "live" must find it and the badge cannot lie.
+			expect(lifecycle.getLiveSession()?.sessionId).toBe("session-123")
+			expect(lifecycle.isLiveSession("session-123")).toBe(true)
+		})
+
+		it("refuses to park a session that has nothing in flight", async () => {
+			const { lifecycle, sdkHost } = await startedLifecycle()
+			lifecycle.setRunning(false)
+
+			expect(lifecycle.parkActiveSession("test")).toBeUndefined()
+			expect(lifecycle.getActiveSession()?.sessionId).toBe("session-123")
+			expect(lifecycle.getParkedSession()).toBeUndefined()
+			expect(sdkHost.stop).not.toHaveBeenCalled()
+		})
+
+		it("resumes a parked session as the displayed one", async () => {
+			const { lifecycle } = await startedLifecycle()
+			lifecycle.parkActiveSession("test")
+
+			expect(lifecycle.resumeParkedSession()?.sessionId).toBe("session-123")
+			expect(lifecycle.getActiveSession()?.isRunning).toBe(true)
+			expect(lifecycle.getParkedSession()).toBeUndefined()
+			expect(lifecycle.resumeParkedSession()).toBeUndefined()
+		})
+
+		it("reports a parked session's idle transition on its own hook, not the displayed one's", async () => {
+			const onDidBecomeIdle = vi.fn()
+			const onParkedSessionIdle = vi.fn()
+			const { lifecycle } = await startedLifecycle({ onDidBecomeIdle, onParkedSessionIdle })
+			lifecycle.parkActiveSession("test")
+
+			lifecycle.setParkedRunning(false)
+			lifecycle.setParkedRunning(false)
+
+			expect(onParkedSessionIdle).toHaveBeenCalledOnce()
+			// A background task finishing must not drive the displayed view's deferred rebuilds.
+			expect(onDidBecomeIdle).not.toHaveBeenCalled()
+			expect(lifecycle.getParkedSession()?.isRunning).toBe(false)
+		})
+
+		it("keeps a parked session idle without ending it, so a returning user finds its transcript", async () => {
+			const { lifecycle, sdkHost } = await startedLifecycle()
+			lifecycle.parkActiveSession("test")
+			lifecycle.setParkedRunning(false)
+
+			// Parked-but-idle is still PARKED: nothing may stop the SDK session behind the user's back.
+			expect(sdkHost.stop).not.toHaveBeenCalled()
+			expect(lifecycle.getParkedSession()?.isRunning).toBe(false)
+		})
+
+		it("ends the parked session for real when a new task starts", async () => {
+			const { lifecycle, sdkHost } = await startedLifecycle()
+			lifecycle.parkActiveSession("test")
+
+			await lifecycle.startNewSession({} as StartInput)
+
+			expect(sdkHost.stop).toHaveBeenCalledWith("session-123")
+			expect(lifecycle.getParkedSession()).toBeUndefined()
+		})
+
+		it("stops the parked session on dispose", async () => {
+			const { lifecycle, sdkHost } = await startedLifecycle()
+			lifecycle.parkActiveSession("test")
+
+			await lifecycle.dispose("testDispose")
+
+			expect(sdkHost.stop).toHaveBeenCalledWith("session-123")
+		})
+	})
+
 	it("calls the send-start hook before sending to the SDK host", async () => {
 		const onSendStart = vi.fn()
 		const send = vi.fn().mockResolvedValue(undefined)

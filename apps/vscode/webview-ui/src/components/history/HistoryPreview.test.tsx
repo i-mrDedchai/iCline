@@ -5,10 +5,16 @@ import { recentVisibleCount } from "@/icline/recentGrid"
 const mocks = vi.hoisted(() => ({
 	showTaskWithId: vi.fn(),
 	taskHistory: [] as unknown[],
+	backgroundTask: undefined as unknown,
+	queuedTask: undefined as unknown,
 }))
 
 vi.mock("@/context/ExtensionStateContext", () => ({
-	useExtensionState: () => ({ taskHistory: mocks.taskHistory }),
+	useExtensionState: () => ({
+		taskHistory: mocks.taskHistory,
+		backgroundTask: mocks.backgroundTask,
+		queuedTask: mocks.queuedTask,
+	}),
 }))
 
 vi.mock("@/services/grpc-client", () => ({
@@ -55,6 +61,8 @@ describe("HistoryPreview", () => {
 		vi.stubGlobal("ResizeObserver", FakeResizeObserver)
 		mocks.showTaskWithId.mockReset().mockResolvedValue({})
 		mocks.taskHistory = history(12)
+		mocks.backgroundTask = undefined
+		mocks.queuedTask = undefined
 	})
 
 	afterEach(() => {
@@ -121,6 +129,55 @@ describe("HistoryPreview", () => {
 		fireEvent.click(screen.getByText("Session number 2"))
 
 		expect(mocks.showTaskWithId).toHaveBeenCalledWith({ value: "task-2" })
+	})
+
+	it("marks the one card that is still working, and only that one", () => {
+		mocks.backgroundTask = { taskId: "task-2", title: "Session number 2", isRunning: true, awaitingApproval: false }
+		render(<HistoryPreview showHistoryView={vi.fn()} />)
+
+		const badges = screen.getAllByText("Working")
+		expect(badges).toHaveLength(1)
+		expect(badges[0].closest(".history-preview-item")?.textContent).toContain("Session number 2")
+	})
+
+	it("says a background task needs an answer when it is waiting on one", () => {
+		mocks.backgroundTask = { taskId: "task-1", title: "Session number 1", isRunning: true, awaitingApproval: true }
+		render(<HistoryPreview showHistoryView={vi.fn()} />)
+
+		expect(screen.queryByText("Working")).toBeNull()
+		expect(screen.getByText("Waiting")).toBeTruthy()
+		// The banner names the task, so the user need not hunt for it among the cards.
+		expect(screen.getByText(/Waiting for your answer: Session number 1/)).toBeTruthy()
+	})
+
+	it("says Done when the task finished while the user was away", () => {
+		mocks.backgroundTask = { taskId: "task-1", title: "Session number 1", isRunning: false, awaitingApproval: false }
+		render(<HistoryPreview showHistoryView={vi.fn()} />)
+
+		// "Working" here would be a lie: nothing is running, the user just has not seen the result.
+		expect(screen.queryByText("Working")).toBeNull()
+		expect(screen.getByText("Done")).toBeTruthy()
+		expect(screen.getByText(/Finished in the background: Session number 1/)).toBeTruthy()
+	})
+
+	it("banners the background task and jumps to it", () => {
+		mocks.backgroundTask = { taskId: "task-3", title: "Session number 3", isRunning: true, awaitingApproval: false }
+		mocks.queuedTask = true
+		render(<HistoryPreview showHistoryView={vi.fn()} />)
+
+		expect(screen.getByText(/Still working in the background: Session number 3/)).toBeTruthy()
+		expect(screen.getByText(/your next task starts when it finishes/)).toBeTruthy()
+
+		fireEvent.click(screen.getByRole("button", { name: "View" }))
+		expect(mocks.showTaskWithId).toHaveBeenCalledWith({ value: "task-3" })
+	})
+
+	it("shows no badge or banner when nothing is running in the background", () => {
+		const { container } = render(<HistoryPreview showHistoryView={vi.fn()} />)
+
+		expect(container.querySelector("[data-icline-background-task]")).toBeNull()
+		expect(screen.queryByText("Working")).toBeNull()
+		expect(screen.queryByText("Waiting")).toBeNull()
 	})
 
 	it("keeps the View All escape hatch", () => {

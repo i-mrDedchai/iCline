@@ -75,6 +75,57 @@ describe("SdkSessionEventCoordinator", () => {
 		expect(options.postStateToWebview).not.toHaveBeenCalled()
 	})
 
+	describe("a session the user walked away from", () => {
+		const makeParkedSession = () => ({ ...makeActiveSession(), sessionId: "parked-1" })
+
+		it("appends its output to its own transcript and never to the webview", async () => {
+			const message: ClineMessage = { ts: 9, type: "say", say: "text", text: "background work" }
+			const parkedTask = { taskId: "parked-1" }
+			const { coordinator, options, event } = makeCoordinator({
+				parkedSession: makeParkedSession(),
+				parkedTask,
+				translation: { messages: [message], sessionEnded: false, turnComplete: false },
+			})
+			const parkedEvent = {
+				...event,
+				payload: { ...event.payload, sessionId: "parked-1" },
+			} as CoreSessionEvent
+
+			await coordinator.handleSessionEvent(parkedEvent)
+
+			// The parked task owns the message; the displayed task's transcript is untouched.
+			expect(options.messages.appendMessages).toHaveBeenCalledWith([message], parkedTask)
+			expect(options.messages.appendAndEmit).not.toHaveBeenCalled()
+			expect(options.postStateToWebview).not.toHaveBeenCalled()
+		})
+
+		it("tracks whether it is still working from its status flips", async () => {
+			const { coordinator, options } = makeCoordinator({ parkedSession: makeParkedSession() })
+			const statusEvent = (status: string) =>
+				({ type: "status", payload: { sessionId: "parked-1", status } }) as unknown as CoreSessionEvent
+
+			await coordinator.handleSessionEvent(statusEvent("running"))
+			expect(options.sessions.setParkedRunning).toHaveBeenLastCalledWith(true)
+
+			await coordinator.handleSessionEvent(statusEvent("pending"))
+			// "pending" means the agent is blocked on a question/approval, not that it stopped.
+			expect(options.sessions.setParkedRunning).toHaveBeenLastCalledWith(true)
+
+			await coordinator.handleSessionEvent(statusEvent("idle"))
+			expect(options.sessions.setParkedRunning).toHaveBeenLastCalledWith(false)
+		})
+
+		it("re-posts state only when the run flag actually changes", async () => {
+			const { coordinator, options } = makeCoordinator({ parkedSession: makeParkedSession() })
+			const statusEvent = { type: "status", payload: { sessionId: "parked-1", status: "idle" } } as CoreSessionEvent
+
+			await coordinator.handleSessionEvent(statusEvent)
+			await coordinator.handleSessionEvent(statusEvent)
+
+			expect(options.postStateToWebview).toHaveBeenCalledOnce()
+		})
+	})
+
 	it("marks turns complete through the session lifecycle", async () => {
 		const activeSession = makeActiveSession()
 		const { coordinator, options, event } = makeCoordinator({
@@ -344,15 +395,25 @@ function makeCoordinator(input: Partial<MakeCoordinatorInput> = {}) {
 		messageTranslatorState: new MessageTranslatorState(),
 		sessions: {
 			getActiveSession: vi.fn(() => activeSession),
+			getParkedSession: vi.fn(() => input.parkedSession),
 			setRunning: vi.fn(),
+			// Mirrors the real one: the coordinator reads `isRunning` back on the next event to
+			// decide whether the status flip is worth pushing to the webview.
+			setParkedRunning: vi.fn((isRunning: boolean) => {
+				if (input.parkedSession) {
+					input.parkedSession.isRunning = isRunning
+				}
+			}),
 		},
 		messages: {
 			appendAndEmit: vi.fn(),
+			appendMessages: vi.fn(),
 		},
 		taskHistory: {
 			updateTaskUsage: vi.fn(),
 		},
 		getTask: vi.fn(() => input.task),
+		getParkedTask: vi.fn(() => input.parkedTask),
 		postStateToWebview: vi.fn().mockResolvedValue(undefined),
 		setTurnPhase: vi.fn(),
 		captureProviderApiError: vi.fn(),
@@ -362,10 +423,16 @@ function makeCoordinator(input: Partial<MakeCoordinatorInput> = {}) {
 	} as unknown as SdkSessionEventCoordinatorOptions & {
 		sessions: SdkSessionEventCoordinatorOptions["sessions"] & {
 			getActiveSession: ReturnType<typeof vi.fn>
+			getParkedSession: ReturnType<typeof vi.fn>
 			setRunning: ReturnType<typeof vi.fn>
+			setParkedRunning: ReturnType<typeof vi.fn>
 		}
-		messages: SdkSessionEventCoordinatorOptions["messages"] & { appendAndEmit: ReturnType<typeof vi.fn> }
+		messages: SdkSessionEventCoordinatorOptions["messages"] & {
+			appendAndEmit: ReturnType<typeof vi.fn>
+			appendMessages: ReturnType<typeof vi.fn>
+		}
 		taskHistory: SdkSessionEventCoordinatorOptions["taskHistory"] & { updateTaskUsage: ReturnType<typeof vi.fn> }
+		getParkedTask: ReturnType<typeof vi.fn>
 		postStateToWebview: ReturnType<typeof vi.fn>
 		captureProviderApiError: ReturnType<typeof vi.fn>
 		beginProviderFailureTelemetryTurn: ReturnType<typeof vi.fn>
@@ -393,6 +460,9 @@ function makeActiveSession(input: Partial<{ isRunning: boolean }> = {}) {
 interface MakeCoordinatorInput {
 	activeSession: ReturnType<typeof makeActiveSession>
 	task: { taskId: string }
+	/** The session the user walked away from while it was working (see parkActiveSession). */
+	parkedSession: ReturnType<typeof makeActiveSession>
+	parkedTask: { taskId: string }
 	isClineFreeModel: () => Promise<boolean>
 	translation: {
 		messages: ClineMessage[]

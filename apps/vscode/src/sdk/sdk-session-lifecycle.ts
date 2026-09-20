@@ -50,10 +50,27 @@ export interface SdkSessionLifecycleOptions {
 	 */
 	consumeModeSwitchNotice?: (sessionId: string) => ModeSwitchNotice | null
 	onDidBecomeIdle?: () => void
+	/**
+	 * The parked (background) session finished its turn. Kept separate from `onDidBecomeIdle`:
+	 * that hook drives deferred mode changes and session rebuilds aimed at the DISPLAYED
+	 * session, and a background task finishing must not rebuild the view the user is looking at.
+	 */
+	onParkedSessionIdle?: () => void
 }
 
 export class SdkSessionLifecycle {
 	private activeSession: ActiveSession | undefined
+	/**
+	 * A session the user walked away from while it was working.
+	 *
+	 * iCline used to end the live session on every navigation ("+", opening another
+	 * task's history, starting a new task), so leaving the chat killed the agent
+	 * mid-turn. A parked session keeps running against the SDK; only the *display*
+	 * moves elsewhere. At most one of {active, parked} exists, and nothing is ever
+	 * parked unless it is running — an idle session has nothing to preserve, and its
+	 * transcript is already durable in the SDK's session store.
+	 */
+	private parkedSession: ActiveSession | undefined
 	private sharedHost: SdkSessionHost | undefined
 	private sharedHostPromise: Promise<SdkSessionHost> | undefined
 	private sharedHostUnsubscribe: (() => void) | undefined
@@ -73,14 +90,94 @@ export class SdkSessionLifecycle {
 		return this.activeSession
 	}
 
-	setRunning(isRunning: boolean): void {
+	/** The session that is still alive in this app: the displayed one, or the parked one. */
+	getLiveSession(): ActiveSession | undefined {
+		return this.activeSession ?? this.parkedSession
+	}
+
+	getParkedSession(): ActiveSession | undefined {
+		return this.parkedSession
+	}
+
+	/** True when this session is the one running/streaming here, displayed or parked. */
+	isLiveSession(sessionId: string): boolean {
+		return this.getLiveSession()?.sessionId === sessionId
+	}
+
+	/**
+	 * Stop displaying the live session without stopping it.
+	 * Returns the parked session, or undefined when there was none (or it was idle).
+	 */
+	parkActiveSession(reason: string): ActiveSession | undefined {
 		const activeSession = this.activeSession
+		if (!activeSession) {
+			return undefined
+		}
+		if (!activeSession.isRunning) {
+			// Idle work has nothing to preserve: leave it to endActiveSession's callers so
+			// the SDK session is stopped and resources are released.
+			return undefined
+		}
+		if (this.parkedSession) {
+			Logger.warn(
+				`[SdkController] Parked ${this.parkedSession.sessionId} was replaced by ${activeSession.sessionId} (${reason})`,
+			)
+			void this.endParkedSession(`${reason}:replaced`, { awaitStop: false })
+		}
+		this.activeSession = undefined
+		this.parkedSession = activeSession
+		Logger.log(
+			`[SdkController] Parked running session ${activeSession.sessionId}; it keeps working while the UI is elsewhere (${reason})`,
+		)
+		return activeSession
+	}
+
+	/** Bring a parked session back to the display (its events flow to the UI again). */
+	resumeParkedSession(): ActiveSession | undefined {
+		const parkedSession = this.parkedSession
+		if (!parkedSession) {
+			return undefined
+		}
+		this.parkedSession = undefined
+		this.activeSession = parkedSession
+		Logger.log(`[SdkController] Resumed parked session ${parkedSession.sessionId}`)
+		return parkedSession
+	}
+
+	/**
+	 * Update the parked session's run flag from its own status events.
+	 *
+	 * Deliberately does NOT fire onDidBecomeIdle: that hook drives deferred mode
+	 * changes and session rebuilds aimed at the *displayed* session, and a background
+	 * task finishing must not trigger a rebuild of the view the user is looking at.
+	 */
+	setParkedRunning(isRunning: boolean): void {
+		const parkedSession = this.parkedSession
+		if (!parkedSession || parkedSession.isRunning === isRunning) {
+			return
+		}
+		parkedSession.isRunning = isRunning
+		if (!isRunning) {
+			this.options.onParkedSessionIdle?.()
+		}
+	}
+
+	setRunning(isRunning: boolean): void {
+		// Applies to whichever session is live here — a parked session must still learn
+		// that its turn ended, otherwise its "working" badge would never clear.
+		const activeSession = this.getLiveSession()
 		if (!activeSession || activeSession.isRunning === isRunning) {
 			return
 		}
 		activeSession.isRunning = isRunning
 		if (!isRunning) {
-			this.options.onDidBecomeIdle?.()
+			// The two idle signals are deliberately different: only the DISPLAYED session's turn end
+			// may drive deferred mode changes and session rebuilds.
+			if (activeSession === this.activeSession) {
+				this.options.onDidBecomeIdle?.()
+			} else {
+				this.options.onParkedSessionIdle?.()
+			}
 		}
 	}
 
@@ -113,6 +210,29 @@ export class SdkSessionLifecycle {
 		return activeSession
 	}
 
+	/**
+	 * Stop the parked session (its work is finished with, or the user cancelled it).
+	 * Safe to call when nothing is parked.
+	 */
+	async endParkedSession(
+		reason: string,
+		options: { awaitStop?: boolean; timeoutMs?: number } = {},
+	): Promise<ActiveSession | undefined> {
+		const parkedSession = this.parkedSession
+		this.parkedSession = undefined
+		if (!parkedSession) {
+			return undefined
+		}
+
+		this.safeUnsubscribe(parkedSession, reason)
+		const stopPromise = this.trackSessionStop(parkedSession.sdkHost, parkedSession.sessionId, reason)
+		if (options.awaitStop) {
+			await this.waitForStop(stopPromise, options.timeoutMs ?? 3000)
+		}
+		Logger.log(`[SdkController] Stopped parked session ${parkedSession.sessionId} (${reason})`)
+		return parkedSession
+	}
+
 	async updateActiveSessionModel(modelId: string): Promise<boolean> {
 		const activeSession = this.activeSession
 		if (!activeSession?.sdkHost.updateSessionModel) {
@@ -128,6 +248,11 @@ export class SdkSessionLifecycle {
 	): Promise<{ startResult: StartSessionResult; sdkHost: SdkSessionHost }> {
 		if (this.activeSession) {
 			await this.endActiveSession("startNewSession")
+		}
+		// A new task means the user is done with whatever was parked: by now the queue
+		// has waited for it to go idle, so stopping it is not killing live work.
+		if (this.parkedSession) {
+			await this.endParkedSession("startNewSession", { awaitStop: true })
 		}
 
 		// Same-id starts must wait for the previous session's stop to finish;
@@ -235,6 +360,7 @@ export class SdkSessionLifecycle {
 
 	async dispose(reason = "SdkSessionLifecycle.dispose"): Promise<void> {
 		await this.endActiveSession(reason, { awaitStop: true })
+		await this.endParkedSession(reason, { awaitStop: true })
 
 		const sharedHost = this.sharedHost ?? (await this.sharedHostPromise?.catch(() => undefined))
 		this.sharedHost = undefined

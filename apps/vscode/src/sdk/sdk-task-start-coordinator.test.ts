@@ -71,6 +71,66 @@ describe("SdkTaskStartCoordinator", () => {
 		)
 	})
 
+	describe("a task asked for while another one is still working", () => {
+		it("waits its turn instead of killing the running task", async () => {
+			const { coordinator, options, state } = makeCoordinator({ backgroundSessionId: "running-1" })
+
+			const sessionId = await coordinator.initTask("second task")
+
+			expect(sessionId).toBeUndefined()
+			expect(coordinator.hasQueuedTask()).toBe(true)
+			// Nothing was prepared and nothing was sent: the running task keeps its turn.
+			expect(options.clearTask).not.toHaveBeenCalled()
+			expect(options.sessions.startNewSession).not.toHaveBeenCalled()
+			expect(options.sessions.fireAndForgetSend).not.toHaveBeenCalled()
+			expect(state.task).toBeUndefined()
+			// The webview needs to be told, or the user's prompt would look ignored.
+			expect(options.postStateToWebview).toHaveBeenCalledOnce()
+		})
+
+		it("starts on its own once the running task finishes, with the same prompt", async () => {
+			const { coordinator, options } = makeCoordinator({ backgroundSessionId: "running-1" })
+			await coordinator.initTask("second task", ["image.png"], ["a.ts"])
+			// The background task finished; its session is no longer working.
+			options.getWorkingBackgroundSessionId.mockReturnValue(undefined)
+
+			const sessionId = await coordinator.startQueuedTask()
+
+			expect(sessionId).toEqual(expect.any(String))
+			expect(coordinator.hasQueuedTask()).toBe(false)
+			expect(options.sessionConfigBuilder.build).toHaveBeenCalledWith(
+				expect.objectContaining({ prompt: "second task", images: ["image.png"], files: ["a.ts"] }),
+			)
+			expect(options.sessions.fireAndForgetSend).toHaveBeenCalledWith(
+				expect.objectContaining({ send: expect.any(Function) }),
+				sessionId,
+				"resolved: second task",
+				["image.png"],
+				["a.ts"],
+			)
+		})
+
+		it("does nothing when there was nothing queued", async () => {
+			const { coordinator, options } = makeCoordinator()
+
+			expect(coordinator.hasQueuedTask()).toBe(false)
+			expect(await coordinator.startQueuedTask()).toBeUndefined()
+			expect(options.clearTask).not.toHaveBeenCalled()
+		})
+
+		it("keeps the newest request instead of queueing two", async () => {
+			const { coordinator, options } = makeCoordinator({ backgroundSessionId: "running-1" })
+			await coordinator.initTask("first try")
+			await coordinator.initTask("second try")
+			options.getWorkingBackgroundSessionId.mockReturnValue(undefined)
+
+			await coordinator.startQueuedTask()
+
+			expect(options.sessionConfigBuilder.build).toHaveBeenCalledOnce()
+			expect(options.sessionConfigBuilder.build).toHaveBeenCalledWith(expect.objectContaining({ prompt: "second try" }))
+		})
+	})
+
 	it("emits a Cline auth error instead of starting when the cline provider has no token", async () => {
 		const { coordinator, options } = makeCoordinator({ config: { providerId: "cline", modelId: "model", apiKey: "" } })
 
@@ -277,6 +337,7 @@ function makeCoordinator(input: Partial<MakeCoordinatorInput> = {}) {
 		onAskResponse: vi.fn().mockResolvedValue(undefined),
 		onCancelTask: vi.fn().mockResolvedValue(undefined),
 		getWorkspaceRoot: vi.fn().mockResolvedValue("/workspace"),
+		getWorkingBackgroundSessionId: vi.fn(() => input.backgroundSessionId),
 		createTempSessionHost: vi.fn().mockResolvedValue(tempHost),
 		loadInitialMessages: vi.fn().mockResolvedValue([{ role: "user", content: "hello" }]),
 		resolveContextMentions: vi.fn(async (text: string) => `resolved: ${text}`),
@@ -298,6 +359,7 @@ function makeCoordinator(input: Partial<MakeCoordinatorInput> = {}) {
 			updateTaskHistory: ReturnType<typeof vi.fn>
 			updateTaskHistoryItem: ReturnType<typeof vi.fn>
 		}
+		getWorkingBackgroundSessionId: ReturnType<typeof vi.fn>
 		sessionConfigBuilder: SdkTaskStartCoordinatorOptions["sessionConfigBuilder"] & { build: ReturnType<typeof vi.fn> }
 		buildStartSessionInput: ReturnType<typeof vi.fn>
 		createHistoryItemFromSession: ReturnType<typeof vi.fn>
@@ -320,6 +382,8 @@ function makeCoordinator(input: Partial<MakeCoordinatorInput> = {}) {
 }
 
 interface MakeCoordinatorInput {
+	/** The session still working in the background, which a new task must wait for. */
+	backgroundSessionId: string
 	mode: "act" | "plan"
 	config: {
 		providerId: string

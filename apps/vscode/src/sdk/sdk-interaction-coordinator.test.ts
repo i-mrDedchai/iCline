@@ -337,6 +337,71 @@ describe("SdkInteractionCoordinator", () => {
 		})
 	})
 
+	describe("an ask from a task the user is not looking at", () => {
+		function setup() {
+			const task = createTaskProxy("shown-task", vi.fn(), vi.fn())
+			const messages = new SdkMessageCoordinator({ getTask: () => task })
+			const postStateToWebview = vi.fn().mockResolvedValue(undefined)
+			const coordinator = new SdkInteractionCoordinator({
+				messages,
+				getSessionId: () => "background-task",
+				postStateToWebview,
+				shouldDeferInteraction: (sessionId) => sessionId === undefined || sessionId === "background-task",
+				getBackgroundSessionId: () => "background-task",
+			})
+			return { coordinator, task, postStateToWebview }
+		}
+
+		it("holds it instead of writing it into another task's transcript", async () => {
+			const { coordinator, task, postStateToWebview } = setup()
+
+			void coordinator.handleRequestToolApproval({
+				agentId: "agent",
+				conversationId: "background-task",
+				iteration: 1,
+				toolCallId: "tool-call",
+				toolName: "read_files",
+				input: { path: "README.md" },
+				policy: { autoApprove: false },
+			})
+			await Promise.resolve()
+
+			expect(task.messageStateHandler.getClineMessages()).toEqual([])
+			// Nothing to show, so there is nothing to push; the held ask appears on return.
+			expect(postStateToWebview).not.toHaveBeenCalled()
+			expect(coordinator.isAwaitingApproval("background-task")).toBe(true)
+			expect(coordinator.getDeferredAskSessionId()).toBe("background-task")
+		})
+
+		it("surfaces the held approval when the user returns, still answerable", async () => {
+			const { coordinator, task } = setup()
+
+			const approvalPromise = coordinator.handleRequestToolApproval({
+				agentId: "agent",
+				conversationId: "background-task",
+				iteration: 1,
+				toolCallId: "tool-call",
+				toolName: "read_files",
+				input: { path: "README.md" },
+				policy: { autoApprove: false },
+			})
+			await Promise.resolve()
+
+			expect(coordinator.surfaceDeferredAskForSession("background-task")).toBe(true)
+			expect(task.messageStateHandler.getClineMessages()).toMatchObject([{ type: "ask" }])
+			// The promise was never resolved while it was held, so its buttons still work.
+			expect(coordinator.resolvePendingToolApproval(undefined, "yesButtonClicked", ["yes"])).toBe(true)
+			await expect(approvalPromise).resolves.toEqual({ approved: true })
+		})
+
+		it("does not re-surface an ask it never held", () => {
+			const { coordinator } = setup()
+
+			expect(coordinator.surfaceDeferredAskForSession("background-task")).toBe(false)
+			expect(coordinator.getDeferredAskSessionId()).toBeUndefined()
+		})
+	})
+
 	it("emits ask_question and resolves it with rendered user feedback", async () => {
 		const task = createTaskProxy("session-123", vi.fn(), vi.fn())
 		const messages = new SdkMessageCoordinator({ getTask: () => task })
@@ -346,7 +411,7 @@ describe("SdkInteractionCoordinator", () => {
 			postStateToWebview: vi.fn().mockResolvedValue(undefined),
 		})
 
-		const answerPromise = coordinator.handleAskQuestion("Continue?", ["Yes"], undefined)
+		const answerPromise = coordinator.handleAskQuestion("Continue?", ["Yes"], { agentId: "agent-1", iteration: 1 })
 		await vi.waitFor(() => expect(task.messageStateHandler.getClineMessages()).toHaveLength(1))
 
 		await new Promise((resolve) => setTimeout(resolve, 1))

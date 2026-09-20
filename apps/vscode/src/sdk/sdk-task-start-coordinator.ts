@@ -56,10 +56,61 @@ export interface SdkTaskStartCoordinatorOptions {
 	emitClineAuthError: (task?: string) => void
 	captureProviderApiError?: (event: ProviderFailureTelemetry) => void
 	postStateToWebview: () => Promise<void>
+	/**
+	 * The session still working in the background, if any. Only one task runs at a time in this
+	 * app, so a start requested while this reports an id is queued instead of pre-empting it.
+	 */
+	getWorkingBackgroundSessionId?: () => string | undefined
 }
 
 export class SdkTaskStartCoordinator {
+	/**
+	 * A task the user asked for while another one was still running.
+	 *
+	 * Killing the running task to make room is what iCline used to do (the user lost their turn),
+	 * and running both is not on the table (one task at a time), so the request waits here and is
+	 * replayed the moment the running task finishes. See `startQueuedTask`. Deliberately just the
+	 * intent: no session, no task proxy, and no transcript — nothing to tear down or duplicate if
+	 * the user navigates while waiting.
+	 */
+	private queuedStart:
+		| {
+				prompt?: string
+				images?: string[]
+				files?: string[]
+				historyItem?: HistoryItem
+				taskSettings?: Partial<Settings>
+		  }
+		| undefined
+
 	constructor(private readonly options: SdkTaskStartCoordinatorOptions) {}
+
+	/** True while a task is waiting for the running one to finish. */
+	hasQueuedTask(): boolean {
+		return this.queuedStart !== undefined
+	}
+
+	/**
+	 * Start the task that waited its turn. Returns undefined when nothing was queued, so callers
+	 * can fire this on every idle signal without having to track the queue themselves.
+	 */
+	async startQueuedTask(): Promise<string | undefined> {
+		const queuedStart = this.queuedStart
+		if (!queuedStart) {
+			return undefined
+		}
+		// Cleared first: starting it can itself report the background session as busy if a new
+		// task appears in the meantime, and re-queueing the same intent would loop forever.
+		this.queuedStart = undefined
+		Logger.log("[SdkController] Background task finished; starting the queued task")
+		return this.initTask(
+			queuedStart.prompt,
+			queuedStart.images,
+			queuedStart.files,
+			queuedStart.historyItem,
+			queuedStart.taskSettings,
+		)
+	}
 
 	async initTask(
 		prompt?: string,
@@ -69,6 +120,18 @@ export class SdkTaskStartCoordinator {
 		taskSettings?: Partial<Settings>,
 	): Promise<string | undefined> {
 		Logger.log(`[SdkController] initTask called: "${prompt?.substring(0, 50)}"`)
+		// A task that is still working must not be killed to make room: the user asked for this one
+		// to wait its turn. Checked before anything is prepared so no half-built session is left.
+		const backgroundSessionId = this.options.getWorkingBackgroundSessionId?.()
+		if (backgroundSessionId !== undefined) {
+			this.queuedStart = { prompt, images, files, historyItem, taskSettings }
+			Logger.log(`[SdkController] Queued a new task behind the running session ${backgroundSessionId}`)
+			await this.options.postStateToWebview().catch((error) => {
+				Logger.error("[SdkController] Failed to post state after queueing a task:", error)
+			})
+			return undefined
+		}
+
 		let taskSessionId: string | undefined
 		let providerId: string | undefined
 		let modelId: string | undefined

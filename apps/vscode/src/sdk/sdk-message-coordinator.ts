@@ -71,12 +71,16 @@ export class SdkMessageCoordinator {
 		}
 	}
 
-	appendMessages(messages: ClineMessage[]): void {
+	/**
+	 * Append to the displayed task's transcript, or to an explicit `task` — the only other
+	 * writer is a parked (background) session, whose messages must land in ITS OWN transcript
+	 * while another task is on screen.
+	 */
+	appendMessages(messages: ClineMessage[], task: TaskProxy | undefined = this.options.getTask()): void {
 		// Stamp seq/epoch BEFORE storing/emitting so both the message-state handler and the
 		// partial-message stream carry identical, freshness-ordered, epoch-fenced messages.
 		this.stamp(messages)
 
-		const task = this.options.getTask()
 		if (!task?.messageStateHandler) {
 			return
 		}

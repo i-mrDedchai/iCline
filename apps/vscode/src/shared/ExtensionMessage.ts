@@ -114,6 +114,25 @@ export interface ExtensionState {
 	backgroundCommandRunning?: boolean
 	backgroundCommandTaskId?: string
 	/**
+	 * A task that is still working (or waiting for the user to answer an ask) while the user
+	 * looks at something else. It drives the badge on its Recent card and the "this task is
+	 * still running" notice — the badge must not lie, so it is absent when nothing is running.
+	 */
+	backgroundTask?: {
+		taskId: string
+		/** The task's title, so a notice can name it without another lookup. */
+		title?: string
+		/** True while the agent is executing a turn; false when it only waits for the user. */
+		isRunning: boolean
+		/** True when it asked a question/approval that the user has not been shown yet. */
+		awaitingApproval: boolean
+	}
+	/**
+	 * A task the user asked for while another one was still running. Only one task runs at a
+	 * time, so this one is queued and starts on its own when the running task finishes.
+	 */
+	queuedTask?: boolean
+	/**
 	 * True while a foreground (VS Code terminal) command is awaited by a
 	 * run_commands tool call. Drives the "Proceed While Running" button.
 	 */

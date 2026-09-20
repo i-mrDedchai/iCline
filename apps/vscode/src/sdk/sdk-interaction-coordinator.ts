@@ -1,4 +1,4 @@
-import type { ConsecutiveMistakeLimitContext, ConsecutiveMistakeLimitDecision } from "@cline/shared"
+import type { AgentToolContext, ConsecutiveMistakeLimitContext, ConsecutiveMistakeLimitDecision } from "@cline/shared"
 import type { ClineAskQuestion, ClineMessage, TurnPhase } from "@shared/ExtensionMessage"
 import type { ClineAskResponse } from "@shared/WebviewMessage"
 import { Logger } from "@/shared/services/Logger"
@@ -42,6 +42,15 @@ export interface SdkInteractionCoordinatorOptions {
 	 * looking at the actual change. Must not throw; failures fall back to a plain ask.
 	 */
 	onToolApprovalAsk?: (request: ToolApprovalRequest) => Promise<void>
+	/**
+	 * True when an ask/interaction belongs to a session the user is not looking at
+	 * (they walked away while it was working). Such an ask is held instead of shown:
+	 * it must not enter another task's transcript, and it re-surfaces when the user
+	 * returns to that task. See `getDeferredAsk`.
+	 */
+	shouldDeferInteraction?: (sessionId?: string) => boolean
+	/** The session working in the background, for asks that carry no session of their own. */
+	getBackgroundSessionId?: () => string | undefined
 }
 
 export class SdkInteractionCoordinator {
@@ -55,8 +64,83 @@ export class SdkInteractionCoordinator {
 				toolName: string
 		  }
 		| undefined
+	/**
+	 * An ask that belongs to a background session: kept out of the displayed transcript
+	 * until the user returns to that session, at which point it is appended so the
+	 * pending approval/question stays answerable (the promise below is still waiting).
+	 */
+	private deferredAsk: { message: ClineMessage; sessionId: string; phase: TurnPhase } | undefined
 
 	constructor(private readonly options: SdkInteractionCoordinatorOptions) {}
+
+	/** True when this session is waiting on a question/approval the user has not been shown. */
+	isAwaitingApproval(sessionId: string): boolean {
+		return this.deferredAsk?.sessionId === sessionId
+	}
+
+	/** The session holding an ask the user has not seen yet (its Recent card says so). */
+	getDeferredAskSessionId(): string | undefined {
+		return this.deferredAsk?.sessionId
+	}
+
+	/**
+	 * The ask held for this session, if any — used when the user reopens that task so the
+	 * approval/question they never saw is displayed and can be answered.
+	 */
+	getDeferredAsk(sessionId: string): { message: ClineMessage; phase: TurnPhase } | undefined {
+		const deferred = this.deferredAsk
+		if (!deferred || deferred.sessionId !== sessionId) {
+			return undefined
+		}
+		return { message: deferred.message, phase: deferred.phase }
+	}
+
+	clearDeferredAsk(): void {
+		this.deferredAsk = undefined
+	}
+
+	/**
+	 * Put a held ask back in the transcript because the user just reopened that task.
+	 * The approval/question promise was never resolved, so the buttons work as they did
+	 * when the ask first arrived. Returns true when an ask was re-surfaced.
+	 */
+	surfaceDeferredAskForSession(sessionId: string): boolean {
+		const deferred = this.getDeferredAsk(sessionId)
+		if (!deferred) {
+			return false
+		}
+		this.deferredAsk = undefined
+		this.options.messages.appendAndEmit([deferred.message], {
+			type: "status",
+			payload: { sessionId, status: "running" },
+		})
+		this.options.setTurnPhase?.(deferred.phase, deferred.message.ts)
+		Logger.log(`[SdkController] Re-surfaced held ask for session ${sessionId} after the user returned`)
+		return true
+	}
+
+	/**
+	 * Show an ask in the transcript, or hold it when it belongs to a session the user
+	 * is not looking at. Returns true when it was displayed.
+	 */
+	private surfaceAsk(message: ClineMessage, sessionId: string | undefined, phase: TurnPhase): boolean {
+		if (this.options.shouldDeferInteraction?.(sessionId) === true) {
+			const backgroundSessionId = sessionId ?? this.options.getBackgroundSessionId?.()
+			this.deferredAsk = backgroundSessionId ? { message, sessionId: backgroundSessionId, phase } : undefined
+			Logger.log(
+				`[SdkController] Holding ${message.ask ?? message.say} ask for background session ${backgroundSessionId}; it appears when the user returns`,
+			)
+			return false
+		}
+
+		this.deferredAsk = undefined
+		this.options.messages.appendAndEmit([message], {
+			type: "status",
+			payload: { sessionId: sessionId ?? this.options.getSessionId(), status: "running" },
+		})
+		this.options.setTurnPhase?.(phase, message.ts)
+		return true
+	}
 
 	async handleConsecutiveMistakeLimitReached(
 		context: ConsecutiveMistakeLimitContext,
@@ -71,12 +155,10 @@ export class SdkInteractionCoordinator {
 			partial: false,
 		}
 
-		this.options.messages.appendAndEmit([askMessage], {
-			type: "status",
-			payload: { sessionId: this.options.getSessionId(), status: "running" },
-		})
-		this.options.setTurnPhase?.("error", askMessage.ts)
-		await this.options.postStateToWebview()
+		this.surfaceAsk(askMessage, undefined, "error")
+		if (!this.deferredAsk) {
+			await this.options.postStateToWebview()
+		}
 
 		return new Promise<ConsecutiveMistakeLimitDecision>((resolve) => {
 			this.pendingMistakeLimitResolve = resolve
@@ -89,23 +171,26 @@ export class SdkInteractionCoordinator {
 			return { approved: true }
 		}
 
+		const toolAskMessage: ClineMessage = buildToolApprovalAskMessage(request.toolName, request.input, this.nextMessageTs())
+		const isBackground = this.options.shouldDeferInteraction?.(request.conversationId) === true
+
 		// Open the edit diff preview before the Approve/Reject buttons render. This is the only
 		// pre-execution point where the adapter has the full tool input (the SDK emits the
-		// tool's content events only after approval resolves).
-		try {
-			await this.options.onToolApprovalAsk?.(request)
-		} catch (error) {
-			Logger.warn(`[SdkController] onToolApprovalAsk failed; showing plain approval ask: ${error}`)
+		// tool's content events only after approval resolves). Skipped for a background
+		// session: opening a diff for an ask nobody can see is worse than showing the plain
+		// approval when the user returns.
+		if (!isBackground) {
+			try {
+				await this.options.onToolApprovalAsk?.(request)
+			} catch (error) {
+				Logger.warn(`[SdkController] onToolApprovalAsk failed; showing plain approval ask: ${error}`)
+			}
 		}
 
-		const toolAskMessage: ClineMessage = buildToolApprovalAskMessage(request.toolName, request.input, this.nextMessageTs())
-
-		this.options.messages.appendAndEmit([toolAskMessage], {
-			type: "status",
-			payload: { sessionId: this.options.getSessionId(), status: "running" },
-		})
-		this.options.setTurnPhase?.("awaiting_approval", toolAskMessage.ts)
-		await this.options.postStateToWebview()
+		this.surfaceAsk(toolAskMessage, request.conversationId, "awaiting_approval")
+		if (!isBackground) {
+			await this.options.postStateToWebview()
+		}
 
 		return new Promise<{ approved: boolean; reason?: string }>((resolve) => {
 			this.pendingToolApprovalResolve = resolve
@@ -117,7 +202,7 @@ export class SdkInteractionCoordinator {
 		})
 	}
 
-	async handleAskQuestion(question: string, options: string[], _context: unknown): Promise<string> {
+	async handleAskQuestion(question: string, options: string[], context: AgentToolContext): Promise<string> {
 		const askData: ClineAskQuestion = {
 			question,
 			options: options?.length ? options : undefined,
@@ -130,12 +215,13 @@ export class SdkInteractionCoordinator {
 			partial: false,
 		}
 
-		this.options.messages.appendAndEmit([askMessage], {
-			type: "status",
-			payload: { sessionId: this.options.getSessionId(), status: "running" },
-		})
-		this.options.setTurnPhase?.("awaiting_followup", askMessage.ts)
-		await this.options.postStateToWebview()
+		// The ask_question tool reports which session asked, so a background task's question can be
+		// recognised as one and held instead of interrupting whatever is on screen.
+		const askSessionId = context?.sessionId ?? context?.conversationId
+		this.surfaceAsk(askMessage, askSessionId, "awaiting_followup")
+		if (!this.deferredAsk) {
+			await this.options.postStateToWebview()
+		}
 
 		return new Promise<string>((resolve) => {
 			this.pendingAskResolve = resolve
@@ -270,6 +356,7 @@ export class SdkInteractionCoordinator {
 	}
 
 	clearPending(reason: string): void {
+		this.deferredAsk = undefined
 		this.pendingAskResolve = undefined
 		if (this.pendingMistakeLimitResolve) {
 			this.pendingMistakeLimitResolve({ action: "stop", reason })

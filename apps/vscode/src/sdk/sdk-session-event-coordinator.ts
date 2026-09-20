@@ -20,6 +20,12 @@ function normalizeModelId(modelId: string): string {
 type AgentFailureTelemetry = Pick<ProviderFailureTelemetry, "sessionId" | "error" | "errorType"> | undefined
 
 export interface SdkSessionEventCoordinatorOptions {
+	/**
+	 * The parked session's task proxy, whose transcript receives the events of a session the
+	 * user is not looking at. Undefined when no task was adopted at park time, in which case a
+	 * parked session's display output is dropped and rebuilt from the SDK store on return.
+	 */
+	getParkedTask?: () => TaskProxy | undefined
 	messageTranslatorState: MessageTranslatorState
 	sessions: SdkSessionLifecycle
 	messages: SdkMessageCoordinator
@@ -51,6 +57,9 @@ export class SdkSessionEventCoordinator {
 
 		const activeSession = this.options.sessions.getActiveSession()
 		if (!activeSession || event.payload.sessionId !== activeSession.sessionId) {
+			if (this.trackParkedSessionEvent(event)) {
+				return
+			}
 			Logger.debug(
 				`[SdkController] Ignoring stale SDK event for session ${event.payload.sessionId}; active=${activeSession?.sessionId ?? "none"}`,
 			)
@@ -144,6 +153,59 @@ export class SdkSessionEventCoordinator {
 				Logger.error("[SdkController] Failed to post state after event:", err)
 			})
 		}
+	}
+
+	/**
+	 * Keep a parked (background) session working, and keep its transcript.
+	 *
+	 * The user walked away from this session, so its messages must NOT reach the webview: the
+	 * other task is on screen. They are appended to the parked session's OWN in-memory
+	 * transcript instead, which is what the user sees when they come back — the same message
+	 * objects, with the same ids, so a message that was mid-stream when they left continues in
+	 * the same bubble rather than restarting as a second one. (Translation stays coherent
+	 * because parking a session never resets the translator without bookmarking it first; see
+	 * `StreamBookmark`.)
+	 *
+	 * What the UI still needs is whether the task is still working, because the Recent card's
+	 * badge and the "second task waits its turn" queue read exactly that. The SDK reports it as
+	 * session status flips: "running"/"pending" mean the agent is busy; "idle" means the turn is
+	 * over (including "waiting for the user to answer an ask", which is what "pending" covers).
+	 *
+	 * @returns true when the event belonged to a parked session and was handled here.
+	 */
+	private trackParkedSessionEvent(event: CoreSessionEvent): boolean {
+		const parkedSession = this.options.sessions.getParkedSession()
+		if (!parkedSession || event.payload.sessionId !== parkedSession.sessionId) {
+			return false
+		}
+
+		const parkedTask = this.options.getParkedTask?.()
+		const result = this.translateSessionEvent(event, this.options.messageTranslatorState)
+		if (result.messages.length > 0) {
+			this.options.messages.appendMessages(result.messages, parkedTask)
+		}
+		if (result.usage && parkedSession.startResult) {
+			// Usage is money: account for it even when the turn is not displayed.
+			Promise.resolve(this.options.taskHistory.updateTaskUsage(parkedSession.sessionId, result.usage)).catch((error) => {
+				Logger.error("[SdkController] Failed to persist parked task usage:", error)
+			})
+		}
+
+		if (event.type !== "status") {
+			return true
+		}
+
+		const status = event.payload.status
+		const isWorking = status === "running" || status === "pending"
+		const wasRunning = parkedSession.isRunning
+		this.options.sessions.setParkedRunning(isWorking)
+		if (wasRunning !== isWorking) {
+			Logger.log(`[SdkController] Parked session ${parkedSession.sessionId} is now ${status}`)
+			this.options.postStateToWebview().catch((err) => {
+				Logger.error("[SdkController] Failed to post parked-session state:", err)
+			})
+		}
+		return true
 	}
 
 	private getAgentFailureTelemetry(event: CoreSessionEvent): AgentFailureTelemetry {
