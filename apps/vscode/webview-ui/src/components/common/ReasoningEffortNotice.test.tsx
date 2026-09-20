@@ -37,6 +37,16 @@ describe("effortClampNotice", () => {
 		)
 	})
 
+	it("never renders an empty level: a clamp with no level reads as `not sent`", () => {
+		// The registry scan in the host guarantees this shape does not exist today
+		// (`clamped` without a level always means `no-effort-control`), so this pins the
+		// fallback for a future reason that forgets to name what it sends.
+		const orphaned = effortClampNotice(outcome({ applied: undefined, reason: "nearest-supported" }), en)
+
+		expect(orphaned).toBe("Max is not sent · this model has no Effort control")
+		expect(orphaned).not.toContain("→")
+	})
+
 	it("stays quiet for a level that is sent as chosen, or under a thinking budget", () => {
 		expect(effortClampNotice(undefined, en)).toBeUndefined()
 		expect(effortClampNotice(outcome({ clamped: false }), en)).toBeUndefined()

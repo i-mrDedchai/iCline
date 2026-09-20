@@ -26,6 +26,18 @@ const REASON_KEYS: Record<string, PickerStringKey> = {
 }
 
 /**
+ * The reasons whose sentence names the level that goes out. Everything else must
+ * read as "nothing is sent": a template with an `{applied}` slot and no level to
+ * fill it would render "Max →  · …", which is how a copy bug hides a real state.
+ * (`reasoning-options` guarantees the two shapes over the whole registry — see the
+ * host's registry scan — so this only guards against a future third one.)
+ */
+const NAMES_APPLIED_LEVEL: ReadonlySet<PickerStringKey> = new Set<PickerStringKey>([
+	"effortClampNearest",
+	"effortClampCatalogUnknown",
+])
+
+/**
  * The sentence for one outcome — or `undefined` when there is nothing honest to say.
  * Exported so the copy rules can be tested without a render.
  */
@@ -33,12 +45,15 @@ export function effortClampNotice(outcome: ReasoningEffortOutcome | undefined, t
 	if (!outcome || !outcome.clamped || outcome.suppressedByBudget) {
 		return undefined
 	}
-	const key = REASON_KEYS[outcome.reason]
-	if (!key) {
+	const mapped = REASON_KEYS[outcome.reason]
+	if (!mapped) {
 		// An unknown reason means this build does not know how to describe it; showing
 		// the raw values would be guesswork, so stay quiet until it is taught.
 		return undefined
 	}
+	// A sentence that names the level must have one to name; otherwise fall back to
+	// the "nothing is sent" wording, which is true for any clamped-without-applied case.
+	const key = NAMES_APPLIED_LEVEL.has(mapped) && outcome.applied === undefined ? "effortClampNoControl" : mapped
 	return formatPickerString(tr, key, {
 		requested: effortLevelForValue(outcome.requested).label,
 		applied: outcome.applied === undefined ? "" : effortLevelForValue(outcome.applied).label,

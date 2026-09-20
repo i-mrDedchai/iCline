@@ -1,3 +1,5 @@
+import { decideReasoningEffort, getProviderCollectionSync, getProviderIds } from "@cline/llms"
+import { OPENAI_REASONING_EFFORT_OPTIONS } from "@shared/storage/types"
 import { describe, expect, it } from "vitest"
 import { resolveReasoningEffortOutcome } from "./reasoning-effort-decision"
 
@@ -125,5 +127,42 @@ describe("resolveReasoningEffortOutcome", () => {
 		})
 		expect(tilde?.registryModelId).toBe("~deepseek/deepseek-flash-latest")
 		expect(tilde?.applied).toBe("max")
+	})
+})
+
+/**
+ * The notice copy is only allowed two shapes: "X → Y" (a level really goes out)
+ * or "X is not sent · no Effort control". It fills an `{applied}` slot, so a
+ * clamp with NO level and a reason other than `no-effort-control` would render a
+ * hole (`"Max →  · …"`). `ReasoningEffortNotice` mirrors the rule, and this scan
+ * is what keeps the registry from introducing the third shape silently.
+ */
+describe("every clamped decision is describable", () => {
+	it("names the level it sends, or reports that the model has no Effort control", () => {
+		const offenders: string[] = []
+		for (const providerId of getProviderIds()) {
+			const models = getProviderCollectionSync(providerId)?.models ?? {}
+			for (const [modelId, model] of Object.entries(models)) {
+				for (const effort of OPENAI_REASONING_EFFORT_OPTIONS) {
+					if (effort === "none") {
+						continue
+					}
+					const decision = decideReasoningEffort({ effort, reasoningOptions: model.reasoningOptions })
+					if (decision.clamped && decision.reason === "exact") {
+						offenders.push(`${providerId}/${modelId} ${effort}: clamped but reason=exact`)
+					}
+					if (decision.applied === undefined && decision.reason !== "no-effort-control") {
+						offenders.push(`${providerId}/${modelId} ${effort}: no level sent, reason=${decision.reason}`)
+					}
+					if (decision.applied !== undefined && decision.reason === "no-effort-control") {
+						offenders.push(
+							`${providerId}/${modelId} ${effort}: reason=no-effort-control but sends ${decision.applied}`,
+						)
+					}
+				}
+			}
+		}
+
+		expect(offenders.slice(0, 5)).toEqual([])
 	})
 })

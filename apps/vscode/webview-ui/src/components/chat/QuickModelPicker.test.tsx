@@ -422,3 +422,87 @@ describe("QuickModelPicker Cline list matches Settings Usage-Billing filter", ()
 		})
 	})
 })
+
+/**
+ * Organization policy: the Settings provider dropdown hides blocked providers, so a
+ * click on one here has to be answered. It used to look successful while the host's
+ * remote layer (org policy — highest precedence) kept the pinned provider, and the
+ * chip snapped back on the next state push with no explanation.
+ */
+describe("QuickModelPicker under an organization provider policy", () => {
+	function setPolicy(allowed: string[]) {
+		const applyApiConfigurationPatch = vi.fn()
+		vi.mocked(useExtensionState).mockReturnValue({
+			mode: "act",
+			apiConfiguration: {
+				actModeApiProvider: "xai",
+				actModeApiModelId: LEFTOVER_XAI_MODEL_ID,
+			},
+			providerModelsByProvider: {},
+			remoteConfigSettings: { remoteConfiguredProviders: allowed },
+			applyApiConfigurationPatch,
+		} as ReturnType<typeof useExtensionState>)
+		return applyApiConfigurationPatch
+	}
+
+	beforeEach(() => {
+		vi.clearAllMocks()
+		localStorage.clear()
+		vi.mocked(ModelsServiceClient.commitModelSelection).mockResolvedValue({})
+		vi.mocked(useProviderListings).mockReturnValue({
+			providers: [
+				{ id: "xai", name: "xAI" },
+				{ id: "jan", name: "Jan" },
+			],
+			isLoading: false,
+			error: undefined,
+			refresh: vi.fn(),
+		} as ReturnType<typeof useProviderListings>)
+		vi.mocked(useProviderModels).mockImplementation(((providerId: string) =>
+			mockProviderModels(providerId)) as typeof useProviderModels)
+		vi.mocked(useNormalizedApiConfiguration).mockReturnValue({
+			selectedProvider: "xai",
+			selectedModelId: LEFTOVER_XAI_MODEL_ID,
+			selectedModelInfo: { supportsPromptCache: false },
+		})
+	})
+
+	it("answers the click instead of committing a selection that cannot take effect", async () => {
+		const patch = setPolicy(["cline"])
+		render(<QuickModelPicker modelDisplayName={LEFTOVER_XAI_MODEL_ID} />)
+
+		fireEvent.click(screen.getByRole("button", { name: "Jan" }))
+		const janModel = await screen.findByRole("button", { name: "Jan Local 7B" })
+		pointerDown(janModel, 0)
+
+		expect(await screen.findByRole("alert")).toHaveTextContent(
+			"Your organization manages providers — Jan is not in the allowed list, so this selection was not applied",
+		)
+		// Nothing was sent, and the provider echo never claimed a switch the host undoes.
+		expect(ModelsServiceClient.commitModelSelection).not.toHaveBeenCalled()
+		expect(patch).not.toHaveBeenCalled()
+	})
+
+	it("marks the blocked provider before it is clicked", async () => {
+		setPolicy(["cline"])
+		render(<QuickModelPicker modelDisplayName={LEFTOVER_XAI_MODEL_ID} />)
+
+		fireEvent.click(screen.getByRole("button", { name: "Jan" }))
+		await screen.findByRole("button", { name: "Jan Local 7B" })
+
+		expect(document.querySelector('[data-icline-org-blocked="jan"]')).not.toBeNull()
+	})
+
+	it("leaves an allowed provider untouched", async () => {
+		setPolicy(["cline", "jan"])
+		render(<QuickModelPicker modelDisplayName={LEFTOVER_XAI_MODEL_ID} />)
+
+		fireEvent.click(screen.getByRole("button", { name: "Jan" }))
+		const janModel = await screen.findByRole("button", { name: "Jan Local 7B" })
+		pointerDown(janModel, 0)
+
+		await waitFor(() => expect(ModelsServiceClient.commitModelSelection).toHaveBeenCalledTimes(1))
+		expect(document.querySelector('[data-icline-org-blocked="jan"]')).toBeNull()
+		expect(screen.queryByRole("alert")).toBeNull()
+	})
+})
