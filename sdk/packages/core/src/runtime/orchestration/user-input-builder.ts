@@ -6,6 +6,7 @@
  */
 
 import type * as LlmsProviders from "@cline/llms";
+import { downscaleBase64Png } from "../../media/png";
 
 export async function buildInitialUserContent(
 	userMessage: string,
@@ -100,10 +101,15 @@ function parseDataUrlImage(
 		if (!mediaType || !data) {
 			return undefined;
 		}
+		// A pasted screenshot enters the conversation here and is re-sent with every
+		// later request. Shrink anything above the provider's own downscale ceiling;
+		// the model sees the same pixels for a fraction of the payload. Only PNG is
+		// re-encoded — other formats pass through byte-identical.
+		const downscaled = downscaleBase64Png(data);
 		return {
 			type: "image",
-			mediaType,
-			data,
+			mediaType: downscaled.changed ? "image/png" : mediaType,
+			data: downscaled.data,
 		};
 	}
 

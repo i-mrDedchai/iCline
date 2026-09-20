@@ -26,7 +26,7 @@ import { HookFactory } from "@/core/hooks/hook-factory"
 import { getHooksEnabledSafe } from "@/core/hooks/hooks-utils"
 import type { StateManager } from "@/core/storage/StateManager"
 import { HostProvider } from "@/hosts/host-provider"
-import { EDITOR_INPUT_CHAR_LIMIT, getLargeWriteGuidance, verifyWrittenFile } from "@/icline/harness/guardrails"
+import { EDITOR_INPUT_CHAR_LIMIT, verifyWrittenFile } from "@/icline/harness/guardrails"
 import { recordToolTrace } from "@/icline/harness/tool-trace"
 import { isIclineBuild } from "@/registry"
 
@@ -386,7 +386,7 @@ async function runUserPromptSubmit(
 // write that did not land.
 //
 // "The tool did not throw" is NOT a success signal, for two upstream reasons:
-//   1. Input-level failures (e.g. `new_text` beyond INPUT_ARG_CHAR_LIMIT) come back
+//   1. Input-level failures (e.g. `new_text` beyond EDITOR_INPUT_CHAR_LIMIT) come back
 //      as a failure ENVELOPE — `{ success: false, error }` — and the agent runtime
 //      only sets `isError` for THROWN errors, so such results arrive looking fine.
 //   2. Running verification on those results stats a file that was never meant to
@@ -436,14 +436,16 @@ function describeToolOutput(output: unknown): string {
  * Actionable guidance when the rejected call exceeded the runtime's per-call input
  * limit — by far the most common cause of "the write reported success but nothing
  * is on disk". Without this the model can only guess (dev.6 smoke: it guessed
- * "race" and re-sent the identical oversized call).
+ * "race" and re-sent the identical oversized call). The tool's own rejection message
+ * (which this text is appended to) already carries the chunking recipe, so this adds
+ * only the sizes and the "nothing reached disk" fact.
  */
 function describeOversizeInput(input: unknown): string | undefined {
 	const newText = (input as { new_text?: unknown } | undefined)?.new_text
 	if (typeof newText !== "string" || newText.length <= EDITOR_INPUT_CHAR_LIMIT) {
 		return undefined
 	}
-	return `The call carried ${newText.length} characters of new_text, above the runtime's ${EDITOR_INPUT_CHAR_LIMIT}-character per-call limit, so it was rejected before touching disk. ${getLargeWriteGuidance()}`
+	return `The call carried ${newText.length} characters of new_text, above the runtime's ${EDITOR_INPUT_CHAR_LIMIT}-character per-call limit, so it was rejected before touching disk. Split the write as that error describes — do not re-send the oversized call unchanged.`
 }
 
 /** Trace-safe summary of a write input — never the payload itself. */

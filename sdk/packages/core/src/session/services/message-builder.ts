@@ -24,6 +24,7 @@ import {
 	type ToolResultContent,
 	validateAndReserveImageMedia,
 } from "@cline/shared";
+import { downscaleBase64Png } from "../../media/png";
 
 export const DEFAULT_MAX_TOOL_RESULT_CHARS = 8_000;
 export const DEFAULT_MAX_FILE_CONTENT_CHARS = 50_000;
@@ -1454,10 +1455,27 @@ export class MessageBuilder {
 		if (!isImageContentWithData(image)) {
 			return { type: "text", text: IMAGE_OMITTED_PLACEHOLDER };
 		}
+		let candidate: ImageContent = image;
+
+		// Last resort for an image that was not shrunk where it entered the
+		// conversation (an attachment from an older session, say): a PNG too big for
+		// the per-image budget is downscaled to fit instead of dropped. Omission is
+		// the worst outcome — the model then reasons about a placeholder.
+		// Deliberately gated on the over-budget case only: a decode/encode per turn
+		// for images that already fit would cost more than the bytes it saves.
+		if (
+			candidate.mediaType === "image/png" &&
+			candidate.data.length > budget.maxImageEncodedBytes
+		) {
+			const shrunk = downscaleBase64Png(candidate.data);
+			if (shrunk.changed && shrunk.data.length <= budget.maxImageEncodedBytes) {
+				candidate = { ...candidate, data: shrunk.data };
+			}
+		}
 
 		const validation = validateAndReserveImageMedia(
-			image.mediaType,
-			image.data,
+			candidate.mediaType,
+			candidate.data,
 			{
 				maxImageEncodedBytes: budget.maxImageEncodedBytes,
 				maxImageDecodedBytes: budget.maxImageDecodedBytes,
@@ -1470,7 +1488,7 @@ export class MessageBuilder {
 		}
 
 		return {
-			...image,
+			...candidate,
 			data: validation.base64,
 			mediaType: validation.mediaType,
 		};

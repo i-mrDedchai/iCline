@@ -10,6 +10,7 @@ import * as path from "node:path";
 import { createInterface } from "node:readline";
 import type { AgentToolContext } from "@cline/shared";
 import { resolveExistingFilePath } from "@cline/shared/storage";
+import { downscalePngIfNeeded } from "../../../media/png";
 import type { ReadFileRequest } from "../schemas";
 import type { FileReadExecutor } from "../types";
 import {
@@ -238,15 +239,27 @@ export function createFileReadExecutor(
 				throw new Error("Current model does not support image input");
 			}
 			const data = await fs.readFile(resolvedPath);
+			// Shrink oversized screenshots before they enter the conversation: an image
+			// read here stays in the transcript for the rest of the session and is
+			// re-sent with every request, while the provider discards everything above
+			// its own downscale ceiling anyway. Non-PNG bytes pass through untouched.
+			const image =
+				imageMediaType === "image/png"
+					? downscalePngIfNeeded(new Uint8Array(data))
+					: undefined;
+			const payload = image?.bytes ?? new Uint8Array(data);
+			const sizeNote = image?.changed
+				? ` (downscaled to fit the model's image input: ${image.note})`
+				: "";
 			return [
 				{
 					type: "text",
-					text: "Successfully read image",
+					text: `Successfully read image${sizeNote}`,
 				},
 				{
 					type: "image",
-					data: data.toString("base64"),
-					mediaType: imageMediaType,
+					data: Buffer.from(payload).toString("base64"),
+					mediaType: image?.mediaType ?? imageMediaType,
 				},
 			];
 		}

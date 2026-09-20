@@ -15,19 +15,20 @@ import * as path from "node:path"
  * packaged VSIX executes.
  *
  * What it proves, against the real tool:
- *   - a create at the per-call input limit (6000 chars) writes the file;
+ *   - a create at the per-call input limit (32000 chars since dev.6-fix.23, was 6000)
+ *     writes the file;
  *   - one character over is REJECTED before touching disk, as a returned envelope
  *     (`success: false` + `error`) — NOT a thrown error, so `isError` is never set;
  *     that envelope is what the iCline post-write guardrail must detect
  *     (`apps/vscode/src/sdk/hooks-adapter.ts`);
  *   - a four-call parallel batch behaves the same per call (the smoke-transcript
- *     shape: two small creates land, two oversized ones do not);
+ *     shape: the sizes that used to be rejected now land in one call each);
  *   - the same limit applies to edits, and a rejected edit leaves the file untouched.
  */
 import { type AgentToolContext, createDefaultTools, createEditorExecutor, type EditFileInput } from "@cline/core"
 
 /** Mirrors EDITOR_INPUT_CHAR_LIMIT in src/icline/harness/guardrails.ts. */
-const EXPECTED_LIMIT = 6000
+const EXPECTED_LIMIT = 32000
 
 interface ToolOperationResultLike {
 	query?: string
@@ -133,12 +134,15 @@ async function main(): Promise<void> {
 			`success=${String(edit.success)} fileContent=${JSON.stringify(await readIfExists(editPath))}`,
 		)
 
-		// 4) Parallel batch — the shape that produced the smoke failures.
+		// 4) Parallel batch — the shape that produced the smoke failures, with the
+		// sizes that actually appeared in that transcript (5000/7020/6741/4963) plus
+		// one payload that is genuinely above the limit. Before fix.23 the three
+		// mid-size files were rejected and re-sent as chunks; now only the last one is.
 		const batch = [
 			{ name: "01-shell.html", size: 5000 },
 			{ name: "02-base.css", size: 7020 },
 			{ name: "03-hero.html", size: 6741 },
-			{ name: "04-deck.css", size: 4963 },
+			{ name: "04-deck.css", size: EXPECTED_LIMIT + 500 },
 		]
 		const results = await Promise.all(
 			batch.map((entry) =>
@@ -152,8 +156,8 @@ async function main(): Promise<void> {
 			`\n      parallel batch: ${batch.map((entry, i) => `${entry.name}(${entry.size})=${String(results[i].success)}/${onDisk[i]}`).join("  ")}`,
 		)
 		check(
-			"parallel batch: successful calls land, rejected calls leave nothing",
-			results.map((r) => r.success).join(",") === "true,false,false,true" && onDisk.join(",") === "yes,no,no,yes",
+			"parallel batch: every realistic file size lands in one call; only the oversized one is rejected",
+			results.map((r) => r.success).join(",") === "true,true,true,false" && onDisk.join(",") === "yes,yes,yes,no",
 			`success=[${results.map((r) => String(r.success)).join(",")}] onDisk=[${onDisk.join(",")}]`,
 		)
 	} finally {

@@ -20,7 +20,7 @@ vi.mock("@/registry", () => ({
 
 vi.mock("@/icline/harness/guardrails", () => ({
 	verifyWrittenFile: mocks.verifyWrittenFile,
-	EDITOR_INPUT_CHAR_LIMIT: 6000,
+	EDITOR_INPUT_CHAR_LIMIT: 32000,
 	getLargeWriteGuidance: () => "Write it in chunks: create the file with a first chunk, then append with `insert_line`.",
 }))
 
@@ -124,7 +124,7 @@ describe("hooks-adapter iCline post-write verification", () => {
 				output: {
 					query: "edit:/workspace/file.ts",
 					result: "",
-					error: "Editor input too large: new_text was 7000 characters",
+					error: "Editor input too large: new_text was 33020 characters",
 					success: false,
 				},
 			}),
@@ -132,21 +132,22 @@ describe("hooks-adapter iCline post-write verification", () => {
 		expect(mocks.verifyWrittenFile).not.toHaveBeenCalled()
 		expect(result).toEqual({
 			result: {
-				output: "Editor input too large: new_text was 7000 characters",
+				output: "Editor input too large: new_text was 33020 characters",
 				isError: true,
 			},
 		})
 	})
 
-	it("adds the chunked-write recipe when the rejected call was oversized", async () => {
+	it("adds the oversize explanation when the rejected call was above the per-call limit", async () => {
 		const hooks = buildAgentHooks(makeStateManager())
+		const chars = 33_020
 		const result = await hooks.afterTool?.(
 			makeAfterToolCtx({
-				input: { path: "/workspace/file.ts", new_text: "x".repeat(7020) },
+				input: { path: "/workspace/file.ts", new_text: "x".repeat(chars) },
 				output: {
 					query: "edit:/workspace/file.ts",
 					result: "",
-					error: "Editor input too large: new_text was 7020 characters",
+					error: `Editor input too large: new_text was ${chars} characters`,
 					success: false,
 				},
 			}),
@@ -154,9 +155,30 @@ describe("hooks-adapter iCline post-write verification", () => {
 		expect(mocks.verifyWrittenFile).not.toHaveBeenCalled()
 		const output = (result?.result as { output: string; isError: boolean }).output
 		expect(output).toContain("Editor input too large")
-		expect(output).toContain("7020 characters of new_text")
-		expect(output).toContain("Write it in chunks")
+		expect(output).toContain(`${chars} characters of new_text`)
+		expect(output).toContain("above the runtime's 32000-character per-call limit")
 		expect((result?.result as { isError: boolean }).isError).toBe(true)
+	})
+
+	it("leaves a realistic whole-file write alone", async () => {
+		// 7020 characters is the size that fix.23 unblocked: it used to be rejected
+		// (the 6000 wall) and re-sent as chunks. A failure envelope at this size can
+		// no longer come from the size guard, so no oversize explanation is appended.
+		const hooks = buildAgentHooks(makeStateManager())
+		const result = await hooks.afterTool?.(
+			makeAfterToolCtx({
+				input: { path: "/workspace/file.ts", new_text: "x".repeat(7020) },
+				output: {
+					query: "edit:/workspace/file.ts",
+					result: "",
+					error: "Editor operation failed: No replacement performed: text not found in file.ts.",
+					success: false,
+				},
+			}),
+		)
+		const output = (result?.result as { output: string; isError: boolean }).output
+		expect(output).toContain("No replacement performed")
+		expect(output).not.toContain("per-call limit")
 	})
 
 	it("still verifies a successful envelope that carries an empty error field", async () => {

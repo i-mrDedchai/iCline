@@ -44,14 +44,18 @@ export function normalizeCompactionThreshold(raw?: number): number {
 }
 
 /**
- * Per-call input limit of the runtime's `editor` tool. Mirrors the upstream
- * `INPUT_ARG_CHAR_LIMIT` (@cline/core `extensions/tools/schemas.ts`), which is not
- * re-exported from the package entry point. The upstream tool rejects a larger
- * `new_text` before anything reaches disk, so we mirror the number only to emit an
- * actionable message instead of a phantom filesystem failure — the parity test in
- * `src/sdk/tool-write-pipeline.test.ts` fails if upstream ever changes it.
+ * Per-call input limit of the runtime's `editor` tool. Mirrors `EDITOR_INPUT_CHAR_LIMIT`
+ * (@cline/core `extensions/tools/schemas.ts`), which the fork layer cannot import as a
+ * value: vitest aliases `@cline/core` to a stub (`src/test/cline-core-vitest-stub.ts`).
+ * The upstream tool rejects a larger `new_text` before anything reaches disk, so this
+ * mirror exists only to describe the rejection — `src/sdk/tool-write-pipeline.test.ts`
+ * pins the number and `scripts/repro-editor-write.ts` verifies the real boundary against
+ * the real tool.
+ *
+ * Raised 6000 → 32000 in dev.6-fix.23: 6000 is below one ordinary source file, so
+ * whole-file writes were rejected and re-sent in chunks (extra round trips each time).
  */
-export const EDITOR_INPUT_CHAR_LIMIT = 6000
+export const EDITOR_INPUT_CHAR_LIMIT = 32000
 
 /**
  * The recipe for writing a file that does not fit in a single tool call. Shared by
@@ -105,7 +109,7 @@ export function getIclineHarnessOverlay(): string {
 - On ambiguous requests: ask one focused clarifying question OR proceed with the safest minimal assumption and state it.
 - On partial progress: summarize what changed, what remains, and the next concrete step.
 - Prefer small, verifiable edits over large speculative rewrites.
-- Writing large files: one \`editor\` call accepts at most ~${EDITOR_INPUT_CHAR_LIMIT} characters of new_text; a larger call is rejected before anything is written. Create the file with a first chunk, then append the rest with \`insert_line\` (line_count + 1 = append at EOF).
+- Writing files: a whole file fits in one \`editor\` call (up to ~${EDITOR_INPUT_CHAR_LIMIT} characters of new_text) — do not split a normal file across calls. Only above that size is the call rejected, and then: ${getLargeWriteGuidance()}
 - When context is tight: preserve task goal, recent decisions, and file paths touched.`
 }
 

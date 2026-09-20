@@ -53,6 +53,20 @@
 - **การ์ดต้องบอกลำดับได้ด้วยตัวเอง** — แชทหลายอันของวันเดียวกันเคยดูเหมือนกันหมด ∴ ป้ายเวลามาจาก `recentTime.ts`: `just now` → `14:32` (วันนี้) → `Yesterday` → `Fri` (ใน 7 วัน) → `Sep 10` และ hover (`title`) ต้องเป็นวันเวลาเต็ม · ห้ามเพิ่มความสูงการ์ดหรือเพิ่มบรรทัดเพื่อสิ่งนี้
 - เทสต์ที่ปักกฎ: `src/icline/recentGrid.test.ts` (สูตร + การวัด + กริดที่เกิดทีหลัง) · `src/icline/recentTime.test.ts` (ป้ายเวลา/วันเต็ม) · `components/history/HistoryPreview.test.tsx` (1→2→3 คอลัมน์ ⇒ 3/6/9 การ์ด · 3 คอลัมน์คือเพดาน · คลิกเปิดแชท · ลำดับด้วยป้ายเวลา · View All ยังอยู่)
 
+## กฎที่ 7 — สื่อ (รูป) เข้าคอนเทกซ์ที่ความละเอียดที่มีประโยชน์จริง
+
+- **รูปต้องถูกย่อที่จุดที่มัน "เข้า" บทสนทนา ไม่ใช่ตอนส่งคำขอ** — รูปที่อยู่ในทรานสคริปต์จะถูกส่งซ้ำในทุกคำขอต่อจากนั้น ∴ จุดที่ต้องย่อคือ: `read_files` อ่านไฟล์ภาพ (โค้ดใน `sdk/packages/core/src/extensions/tools/executors/file-read.ts`) · รูปที่ผู้ใช้แนบมากับข้อความ (`buildInitialUserContent`) ⇒ ทั้งสองเรียกตัวเดียวคือ `sdk/packages/core/src/media/png.ts`
+- **เพดานยาวสุด 1,568px (`MAX_IMAGE_LONG_EDGE`) เพราะผู้ให้บริการย่อเองที่ระดับนั้น** (Anthropic 1568 · ค่าย OpenAI-compatible ~2048 + เพดาน image token) ⇒ พิกเซลที่เกินกว่านั้นไม่มีใครเห็น แต่ต้องจ่ายค่าส่งทุกคำขอ · **การย่อต้องไม่แตะรูปที่เล็กกว่าอยู่แล้ว** (ส่งต่อไบต์เดิมไม่ re-encode) และ **ถ้าไฟล์ที่เข้ารหัสใหม่ไม่เล็กกว่าเดิม ให้คืนของเดิม**
+- **โค้ดรูปเขียนเองล้วน ๆ (ไม่มี dependency ใหม่):** `node:zlib` + ตัวถอดรหัส/เข้ารหัส PNG (colour type 0/2/3/4/6 · bit depth 8 · ไม่ interlaced) · **รองรับเฉพาะ PNG — JPEG/GIF/WEBP ต้องผ่านไปทั้งไบต์** (GIF แบบ animated ห้าม re-encode เด็ดขาด) · **ถอดรหัสไม่ได้ = คืนของเดิม** ⇒ บั๊กโคเดกต้องเสื่อมเป็น "ส่งขนาดเต็ม" ไม่ใช่ "รูปเสีย/รูปหาย"
+- **งบของ `MessageBuilder` ยังเป็นตาข่ายกันล้ม:** รูปที่เกินงบต่อใบจะ **ย่อให้พอดีแล้วเก็บไว้** ไม่ใช่ถูกแทนด้วย `[media omitted: …]` (การทิ้งรูป = โมเดลอ่านแต่ placeholder) · จุดนี้ย่อเฉพาะเส้นทางที่เกินงบอยู่แล้วเพื่อไม่ให้เสีย CPU ทุกเทิร์น
+- เทสต์ที่ปักกฎ: `sdk/packages/core/src/media/png.test.ts` (round-trip · ฟิลเตอร์ทั้ง 5 · palette/grayscale · alpha-premultiply ของ box filter) · `executors/file-read.test.ts` (รูปใหญ่ถูกย่อ + รายงานขนาดเดิม→ใหม่) · `runtime/orchestration/user-input-builder.test.ts` (รูปที่แปะมา) · `session/services/message-builder.test.ts` (เกินงบ ⇒ ย่อ ไม่ใช่ทิ้ง)
+
+## กฎที่ 8 — เพดานตัวอักษรต่อการเรียกของเครื่องมือเขียนไฟล์
+
+- `editor` รับ `old_text`/`new_text` ได้ไม่เกิน **32,000 ตัวอักษรต่อการเรียก** (`EDITOR_INPUT_CHAR_LIMIT` ใน `sdk/packages/core/src/extensions/tools/schemas.ts`) · เดิม 6,000 ซึ่ง **เล็กกว่าไฟล์ซอร์สทั่วไป**: งานเขียนไฟล์ทั้งไฟล์ถูกปฏิเสธ แล้วโมเดลต้องส่งใหม่ 2–4 คำขอ (คำขอ + เวลาบานปลาย) — ทั้งที่ตอนนั้น argument ถูกส่งมาครบและประกอบสำเร็จแล้ว
+- เพดานนี้มีไว้กัน payload ที่ไม่มีทางถูกส่งมาครบในคำตอบเดียว ไม่ใช่เพื่อ "บีบให้เขียนสั้น" ⇒ **การปฏิเสธต้องบอกขนาด, บอกว่ายังไม่เขียนอะไรลงดิสก์, และบอกวิธีส่งใหม่ (chunk + `insert_line`) ในข้อความเดียว** · หมายเลขเพดานมีที่เดียว (core) และ fork มองเห็นผ่าน `EDITOR_INPUT_CHAR_LIMIT` ใน `apps/vscode/src/icline/harness/guardrails.ts` + `scripts/repro-editor-write.ts` พิสูจน์ขอบเขตจริงกับเครื่องมือจริง
+- เทสต์ที่ปักกฎ: core `extensions/tools/definitions.test.ts` (reject ที่เพดาน+1) · `bun run repro:editor-write` (ที่เพดานเขียนสำเร็จ · เกินถูกปฏิเสธก่อนแตะดิสก์ · ขนาดไฟล์จริงในทรานสคริปต์ smoke ลงในคำขอเดียวได้) · `apps/vscode/src/sdk/tool-write-pipeline.test.ts` + `hooks-adapter.test.ts` (ข้อความที่โมเดลเห็น)
+
 ## Quick Picker (ออกแบบล็อกแล้ว — สรุป)
 
 - ความกว้าง popover 320px · hover Options panel **236px** ด้านขวา (top-align กับแถว ถ้าล้นขอบล่างเลื่อนขึ้นพอดีขอบ margin 10px + max-height 320px · gap 4px · ไม่ต่ำกว่า 38px จากขอบบนของ picker เพื่อไม่ทับช่องค้นหา) — สูตรจริงอยู่ใน `computeOptionsPanelTop` (`quickModelPickerList.ts`) และ mock ที่ล็อก

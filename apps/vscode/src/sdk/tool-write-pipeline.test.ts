@@ -44,7 +44,7 @@ function sizeRejectionEnvelope(chars: number) {
 	return {
 		query: "edit:/tmp/oversized.css",
 		result: "",
-		error: `Editor input too large: new_text was ${chars} characters, exceeding the recommended limit of ${EDITOR_INPUT_CHAR_LIMIT}. Split the edit into smaller tool calls so later tool calls are less likely to be truncated or time out.`,
+		error: `Editor input too large: new_text was ${chars} characters, above the ${EDITOR_INPUT_CHAR_LIMIT}-character per-call limit; nothing was written. Create the file with a first chunk of at most ${EDITOR_INPUT_CHAR_LIMIT} characters, then append the remaining chunks with \`insert_line\` (line_count + 1 appends at EOF). Do not re-send the oversized call unchanged.`,
 		success: false,
 	}
 }
@@ -93,21 +93,25 @@ describe("write-pipeline guardrail (iCline layer)", () => {
 	it("keeps the mirrored limit in step with the upstream boundary", () => {
 		// The repro script asserts this against the real tool's behavior; if upstream
 		// moves the boundary, both this number and that harness must move together.
-		expect(EDITOR_INPUT_CHAR_LIMIT).toBe(6000)
+		// 32000 (dev.6-fix.23) sits above any hand-written file so a whole-file write
+		// lands in one call; lower it and the chunked-retry storm comes back.
+		expect(EDITOR_INPUT_CHAR_LIMIT).toBe(32000)
 	})
 
 	it("turns an oversized rejection into an actionable error instead of a phantom ENOENT", async () => {
 		const target = path.join(tmpDir, "oversized.css")
+		const chars = EDITOR_INPUT_CHAR_LIMIT + 2020
 		const result = await runGuardrail(
-			{ path: target, new_text: "y".repeat(7020) },
-			{ ...sizeRejectionEnvelope(7020), query: `edit:${target}` },
+			{ path: target, new_text: "y".repeat(chars) },
+			{ ...sizeRejectionEnvelope(chars), query: `edit:${target}` },
 		)
 
 		expect(isErrorOf(result)).toBe(true)
 		const output = outputOf(result)
 		expect(output).toContain("Editor input too large")
-		expect(output).toContain("7020 characters of new_text")
-		expect(output).toContain("Write it in chunks")
+		expect(output).toContain(`${chars} characters of new_text`)
+		expect(output).toContain(`above the runtime's ${EDITOR_INPUT_CHAR_LIMIT}-character per-call limit`)
+		expect(output).toContain("insert_line")
 		// The old failure mode: a filesystem error that hid the real cause.
 		expect(output).not.toContain("Verification failed")
 		// And nothing was invented on disk by the verifier.
@@ -128,7 +132,8 @@ describe("write-pipeline guardrail (iCline layer)", () => {
 
 		expect(isErrorOf(result)).toBe(true)
 		expect(outputOf(result)).toContain("No replacement performed")
-		expect(outputOf(result)).not.toContain("Write it in chunks")
+		// Only the oversize path adds the per-call-limit explanation.
+		expect(outputOf(result)).not.toContain("per-call limit")
 	})
 
 	it("keeps the tool's own claim when a real success turns out to be missing on disk", async () => {

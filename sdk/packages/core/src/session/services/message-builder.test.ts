@@ -6,6 +6,12 @@ import {
 } from "@cline/shared";
 import { describe, expect, it } from "vitest";
 import {
+	decodePng,
+	downscaleBase64Png,
+	encodePng,
+	MAX_IMAGE_LONG_EDGE,
+} from "../../media/png";
+import {
 	agentMessagesToMessages,
 	messagesToAgentMessages,
 } from "../../runtime/config/agent-message-codec";
@@ -972,6 +978,62 @@ describe("MessageBuilder with structured ToolOperationResult content", () => {
 				},
 			]),
 		]);
+	});
+
+	it("downscales an over-budget PNG to fit instead of omitting it", () => {
+		// A screenshot pasted before fix.23, or carried in from an older session, is
+		// still full size here. Omission is the worst outcome — the model then reads a
+		// placeholder — so the builder shrinks it into the budget and keeps it.
+		const width = 2000;
+		const height = 1500;
+		const pixels = new Uint8Array(width * height * 4);
+		for (let i = 0; i < width * height; i++) {
+			pixels[i * 4] = (i * 37) % 251;
+			pixels[i * 4 + 1] = (i * 91) % 241;
+			pixels[i * 4 + 2] = (i * 53) % 239;
+			pixels[i * 4 + 3] = 255;
+		}
+		const fullSize = Buffer.from(
+			encodePng({ width, height, data: pixels }),
+		).toString("base64");
+		const shrunk = downscaleBase64Png(fullSize);
+		expect(shrunk.changed).toBe(true);
+		expect(shrunk.data.length).toBeLessThan(fullSize.length);
+
+		// A budget the original cannot meet but the downscaled image can.
+		const budget = shrunk.data.length + 64;
+		const builder = new MessageBuilder({
+			maxToolResultChars: 50_000,
+			maxTotalTextBytes: 10_000_000,
+			mediaBudget: {
+				maxImageEncodedBytes: budget,
+				maxImageDecodedBytes: 10_000_000,
+				maxTotalMediaBytes: 10_000_000,
+			},
+		});
+		const messages: Message[] = [
+			toolUseMessage("call_1", "read_files", {
+				files: [{ path: "/tmp/Screenshot.png" }],
+			}),
+			structuredToolResultMessage("call_1", "read_files", [
+				{
+					query: "/tmp/Screenshot.png",
+					result: [
+						"Successfully read image",
+						{ type: "image", data: fullSize, mediaType: "image/png" },
+					],
+					success: true,
+				},
+			]),
+		];
+
+		const serialized = JSON.stringify(builder.buildForApi(messages));
+
+		expect(serialized).not.toContain("[media omitted");
+		expect(serialized).not.toContain(fullSize);
+		expect(serialized).toContain(shrunk.data);
+		const kept = decodePng(new Uint8Array(Buffer.from(shrunk.data, "base64")));
+		expect(kept?.width).toBe(MAX_IMAGE_LONG_EDGE);
 	});
 
 	it("omits oversized custom structured image results regardless of tool name", () => {

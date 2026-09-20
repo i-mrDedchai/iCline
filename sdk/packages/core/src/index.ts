@@ -444,6 +444,18 @@ export {
 	setSdkLogger,
 } from "./logging/early-logger";
 export {
+	decodePng,
+	downscaleBase64Png,
+	downscalePngIfNeeded,
+	downscaleRgba,
+	encodePng,
+	type ImageDownscaleResult,
+	MAX_IMAGE_LONG_EDGE,
+	type PngHeader,
+	type RgbaImage,
+	readPngHeader,
+} from "./media/png";
+export {
 	buildRemoteConfigSessionBlobUploadMetadata,
 	createRemoteConfigSessionMessagesArtifactUploader,
 	type PreparedRemoteConfigCoreIntegration,

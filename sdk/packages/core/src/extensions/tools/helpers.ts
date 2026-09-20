@@ -1,7 +1,7 @@
 import { validateWithZod } from "@cline/shared";
 import {
+	EDITOR_INPUT_CHAR_LIMIT,
 	type EditFileInput,
-	INPUT_ARG_CHAR_LIMIT,
 	type ReadFileRequest,
 	RunCommandsInputUnionSchema,
 	type StructuredCommandInput,
@@ -17,16 +17,25 @@ export function formatError(error: unknown): string {
 	return String(error);
 }
 
+/**
+ * Reject a single `editor` payload that is too large to have arrived intact.
+ *
+ * The message is the model's only recovery recipe in this path, so it states the
+ * limit, that nothing was written, and exactly how to land the same write — see
+ * `EDITOR_INPUT_CHAR_LIMIT` for why the limit sits at 32k rather than 6k.
+ */
 export function getEditorSizeError(input: EditFileInput): string | null {
+	const recipe = `Create the file with a first chunk of at most ${EDITOR_INPUT_CHAR_LIMIT} characters, then append the remaining chunks with \`insert_line\` (line_count + 1 appends at EOF). Do not re-send the oversized call unchanged.`;
+
 	if (
 		typeof input.old_text === "string" &&
-		input.old_text.length > INPUT_ARG_CHAR_LIMIT
+		input.old_text.length > EDITOR_INPUT_CHAR_LIMIT
 	) {
-		return `Editor input too large: old_text was ${input.old_text.length} characters, exceeding the recommended limit of ${INPUT_ARG_CHAR_LIMIT}. Split the edit into smaller tool calls so later tool calls are less likely to be truncated or time out.`;
+		return `Editor input too large: old_text was ${input.old_text.length} characters, above the ${EDITOR_INPUT_CHAR_LIMIT}-character per-call limit; nothing was written. ${recipe}`;
 	}
 
-	if (input.new_text.length > INPUT_ARG_CHAR_LIMIT) {
-		return `Editor input too large: new_text was ${input.new_text.length} characters, exceeding the recommended limit of ${INPUT_ARG_CHAR_LIMIT}. Split the edit into smaller tool calls so later tool calls are less likely to be truncated or time out.`;
+	if (input.new_text.length > EDITOR_INPUT_CHAR_LIMIT) {
+		return `Editor input too large: new_text was ${input.new_text.length} characters, above the ${EDITOR_INPUT_CHAR_LIMIT}-character per-call limit; nothing was written. ${recipe}`;
 	}
 
 	return null;

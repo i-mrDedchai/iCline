@@ -1,7 +1,43 @@
-**Last updated:** 2026-09-20
+**Last updated:** 2026-09-20 (fix.23)
 **Branch:** `feat/upstream-waves-1-2` (จาก main @ `78ebd0923` — รวม dev.5 แล้ว, tag `pre-merge-dev.5`, ยังไม่ push)
-**HEAD:** ดู `git log` (ไม่ตรึง hash ไว้ตรงนี้ — มันตกหล่นทุกครั้งที่มี commit เอกสารตามหลัง) · **fix.7–fix.21 commit แล้ว ยังไม่ push** (`88ff6028b` fix lifecycle ของวิว · `29c24e71c` e2e ขนาน + fixture auxiliary bar + เทสต์ใหม่ · `af58ebbad`/`8aec05f6c` เอกสาร fix.20 · fix.21 Recent หลายคอลัมน์ + draft รอดการย้ายวิว) · **fix.22 ยังไม่ commit** (รอบปัจจุบัน — เตรียมแพ็กเป็น `fix.22`)
-**vsix (ล่าสุดที่มีอยู่):** `apps/vscode/dist/i-mrdedchai.iCline-0.1.18-dev.6-fix.22.vsix` (12,086,670 B @ 2026-09-20T12:16:30Z · 60 files · About = `dev build 6 · fix.22` — ตรวจแล้วว่าสตริงอยู่ในบันเดิล webview จริง และ host bundle มีโค้ดใหม่ (`nothing new above the cut to fold` · ตัวประเมินรูป) · สคริปต์คืน `package.json`/`build-metadata.ts` แล้ว ไม่มี `.wip.bak` ตกค้าง) — ⏳ รอ maintainer smoke · **ห้ามใช้ `fix.21` (หรือก่อนหน้า) smoke เรื่อง compaction/รูป — ยังมีบั๊กตัวประเมิน และ Recent ยังไม่มีป้ายเวลา** · do not overwrite `fix.1`–`fix.21` ใน `dist/` (fix.20 = 12,084,123 B @ 2026-09-20T09:28:31Z · fix.19 = 11,967,453 B @ 2026-09-20T06:07:27Z · fix.18 = 11,967,298 B @ 2026-09-20 05:36:02Z)
+**HEAD:** ดู `git log` (ไม่ตรึง hash ไว้ตรงนี้ — มันตกหล่นทุกครั้งที่มี commit เอกสารตามหลัง) · **fix.23 ยังไม่ commit** (รอบปัจจุบัน — pack จาก working tree) · **fix.7–fix.22 commit แล้ว ยังไม่ push** (`88ff6028b` fix lifecycle ของวิว · `29c24e71c` e2e ขนาน + fixture auxiliary bar + เทสต์ใหม่ · `af58ebbad`/`8aec05f6c` เอกสาร fix.20 · fix.21 Recent หลายคอลัมน์ + draft รอดการย้ายวิว) · **fix.22 ยังไม่ commit** (รอบปัจจุบัน — เตรียมแพ็กเป็น `fix.22`)
+**vsix (ล่าสุดที่มีอยู่):** `apps/vscode/dist/i-mrdedchai.iCline-0.1.18-dev.6-fix.23.vsix` (12,089,267 B @ 2026-09-20T13:02:26Z · 60 files · About = `dev build 6 · fix.23` — ตรวจในไบต์จริงแล้วว่ามีเพดานใหม่ `32000` + ข้อความรูปที่ถูกย่อ และสคริปต์คืน `package.json`/`build-metadata.ts` เรียบร้อย)· ⏳ รอ maintainer smoke · **ห้ามใช้ `fix.22` หรือก่อนหน้า smoke เรื่องรูป/ไฟล์ใหญ่** (fix.22 ยังมีกำแพง 6,000 ของ `editor` และยังไม่มีการย่อรูป) · ของเดิม: `apps/vscode/dist/i-mrdedchai.iCline-0.1.18-dev.6-fix.22.vsix` (12,086,670 B @ 2026-09-20T12:16:30Z · 60 files · About = `dev build 6 · fix.22` — ตรวจแล้วว่าสตริงอยู่ในบันเดิล webview จริง และ host bundle มีโค้ดใหม่ (`nothing new above the cut to fold` · ตัวประเมินรูป) · สคริปต์คืน `package.json`/`build-metadata.ts` แล้ว ไม่มี `.wip.bak` ตกค้าง) — ⏳ รอ maintainer smoke · **ห้ามใช้ `fix.21` (หรือก่อนหน้า) smoke เรื่อง compaction/รูป — ยังมีบั๊กตัวประเมิน และ Recent ยังไม่มีป้ายเวลา** · do not overwrite `fix.1`–`fix.21` ใน `dist/` (fix.20 = 12,084,123 B @ 2026-09-20T09:28:31Z · fix.19 = 11,967,453 B @ 2026-09-20T06:07:27Z · fix.18 = 11,967,298 B @ 2026-09-20 05:36:02Z)
+
+---
+
+## 🔧 dev.6-fix.23 — เพดาน `editor` 6,000 → 32,000 ตัวอักษร + **ย่อรูปก่อนเข้าโมเดล** (2026-09-20)
+
+**สถานะ:** ✅ เสร็จ (2 ใน 4 ข้อที่อนุมัติ) · core `bun run build` สะอาด · core รวม **2,504 เทสต์: 2,397 ผ่าน / 21 fail / 86 skip** โดย **21 ตัวที่ fail ไม่เกี่ยวกับรอบนี้เลย** (`cron-runner` 10 · `hub/server` 3 · `runtime-builder` MCP 2 · `workspace-manifest` 2 · `hook-file-hooks` · `checkpoint-hooks` · `local-provider-service` offline · `runtime-commands` — ทุกตัวพังอยู่ก่อนและไม่แตะไฟล์ที่รอบนี้แก้) · กลุ่มที่แตะ: `media` + `extensions/tools` + `message-builder` + `user-input-builder` **428 ผ่าน** · app vitest `hooks-adapter`/`tool-write-pipeline`/`guardrails` **27/27** · `bun run repro:editor-write` **PASS ทุกข้อ** · e2e บน VS Code จริง `oversized-editor-write` **3/3 (24.4s)** · `tsc` สะอาด (app compat · e2e generated) · biome ไม่มี error ใหม่ · **แพ็กแล้ว:** `apps/vscode/dist/i-mrdedchai.iCline-0.1.18-dev.6-fix.23.vsix` (12,089,267 B @ 2026-09-20T13:02:26Z · 60 files) — ตรวจในไบต์จริงแล้วว่า host bundle มี `-character per-call limit` + `32000` + `downscaled to fit the model's image input` และ webview bundle มีสตริง `fix.23` · สคริปต์คืน `package.json`/`build-metadata.ts` แล้ว (ไม่มี `.wip.bak` ตกค้าง · `git status` มีแต่ไฟล์ที่ตั้งใจแก้)
+
+### ข้อ 2 — ลบกำแพง 6,000 ตัวอักษรของ `editor` (รากของคำขอที่บานปลาย)
+
+- **หลักฐานจากแชทจริง:** 6 ใน 9 ครั้งของข้อความสีส้มคือ `Editor input too large: new_text was 6079/6113/6729/7144/8181 characters` ⇒ ทุกไฟล์ HTML/CSS/JS ที่ยาวกว่านี้ถูก **ปฏิเสธก่อนแตะดิสก์** แล้วโมเดลต้องฉีกเป็น 2–4 คำขอ (แต่ละครั้ง = provider round trip เต็ม) · ตอนที่มาถึงเครื่องมือ argument นั้น **ถูกส่งมาครบและ parse สำเร็จแล้ว** ⇒ เพดานนี้ไม่ได้กันอะไรในจังหวะที่มันปฏิเสธ
+- **แก้:** `EDITOR_INPUT_CHAR_LIMIT = 32_000` (ใหม่ ใน `extensions/tools/schemas.ts` ใช้ทั้งการตรวจขนาด + คำอธิบาย schema ที่โมเดลอ่าน) · `INPUT_ARG_CHAR_LIMIT = 6000` ยังอยู่ตามเดิมในฐานะ "งบคำแนะนำ" ของข้อความ command เท่านั้น (ไม่มีการบังคับใช้) · ข้อความปฏิเสธใหม่บอก **ขนาดจริง + ยังไม่เขียนอะไรลงดิสก์ + วิธีส่งใหม่ (chunk + `insert_line`)** ในข้อความเดียว (เดิมมีถ้อยคำ "less likely to be truncated or time out" ที่ชี้สาเหตุผิด) และ **ตัดถ้อยคำซ้ำ** ที่ fork ต่อท้ายอีกชั้นออก
+- **ตัวเลขเพดานต้องมีที่เดียว:** fork เห็นผ่าน `EDITOR_INPUT_CHAR_LIMIT` ที่ `apps/vscode/src/icline/harness/guardrails.ts` (vitest alias `@cline/core` เป็น stub ∴ import ค่าจริงไม่ได้ — มีเทสต์ปักตัวเลข + `bun run repro:editor-write` พิสูจน์กับเครื่องมือจริง) · overlay ที่โมเดลอ่านตอนนี้บอกว่า **"ไฟล์ทั้งไฟล์ลงในคำขอเดียวได้ ไม่ต้องฉีก"** แล้วค่อยบอกวิธีฉีกเมื่อเกินเพดาน
+- **พิสูจน์ขอบเขตจริง (`bun run repro:editor-write`, เครื่องมือจริง + ดิสก์จริง):** 32,000 สำเร็จ/32,001 ถูกปฏิเสธ · แบทช์ขนาน 4 คำขอที่ "ขนาดเดิมจากทรานสคริปต์" (5000 · 7020 · 6741) **ลงดิสก์ได้ทุกใบในคำขอเดียว** (ก่อนรอบนี้ 7020/6741 ถูกปฏิเสธ) และเฉพาะ 32,500 ที่ถูกปฏิเสธ ⇒ `success=[true,true,true,false]`
+- e2e บนหน้าต่าง VS Code จริง (`oversized-editor-write.test.ts`) อัปเดตมาใช้เพดานใหม่ (fixture ดึงขนาดจากค่าคงที่ของแอปเอง ∴ เลื่อนหลุดขอบเขตไม่ได้) และยังยืนยันครบ 4 อย่าง: ไม่มีไฟล์ลงดิสก์ · ข้อความของเครื่องมือถึงโมเดล · ไม่มี ENOENT · มีวิธีส่งใหม่ในข้อความที่ผู้ใช้เห็น
+
+### ข้อ 3 — รูปต้องถูกย่อก่อนเข้าโมเดล (dependency-free PNG codec)
+
+- **ทำไม:** รูปที่อยู่ในทรานสคริปต์ถูกส่งซ้ำ **ทุกคำขอต่อจากนั้น** และผู้ให้บริการย่อรูปเองอยู่แล้ว (Anthropic 1,568px · OpenAI-compatible ~2048px + เพดาน image token) ⇒ พิกเซลที่เกินกว่านั้นไม่มีใครเห็น แต่ต้องจ่ายค่าส่งทุกคำขอ
+- **โค้ดใหม่ `sdk/packages/core/src/media/png.ts`** (ไม่มี dependency เพิ่ม — `node:zlib` + ถอด/เข้ารหัส PNG เอง): รองรับ colour type 0/2/3/4/6 · bit depth 8 · non-interlaced · box filter แบบ **premultiplied alpha** (กันขอบดำ/halo) · เข้ารหัสใหม่เป็น RGBA ที่ deflate ระดับ 3 (วัดแล้ว: ระดับ 6 แพงกว่า ~5 เท่าเพื่อลดขนาดไม่ถึง 10% และงานนี้วิ่งอยู่ใน tool call)
+- **ย่อที่จุดที่รูป "เข้า" ไม่ใช่ตอนส่ง** (ราคา decode/encode ต่อเทิร์นจะแพงกว่าที่ประหยัด): `read_files` ที่อ่านไฟล์ `.png` · `buildInitialUserContent` สำหรับรูปที่ผู้ใช้แปะ ⇒ ทั้งคู่เรียก `downscalePngIfNeeded` / `downscaleBase64Png`
+- **ทุกทางออกของความล้มเหลว = คืนของเดิม:** ไม่ใช่ PNG · เล็กกว่าเพดานอยู่แล้ว · ถอดรหัสไม่ได้ (16-bit/ย่อย palette/interlaced/ไฟล์ขาด) · **หรือไฟล์ที่เข้ารหัสใหม่ไม่เล็กกว่าเดิม** ⇒ GIF/JPEG/WEBP ผ่านไปทั้งไบต์ (GIF animated ห้าม re-encode)
+- **ตาข่ายกันล้มของ `MessageBuilder` เปลี่ยนจาก "ทิ้ง" เป็น "ย่อ":** รูปที่เกินงบต่อใบเคยถูกแทนด้วย `[media omitted: …]` (โมเดลอ่านแต่ placeholder) ⇒ ตอนนี้ลองย่อให้พอดีก่อนตัดสินใจทิ้ง และทำ **เฉพาะเส้นทางที่เกินงบอยู่แล้ว** ∴ ไม่มี CPU เพิ่มในเส้นทางปกติ
+- เทสต์ใหม่ 20 ข้อ: `media/png.test.ts` 14 (round-trip · ฟิลเตอร์ 1–4 ที่ทดสอบด้วย PNG ที่สร้างฟิลเตอร์เอง · palette + tRNS · grayscale/gray+alpha · ข้อกำหนด "คืน undefined ไม่เดา" · box filter + alpha) · `file-read.test.ts` (+1: รูป 2400×1600 ถูกย่อเป็น 1568×1045 และรายงานขนาดเดิม→ใหม่) · `user-input-builder.test.ts` ใหม่ 5 · `message-builder.test.ts` (+1: เกินงบ ⇒ ย่อให้พอดี ไม่ใช่ทิ้ง)
+
+### จุด smoke (fix.23)
+
+- **ไฟล์ใหญ่ลงในคำขอเดียว:** ให้ agent สร้างไฟล์ HTML/CSS ที่ยาว ~7,000–10,000 ตัวอักษร ⇒ **ต้องไม่เห็น** `Editor input too large` และ **ไม่ต้องมีคำขอเขียนไฟล์ซ้ำ/แยกชิ้น** (ก่อนแก้: ทุกไฟล์ถูกปฏิเสธแล้วฉีก 2–4 คำขอ)
+- **เพดานยังทำงานเมื่อเกินจริง:** ถ้าเจอ `Editor input too large` ต้องบอกขนาดจริง + "nothing was written" + วิธีส่งใหม่ (และต้องมีแค่ที่เดียว ไม่ซ้ำเป็นสองบรรทัด)
+- **รูปไม่กินคอนเทกซ์:** ให้ agent อ่านรูป `.png` ขนาดใหญ่ (screenshot หน้าจอเต็ม) ⇒ ผลลัพธ์ต้องมีข้อความ `… (downscaled to fit the model's image input: 3024x1964 → 1568x1019, …)` และ **คำขอถัด ๆ ไปต้องไม่พา base64 ขนาดเดิมไปด้วย** (ดู `inputTokens` ต่อคำขอ — ไม่ควรกระโดดเป็นแสนเพราะรูปใบเดียว)
+- **รูปที่แปะจากผู้ใช้:** แนบ screenshot ใหญ่ในช่องแชท ⇒ รูปย่อในช่องแชท **ไม่** เปลี่ยนขนาดที่เห็น (การย่อเกิดฝั่งส่งเข้าโมเดล) และยังส่งได้ตามปกติ
+- ของเดิมทั้งหมดของ fix.18–fix.22 ยังใช้ได้
+
+### คิวถัดไป (2 ข้อที่เหลือของชุดที่อนุมัติ)
+
+1. **งานเดินต่อได้ขณะออกจากหน้าแชท (หลาย session พร้อมกัน)** — สถาปัตยกรรมวันนี้ถือ session เดียวต่อ view; ต้องมีโมเดล "หลาย task ที่ยัง active" ฝั่ง host ก่อน
+2. **Working badge บนการ์ด Recent** — ต้องมีข้อ 1 ก่อนจึงจะไม่โกหก
 
 ---
 

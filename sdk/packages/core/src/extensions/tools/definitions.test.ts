@@ -11,7 +11,7 @@ import {
 } from "./definitions";
 import { CommandExitError } from "./executors/bash";
 import { RUN_COMMAND_QUERY_PREVIEW_LIMIT, TimeoutError } from "./helpers";
-import { type EditFileInput, INPUT_ARG_CHAR_LIMIT } from "./schemas";
+import { EDITOR_INPUT_CHAR_LIMIT, type EditFileInput } from "./schemas";
 import type { SkillsExecutorWithMetadata } from "./types";
 
 function hasSchemaKey(value: unknown, key: string): boolean {
@@ -2082,7 +2082,7 @@ describe("default editor tool", () => {
 			throw new Error("Expected editor tool to be defined.");
 		}
 
-		const oversizedText = "x".repeat(INPUT_ARG_CHAR_LIMIT + 1);
+		const oversizedText = "x".repeat(EDITOR_INPUT_CHAR_LIMIT + 1);
 		const result = await editorTool.execute(
 			{
 				path: "/tmp/example.ts",
@@ -2105,7 +2105,7 @@ describe("default editor tool", () => {
 			throw new Error("Expected editor tool result to include an error.");
 		}
 		expect(result.error).toContain(
-			`recommended limit of ${INPUT_ARG_CHAR_LIMIT}`,
+			`above the ${EDITOR_INPUT_CHAR_LIMIT}-character per-call limit`,
 		);
 		expect(execute).not.toHaveBeenCalled();
 	});

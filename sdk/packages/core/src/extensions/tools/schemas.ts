@@ -7,7 +7,26 @@
 
 import { z } from "zod";
 
+/**
+ * Soft per-call character budget advertised to the model for free-form command
+ * text. It shapes guidance only; nothing rejects input at this size.
+ */
 export const INPUT_ARG_CHAR_LIMIT = 6000;
+
+/**
+ * Hard cap on the text payload of a single `editor` call (`old_text` /
+ * `new_text`). A larger payload is rejected before anything reaches disk.
+ *
+ * Was 6000 until dev.6-fix.23, which is smaller than an ordinary source file:
+ * six of the nine orange tool failures in the dev.6-fix.21 smoke chat were this
+ * guard alone (6079 / 6113 / 6729 / 7144 / 8181 characters). Every whole-file
+ * write was therefore rejected, the model re-sent it as 2-4 chunked calls, and
+ * each retry cost a full provider round trip — ballooning both the request count
+ * and the wall-clock time. The cap now sits far above any hand-written file
+ * while still refusing a payload no single response could have produced intact
+ * (32k chars is roughly 8k tokens, inside every catalog model's output budget).
+ */
+export const EDITOR_INPUT_CHAR_LIMIT = 32_000;
 
 /**
  * Schema for read tool input
@@ -202,12 +221,12 @@ export const EditFileInputSchema = z
 			.nullable()
 			.optional()
 			.describe(
-				`Exact text to replace (must match exactly once). Omit this when creating a missing file or inserting via insert_line. Keep this at or below ${INPUT_ARG_CHAR_LIMIT} characters when possible; larger payloads should be split across multiple tool calls to avoid timeouts.`,
+				`Exact text to replace (must match exactly once). Omit this when creating a missing file or inserting via insert_line. Up to ${EDITOR_INPUT_CHAR_LIMIT} characters per call; a larger replacement should be split across multiple calls.`,
 			),
 		new_text: z
 			.string()
 			.describe(
-				`The new content to write when creating a missing file, the replacement text for edits, or the inserted text when insert_line is provided. Keep this at or below ${INPUT_ARG_CHAR_LIMIT} characters when possible; for large edits, use multiple calls with small chunks of old_text and new_text to iteratively edit the file.`,
+				`The new content to write when creating a missing file, the replacement text for edits, or the inserted text when insert_line is provided. A whole file fits in one call (up to ${EDITOR_INPUT_CHAR_LIMIT} characters); larger payloads must be split — create the file with a first chunk, then append the rest with insert_line.`,
 			),
 		// See start_line above: coerced so a stringified line number still applies.
 		insert_line: z.coerce
@@ -220,7 +239,7 @@ export const EditFileInputSchema = z
 			),
 	})
 	.describe(
-		"Edit a text file by replacing old_text with new_text, create the file with new_text if it does not exist, or insert new_text at insert_line when insert_line is provided. Prefer using this tool for file edits over shell commands. IMPORTANT: large edits can time out, so use small chunks and multiple calls when possible.",
+		`Edit a text file by replacing old_text with new_text, create the file with new_text if it does not exist, or insert new_text at insert_line when insert_line is provided. Prefer using this tool for file edits over shell commands. Write a file in one call whenever it fits (up to ${EDITOR_INPUT_CHAR_LIMIT} characters); above that, create it with a first chunk and append the rest with insert_line.`,
 	);
 
 /**

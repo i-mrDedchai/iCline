@@ -1,13 +1,14 @@
 import * as fs from "node:fs"
 import * as path from "node:path"
 import { expect } from "@playwright/test"
+import { E2E_MOCK_OVERSIZED_EDITOR_NEW_TEXT_CHARS } from "./fixtures/server/api"
 import { E2E_WORKSPACE_TYPES, e2e } from "./utils/helpers"
 
 /**
  * E2E repro for the dev.6-fix.7 class of bug, on a REAL VS Code window.
  *
  * The mock server streams a structured `editor` tool call whose new_text is
- * 7020 characters — above the runtime's 6000-char per-call input limit. The
+ * 33020 characters — above the runtime's 32000-char per-call input limit. The
  * real tool rejects it BEFORE touching disk by RETURNING a failure envelope
  * (`{ success: false, error: "Editor input too large …" }`) instead of
  * throwing, so the agent runtime never sets `isError` on its own.
@@ -38,7 +39,7 @@ e2e.describe("Oversized editor write — real failure reaches the transcript", (
 			// The mock oversized tool call targets "oversized-repro.txt" relative
 			// to the session cwd (the first workspace folder). If the guardrail
 			// regresses, the executor would claim success and this file would
-			// appear on disk with 7020 chars — the exact bug being pinned.
+			// appear on disk with 33020 chars — the exact bug being pinned.
 			const targetPath = path.join(workspaceDir, "oversized-repro.txt")
 
 			try {
@@ -75,8 +76,9 @@ e2e.describe("Oversized editor write — real failure reaches the transcript", (
 				await expect(errorText).toBeVisible()
 				const rendered = await errorText.innerText()
 				expect(rendered).not.toContain("ENOENT")
-				expect(rendered).toContain("7020")
-				expect(rendered).toContain("Write it in chunks")
+				expect(rendered).toContain(String(E2E_MOCK_OVERSIZED_EDITOR_NEW_TEXT_CHARS))
+				// The rejection must carry the recovery recipe (chunk + insert_line).
+				expect(rendered).toContain("insert_line")
 				const bodyText = await sidebar.locator("body").innerText()
 				expect(bodyText).not.toContain("Verification failed: could not read")
 				expect(bodyText).not.toContain("ENOENT")

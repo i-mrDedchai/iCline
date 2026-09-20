@@ -1,3 +1,5 @@
+import { EDITOR_INPUT_CHAR_LIMIT } from "../../../../icline/harness/guardrails"
+
 export const E2E_REGISTERED_MOCK_ENDPOINTS = {
 	"/api/v1": {
 		GET: [
@@ -89,18 +91,26 @@ export const E2E_MOCK_EDITOR_TOOL_CALL = {
 
 /**
  * Structured `editor` tool call whose new_text exceeds the runtime's per-call
- * input limit (INPUT_ARG_CHAR_LIMIT = 6000 chars). The real tool rejects it
- * BEFORE touching disk by RETURNING a failure envelope
+ * input limit (`EDITOR_INPUT_CHAR_LIMIT`, 32000 chars since dev.6-fix.23 — it was
+ * 6000, which this fixture used to trip with a 7020-character file). The real tool
+ * rejects it BEFORE touching disk by RETURNING a failure envelope
  * (`{ success: false, error: "Editor input too large …" }`) instead of
  * throwing, and the iCline post-write guardrail must surface that message to
  * the model with `isError: true` — never as a phantom ENOENT.
+ *
+ * The size is derived from the extension's own mirror of the limit so the fixture
+ * cannot drift below a boundary the real tool would accept. That realistic writes
+ * now land in a single call instead of being chunked is pinned by the real-core
+ * half, `bun run repro:editor-write`.
  */
+export const E2E_MOCK_OVERSIZED_EDITOR_NEW_TEXT_CHARS = EDITOR_INPUT_CHAR_LIMIT + 1020
+
 export const E2E_MOCK_OVERSIZED_EDITOR_TOOL_CALL = {
 	id: "call_e2e_oversized_1",
 	name: "editor",
 	arguments: {
 		path: "oversized-repro.txt",
-		new_text: "x".repeat(7020),
+		new_text: "x".repeat(E2E_MOCK_OVERSIZED_EDITOR_NEW_TEXT_CHARS),
 	},
 }
 

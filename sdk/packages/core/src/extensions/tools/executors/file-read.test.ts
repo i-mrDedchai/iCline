@@ -2,7 +2,71 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { describe, expect, it } from "vitest";
+import { decodePng, encodePng, MAX_IMAGE_LONG_EDGE } from "../../../media/png";
 import { createFileReadExecutor } from "./file-read";
+
+/**
+ * Synthesize a screenshot-like PNG: flat panels (like an editor) plus text rows.
+ * A pixel-periodic pattern would be the wrong fixture here — resampling destroys
+ * its exact repetition and the re-encode can come out larger, which the codec
+ * deliberately refuses to ship.
+ */
+function screenshotPng(width: number, height: number): Buffer {
+	const data = new Uint8Array(width * height * 4);
+	data.fill(255); // white page, alpha included
+	let seed = 20_260_920;
+	const rand = () => {
+		seed = (seed * 1_103_515_245 + 12_345) & 0x7fffffff;
+		return seed / 0x7fffffff;
+	};
+
+	const fillRect = (
+		x0: number,
+		y0: number,
+		w: number,
+		h: number,
+		rgb: [number, number, number],
+	) => {
+		for (let y = Math.max(0, y0); y < Math.min(height, y0 + h); y++) {
+			for (let x = Math.max(0, x0); x < Math.min(width, x0 + w); x++) {
+				const offset = (y * width + x) * 4;
+				data[offset] = rgb[0];
+				data[offset + 1] = rgb[1];
+				data[offset + 2] = rgb[2];
+			}
+		}
+	};
+
+	// A sidebar, a few cards, and text: large flat areas with fine dark detail.
+	fillRect(0, 0, Math.round(width * 0.25), height, [40, 44, 52]);
+	for (let i = 0; i < 40; i++) {
+		fillRect(
+			Math.round(rand() * width * 0.9),
+			Math.round(rand() * height * 0.9),
+			Math.round(60 + rand() * 400),
+			Math.round(40 + rand() * 200),
+			[
+				Math.round(rand() * 255),
+				Math.round(rand() * 255),
+				Math.round(rand() * 255),
+			],
+		);
+	}
+	for (let row = 40; row < height - 20; row += 28) {
+		const textWidth = Math.round(rand() * width * 0.4);
+		for (
+			let x = Math.round(width * 0.3);
+			x < Math.round(width * 0.3) + textWidth;
+			x += 2
+		) {
+			if (rand() > 0.35) {
+				fillRect(x, row, 1, 12, [230, 235, 240]);
+			}
+		}
+	}
+
+	return Buffer.from(encodePng({ width, height, data }));
+}
 
 describe("createFileReadExecutor", () => {
 	it("reads a file from an absolute path", async () => {
@@ -235,6 +299,53 @@ describe("createFileReadExecutor", () => {
 					mediaType: "image/png",
 				},
 			]);
+		} finally {
+			await fs.rm(dir, { recursive: true, force: true });
+		}
+	});
+
+	it("downscales an oversized screenshot before inlining it", async () => {
+		// A 2x Retina screenshot: every byte above the provider's own downscale
+		// ceiling is dead weight re-sent with each later request.
+		const dir = await fs.mkdtemp(path.join(os.tmpdir(), "agents-file-read-"));
+		const filePath = path.join(dir, "Screenshot.png");
+		const pngBytes = screenshotPng(2400, 1600);
+		await fs.writeFile(filePath, pngBytes);
+
+		try {
+			const readFile = createFileReadExecutor();
+			const result = await readFile(
+				{ path: filePath },
+				{
+					agentId: "agent-1",
+					conversationId: "conv-1",
+					iteration: 1,
+					metadata: { modelSupportsImages: true },
+				},
+			);
+			if (!Array.isArray(result)) {
+				throw new Error("expected image content blocks");
+			}
+			const [text, image] = result as [
+				{ type: string; text: string },
+				{ type: string; data: string; mediaType: string },
+			];
+			expect(text.text).toContain("Successfully read image");
+			expect(text.text).toContain("downscaled");
+			expect(text.text).toContain("2400x1600");
+			expect(text.text).toContain(`${MAX_IMAGE_LONG_EDGE}x`);
+			expect(image.mediaType).toBe("image/png");
+
+			const decoded = decodePng(
+				new Uint8Array(Buffer.from(image.data, "base64")),
+			);
+			expect(decoded?.width).toBe(MAX_IMAGE_LONG_EDGE);
+			expect(decoded?.height).toBe(
+				Math.round((1600 * MAX_IMAGE_LONG_EDGE) / 2400),
+			);
+			expect(Buffer.from(image.data, "base64").length).toBeLessThan(
+				pngBytes.length,
+			);
 		} finally {
 			await fs.rm(dir, { recursive: true, force: true });
 		}
