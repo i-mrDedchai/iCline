@@ -40,6 +40,8 @@
 - ห้ามมีปุ่ม "None/Off" ในแผง — การปิดเป็นหน้าที่ของสวิตช์ Thinking
 - ไอคอน capability บนแถวใช้**สีตามสถานะจริง** (ม่วง reasoning · ทอง thinking: สว่างเมื่อเปิด, จาง 50% เมื่อปิด) + tooltip บอกระดับที่ใช้จริง ส่วน vision/audio/video/training เป็นสีประจำความสามารถล้วน
 - **ชุดไอคอน + badge ตัวเดียวกันต้องแสดงที่ชิปโมเดลใต้ช่องแชทด้วย** (ไม่ใช่เฉพาะใน picker) — นิยามที่เดียวคือ `components/chat/ModelStatusIcons.tsx` จาก `status` ก้อนเดียวกับที่แถวใช้ (`resolveModelStatus`) — ห้ามคัดลอกมาร์กอัปไปที่ที่สอง
+- **ชิปใต้ช่องแชทแยกเป็น 2 ปุ่ม** (fix.17): ปุ่มชื่อโมเดล + chevron = เปิด **รายการโมเดล** (`data-icline-model-trigger`) · ชุดไอคอนสถานะ = ปุ่มของตัวเอง (`data-icline-model-status-button`) เปิด **แผง Options ของโมเดลที่ใช้อยู่** (`data-icline-status-options`) ⇒ เปลี่ยน Effort/Thinking ของโมเดลปัจจุบันได้โดยไม่ต้องสลับโมเดล · สถานะที่ไม่มีอะไรแสดงเลย = ไม่ต้องมีปุ่ม (อย่าทำปุ่มเปล่า)
+- **เนื้อหาแผง Options ต้องเป็นคอมโพเนนต์เดียว** — `components/chat/ModelOptionsPanel.tsx` ใช้ทั้งแผง hover ของ picker และ popover ของชิป (หัวข้อ Options → model id → Thinking → Effort → capability) ห้ามมีมาร์กอัปชุดที่สองที่ "หน้าตาเหมือนกัน" · สวิตช์/ปุ่มในแผงเขียนค่าผ่าน handler ตัวเดียวกันเสมอ (เขียนลง configuration จริงเมื่อเป็นโมเดลที่ใช้อยู่ · เก็บเป็น preference เมื่อไม่ใช่)
 - **effort ที่ถูกลดระดับต้องถูกบอก** — เมื่อค่าที่เก็บไว้ทำให้ SDK ส่งค่าอื่น (หรือไม่ส่งเลย) แผง Options และ Effort control ใน Settings ต้องแสดงประโยคเดียวกันจากคำตอบของ host (`ReasoningEffortNotice`) · ถ้าไม่รู้คำตอบหรือส่งตามที่เลือก → เงียบ · **ประโยคที่ต้องมีระดับต้องมีระดับจริง** — ถ้าไม่มี `applied` ให้ใช้ประโยค "ไม่ส่ง" เสมอ (ห้ามมี `X →  · …`) และ host มีเทสต์สแกน registry ยืนยันว่ามีแค่ 2 รูปแบบที่อธิบายได้
 
 ## ฟอร์ม Settings: ลำดับ z-index ของ dropdown
@@ -62,5 +64,5 @@
 
 ## ขอบเขตการ implement
 
-1. ~~fix.9 — QuickModelPicker ตามสเปกนี้ + reusable tooltip component~~ ✅ ปิดแล้ว (fix.9–fix.15: แผง Options ตามแถว · เนื้อหาตรง mock v11 · สถานะ/ไอคอนตรงกับค่าที่ตั้ง · นโยบาย + ชุดค่า Effort เป็น metadata กลาง · พจนานุกรมค่าเดียวกันทั้งแอป · แจ้งเมื่อค่า Effort ถูกลดระดับ · ชุดไอคอน+badge ตัวเดียวบนชิปใต้ช่องแชท · ลำดับ z-index ของ dropdown ในฟอร์ม Settings)
+1. ~~fix.9 — QuickModelPicker ตามสเปกนี้ + reusable tooltip component~~ ✅ ปิดแล้ว (fix.9–fix.17: แผง Options ตามแถว · เนื้อหาตรง mock v11 · สถานะ/ไอคอนตรงกับค่าที่ตั้ง · นโยบาย + ชุดค่า Effort เป็น metadata กลาง · พจนานุกรมค่าเดียวกันทั้งแอป · แจ้งเมื่อค่า Effort ถูกลดระดับ · ชุดไอคอน+badge ตัวเดียวบนชิปใต้ช่องแชท · ลำดับ z-index ของ dropdown ในฟอร์ม Settings · นโยบาย provider ขององค์กรมีคำตอบในที่ที่คลิก · ชิปแยกเป็นปุ่มโมเดล/ปุ่มสถานะที่เปิด Options ของโมเดลปัจจุบันได้)
 2. รอบหลัง — ขยายคลุม surface อื่นของ iCline (แทน native title ที่เหลือทั้งแอป) ทีละส่วน

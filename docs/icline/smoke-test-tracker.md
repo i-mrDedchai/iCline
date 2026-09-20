@@ -1,7 +1,39 @@
 **Last updated:** 2026-09-20
 **Branch:** `feat/upstream-waves-1-2` (จาก main @ `78ebd0923` — รวม dev.5 แล้ว, tag `pre-merge-dev.5`, ยังไม่ push)
-**HEAD:** ดู `git log` (ไม่ตรึง hash ไว้ตรงนี้ — มันตกหล่นทุกครั้งที่มี commit เอกสารตามหลัง) · **fix.7–fix.16 commit แล้ว ยังไม่ push**
-**vsix (ล่าสุด):** `apps/vscode/dist/i-mrdedchai.iCline-0.1.18-dev.6-fix.16.vsix` (11,966,196 B @ 2026-09-20 02:34Z · About = `dev build 6 · fix.16`) — ⏳ **รอบนี้คือ fix.16** · do not overwrite `fix.1`–`fix.15` ใน `dist/`
+**HEAD:** ดู `git log` (ไม่ตรึง hash ไว้ตรงนี้ — มันตกหล่นทุกครั้งที่มี commit เอกสารตามหลัง) · **fix.7–fix.17 commit แล้ว ยังไม่ push**
+**vsix (ล่าสุด):** `apps/vscode/dist/i-mrdedchai.iCline-0.1.18-dev.6-fix.17.vsix` (11,966,957 B @ 2026-09-20T03:45:49Z · About = `dev build 6 · fix.17`) — ⏳ **รอบนี้คือ fix.17** · do not overwrite `fix.1`–`fix.16` ใน `dist/` (ของ fix.16 = 11,966,196 B @ 2026-09-20 02:34Z)
+
+---
+
+## 🎛️ dev.6-fix.17 — ชิปสถานะแยกปุ่ม + เปิด Options ของโมเดลที่ใช้อยู่ + นโยบายองค์กรมีหลักฐานบน VS Code จริง (2026-09-20)
+
+**สถานะ:** ✅ เสร็จ · unit/tsc/biome ผ่าน · e2e บน VS Code จริง **5/5** · ⏳ รอ maintainer smoke (VSIX `dev.6-fix.17`)
+
+**ที่มา (2 เรื่องที่ maintainer อนุมัติพร้อมกัน):**
+1. ทำเส้นทาง "provider ที่องค์กรไม่อนุญาต" ของ fix.16 ให้มีหลักฐาน e2e บน VS Code จริง (เดิมพิสูจน์ได้แค่ระดับ unit เพราะ harness ไม่มี control plane ที่ส่ง remote config ได้)
+2. ปรับ UXUI ชิปใต้ช่องแชท: ไอคอนสถานะถูก“ฝัง”รวมกับปุ่มชื่อโมเดล (คลิกเดียวเปิดรายการโมเดล) ⇒ อยากกดที่ไอคอนเพื่อเปิดแผง Options ของโมเดลที่ใช้อยู่ (เปลี่ยน Thinking/Effort โดยไม่สลับโมเดล) — และแยกไอคอนให้ออกมาอยู่ข้างปุ่มชื่อ
+
+**วิธีแก้ (1) — harness:** `fixtures/server/api.ts` + `index.ts` เพิ่ม state `remoteConfig` + 2 endpoint ที่ extension อ่านจริง (`GET /api/v1/users/me/remote-config` = discovery คืน `data: null` เมื่อไม่มีนโยบาย, `GET /api/v1/organizations/{id}/remote-config` = `{ value: JSON, enabled }`) + helper `/.test/setRemoteConfig` + `setRemoteConfig()` บนคลาส mock (เพิ่ม endpoint `/organizations/{orgId}/api-keys` ที่ implement ไว้ก่อนหน้านี้ไม่ครบด้วย)
+
+**เทสต์ e2e ใหม่:** `src/test/e2e/quick-picker-org-policy.test.ts` — signin → เผยแพร่นโยบาย "Cline เท่านั้น" → เข้า org ผ่าน **Account view จริง** (`tab-account` → select `random-org-id`) ซึ่งเป็นเส้น `setUserOrganization` → `fetchRemoteConfig` (await จริง ⇒  deterministic) → กลับหน้า chat → เปิด picker → assert (ก) provider ทุกตัวที่ไม่อนุญาตมีล็อก `data-icline-org-blocked="<id>"` และ cline ไม่มี (ข) ขยาย provider ที่ถูกห้ามจนเจอตัวที่มีโมเดล → คลิกโมเดล → ขึ้น `[data-icline-org-provider-block]` + popover ยังเปิด + **ชื่อโมเดลบนชิปไม่เปลี่ยน**
+
+**วิธีแก้ (2) — webview:**
+- คอมโพเนนต์ใหม่ `components/chat/ModelOptionsPanel.tsx` = เนื้อหาแผง Options (หัวข้อ/model id/Thinking/Effort/capability + `ReasoningEffortNotice`) ที่**ทั้งสองที่**เรนเดอร์: แผง hover ของ picker และ popover ของชิป · `CAPABILITY_ICONS` export จาก `ModelStatusIcons` เป็นนิยามเดียว (ลบตารางที่สองใน picker)
+- ชิปแยกเป็น 2 ปุ่ม: `data-icline-model-trigger` (ชื่อ + chevron → รายการโมเดล) และ `data-icline-model-status-button` (ชุดไอคอน/badge → popover `data-icline-status-options`) · ซ่อนปุ่มสถานะเมื่อไม่มีอะไรแสดง (caps ว่าง + ไม่มี badge)
+- เขียนค่าผ่าน handler ตัวเดิม (`handleThinkingToggle`/`handleEffortChange`) ⇒ โมเดลที่ใช้อยู่เขียนลง configuration จริง (ไม่ใช่ preference) และเรียก `useReasoningEffortOutcome` ตัวที่สองสำหรับโมเดลปัจจุบันเพื่อให้ popover แสดงประโยค clamp เดียวกับแผง hover
+- i18n: `statusOptionsTooltip` (en/th)
+
+**เทสต์ unit ใหม่:** `QuickModelPickerRealPopover.test.tsx` — "splits the composer chip..." : assert ไอคอนไม่อยู่ในปุ่มชื่อ · status button ไม่เปิดรายการโมเดล · popover แสดง model id/switch/effort ของโมเดลที่ใช้อยู่ · คลิก Max ⇒ `handleModeFieldChange({plan,act}, "max", "act")` และ **ไม่เรียก `commitModelSelection`** · badge บนชิปขยับตาม
+
+**แก้เทสต์ e2e เดิม:** `quick-picker-hover` / `quick-picker-effort-notice` เลิกใช้ selector `button:has(span[class~="max-w-[180px]"])` (ราะปุ่มชื่อถูกจัดวางใหม่) → ใช้ `[data-icline-model-trigger]`
+
+**หมายเหตุที่ต้องรู้ (harness):** ถ้าไม่มีนโยบาย discovery ตอบ `data: null` ⇒ host เรียก `clearRemoteConfig()` ตามเดิม · `vscode-dropdown` **ไม่ใช่** `<select>` (เป็น combobox ของ webview-toolkit: `role="combobox"` + `vscode-option` เป็น light DOM ที่ถูก slot เข้า shadow listbox) ⇒ ต้อง **คลิก dropdown แล้วคลิก `vscode-option[value=...]`** (ห้ามใช้ `selectOption` และ `getByRole("option")` จะมองไม่เห็นตอน listbox ปิด) · `showNavbar: false` ใน `platform-configs.json` ⇒ ใน VS Code ไม่มี navbar (`tab-account`) ต้องเปิด Account view ผ่านปุ่ม view-title ของ host (`.action-label[aria-label="Account"]:visible`) ซึ่งคือคำสั่ง `iCline.accountButtonClicked`
+
+**ผลตรวจ (รอบนี้):** webview vitest **486/486** · `tsc -b` + biome ผ่าน · e2e บน VS Code จริง **5/5** = `composer-status-options` (ใหม่ 16.9s) · `quick-picker-org-policy` (ใหม่ 17.9s) · `quick-picker-hover` (19.0s) · `quick-picker-effort-notice` (39.5s) · `settings-model-selection` (17.4s) — รันบน VSIX `dist/e2e.vsix` ที่แพ็กจาก commit รอบนี้ (ยืนยันว่าบันเดิล webview มี `data-icline-model-status-button` + `data-icline-status-options`)
+
+**VSIX:** `dist/i-mrdedchai.iCline-0.1.18-dev.6-fix.17.vsix` (11,966,957 B @ 2026-09-20T03:45:49Z · About = `dev build 6 · fix.17`) · `build-metadata.ts` / `package.json` ถูก restore กลับสภาพเดิมหลังแพ็ก (ไม่มีไฟล์ค้าง)
+
+**ยังไม่ทำ (ตัดสินใจไว้):** เส้นทาง "นโยบายองค์กร" ที่พิสูจน์ด้วย e2e นี้ครอบ sign-in → เข้า org ผ่าน UI → lock + คลิก blocked; ยังไม่ได้จำลองเคส **องค์กรปัก provider จริง** (remote config ที่มี `providerSettings` ของ provider อื่น + API keys) เพราะ harness ยังไม่มีคีย์ปลอมให้ resolve โมเดลของ provider นั้น
 
 ---
 
