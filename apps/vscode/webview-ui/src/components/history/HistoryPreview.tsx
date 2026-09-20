@@ -1,6 +1,7 @@
 import { StringRequest } from "@shared/proto/cline/common"
-import { memo } from "react"
+import { type CSSProperties, memo, useMemo, useState } from "react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
+import { sliceRecentTasks, useRecentColumnCount } from "@/icline/recentGrid"
 import { TaskServiceClient } from "@/services/grpc-client"
 
 type HistoryPreviewProps = {
@@ -9,6 +10,12 @@ type HistoryPreviewProps = {
 
 const HistoryPreview = ({ showHistoryView }: HistoryPreviewProps) => {
 	const { taskHistory } = useExtensionState()
+	// The grid measures itself: three rows stay three rows, and how many sessions fit per row
+	// is the pane's decision (see `@/icline/recentGrid`). A callback ref into state, because the
+	// grid only exists once there is history — which is after the first paint.
+	const [grid, setGrid] = useState<HTMLDivElement | null>(null)
+	const columns = useRecentColumnCount(grid)
+	const recentTasks = useMemo(() => taskHistory.filter((item) => item.ts && item.task), [taskHistory])
 	const handleHistorySelect = (id: string) => {
 		TaskServiceClient.showTaskWithId(StringRequest.create({ value: id })).catch((error) =>
 			console.error("Error showing task:", error),
@@ -27,13 +34,19 @@ const HistoryPreview = ({ showHistoryView }: HistoryPreviewProps) => {
 		<div style={{ flexShrink: 0 }}>
 			<style>
 				{`
+					.history-preview-grid {
+						display: grid;
+						grid-template-columns: repeat(var(--history-columns, 1), minmax(0, 1fr));
+						gap: 8px;
+						/* Cards in a row match the tallest of them, so a row reads as a row. */
+						align-items: stretch;
+					}
 					.history-preview-item {
 						background-color: color-mix(in srgb, var(--vscode-toolbar-hoverBackground) 65%, transparent);
 						border-radius: 4px;
 						position: relative;
 						overflow: hidden;
 						cursor: pointer;
-						margin-bottom: 8px;
 						padding: 10px 12px;
 						display: flex;
 						align-items: flex-start;
@@ -129,7 +142,7 @@ const HistoryPreview = ({ showHistoryView }: HistoryPreviewProps) => {
 						Recent
 					</span>
 				</div>
-				{taskHistory.filter((item) => item.ts && item.task).length > 0 && (
+				{recentTasks.length > 0 && (
 					<button
 						aria-label="View all history"
 						className="history-view-all-btn"
@@ -143,11 +156,14 @@ const HistoryPreview = ({ showHistoryView }: HistoryPreviewProps) => {
 
 			{
 				<div className="px-4">
-					{taskHistory.filter((item) => item.ts && item.task).length > 0 ? (
-						taskHistory
-							.filter((item) => item.ts && item.task)
-							.slice(0, 3)
-							.map((item) => (
+					{recentTasks.length > 0 ? (
+						<div
+							className="history-preview-grid"
+							data-columns={columns}
+							data-icline-recent-grid
+							ref={setGrid}
+							style={{ "--history-columns": String(columns) } as CSSProperties}>
+							{sliceRecentTasks(recentTasks, columns).map((item) => (
 								<div className="history-preview-item" key={item.id} onClick={() => handleHistorySelect(item.id)}>
 									<div className="history-task-content">
 										{item.isFavorited && (
@@ -170,7 +186,8 @@ const HistoryPreview = ({ showHistoryView }: HistoryPreviewProps) => {
 										)}
 									</div>
 								</div>
-							))
+							))}
+						</div>
 					) : (
 						<div
 							style={{

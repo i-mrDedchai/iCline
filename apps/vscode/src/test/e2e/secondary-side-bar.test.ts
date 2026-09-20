@@ -24,6 +24,10 @@ import { e2e } from "./utils/helpers"
  *   3. **the pane fixture follows the view.** The width controller finds the sash by tracing
  *      the frame stack back to the workbench part that hosts the webview, so it keeps working
  *      after the move — the width is measured (and changed) in the new part.
+ *   4. **an unsent draft comes with the view.** The webview is re-created by the move, so a
+ *      half-written message has to come from the draft store rather than from the React tree
+ *      (`@/icline/composerDraftStorage`); typing into the sidebar and reading the text back in
+ *      the secondary side bar is the only way to know a real webview's `localStorage` survives.
  */
 
 /** The picker body's own width (`PICKER_WIDTH_PX`), used by the anchoring rule before render. */
@@ -34,6 +38,8 @@ const MENU_MARGIN_PX = 8
 const AUX_BAR_GROWTH_PX = 120
 /** What the mock Cline API answers with, once per turn (see `fixtures/server`). */
 const MOCK_REPLY = "mock Cline API response"
+/** Left in the composer on purpose, never sent: it is what the move has to preserve. */
+const UNSENT_DRAFT = "unsent draft that has to survive the move"
 
 e2e(
 	"Secondary Side Bar — the chat keeps working after the view is moved there",
@@ -56,6 +62,11 @@ e2e(
 		await sidebar.getByTestId("send-button").click({ delay: 50 })
 		await expect(sidebar.getByText(MOCK_REPLY)).toHaveCount(1, { timeout: 20_000 })
 
+		// The message the user is still writing when the view is moved: nothing sends it, so
+		// whatever the moved view shows is what the draft store handed it.
+		await sidebarInput.fill(UNSENT_DRAFT)
+		await expect(sidebarInput).toHaveValue(UNSENT_DRAFT)
+
 		const moved = await pane.moveToAuxiliaryBar()
 		expect(await pane.location(), "the chat view should be in the secondary side bar now").toBe("auxiliarybar")
 
@@ -68,18 +79,25 @@ e2e(
 			"the conversation taken in the sidebar should survive the move (an empty chat means the session was cleared)",
 		).toHaveCount(1, { timeout: 10_000 })
 
-		// 2) The pane the fixture measures and drags is the one the chat landed in.
+		// 2) The unsent draft came with it, even though this webview is a new one.
+		await expect(
+			movedInput,
+			"an unsent message should survive the move (an empty composer means the draft was lost)",
+		).toHaveValue(UNSENT_DRAFT, { timeout: 10_000 })
+
+		// 3) The pane the fixture measures and drags is the one the chat landed in.
 		const before = await pane.measure()
 		const after = await pane.widenTo(before + AUX_BAR_GROWTH_PX)
 		expect(after, `the secondary side bar should widen from ${before}px`).toBeGreaterThanOrEqual(before + AUX_BAR_GROWTH_PX)
 
-		// 3) A second turn still goes through where the view now lives.
+		// 4) A second turn still goes through where the view now lives — and sending clears what
+		// was left over from the draft, rather than sending it twice.
 		await movedInput.fill("And this one from the secondary side bar")
 		await expect(movedInput).toHaveValue("And this one from the secondary side bar")
 		await moved.getByTestId("send-button").click({ delay: 50 })
 		await expect(moved.getByText(MOCK_REPLY)).toHaveCount(2, { timeout: 20_000 })
 
-		// 4) And the popover still decides its own edge in the new part, by the shared rule.
+		// 5) And the popover still decides its own edge in the new part, by the shared rule.
 		const trigger = moved.locator("[data-icline-model-trigger]")
 		await expect(trigger).toBeVisible({ timeout: 10_000 })
 		await trigger.click({ delay: 30 })

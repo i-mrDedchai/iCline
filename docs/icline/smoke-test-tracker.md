@@ -1,7 +1,33 @@
 **Last updated:** 2026-09-20
 **Branch:** `feat/upstream-waves-1-2` (จาก main @ `78ebd0923` — รวม dev.5 แล้ว, tag `pre-merge-dev.5`, ยังไม่ push)
-**HEAD:** ดู `git log` (ไม่ตรึง hash ไว้ตรงนี้ — มันตกหล่นทุกครั้งที่มี commit เอกสารตามหลัง) · **fix.7–fix.20 commit แล้ว ยังไม่ push** (`88ff6028b` fix lifecycle ของวิว · `29c24e71c` e2e ขนาน + fixture auxiliary bar + เทสต์ใหม่)
-**vsix (ล่าสุดที่มีอยู่):** `apps/vscode/dist/i-mrdedchai.iCline-0.1.18-dev.6-fix.20.vsix` (12,084,123 B @ 2026-09-20T09:28:31Z · 60 files · About = `dev build 6 · fix.20`) — ⏳ รอ maintainer smoke · แพ็กจาก HEAD ปัจจุบัน (รอบแรกของ fix.20 ไม่เคยแพ็ก ⇒ artefact ใบนี้ครอบทั้ง 2 รอบ) ⇒ **อย่าใช้ `fix.19` smoke เคสย้ายวิว** เพราะยังมีบั๊กทั้งสองส่วน (controller ตาย + task ถูกเคลียร์) · do not overwrite `fix.1`–`fix.19` ใน `dist/` (fix.19 = 11,967,453 B @ 2026-09-20T06:07:27Z · fix.18 = 11,967,298 B @ 2026-09-20 05:36:02Z)
+**HEAD:** ดู `git log` (ไม่ตรึง hash ไว้ตรงนี้ — มันตกหล่นทุกครั้งที่มี commit เอกสารตามหลัง) · **fix.7–fix.20 commit แล้ว ยังไม่ push** (`88ff6028b` fix lifecycle ของวิว · `29c24e71c` e2e ขนาน + fixture auxiliary bar + เทสต์ใหม่) · **fix.21 ยังไม่ commit** (รอบปัจจุบัน — pack จาก working tree)
+**vsix (ล่าสุดที่มีอยู่):** `apps/vscode/dist/i-mrdedchai.iCline-0.1.18-dev.6-fix.21.vsix` (12,085,311 B @ 2026-09-20T10:04:27Z · 60 files · About = `dev build 6 · fix.21` — ตรวจแล้วว่าสตริงอยู่ในบันเดิล webview จริง) — ⏳ รอ maintainer smoke · **รอบนี้แก้ webview จริง (Recent หลายคอลัมน์ + draft) ⇒ `fix.20` และก่อนหน้าไม่มีสิ่งเหล่านี้** · do not overwrite `fix.1`–`fix.20` ใน `dist/` (fix.20 = 12,084,123 B @ 2026-09-20T09:28:31Z · fix.19 = 11,967,453 B @ 2026-09-20T06:07:27Z · fix.18 = 11,967,298 B @ 2026-09-20 05:36:02Z)
+
+---
+
+## 🧰 dev.6-fix.21 — "Recent" หลายคอลัมน์บนหน้าแรก + **แก้บั๊ก: draft ในช่องแชทหายเมื่อย้ายวิว** (2026-09-20)
+
+**สถานะ:** ✅ เสร็จ · webview vitest **537/537** (เดิม 501 + ใหม่ 36: `recentGrid` 15 · `HistoryPreview` 5 · `composerDraftStorage` 10 · `useChatState` 6) · `tsc` สะอาดทั้ง app (`tsconfig.vscode-compat.json`) และ e2e (`tsconfig.test.generated.json`) · biome: **ไม่มี finding ใหม่** (แก้ format ของตัวเอง 2 ไฟล์ · เหลือ a11y info 4 ตัวเดิมของ `HistoryPreview.tsx`) · e2e บน VS Code จริง **16/16 ที่ 3 worker (2m00s)** รวม assertion ใหม่ของ draft · ⚠️ **ยังไม่ commit** (pack จาก working tree ก่อน ⇒ เนื้อไฟล์เหมือนที่จะ commit) · **แพ็กแล้ว:** `apps/vscode/dist/i-mrdedchai.iCline-0.1.18-dev.6-fix.21.vsix` — ⏳ รอ maintainer smoke
+
+**ที่มา (maintainer อนุมัติ 2 ข้อ):**
+1. เก็บ **draft ของช่องแชท** ไว้ให้รอดการย้ายวิว (ข้อที่ fix.20 บันทึกไว้ว่า "ไม่ได้แก้": ข้อความ/ไฟล์ที่พิมพ์ค้างหายเพราะ VS Code สร้าง webview ใหม่)
+2. หน้าแรก: Recent ยัง **3 แถวเท่าเดิม** แต่ให้ปรับเป็น 2–3 คอลัมน์ตามความกว้างที่ใช้จริง (ชื่อ session สั้น ⇒ แถวยาว 1 คอลัมน์เหลือที่ว่างเยอะ) ⇒ เห็น 6–9 แชทก่อนต้องกด View All
+
+**สิ่งที่ทำ (1) — draft รอดการย้ายวิว:**
+- โมดูลใหม่ `webview-ui/src/icline/composerDraftStorage.ts` (พี่น้องกับ `quickStartPromptStorage.ts`): **one slot** ไม่ใช่ต่อ task (ช่องแชทมีใบเดียว · การสลับ task วันนี้ก็ไม่ล้างข้อความ) · **แยกคีย์ `text` กับ `attachments`** เพราะการพิมพ์ทุกคีย์สโตรกต้องไม่ลากการ re-serialize รูป base64 ทั้งก้อน · เพดานไฟล์แนบ `1_000_000` ตัวอักษร ⇒ รูปที่เกินถูกตัด (เก่าสุดก่อน) และ `console.warn` ครั้งเดียวต่อ session
+- `useChatState` อ่าน draft **ตอน mount** (ก่อน paint แรก ⇒ ไม่กระพริบว่าง) แล้ว **เขียนผ่านทุกครั้งที่ช่องแชทเปลี่ยน** ⇒ ไม่ต้องมีคำสั่ง "save draft" ที่ไหน และ **การส่งข้อความ (ที่ล้างช่องแชทอยู่แล้ว) = ล้าง draft เอง** · เทสต์ `useChatState.test.ts` จำลอง "webview ถูกสร้างใหม่" ด้วย unmount → mount ใหม่
+- **ทำไม localStorage ไม่ใช่ state ของ host:** VS Code สร้าง webview ใหม่ให้ view เดิมใน **origin เดิม** ⇒ localStorage รอด (ยืนยันบนหน้าต่างจริง ด้านล่าง) และไม่ต้องแตะ proto/host state เลย · ข้อจำกัดที่ยอมรับ: ถ้าเปิด VS Code สองหน้าต่างพร้อมกัน หน้าต่างที่สองอาจเห็น draft ของหน้าต่างแรก (ยังไม่ยืนยันว่า origin แยกต่อหน้าต่างหรือไม่)
+- **หลักฐานบนหน้าต่างจริง (probe):** พิมพ์ใน composer ของ sidebar ⇒ `localStorage` มีคีย์ `icline-composer-draft-text` และค่าเป็นข้อความนั้น · หลังย้ายวิว webview ใหม่ได้ **origin เดิม** (`vscode-webview://0tvl…`) และอ่านค่าเดิมได้ ⇒ `secondary-side-bar.test.ts` เพิ่ม assertion: พิมพ์ draft ค้างไว้ก่อนย้าย → หลังย้าย `chat-input` ต้องมีค่าเดิม (ก่อนรอบนี้ได้ `""`)
+
+**สิ่งที่ทำ (2) — Recent หลายคอลัมน์:**
+- โมดูลใหม่ `webview-ui/src/icline/recentGrid.ts`: `recentColumnCount(width)` (≥240px ต่อการ์ด + gap 8px · เพดาน 3) · `recentVisibleCount(columns)` = columns × 3 · `sliceRecentTasks` · `useRecentColumnCount(element)`
+- `HistoryPreview.tsx`: จาก list 1 คอลัมน์ (`px-4` + `.history-preview-item { margin-bottom: 8px }`) เป็นกริด `repeat(var(--history-columns), minmax(0,1fr))` + `gap: 8px` · ติด `data-icline-recent-grid` / `data-columns` ให้เทสต์กับคนอ่าน DOM · **ความสูงการ์ดไม่แตะ** (ชื่อยัง clamp 2 บรรทัด) และการ์ดในแถวเดียวกันสูงเท่ากัน (`align-items: stretch`)
+- **การวัด:** ฮุกใช้ **callback ref** (กริดเกิดหลังประวัติมาถึง — ถ้าใช้ ref object ธรรมดา effect จะพลาดกริดที่ยังไม่มี) + `ResizeObserver` บนตัวกริด (jsdom ไม่มี ⇒ ถอยไปฟัง `window.resize`) · ผลจริง: pane ~843px อย่างที่ maintainer ใช้ = **3 คอลัมน์** · ~600px = 2 · sidebar ~300px = 1 (ค่าเดิม)
+- เทสต์: `recentGrid.test.ts` 15 ข้อ (สูตร/ขอบเขต/NaN/กริดที่เกิดทีหลัง/ทั้งสองเส้นทางการวัด) · `HistoryPreview.test.tsx` 5 ข้อ (mock `ResizeObserver` แล้วป้อนความกว้าง ⇒ 3→6→9 การ์ด · 3 คือเพดาน · คลิกเปิด session · View All · สถานะว่าง)
+
+**จุด smoke (fix.21):** ของเดิมทั้งหมดของ fix.18/19/20 ยังใช้ได้ + เพิ่ม 2 ข้อ:
+- **Recent หลายคอลัมน์:** เปิดหน้าแรก (ต้องมีประวัติ ≥ 4 แชท) บนหน้าแชทกว้าง (~875px) ⇒ ต้องเห็น **3 คอลัมน์ × 3 แถว = 9 แชท** โดยความสูงแถวเท่าเดิม · ลากขอบให้แคบลง ⇒ 3 → 2 → 1 คอลัมน์ แต่ยัง **3 แถวเสมอ** · ที่เกิน 9 ยังใช้ View All
+- **draft รอดการย้ายวิว:** พิมพ์ข้อความค้างไว้ (ยังไม่ส่ง) + แนบรูป 1 รูป ⇒ ย้ายวิวไป Secondary Side Bar ⇒ ข้อความ **และรูปย่อ** ต้องยังอยู่ในช่องแชท ⇒ ส่งได้ตามปกติ (ส่งแล้ว draft ต้องไม่กลับมาอีก)
 
 ---
 
