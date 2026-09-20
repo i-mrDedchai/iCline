@@ -88,6 +88,13 @@
 - การเขียน API configuration ทั่วไป **ห้าม** ป้อนค่าเข้า remote cache — เคยทำแล้วกลายเป็น "pin ปลอม": provider ที่เป็นอยู่ตอนนั้นถูกปักถาวร ทำให้การเลือกโมเดลของ provider อื่น commit สำเร็จแค่โมเดล (หน้า Settings เด้งกลับ provider เดิม)
 - ถ้าจะ "เจาะ" ชั้นเพื่อให้ค่าที่ผู้ใช้เลือกมีผล ต้องเจาะแค่ session/task — remote ไม่เจาะ
 
+## วงจรชีวิตของวิว (host) — `dispose` ของวิว ≠ จบ session
+
+- **การย้ายวิวไป part อื่น** (Secondary Side Bar / panel / แถบข้างอีกด้าน) = VS Code dispose วิวเดิม **แล้ว resolve วิวใหม่** ในที่ใหม่ — ไม่ใช่การปิดงาน
+- จึงห้ามผูกการทิ้ง controller (task history/session) กับ `webviewView.onDidDispose` — เคยทำแล้วผู้ใช้ที่ย้ายวิวเห็น **หน้าแชทว่างเปล่า** และ host ล็อก `SdkTaskHistory has been disposed` · `onDidDispose` ให้ทิ้งแค่ reference ของวิว; controller ถูกทิ้งตอน **extension deactivate** (`WebviewProvider.disposeAllInstances()`) ซึ่งเป็นตอนที่ session จบจริง
+- กติกาตรวจ: ทุกอย่างที่ผูกกับ "วิว" (เช่น focus, visibility, ตัวชี้ webview) ต้องพร้อมถูกสร้างใหม่หลังย้าย โดยไม่ต้อง reload หน้าต่าง · เทสต์ `secondary-side-bar.test.ts` ย้ายวิวแล้วต้องส่งข้อความได้และป็อปโอเวอร์เกาะขอบตามกฎ
+- **`view.name` ของ iCline เป็นค่าว่าง** ⇒ อย่าอ้างวิวด้วยชื่อใน UI ของ VS Code (palette/quick pick ออกมาเป็นแถวเปล่า ๆ) ต้องอ้างด้วยตำแหน่ง/บริบท
+
 ## ขอบเขตการ implement
 
 1. ~~fix.9 — QuickModelPicker ตามสเปกนี้ + reusable tooltip component~~ ✅ ปิดแล้ว (fix.9–fix.17: แผง Options ตามแถว · เนื้อหาตรง mock v11 · สถานะ/ไอคอนตรงกับค่าที่ตั้ง · นโยบาย + ชุดค่า Effort เป็น metadata กลาง · พจนานุกรมค่าเดียวกันทั้งแอป · แจ้งเมื่อค่า Effort ถูกลดระดับ · ชุดไอคอน+badge ตัวเดียวบนชิปใต้ช่องแชท · ลำดับ z-index ของ dropdown ในฟอร์ม Settings · นโยบาย provider ขององค์กรมีคำตอบในที่ที่คลิก · ชิปแยกเป็นปุ่มโมเดล/ปุ่มสถานะที่เปิด Options ของโมเดลปัจจุบันได้)

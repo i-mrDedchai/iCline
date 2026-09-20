@@ -1,7 +1,42 @@
 **Last updated:** 2026-09-20
 **Branch:** `feat/upstream-waves-1-2` (จาก main @ `78ebd0923` — รวม dev.5 แล้ว, tag `pre-merge-dev.5`, ยังไม่ push)
-**HEAD:** ดู `git log` (ไม่ตรึง hash ไว้ตรงนี้ — มันตกหล่นทุกครั้งที่มี commit เอกสารตามหลัง) · **fix.7–fix.19 commit แล้ว ยังไม่ push**
-**vsix (ล่าสุด):** `apps/vscode/dist/i-mrdedchai.iCline-0.1.18-dev.6-fix.19.vsix` (11,967,453 B @ 2026-09-20T06:07:27Z · About = `dev build 6 · fix.19`) — ⏳ **รอบนี้คือ fix.19 (รอ maintainer smoke · พฤติกรรม = fix.18 ทุกข้อ)** · do not overwrite `fix.1`–`fix.18` ใน `dist/` (ของ fix.18 = 11,967,298 B @ 2026-09-20 05:36:02Z · fix.17 = 11,966,957 B @ 2026-09-20 03:45:49Z)
+**HEAD:** ดู `git log` (ไม่ตรึง hash ไว้ตรงนี้ — มันตกหล่นทุกครั้งที่มี commit เอกสารตามหลัง) · **fix.7–fix.20 commit แล้ว ยังไม่ push** (`88ff6028b` fix lifecycle ของวิว · `29c24e71c` e2e ขนาน + fixture auxiliary bar + เทสต์ใหม่)
+**vsix (ต่อรอบ fix.20):** ต้องแพ็กใหม่ — `cd apps/vscode && bun scripts/package-vsix-wip.mjs --fix 20` (ยังไม่ได้สั่ง) · **vsix (ล่าสุดที่มีอยู่):** `apps/vscode/dist/i-mrdedchai.iCline-0.1.18-dev.6-fix.19.vsix` (11,967,453 B @ 2026-09-20T06:07:27Z · About = `dev build 6 · fix.19`) — ⏳ รอ maintainer smoke · ⚠️ **รอบ fix.20 (แก้ lifecycle ของวิวครั้งย้าย part + e2e ขนาน) ยังไม่แพ็ก** ⇒ `fix.19` ยัง**มีบั๊กย้ายวิวแล้วแชทหาย** อยู่ (ไม่ตรงกับ HEAD) · do not overwrite `fix.1`–`fix.18` ใน `dist/` (ของ fix.18 = 11,967,298 B @ 2026-09-20 05:36:02Z · fix.17 = 11,966,957 B @ 2026-09-20 03:45:49Z)
+
+---
+
+## 🧰 dev.6-fix.20 — e2e รันขนานได้ + fixture ย้ายวิวไป Secondary Side Bar + **แก้บั๊ก: ย้ายวิวแล้วแชทหาย** (2026-09-20)
+
+**สถานะ:** ✅ เสร็จ · e2e บน VS Code จริง **16/16 ทั้งชุด × 3 รอบติดกัน ไม่มี retry** (2m19s / 2m17s / 2m21s ที่ 3 worker เทียบกับ **4m24s** ตอน `workers: 1` — เร็วขึ้น ~1.9 เท่า) · unit tests ฝั่ง extension **1031 pass / 1 fail** — ตัวที่ fail คือ `src/test/shell.test.ts` › "expands and selects the first configured profile path when it exists" ซึ่ง **พังมาก่อนรอบนี้และไม่เกี่ยวกับรอบนี้เลย**: รอบนี้ไม่ได้แตะ `shell.test.ts` หรือซอร์สของ shell (ดู `git status`) และเป็นเทสต์ที่พึ่ง `%windir%` ของเครื่อง ⇒ ต้องแยกดูว่าเป็นเพราะ env ของเครื่องนี้ หรือเป็นบั๊กจริงของ env expansion · `tsc` สะอาดทั้ง app และ e2e (`tsconfig.test.generated.json`) · biome: **ไม่มี warning ใหม่** — เหลือ 2 warning เดิมที่ `src/__tests__/config.test.ts` (บรรทัดที่รอบนี้ไม่ได้แตะ) และรอบนี้ **_ลบ_ warning เดิมออก 1 ตัว** (`helpers.ts` ตัวแปรตายของ fixture `clineTestDir`) พร้อมปิด warning ของ fixture param ที่เพิ่มเข้ามาด้วย `biome-ignore` ที่อธิบายเหตุผล · ❗ **ยังไม่แพ็ก VSIX** — รอบนี้แก้ **extension host** (`VscodeWebviewProvider`) ⇒ **ต้องแพ็ก artefact ใหม่ (fix.20) ก่อน smoke** (ของเดิม `fix.19` ยังมีบั๊กย้ายวิว)
+
+**ที่มา (maintainer อนุมัติ 2 ข้อ):**
+1. แยกชุด e2e ให้รัน **หลาย worker** เพื่อให้รอบต่อไปเร็วขึ้น (โดยไม่ให้ fixture ที่แชร์กันทำเทสต์ล้มกัน)
+2. ขยาย fixture ของ pane ให้ **ย้ายวิวไป auxiliary bar** (Secondary Side Bar) ได้ แล้วเพิ่มเทสต์ยืนยันว่าแถบแชท/ป็อปโอเวอร์ยังทำงานถูกเมื่อผู้ใช้ย้ายเอง
+
+**สิ่งที่ทำ (1) — e2e ขนาน:** `playwright.config.ts` → `workers = E2E_WORKERS ?? (CI ? 2 : 3)` (เดิมตรึง `workers: 1`) · `fullyParallel` คงไว้ + คอมเมนต์ว่าทำไมปลอดภัย · สิ่งที่ต้องแก้ก่อนจึงขนานได้จริง:
+- **mock server ผูกพอร์ต 7777 ตายตัว** ⇒ worker ที่สอง `listen` ล้ม · `ClineApiServerMock.startGlobalServer(0)` ขอพอร์ตว่างจาก OS แล้วอ่านกลับจาก socket (`getMockApiServerUrl()`) · ค่าปริยายของสคริปต์อื่นยังเป็น 7777
+- **extension host ไม่รู้จัก `CLINE_API_BASE_URL`** (มีแต่ SDK ที่รู้ — `apps/vscode/src/config.ts` ฮาร์ดโค้ด `localhost:7777` ให้ `local`) ⇒ เพิ่ม override ให้ `getEnvironment()` เคารพ env ตัวเดียวกัน (แต่ย้ายแค่ `apiBaseUrl` ไม่แตะ `mcpBaseUrl` ที่ตั้งใจชี้โฮสต์สาธารณะ) + unit test 4 ข้อใน `src/__tests__/config.test.ts` · harness ส่งค่านี้เป็น env ตอน launch
+- **teardown กวาด `os.tmpdir()` หา `cline-e2e-*` ทั้งหมด** ⇒ ขนานแล้วจะลบโฟลเดอร์ CLINE_DIR ที่ worker อื่นกำลังใช้อยู่ · เปลี่ยนเป็นลบเฉพาะของ launch ตัวเอง (และลบ fixture `clineTestDir` ที่ตายอยู่ทิ้ง)
+- **workspace ใช้ไฟล์ที่ commit ไว้ร่วมกัน** (extension แก้ไฟล์จริง: `file-edit` 2 เทสต์เขียน `test.ts` ไฟล์เดียวกัน) ⇒ เพิ่ม fixture `privateWorkspaces` = สำเนาชุด fixture ลง temp ต่อ **หนึ่งเทสต์** · `workspaceDir`/`multiRootWorkspaceDir` ชี้เข้าไปในสำเนา ⇒ เทสต์ไม่ผูกกับลำดับ/กันเองอีก
+- **ดาวน์โหลด VS Code แข่งกันตอน cache เย็น** ⇒ `global.setup.ts` อุ่นเครื่องก่อน worker ไหนเริ่ม
+- รอบขนานทำให้ timeout ปริยายของ assertion ที่ต้องรอ "ทั้งเทิร์น" แคบไป 2 จุด ⇒ ใส่ budget ให้ตรงความหมาย: `chat.test.ts` รอข้อความตอบ (`{ timeout: 20_000 }`) และ `settings-model-selection.test.ts` อ่านลิสต์โมเดลแบบ **poll จนกว่าจะมีข้อมูล** (`expect(async () => …).toPass()`) แทนการอ่านครั้งเดียว
+
+**สิ่งที่ทำ (2) — fixture + เทสต์ใหม่:**
+- `utils/pane.ts` เพิ่ม `location()` (อยู่ part ไหน) และ `moveToAuxiliaryBar()` ที่ขับ UI ของ VS Code เอง: palette → `View: Move View` → เลือกวิว → `New Secondary Side Bar Entry` แล้ว poll จน webview ย้าย part จริง · คืน **frame ใหม่** เพราะการย้ายสร้าง webview ใหม่
+- หา "ตัววิว" ไม่ได้ด้วยชื่อ: วิวของ iCline ประกาศชื่อเป็น **ค่าว่าง** (`contributes.views[].name = ""`) และ palette ทำให้วิวเสียโฟกัส (`focusedView` ว่าง ⇒ picker ไม่ preselect) ⇒ แถวของวิวเราคือแถวที่ **เริ่มกลุ่ม** (aria-label ออกมาเป็น `", Side Bar / iCline"`) ส่วนแถวคำสั่งใช้ label ตรง ๆ เพราะ ranking ของ palette ไม่ได้เรียงตามที่พิมพ์ (`Move View` ดัน `Move Panel Views…` ขึ้นก่อน)
+- หา part ของวิวด้วย **เรขาคณิต ไม่ใช่ ancestry**: webview ถูกวางในเลเยอร์ overlay ของ workbench (ancestor ไม่มี `.part.*`) ⇒ เทียบ rect ของ webview กับ rect ของ part
+- `helper.getSidebar()` เดิมรับ frame ที่ยัง **`#pending-frame`** (webview ใหม่ยังโหลดไม่เสร็จ แต่ title ขึ้น "Cline" แล้ว) ได้ ⇒ ข้าม pending frame และรอตัวที่ active จริง
+- เทสต์ใหม่ `secondary-side-bar.test.ts`: ย้ายวิว ⇒ ยืนยัน `location() === "auxiliarybar"` ⇒ ขยายแถบข้างใหม่ผ่าน fixture ⇒ ส่งข้อความจริง 1 เทิร์น (ได้ข้อความตอบจาก mock) ⇒ เปิดเมนูโมเดล แล้วตรวจว่า `data-align` ตรงกับ **สูตรกลาง** (`triggerLeft + 320 + 8 ≤ viewportWidth`) และแผงยังอยู่ในกรอบ pane
+- ต้องปิด toast ของ VS Code ก่อน: harness รันด้วย `--disable-extensions` ⇒ VS Code เด้ง "Reload and Enable Extensions" ที่มุมล่างขวา ซึ่ง **ทับปุ่มส่งในโหมด auxiliary bar พอดี** ⇒ ใช้ `toggleNotifications(page)` ของ harness (ไม่ใช่บั๊กของ iCline)
+
+**สิ่งที่ทำ (3) — บั๊กที่เทสต์ใหม่เจอ (และแก้แล้ว):** หลังย้ายวิวไป Secondary Side Bar **หน้าแชทว่างเปล่า** ทุกครั้ง
+- **ราก:** `VscodeWebviewProvider` ผูก `webviewView.onDidDispose` ⇒ `this.dispose()` ⇒ `controller.dispose()` (ทิ้ง task history/session ทั้งก้อน) — แต่การ **ย้ายวิว** ไม่ได้จบเซสชัน: VS Code dispose วิวเดิมแล้ว resolve วิวใหม่ใน part ปลายทาง ⇒ วิวใหม่ถูกต่อกับ controller ที่ตายแล้ว · Console ยืนยันชัด: `SdkTaskHistory has been disposed` + `this.unsubscribeHostTelemetrySettings is not a function` ⇒ webview โหลดแล้วแอปบูตไม่ขึ้น (frame ว่าง ไม่มี `[data-testid]` เลย นานกว่า 30 วิ)
+- **แก้:** `onDidDispose` ทิ้งแค่ reference ของวิว (`this.webview`) ไม่แตะ controller · controller ถูกทิ้งตอน **extension deactivate** (`WebviewProvider.disposeAllInstances()` ใน `common.ts`) ซึ่งเป็นตอนที่เซสชันจบจริง · หลังแก้ console **ไม่มี error เลย** และหน้าแชทกลับมาทำงานพร้อมเซสชันเดิม
+- **ขอบเขตผลกระทบ:** ผู้ใช้ที่ลากวิว iCline ไป Secondary Side Bar (หรือ panel/แถบข้างอีกด้าน) แล้วแชทหาย = เคสเดียวกันนี้
+
+**จุด smoke (fix.20):** ของเดิมทั้งหมดของ fix.18/19 ยังใช้ได้ + เพิ่ม 2 ข้อ:
+- **ย้ายวิว:** เปิดแชทให้ล็อกอินแล้ว ⇒ ลาก/ย้ายวิว iCline ไป **Secondary Side Bar** (หรือ `F1` → `View: Move View` → `New Secondary Side Bar Entry`) ⇒ แชทต้องกลับมาแสดง **พร้อมประวัติเดิม** (ไม่ว่างเปล่า) ส่งข้อความได้ และเปิด Quick Picker/แผง Options ได้ตามปกติ (ป็อปโอเวอร์ยังเกาะขอบตามกฎ)
+- **ย้ายกลับ:** ย้ายวิวกลับไปแถบข้างเดิม ⇒ ต้องยังทำงานเหมือนเดิม ไม่ต้อง reload หน้าต่าง และไม่มีข้อความ error ใหม่ใน Notification
 
 ---
 
