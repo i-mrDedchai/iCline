@@ -1,7 +1,30 @@
 **Last updated:** 2026-09-20
 **Branch:** `feat/upstream-waves-1-2` (จาก main @ `78ebd0923` — รวม dev.5 แล้ว, tag `pre-merge-dev.5`, ยังไม่ push)
-**HEAD:** ดู `git log` (ไม่ตรึง hash ไว้ตรงนี้ — มันตกหล่นทุกครั้งที่มี commit เอกสารตามหลัง) · **fix.7–fix.18 commit แล้ว ยังไม่ push** (fix.18 = `3012c6df5` feat + `ddf4a372a` e2e + commit เอกสารนี้)
-**vsix (ล่าสุด):** `apps/vscode/dist/i-mrdedchai.iCline-0.1.18-dev.6-fix.18.vsix` (11,967,298 B @ 2026-09-20T05:36:02Z · About = `dev build 6 · fix.18`) — ⏳ **รอบนี้คือ fix.18 (รอ maintainer smoke)** · do not overwrite `fix.1`–`fix.17` ใน `dist/` (ของ fix.17 = 11,966,957 B @ 2026-09-20 03:45:49Z · fix.16 = 11,966,196 B @ 2026-09-20 02:34Z)
+**HEAD:** ดู `git log` (ไม่ตรึง hash ไว้ตรงนี้ — มันตกหล่นทุกครั้งที่มี commit เอกสารตามหลัง) · **fix.7–fix.19 commit แล้ว ยังไม่ push**
+**vsix (ล่าสุด):** `apps/vscode/dist/i-mrdedchai.iCline-0.1.18-dev.6-fix.19.vsix` (11,967,453 B @ 2026-09-20T06:07:27Z · About = `dev build 6 · fix.19`) — ⏳ **รอบนี้คือ fix.19 (รอ maintainer smoke · พฤติกรรม = fix.18 ทุกข้อ)** · do not overwrite `fix.1`–`fix.18` ใน `dist/` (ของ fix.18 = 11,967,298 B @ 2026-09-20 05:36:02Z · fix.17 = 11,966,957 B @ 2026-09-20 03:45:49Z)
+
+---
+
+## 🧰 dev.6-fix.19 — รวมนิสัย popover เป็นฮุกกลาง + guard สแกนซอร์ส + e2e พิสูจน์โหมดขอบซ้ายบนหน้าต่างจริง (2026-09-20)
+
+**สถานะ:** ✅ เสร็จ · webview vitest **501/501** · `tsc` สะอาดทั้งสองฝั่ง · biome ไม่มี finding ใหม่ · e2e บน VS Code จริง **6/6** (`composer-status-options` 2 เทสต์ + `quick-picker-hover` + `quick-picker-effort-notice` + `quick-picker-org-policy`) · **commit แล้ว** (`690e703e4` refactor + `6bd8adf2c` e2e) · **แพ็กแล้ว:** `dist/i-mrdedchai.iCline-0.1.18-dev.6-fix.19.vsix` (11,967,453 B @ 2026-09-20T06:07:27Z, About = `dev build 6 · fix.19`)
+
+**ที่มา (maintainer อนุมัติ 2 ข้อต่อจากรอบ fix.18):**
+1. เพิ่ม e2e ที่ทำให้หน้าแชท **กว้างพอ** เพื่อพิสูจน์โหมดหลัก (ขอบซ้ายของปุ่ม) บนหน้าต่าง VS Code จริง — ของเดิมพิสูจน์ได้แค่โหมดถอย เพราะ sidebar ของ harness แคบ
+2. รวม "นิสัยของ popover" (ขอบที่เกาะ · รูปมือทั้งเมนู · ข้อยกเว้นช่องพิมพ์) เป็นคอมโพเนนต์/ฮุกกลาง + เทสต์ guard ที่ fail เมื่อเมนูใหม่ไม่ผ่านข้อตกลง ⇒ "ครอบคลุมและยืดหยุ่นสำหรับอนาคต"
+
+**สิ่งที่ทำ (1) — e2e:** `composer-status-options.test.ts` เพิ่มเทสต์ที่ 2: เปิดแผง Options ตอนหน้าแชทยังแคบ (ยืนยันเงื่อนไขก่อนว่าแคบจริง + `data-align="end"`) ⇒ ขยายหน้าต่าง Electron ผ่าน `app.evaluate(BrowserWindow.setSize(1800,1000))` ⇒ **ลาก sash ของ VS Code จริง** เพื่อขยาย pane ⇒ ยืนยันว่าแผงที่เปิดอยู่**ยังเปิดอยู่** และย้ายไป `data-align="start"` โดยขอบซ้ายตรงกับปุ่ม ≤1px
+- ยืนยันรหัส pane/ sash ไม่ได้ฮาร์ดโค้ด id ของ part:หาจาก **webview id** ใน query (`id=<guid>` ของ iframe ด้านนอกที่ตรงกับเฟรมที่เทสต์ขับ) ⇒ ใช้ได้ทั้ง sidebar และ auxiliary bar (VS Code ซ้อน iframe สองชั้น: `frameElement()` ของเฟรมเราเป็น `#active-frame` ด้านใน ซึ่งไม่รู้จัก `.part`/`.monaco-sash` เลย — จุดนี้ทำให้รอบแรกของเทสต์ fail)
+- sash ที่ต้องลาก = `.monaco-sash` แนวตั้งที่ไม่ติด `disabled` และอยู่ใกล้ขอบซ้าย/ขวาของ iframe ≤ 40px (ของจริงใน sidebar = `primary-sidebar-sash` ที่ x=348) · วัดผลได้: pane 297px → 900px, ปุ่ม `x=277.7` คงที่, แผงย้ายจาก `x=73` (`end`) ไป `x=278` (`start`, ต่าง 0.27px)
+
+**สิ่งที่ทำ (2) — ฮุกกลาง + guard:** โมดูลใหม่ `webview-ui/src/icline/menuPopover.ts` รวม `pickMenuPopoverAlign` (สูตรเดิมจาก `quickModelPickerList.ts` — ย้ายมา ไม่มี copy) · `useMenuPopoverAnchor({ open, setOpen, triggerRef, panelWidth })` (วัดจาก trigger ตอนเปิด ⇒ ภาพแรกถูกข้าง ไม่กระพริบ · วัดซ้ำเมื่อ `resize` · คืน `align` + `onOpenChange` ให้ Radix) · `MENU_SURFACE_CLASS` · `MENU_TEXT_FIELD_CLASS` ⇒ picker เรียก **2 ครั้ง** (เมนูโมเดล 320px และแผง Options 236px ตัดสินคนละคำตอบได้)
+- `menuPopover.guard.test.ts` สแกนซอร์สทุก "เมนูของ iCline" (นิยาม = `<PopoverContent>` ที่มี `data-icline-*`) แล้ว fail ถ้าไม่ใช้ `MENU_SURFACE_CLASS` · `align` เป็นค่าคงที่ · ไม่ import โมดูล · หรือ `<input>` ไม่ใช้ `MENU_TEXT_FIELD_CLASS` · มี liveness assert กัน guard ตาย (สแกนไม่พบอะไร = fail) · พิสูจน์แล้วว่ามันกัดจริงโดยวางไฟล์ตัวอย่างที่ผิดข้อตกลง → เทสต์ fail 4 ข้อ → ลบไฟล์ทิ้ง
+- เทสต์เดิมย้ายตาม: สูตร align → `src/icline/menuPopover.test.ts` (quickModelPickerList.test.ts เหลือหมายเหตุชี้ทาง) และ `QuickModelPickerRealPopover.test.tsx` เพิ่มเทสต์ "แต่ละเมนูตัดสินข้างของตัวเอง" (สลับเป็น `end` เมื่อชิปถูกดันชิดขอบ)
+
+**สิ่งที่ต้องรู้:** พฤติกรรมที่ผู้ใช้เห็นของ fix.19 = fix.18 ทุกข้อ (รอบนี้เป็นการจัดบ้าน + เพิ่มหลักฐาน) ⇒ ถ้าติดตั้ง fix.18 ไว้แล้วยัง smoke ต่อได้ หรือใช้ fix.19 แทนได้เลย · `fix.18` ใน `dist/` ไม่ถูกเขียนทับ
+
+**จุด smoke (fix.19):** ใช้รายการเดียวกับ fix.18 ทั้ง 5 ข้อ + เพิ่ม 1 ข้อ:
+- ข้อ 2 (ต่อ): ลากขอบ sidebar ให้แคบ/กว้าง**ขณะเปิดแผง Options อยู่** — แผงต้องสลับข้างเองโดยไม่ปิด-เปิดใหม่ (e2e พิสูจน์แล้ว 297→900px) · เปิด picker ของโมเดลแล้วทำเหมือนกัน ⇒ เมนูโมเดลก็สลับข้างเองเช่นกัน
 
 ---
 
