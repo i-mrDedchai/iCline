@@ -1,8 +1,9 @@
-import { expect } from "@playwright/test"
+import { expect, type Frame, type Page } from "@playwright/test"
 import { e2e } from "./utils/helpers"
 
 /**
- * E2E guard for the composer's split chip on a REAL VS Code window (fix.17).
+ * E2E guard for the composer's split chip on a REAL VS Code window (fix.17) and for the
+ * menu-anchoring rule that came with it (fix.18).
  *
  * The status readout used to be part of the model-name button, so changing the Effort
  * of the model already driving the chat meant opening the model list and hunting for its
@@ -12,24 +13,30 @@ import { e2e } from "./utils/helpers"
  *     Options surface for the ACTIVE model,
  * with the panel body shared by both surfaces (`ModelOptionsPanel`).
  *
- * What it pins, on a real window: the readout is not inside the model button, clicking
- * it opens Options for the model in use (not the list), picking a level there writes to
- * that model and leaves the selection alone, the chip's own badge follows, and the panel
- * is anchored to the edge of that button the pane can afford — its LEFT edge
+ * What the two tests pin, on a real window: the readout is not inside the model button,
+ * clicking it opens Options for the model in use (not the list), picking a level there
+ * writes to that model and leaves the selection alone, the chip's own badge follows, and
+ * the panel is anchored to the edge of that button the pane can afford — its LEFT edge
  * (`align="start"`) while the pane can hold the panel beside the button, its RIGHT edge
- * (`align="end"`, the behaviour before this round) once it cannot.
+ * (`align="end"`, the behaviour before this round) once it cannot. The first test runs on
+ * VS Code's default sidebar, which is the fallback case; the second drags the pane wide
+ * and watches the SAME open panel move onto the left edge, which is the case the request
+ * was made about (a ~930px working pane) plus the `resize` path that goes with it.
  */
-e2e("Composer — the status button opens Options for the model in use", async ({ helper, sidebar }) => {
-	await helper.signin(sidebar)
 
+/** Bounding box of a locator, with Playwright's nullability narrowed away. */
+type Box = { x: number; y: number; width: number; height: number }
+
+/**
+ * Bring up a model that has a status readout, so the composer's status button exists:
+ * open the picker and walk the provider headers until one lists a reasoning model.
+ * Returns the model id that is selected as a result.
+ */
+async function pickReasoningModel(sidebar: Frame): Promise<string> {
 	const trigger = sidebar.locator("[data-icline-model-trigger]")
-	const statusButton = sidebar.locator("[data-icline-model-status-button]")
 	const picker = sidebar.locator("[data-icline-quick-picker]")
 	await expect(trigger).toBeVisible({ timeout: 10_000 })
 
-	// Pick a model that has a status readout (a reasoning model), so the status button is
-	// guaranteed to exist. The active provider is expanded on open; otherwise walk the
-	// provider headers until one of them lists a reasoning model.
 	await trigger.click({ delay: 30 })
 	await expect(picker).toBeVisible({ timeout: 10_000 })
 	const reasoningRow = sidebar.locator("[data-icline-model-row]").filter({
@@ -54,10 +61,85 @@ e2e("Composer — the status button opens Options for the model in use", async (
 	}
 	expect(targetRow, `no reasoning model listed in any provider (${providerIds.join(",")})`).not.toBeNull()
 
-	const chosenModelId = await targetRow!.getAttribute("data-icline-model-id")
+	const chosenModelId = await targetRow?.getAttribute("data-icline-model-id")
 	expect(chosenModelId).toBeTruthy()
-	await targetRow!.click({ delay: 30 })
+	await targetRow?.click({ delay: 30 })
 	await expect(picker).toBeHidden({ timeout: 10_000 })
+	return chosenModelId as string
+}
+
+/**
+ * Widen the pane the chat lives in, the way a user does it: drag VS Code's own sash.
+ *
+ * The workbench document is reached with `page`, and the pane is located from the WEBVIEW ITSELF
+ * (the outer `<iframe>` whose box matches the frame we drive — VS Code nests the webview, so
+ * `frameElement()` on our frame points at the inner `#active-frame`), never from a hard-coded
+ * part id: the harness runs the view in the primary sidebar, a user can move it to the
+ * auxiliary bar. The vertical, draggable sash on that pane's edge is then dragged AWAY from
+ * the pane so the pane grows. Returns the pane's new inner width.
+ */
+async function widenChatPane(page: Page, sidebar: Frame, targetWidth: number): Promise<number> {
+	// The workbench-side identity of OUR pane: the outer `<iframe>` carries the same `id`
+	// query parameter as the frame we drive (`…/index.html?id=<webview id>&…`), which is the
+	// only reliable handle on it — VS Code nests the webview and which part holds the view
+	// is VS Code's call.
+	const webviewId = new URL(sidebar.url()).searchParams.get("id")
+	let width = await sidebar.evaluate(() => window.innerWidth)
+	for (let attempt = 0; attempt < 3 && width < targetWidth; attempt++) {
+		const found = await page.evaluate((id) => {
+			const boxes = (selector: string) =>
+				[...document.querySelectorAll(selector)].map((element) => ({ element, rect: element.getBoundingClientRect() }))
+			const webview = boxes("iframe").find(({ element }) => (element.getAttribute("src") ?? "").includes(`id=${id}`))
+			if (!webview) {
+				return null
+			}
+			let best: { x: number; y: number; distance: number; growsRight: boolean } | null = null
+			for (const { element, rect } of boxes(".monaco-sash")) {
+				// Horizontal sashes belong to the panel/editor, and a `disabled` one marks a
+				// boundary that cannot be dragged at all.
+				if (rect.height <= rect.width || element.classList.contains("disabled")) {
+					continue
+				}
+				const x = rect.left + rect.width / 2
+				const toLeft = Math.abs(x - webview.rect.left)
+				const toRight = Math.abs(x - webview.rect.right)
+				const distance = Math.min(toLeft, toRight)
+				// A sash further away than this belongs to another pane.
+				if (distance > 40 || (best && distance >= best.distance)) {
+					continue
+				}
+				best = { x, y: rect.top + rect.height / 2, distance, growsRight: toRight < toLeft }
+			}
+			return best
+		}, webviewId)
+		expect(
+			found,
+			`no draggable sash at the edge of the pane that holds the chat webview (webview id ${webviewId})`,
+		).not.toBeNull()
+		const sash = found as { x: number; y: number; growsRight: boolean }
+		const delta = (targetWidth - width) * (sash.growsRight ? 1 : -1)
+		await page.mouse.move(sash.x, sash.y)
+		await page.mouse.down()
+		await page.mouse.move(sash.x + delta, sash.y, { steps: 15 })
+		await page.mouse.up()
+
+		const next = await sidebar.evaluate(() => window.innerWidth)
+		if (next === width) {
+			break // the drag was ignored (or the part hit its maximum); do not spin
+		}
+		width = next
+	}
+	return width
+}
+
+e2e("Composer — the status button opens Options for the model in use", async ({ helper, sidebar }) => {
+	await helper.signin(sidebar)
+
+	const trigger = sidebar.locator("[data-icline-model-trigger]")
+	const statusButton = sidebar.locator("[data-icline-model-status-button]")
+	const picker = sidebar.locator("[data-icline-quick-picker]")
+
+	const chosenModelId = await pickReasoningModel(sidebar)
 
 	// The readout exists for this model and is a button of its own.
 	await expect(statusButton).toBeVisible({ timeout: 10_000 })
@@ -70,7 +152,7 @@ e2e("Composer — the status button opens Options for the model in use", async (
 	await statusButton.click({ delay: 30 })
 	const panel = sidebar.locator("[data-icline-status-options]")
 	await expect(panel).toBeVisible({ timeout: 10_000 })
-	await expect(panel.locator("[data-icline-options-model-id]")).toHaveText(chosenModelId as string)
+	await expect(panel.locator("[data-icline-options-model-id]")).toHaveText(chosenModelId)
 	await expect(picker).toBeHidden()
 	await expect(panel).toHaveText(/Options|ตัวเลือก/)
 
@@ -80,11 +162,10 @@ e2e("Composer — the status button opens Options for the model in use", async (
 	// it falls back to the older right-edge anchoring when it cannot, so a squeezed sidebar
 	// still shows the whole panel instead of losing it off the side of the pane.
 	//
-	// Measured on the real window, because jsdom has no layout for the placement maths: the
-	// harness runs VS Code's default sidebar (~300px) with the composer row already filled
-	// by the four icons and the model chip, so this window is the FALLBACK case; the
-	// left-edge case is covered by the helper's own unit tests and by the webview test that
-	// pins a wide pane.
+	// Measured on the real window, because jsdom has no layout for the placement maths: this
+	// window runs VS Code's default sidebar (~300px) with the composer row already filled by
+	// the four icons and the model chip, so it is the FALLBACK case. The left-edge case is
+	// the second test's job — it widens this very pane.
 	//
 	// Radix republishes the resolved side as `data-align`, and still nudges the panel back
 	// inside the pane when even the chosen edge would overflow — so the edge coincidence is
@@ -96,11 +177,11 @@ e2e("Composer — the status button opens Options for the model in use", async (
 	])
 	expect(buttonBox).not.toBeNull()
 	expect(panelBox).not.toBeNull()
-	const button = buttonBox as { x: number; width: number }
-	const content = panelBox as { x: number; width: number }
+	const button = buttonBox as Box
+	const content = panelBox as Box
 
-	// The same rule the picker itself uses (`pickOptionsPopoverAlign`, panel width 236 plus
-	// an 8px viewport margin).
+	// The same rule the picker itself uses (`pickMenuPopoverAlign`, panel width 236 plus an
+	// 8px viewport margin).
 	const leftEdgeFits = button.x + content.width + 8 <= viewportWidth
 	expect(await panel.getAttribute("data-align")).toBe(leftEdgeFits ? "start" : "end")
 	if (leftEdgeFits) {
@@ -118,3 +199,54 @@ e2e("Composer — the status button opens Options for the model in use", async (
 	await expect(statusButton.locator(`[data-icline-effort="${levelValue}"]`)).toBeVisible({ timeout: 10_000 })
 	await expect(trigger).toHaveText(modelBefore)
 })
+
+e2e(
+	"Composer — a widened pane pulls the open Options panel onto the button's left edge",
+	async ({ app, helper, page, sidebar }) => {
+		await helper.signin(sidebar)
+		const chosenModelId = await pickReasoningModel(sidebar)
+
+		const statusButton = sidebar.locator("[data-icline-model-status-button]")
+		const panel = sidebar.locator("[data-icline-status-options]")
+		await expect(statusButton).toBeVisible({ timeout: 10_000 })
+
+		// Open Options while the pane is still narrow, and confirm the fallback edge is what is
+		// on screen: without that precondition the flip below would prove nothing.
+		await statusButton.click({ delay: 30 })
+		await expect(panel).toBeVisible({ timeout: 10_000 })
+		await expect(panel.locator("[data-icline-options-model-id]")).toHaveText(chosenModelId)
+		const narrowWidth = await panel.evaluate(() => window.innerWidth)
+		const [narrowButtonBox, narrowPanelBox] = await Promise.all([statusButton.boundingBox(), panel.boundingBox()])
+		expect(narrowButtonBox).not.toBeNull()
+		expect(narrowPanelBox).not.toBeNull()
+		const fitsNarrow = (narrowButtonBox as Box).x + (narrowPanelBox as Box).width + 8 <= narrowWidth
+		expect(fitsNarrow, "the default VS Code pane is expected to be too narrow for the left-edge anchor").toBe(false)
+		expect(await panel.getAttribute("data-align")).toBe("end")
+
+		// Now give the window room and drag the pane wide — the request's ~930px working pane,
+		// reached the way a user reaches it. The drag happens in the WORKBENCH document (the
+		// sash is not inside the webview), so it never counts as a click outside the panel and
+		// the panel must stay open across it, re-deciding its edge as the pane resizes.
+		await app.evaluate(({ BrowserWindow }) => {
+			BrowserWindow.getAllWindows()[0]?.setSize(1800, 1000)
+		})
+		const wideWidth = await widenChatPane(page, sidebar, 900)
+		expect(wideWidth, "the sash drag did not widen the chat pane").toBeGreaterThan(700)
+		await expect(panel).toBeVisible()
+
+		const [buttonBox, panelBox] = await Promise.all([statusButton.boundingBox(), panel.boundingBox()])
+		expect(buttonBox).not.toBeNull()
+		expect(panelBox).not.toBeNull()
+		const button = buttonBox as Box
+		const content = panelBox as Box
+		// The precondition the request is about: this pane CAN hold the panel beside the button
+		// (if VS Code's composer row ever pushes the button out to the far edge, this says so
+		// instead of silently passing on the fallback).
+		expect(
+			button.x + content.width + 8 <= wideWidth,
+			`the widened pane (${wideWidth}px) still cannot hold the ${content.width}px panel at x=${button.x}`,
+		).toBe(true)
+		expect(await panel.getAttribute("data-align")).toBe("start")
+		expect(Math.abs(content.x - button.x)).toBeLessThanOrEqual(1)
+	},
+)
