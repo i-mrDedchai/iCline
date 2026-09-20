@@ -2,9 +2,10 @@ import type {
 	GatewayProviderContext,
 	GatewayStreamRequest,
 	ModelReasoningOption,
+	ReasoningEffort,
 } from "@cline/shared";
 import { describe, expect, it } from "vitest";
-import { normalizeReasoningRequest } from "./reasoning-options";
+import { decideReasoningEffort, normalizeReasoningRequest } from "./reasoning-options";
 
 function makeRequest(
 	reasoning: GatewayStreamRequest["reasoning"],
@@ -198,5 +199,116 @@ describe("normalizeReasoningRequest", () => {
 				makeContext(undefined),
 			).reasoning?.effort,
 		).toBe("high");
+	});
+});
+
+describe("decideReasoningEffort", () => {
+	it("reports the advertised level unchanged", () => {
+		expect(
+			decideReasoningEffort({
+				effort: "high",
+				reasoningOptions: [{ type: "effort", values: ["low", "high"] }],
+			}),
+		).toEqual({
+			requested: "high",
+			applied: "high",
+			supportedEfforts: ["low", "high"],
+			clamped: false,
+			reason: "exact",
+		});
+	});
+
+	it("names the nearest advertised level when the request is above it", () => {
+		// The Sakana case a user hits: Fugu Ultra advertises high/xhigh, so a
+		// stored `max` reaches the provider as X-High.
+		expect(
+			decideReasoningEffort({
+				effort: "max",
+				reasoningOptions: [{ type: "effort", values: ["high", "xhigh"] }],
+			}),
+		).toMatchObject({
+			requested: "max",
+			applied: "xhigh",
+			supportedEfforts: ["high", "xhigh"],
+			clamped: true,
+			reason: "nearest-supported",
+		});
+	});
+
+	it("keeps capability on a tie", () => {
+		expect(
+			decideReasoningEffort({
+				effort: "medium",
+				reasoningOptions: [{ type: "effort", values: ["low", "high"] }],
+			}).applied,
+		).toBe("high");
+	});
+
+	it("falls back to broadly supported levels for models without metadata", () => {
+		expect(decideReasoningEffort({ effort: "max" })).toMatchObject({
+			applied: "high",
+			supportedEfforts: [],
+			clamped: true,
+			reason: "catalog-unknown",
+		});
+		expect(decideReasoningEffort({ effort: "minimal" }).applied).toBe("low");
+		expect(decideReasoningEffort({ effort: "low" })).toMatchObject({
+			applied: "low",
+			clamped: false,
+			reason: "catalog-unknown",
+		});
+	});
+
+	it("reports no applied effort for models with no effort control", () => {
+		expect(
+			decideReasoningEffort({
+				effort: "high",
+				reasoningOptions: [{ type: "toggle" }],
+			}),
+		).toMatchObject({
+			applied: undefined,
+			clamped: true,
+			reason: "no-effort-control",
+		});
+		expect(
+			decideReasoningEffort({ effort: "high", reasoningOptions: [] }),
+		).toMatchObject({ applied: undefined, clamped: true });
+	});
+
+	it("never disagrees with what the request path sends", () => {
+		const effortSets: (readonly ModelReasoningOption[] | undefined)[] = [
+			undefined,
+			[],
+			[{ type: "toggle" }],
+			[{ type: "effort", values: ["low", "high"] }],
+			[{ type: "effort", values: ["high", "xhigh"] }],
+			[{ type: "effort", values: ["minimal", "low", "medium", "high"] }],
+			[{ type: "effort", values: ["low", "medium", "high", "max"] }],
+		];
+		const efforts: ReasoningEffort[] = [
+			"minimal",
+			"low",
+			"medium",
+			"high",
+			"xhigh",
+			"max",
+		];
+
+		for (const options of effortSets) {
+			for (const effort of efforts) {
+				const decision = decideReasoningEffort({
+					effort,
+					reasoningOptions: options,
+				});
+				const sent = normalizeReasoningRequest(
+					makeRequest({ effort }),
+					makeContext(options),
+				).reasoning?.effort;
+				expect(
+					sent,
+					`${effort} with ${JSON.stringify(options)}`,
+				).toBe(decision.applied);
+			}
+		}
 	});
 });

@@ -71,6 +71,10 @@ service ModelsService {
   rpc refreshXaiSubscriptionModelsRpc(EmptyRequest) returns (OpenRouterCompatibleModelInfo);
   // iCline: fetch Jan Local API Server model list (OpenAI-compatible /v1/models).
   rpc getJanModels(OpenAiModelsRequest) returns (StringArray);
+  // iCline: what a stored Effort level really sends for a provider+model. The SDK
+  // gateway clamps a level the model does not advertise (Sakana's `max` reaches a
+  // model whose top level is `xhigh` as X-High), and no other surface reports it.
+  rpc resolveReasoningEffort(ResolveReasoningEffortRequest) returns (ResolveReasoningEffortResponse);
 }
 
 // List of VS Code LM models
@@ -227,6 +231,40 @@ message ResolveModelInfoResponse {
   string model_id = 2;
   optional OpenRouterModelInfo model_info = 3;
   string source = 4;
+}
+
+message ResolveReasoningEffortRequest {
+  string provider_id = 1;
+  optional string model_id = 2;
+  // The level currently stored for this provider+mode.
+  string effort = 3;
+  // Thinking budget in force for the provider+mode, when one is set: the app sends
+  // the budget INSTEAD of an effort, so the answer must know it to stay honest.
+  optional int64 thinking_budget_tokens = 4;
+}
+
+message ResolveReasoningEffortResponse {
+  string provider_id = 1;
+  string model_id = 2;
+  // The level that was asked for.
+  string requested = 3;
+  // The level the provider receives; absent when no effort is forwarded at all.
+  optional string applied = 4;
+  // Levels the model advertises, ascending. Empty when the catalog publishes none.
+  repeated string supported_efforts = 5;
+  // Why `applied` differs: "exact", "nearest-supported", "catalog-unknown",
+  // "no-effort-control", or "not-applicable" when there is nothing to report.
+  string reason = 6;
+  // `applied` differs from `requested` — including the "nothing forwarded" case.
+  bool clamped = 7;
+  // A thinking budget is what goes out instead of this effort; stay quiet about
+  // the effort when true rather than claiming a level is in force.
+  bool suppressed_by_budget = 8;
+  // Registry entry the levels came from; absent when the catalog has no entry.
+  optional string registry_model_id = 9;
+  // "sdk-registry" when a model entry supplied the levels, else
+  // "registry-missing-model" (the SDK then uses broadly supported levels).
+  string source = 10;
 }
 
 message AwsProviderConfig {

@@ -127,6 +127,11 @@ export {
 } from "./providers/model-tools";
 export { resolveProviderModelCatalogKeys } from "./providers/provider-keys";
 export {
+	type ReasoningEffortDecision,
+	type ReasoningEffortDecisionReason,
+	decideReasoningEffort,
+} from "./providers/routing/reasoning-options";
+export {
 	type OpenAICodexRequestHeaderContext,
 	type ProviderRequestHeaderClientContext,
 	type ProviderRequestHeaderLayers,

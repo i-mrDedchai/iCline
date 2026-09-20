@@ -3,6 +3,7 @@ import {
 	type GatewayStreamRequest,
 	isClineProvider,
 	type ModelReasoningOption,
+	type ReasoningEffort,
 	resolveReasoningBudgetFromRatio,
 } from "@cline/shared";
 import {
@@ -27,6 +28,82 @@ function clampBudget(
 		maximum,
 	);
 	return Math.min(Math.max(Math.floor(budgetTokens), minimum), cappedMaximum);
+}
+
+/**
+ * Conservative effort mapping for models with no catalog metadata: only levels
+ * every OpenAI-style endpoint understands go out. Shared with the request path
+ * below so the two can never disagree about what an unlisted model receives.
+ */
+function conservativeEffort(effort: ReasoningEffort): ReasoningEffort {
+	return effort === "minimal"
+		? "low"
+		: effort === "xhigh" || effort === "max"
+			? "high"
+			: effort;
+}
+
+/** Why the level the provider receives is not the level the caller asked for. */
+export type ReasoningEffortDecisionReason =
+	/** The model advertises the requested level. */
+	| "exact"
+	/** The model advertises effort levels, but not this one — nearest wins. */
+	| "nearest-supported"
+	/** No catalog metadata: only broadly supported levels are sent. */
+	| "catalog-unknown"
+	/** The model advertises no effort control — the effort is not forwarded. */
+	| "no-effort-control";
+
+export interface ReasoningEffortDecision {
+	/** The level the caller asked for. */
+	requested: ReasoningEffort;
+	/** The level the provider receives; `undefined` = no effort forwarded. */
+	applied?: ReasoningEffort;
+	/**
+	 * Levels the model advertises, in ascending order (empty when the catalog
+	 * publishes none). This is what a UI can offer as "levels this model accepts".
+	 */
+	supportedEfforts: readonly ReasoningEffort[];
+	/** `applied !== requested` — including the "not forwarded at all" case. */
+	clamped: boolean;
+	reason: ReasoningEffortDecisionReason;
+}
+
+/**
+ * The single decision about which effort level a model actually receives.
+ *
+ * `normalizeReasoningRequest` calls this for every request, and hosts can call
+ * it with the same inputs to tell a user what a selection will really send —
+ * asking the same function is the only way a UI cannot drift from the wire.
+ *
+ * `reasoningOptions` are the model's models.dev controls: `undefined` means the
+ * catalog knows nothing about the model, an empty list means it advertises no
+ * user-facing reasoning control at all.
+ */
+export function decideReasoningEffort(input: {
+	effort: ReasoningEffort;
+	reasoningOptions?: readonly ModelReasoningOption[];
+}): ReasoningEffortDecision {
+	const controls = getModelReasoningControls(input.reasoningOptions);
+	if (!controls) {
+		const applied = conservativeEffort(input.effort);
+		return {
+			requested: input.effort,
+			applied,
+			supportedEfforts: [],
+			clamped: applied !== input.effort,
+			reason: "catalog-unknown",
+		};
+	}
+
+	const applied = normalizeReasoningEffort(input.effort, controls.efforts);
+	return {
+		requested: input.effort,
+		applied,
+		supportedEfforts: controls.efforts,
+		clamped: applied !== input.effort,
+		reason: applied === input.effort ? "exact" : controls.efforts.length === 0 ? "no-effort-control" : "nearest-supported",
+	};
 }
 
 /**
@@ -66,13 +143,7 @@ export function normalizeReasoningRequest(
 			return { ...request, reasoning: undefined };
 		}
 		// Custom/unlisted models get only broadly supported effort values.
-		const effort = reasoning.effort
-			? reasoning.effort === "minimal"
-				? "low"
-				: reasoning.effort === "xhigh" || reasoning.effort === "max"
-					? "high"
-					: reasoning.effort
-			: undefined;
+		const effort = reasoning.effort ? conservativeEffort(reasoning.effort) : undefined;
 		return {
 			...request,
 			reasoning: { ...reasoning, effort },
@@ -98,7 +169,7 @@ export function normalizeReasoningRequest(
 
 	const hasExplicitBudget = typeof reasoning.budgetTokens === "number";
 	const effort = reasoning.effort
-		? normalizeReasoningEffort(reasoning.effort, controls.efforts)
+		? decideReasoningEffort({ effort: reasoning.effort, reasoningOptions: options }).applied
 		: reasoning.enabled === true &&
 				!hasExplicitBudget &&
 				!controls.supportsDefault
