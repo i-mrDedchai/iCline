@@ -7,7 +7,7 @@
 
 ## 🧰 dev.6-fix.19 — รวมนิสัย popover เป็นฮุกกลาง + guard สแกนซอร์ส + e2e พิสูจน์โหมดขอบซ้ายบนหน้าต่างจริง (2026-09-20)
 
-**สถานะ:** ✅ เสร็จ · webview vitest **501/501** · `tsc` สะอาดทั้งสองฝั่ง · biome ไม่มี finding ใหม่ · e2e บน VS Code จริง **6/6** (`composer-status-options` 2 เทสต์ + `quick-picker-hover` + `quick-picker-effort-notice` + `quick-picker-org-policy`) · **commit แล้ว** (`690e703e4` refactor + `6bd8adf2c` e2e) · **แพ็กแล้ว:** `dist/i-mrdedchai.iCline-0.1.18-dev.6-fix.19.vsix` (11,967,453 B @ 2026-09-20T06:07:27Z, About = `dev build 6 · fix.19`)
+**สถานะ:** ✅ เสร็จ · webview vitest **501/501** · `tsc` สะอาดทั้งสองฝั่ง · biome ไม่มี finding ใหม่ · e2e บน VS Code จริง **15/15 ทั้งชุด** (หลังรอบเสริมด้านล่าง — ไม่มี retry) · **commit แล้ว** (`690e703e4` refactor + `6bd8adf2c` e2e) · **แพ็กแล้ว:** `dist/i-mrdedchai.iCline-0.1.18-dev.6-fix.19.vsix` (11,967,453 B @ 2026-09-20T06:07:27Z, About = `dev build 6 · fix.19`)
 
 **ที่มา (maintainer อนุมัติ 2 ข้อต่อจากรอบ fix.18):**
 1. เพิ่ม e2e ที่ทำให้หน้าแชท **กว้างพอ** เพื่อพิสูจน์โหมดหลัก (ขอบซ้ายของปุ่ม) บนหน้าต่าง VS Code จริง — ของเดิมพิสูจน์ได้แค่โหมดถอย เพราะ sidebar ของ harness แคบ
@@ -25,6 +25,15 @@
 
 **จุด smoke (fix.19):** ใช้รายการเดียวกับ fix.18 ทั้ง 5 ข้อ + เพิ่ม 1 ข้อ:
 - ข้อ 2 (ต่อ): ลากขอบ sidebar ให้แคบ/กว้าง**ขณะเปิดแผง Options อยู่** — แผงต้องสลับข้างเองโดยไม่ปิด-เปิดใหม่ (e2e พิสูจน์แล้ว 297→900px) · เปิด picker ของโมเดลแล้วทำเหมือนกัน ⇒ เมนูโมเดลก็สลับข้างเองเช่นกัน
+
+### รอบเสริม (test-only — หลังแพ็ก fix.19 แล้ว): ทำเทคนิคขยาย pane เป็น fixture + ล้างเทสต์ที่พังเพราะ sidebar แคบ
+
+**สถานะ:** ✅ e2e บน VS Code จริง **15/15 (ทั้งชุด ไม่มี retry)** · `tsc -p tsconfig.test.generated.json` สะอาด · biome ไม่มี finding ใหม่ · ❗ **ไม่ต้องแพ็ก VSIX ใหม่** — รอบนี้แตะแค่ `src/test/e2e` (ไม่เข้า bundle ของ extension) ⇒ artefact `fix.19` ยังตรงกับโค้ดที่ ship อยู่
+
+- **fixture ใหม่:** `src/test/e2e/utils/pane.ts` → `createPaneController({ app, page, sidebar })` มี `measure()` / `widenTo(target = 900)` (ขยายหน้าต่าง Electron ก่อน + ลาก sash ของ VS Code จริง โดยหา sash จาก **webview id** ไม่ใช่ part id ⇒ ใช้ได้ทั้ง sidebar/auxiliary bar · ถ้าลากไม่ถึงเป้าจะ throw ไม่ปล่อยให้เทสต์ผ่านแบบหลอก ๆ) และใน `helpers.ts` มี fixture `pane` (คอนโทรลเลอร์) กับ `widePane` (ใส่ชื่อในเทสต์ = ขยาย pane ให้ก่อนเข้า body แล้วคืนความกว้างที่ได้)
+- **`chat.test.ts` ผ่านแล้ว** (พังมาก่อนหน้ารอบนี้ทุกครั้ง): สาเหตุคือ composer row ใน sidebar ~300px ซ้อนกันเอง จนชื่อโมเดลที่ถูกตัด (`<span class="truncate max-w-[180px]">`) ทับสวิตช์ Plan/Act ⇒ `planButton.click()` ถูก intercept ทุกครั้ง · ใช้ `widePane` แล้วผ่าน — พร้อมแก้ locator ที่เปราะอีก 3 จุดที่เจอตอนวิ่งถึง: (1) ปุ่ม New Task ถูก re-render ของ header กลืนคลิก ⇒ คลิก-แล้ว-ยืนยันด้วย `expect(async () => {…}).toPass()`, (2) เมนู slash command เมนู "Context mentions" ต้องอ้างเป็น **การ์ดข้อเสนอแนะ (ARIA option)** ไม่ใช่ `getByText` เพราะข้อความเดียวกันมีอยู่ใน live-region สำหรับ screen reader (`Problems, 2 of 2`) และมี Problems สองแถว ⇒ ใช้ `getByRole("option", { name: "Problems", selected: true })` (แถวที่เมนูไฮไลต์คือแถวที่ใส่เมนชันได้จริง)
+- **`composer-status-options` ใช้ fixture แทนโค้ดในไฟล์** (ลบ `widenChatPane`/`findSash` ในเทสต์ออกแล้ว เหลือ `await pane.widenTo(PANE_WIDE_WIDTH_PX)`)
+- **ประโยชน์ต่ออนาคต:** เทสต์ใดก็ได้ที่ต้องการแถบข้างกว้างแค่ใส่ `widePane` ในรายการ fixture (หรือเรียก `pane.widenTo(n)` เมื่ออยากทดสอบการเปลี่ยนความกว้างกลางทาง)
 
 ---
 
