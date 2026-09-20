@@ -1,9 +1,12 @@
-import { expect, type Frame, type Page } from "@playwright/test"
+import { expect, type Frame } from "@playwright/test"
 import { e2e } from "./utils/helpers"
+import { PANE_WIDE_WIDTH_PX } from "./utils/pane"
 
 /**
  * E2E guard for the composer's split chip on a REAL VS Code window (fix.17) and for the
- * menu-anchoring rule that came with it (fix.18).
+ * menu-anchoring rule that came with it (fix.18). The pane's width is driven through the
+ * shared `pane` fixture (utils/pane.ts), which is what makes the second test able to reach
+ * the wide pane the anchoring rule was requested for.
  *
  * The status readout used to be part of the model-name button, so changing the Effort
  * of the model already driving the chat meant opening the model list and hunting for its
@@ -66,70 +69,6 @@ async function pickReasoningModel(sidebar: Frame): Promise<string> {
 	await targetRow?.click({ delay: 30 })
 	await expect(picker).toBeHidden({ timeout: 10_000 })
 	return chosenModelId as string
-}
-
-/**
- * Widen the pane the chat lives in, the way a user does it: drag VS Code's own sash.
- *
- * The workbench document is reached with `page`, and the pane is located from the WEBVIEW ITSELF
- * (the outer `<iframe>` whose box matches the frame we drive — VS Code nests the webview, so
- * `frameElement()` on our frame points at the inner `#active-frame`), never from a hard-coded
- * part id: the harness runs the view in the primary sidebar, a user can move it to the
- * auxiliary bar. The vertical, draggable sash on that pane's edge is then dragged AWAY from
- * the pane so the pane grows. Returns the pane's new inner width.
- */
-async function widenChatPane(page: Page, sidebar: Frame, targetWidth: number): Promise<number> {
-	// The workbench-side identity of OUR pane: the outer `<iframe>` carries the same `id`
-	// query parameter as the frame we drive (`…/index.html?id=<webview id>&…`), which is the
-	// only reliable handle on it — VS Code nests the webview and which part holds the view
-	// is VS Code's call.
-	const webviewId = new URL(sidebar.url()).searchParams.get("id")
-	let width = await sidebar.evaluate(() => window.innerWidth)
-	for (let attempt = 0; attempt < 3 && width < targetWidth; attempt++) {
-		const found = await page.evaluate((id) => {
-			const boxes = (selector: string) =>
-				[...document.querySelectorAll(selector)].map((element) => ({ element, rect: element.getBoundingClientRect() }))
-			const webview = boxes("iframe").find(({ element }) => (element.getAttribute("src") ?? "").includes(`id=${id}`))
-			if (!webview) {
-				return null
-			}
-			let best: { x: number; y: number; distance: number; growsRight: boolean } | null = null
-			for (const { element, rect } of boxes(".monaco-sash")) {
-				// Horizontal sashes belong to the panel/editor, and a `disabled` one marks a
-				// boundary that cannot be dragged at all.
-				if (rect.height <= rect.width || element.classList.contains("disabled")) {
-					continue
-				}
-				const x = rect.left + rect.width / 2
-				const toLeft = Math.abs(x - webview.rect.left)
-				const toRight = Math.abs(x - webview.rect.right)
-				const distance = Math.min(toLeft, toRight)
-				// A sash further away than this belongs to another pane.
-				if (distance > 40 || (best && distance >= best.distance)) {
-					continue
-				}
-				best = { x, y: rect.top + rect.height / 2, distance, growsRight: toRight < toLeft }
-			}
-			return best
-		}, webviewId)
-		expect(
-			found,
-			`no draggable sash at the edge of the pane that holds the chat webview (webview id ${webviewId})`,
-		).not.toBeNull()
-		const sash = found as { x: number; y: number; growsRight: boolean }
-		const delta = (targetWidth - width) * (sash.growsRight ? 1 : -1)
-		await page.mouse.move(sash.x, sash.y)
-		await page.mouse.down()
-		await page.mouse.move(sash.x + delta, sash.y, { steps: 15 })
-		await page.mouse.up()
-
-		const next = await sidebar.evaluate(() => window.innerWidth)
-		if (next === width) {
-			break // the drag was ignored (or the part hit its maximum); do not spin
-		}
-		width = next
-	}
-	return width
 }
 
 e2e("Composer — the status button opens Options for the model in use", async ({ helper, sidebar }) => {
@@ -200,53 +139,46 @@ e2e("Composer — the status button opens Options for the model in use", async (
 	await expect(trigger).toHaveText(modelBefore)
 })
 
-e2e(
-	"Composer — a widened pane pulls the open Options panel onto the button's left edge",
-	async ({ app, helper, page, sidebar }) => {
-		await helper.signin(sidebar)
-		const chosenModelId = await pickReasoningModel(sidebar)
+e2e("Composer — a widened pane pulls the open Options panel onto the button's left edge", async ({ helper, pane, sidebar }) => {
+	await helper.signin(sidebar)
+	const chosenModelId = await pickReasoningModel(sidebar)
 
-		const statusButton = sidebar.locator("[data-icline-model-status-button]")
-		const panel = sidebar.locator("[data-icline-status-options]")
-		await expect(statusButton).toBeVisible({ timeout: 10_000 })
+	const statusButton = sidebar.locator("[data-icline-model-status-button]")
+	const panel = sidebar.locator("[data-icline-status-options]")
+	await expect(statusButton).toBeVisible({ timeout: 10_000 })
 
-		// Open Options while the pane is still narrow, and confirm the fallback edge is what is
-		// on screen: without that precondition the flip below would prove nothing.
-		await statusButton.click({ delay: 30 })
-		await expect(panel).toBeVisible({ timeout: 10_000 })
-		await expect(panel.locator("[data-icline-options-model-id]")).toHaveText(chosenModelId)
-		const narrowWidth = await panel.evaluate(() => window.innerWidth)
-		const [narrowButtonBox, narrowPanelBox] = await Promise.all([statusButton.boundingBox(), panel.boundingBox()])
-		expect(narrowButtonBox).not.toBeNull()
-		expect(narrowPanelBox).not.toBeNull()
-		const fitsNarrow = (narrowButtonBox as Box).x + (narrowPanelBox as Box).width + 8 <= narrowWidth
-		expect(fitsNarrow, "the default VS Code pane is expected to be too narrow for the left-edge anchor").toBe(false)
-		expect(await panel.getAttribute("data-align")).toBe("end")
+	// Open Options while the pane is still narrow, and confirm the fallback edge is what is
+	// on screen: without that precondition the flip below would prove nothing.
+	await statusButton.click({ delay: 30 })
+	await expect(panel).toBeVisible({ timeout: 10_000 })
+	await expect(panel.locator("[data-icline-options-model-id]")).toHaveText(chosenModelId)
+	const narrowWidth = await panel.evaluate(() => window.innerWidth)
+	const [narrowButtonBox, narrowPanelBox] = await Promise.all([statusButton.boundingBox(), panel.boundingBox()])
+	expect(narrowButtonBox).not.toBeNull()
+	expect(narrowPanelBox).not.toBeNull()
+	const fitsNarrow = (narrowButtonBox as Box).x + (narrowPanelBox as Box).width + 8 <= narrowWidth
+	expect(fitsNarrow, "the default VS Code pane is expected to be too narrow for the left-edge anchor").toBe(false)
+	expect(await panel.getAttribute("data-align")).toBe("end")
 
-		// Now give the window room and drag the pane wide — the request's ~930px working pane,
-		// reached the way a user reaches it. The drag happens in the WORKBENCH document (the
-		// sash is not inside the webview), so it never counts as a click outside the panel and
-		// the panel must stay open across it, re-deciding its edge as the pane resizes.
-		await app.evaluate(({ BrowserWindow }) => {
-			BrowserWindow.getAllWindows()[0]?.setSize(1800, 1000)
-		})
-		const wideWidth = await widenChatPane(page, sidebar, 900)
-		expect(wideWidth, "the sash drag did not widen the chat pane").toBeGreaterThan(700)
-		await expect(panel).toBeVisible()
+	// Now widen the pane to the width the request came from, the way a user does it (give the
+	// window room, then drag VS Code's own sash). The drag happens in the WORKBENCH document —
+	// the sash is not inside the webview — so it never counts as a click outside the panel: the
+	// panel must stay open across it and re-decide its edge as the pane resizes.
+	const wideWidth = await pane.widenTo(PANE_WIDE_WIDTH_PX)
+	await expect(panel).toBeVisible()
 
-		const [buttonBox, panelBox] = await Promise.all([statusButton.boundingBox(), panel.boundingBox()])
-		expect(buttonBox).not.toBeNull()
-		expect(panelBox).not.toBeNull()
-		const button = buttonBox as Box
-		const content = panelBox as Box
-		// The precondition the request is about: this pane CAN hold the panel beside the button
-		// (if VS Code's composer row ever pushes the button out to the far edge, this says so
-		// instead of silently passing on the fallback).
-		expect(
-			button.x + content.width + 8 <= wideWidth,
-			`the widened pane (${wideWidth}px) still cannot hold the ${content.width}px panel at x=${button.x}`,
-		).toBe(true)
-		expect(await panel.getAttribute("data-align")).toBe("start")
-		expect(Math.abs(content.x - button.x)).toBeLessThanOrEqual(1)
-	},
-)
+	const [buttonBox, panelBox] = await Promise.all([statusButton.boundingBox(), panel.boundingBox()])
+	expect(buttonBox).not.toBeNull()
+	expect(panelBox).not.toBeNull()
+	const button = buttonBox as Box
+	const content = panelBox as Box
+	// The precondition the request is about: this pane CAN hold the panel beside the button
+	// (if VS Code's composer row ever pushes the button out to the far edge, this says so
+	// instead of silently passing on the fallback).
+	expect(
+		button.x + content.width + 8 <= wideWidth,
+		`the widened pane (${wideWidth}px) still cannot hold the ${content.width}px panel at x=${button.x}`,
+	).toBe(true)
+	expect(await panel.getAttribute("data-align")).toBe("start")
+	expect(Math.abs(content.x - button.x)).toBeLessThanOrEqual(1)
+})

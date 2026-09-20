@@ -6,6 +6,7 @@ import { type ElectronApplication, expect, type Frame, type Page, test } from "@
 import { downloadAndUnzipVSCode, SilentReporter } from "@vscode/test-electron"
 import { _electron } from "playwright"
 import { ClineApiServerMock } from "../fixtures/server"
+import { createPaneController, PANE_WIDE_WIDTH_PX, type PaneController } from "./pane"
 
 interface E2ETestDirectories {
 	workspaceDir: string
@@ -316,6 +317,11 @@ export class E2ETestHelper {
  * - `helper`: E2ETestHelper instance for test utilities
  * - `page`: Playwright Page object representing the main VS Code window with Cline sidebar opened
  * - `sidebar`: Playwright Frame object representing the Cline extension's sidebar iframe
+ * - `pane`: Controller for the WIDTH of the pane the chat lives in (see utils/pane.ts)
+ * - `widePane`: the same, used as a request — naming it in a test's fixtures widens the pane
+ *   to `PANE_WIDE_WIDTH_PX` before the body runs and hands back the width it reached. Ask
+ *   for it in any test whose subject does not fit VS Code's ~300px default (the composer row
+ *   overlaps itself there and the model chip swallows clicks on the Plan/Act switch)
  *
  * @returns Extended test object with all fixtures available for E2E test scenarios:
  * - **server**: Automatically starts and manages a ClineApiServerMock instance
@@ -327,6 +333,8 @@ export class E2ETestHelper {
  * - **helper**: Provides E2ETestHelper utilities for test operations
  * - **page**: Configures the main VS Code window with notifications disabled and Cline sidebar open
  * - **sidebar**: Provides access to the Cline extension's sidebar frame
+ * - **pane**: Drives the pane's width (measure / widenTo) by dragging VS Code's own sash
+ * - **widePane**: Widens the pane before the test body and resolves to its new inner width
  *
  * @example
  * ```typescript
@@ -475,6 +483,18 @@ export const e2e = test
 			await E2ETestHelper.openClineSidebar(page)
 			const sidebar = await helper.getSidebar(page)
 			await use(sidebar)
+		},
+	})
+	.extend<{ pane: PaneController }>({
+		pane: async ({ app, page, sidebar }, use) => {
+			await use(createPaneController({ app, page, sidebar }))
+		},
+	})
+	.extend<{ widePane: number }>({
+		// A fixture used as a REQUEST: `async ({ widePane }) => …` widens the chat pane to a
+		// width the composer row can lay out in, and resolves to the width it reached.
+		widePane: async ({ pane }, use) => {
+			await use(await pane.widenTo(PANE_WIDE_WIDTH_PX))
 		},
 	})
 
