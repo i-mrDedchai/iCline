@@ -14,7 +14,10 @@ import { e2e } from "./utils/helpers"
  *
  * What it pins, on a real window: the readout is not inside the model button, clicking
  * it opens Options for the model in use (not the list), picking a level there writes to
- * that model and leaves the selection alone, and the chip's own badge follows.
+ * that model and leaves the selection alone, the chip's own badge follows, and the panel
+ * is anchored to the edge of that button the pane can afford — its LEFT edge
+ * (`align="start"`) while the pane can hold the panel beside the button, its RIGHT edge
+ * (`align="end"`, the behaviour before this round) once it cannot.
  */
 e2e("Composer — the status button opens Options for the model in use", async ({ helper, sidebar }) => {
 	await helper.signin(sidebar)
@@ -70,6 +73,42 @@ e2e("Composer — the status button opens Options for the model in use", async (
 	await expect(panel.locator("[data-icline-options-model-id]")).toHaveText(chosenModelId as string)
 	await expect(picker).toBeHidden()
 	await expect(panel).toHaveText(/Options|ตัวเลือก/)
+
+	// Which edge the panel is anchored to is a decision, not a constant (request of
+	// 2026-09-20): its LEFT edge sits on the button's left edge while the pane can hold the
+	// 236px panel beside the button — the ~930px working pane the request came from — and
+	// it falls back to the older right-edge anchoring when it cannot, so a squeezed sidebar
+	// still shows the whole panel instead of losing it off the side of the pane.
+	//
+	// Measured on the real window, because jsdom has no layout for the placement maths: the
+	// harness runs VS Code's default sidebar (~300px) with the composer row already filled
+	// by the four icons and the model chip, so this window is the FALLBACK case; the
+	// left-edge case is covered by the helper's own unit tests and by the webview test that
+	// pins a wide pane.
+	//
+	// Radix republishes the resolved side as `data-align`, and still nudges the panel back
+	// inside the pane when even the chosen edge would overflow — so the edge coincidence is
+	// asserted only while there is room for it.
+	const [buttonBox, panelBox, viewportWidth] = await Promise.all([
+		statusButton.boundingBox(),
+		panel.boundingBox(),
+		panel.evaluate(() => window.innerWidth),
+	])
+	expect(buttonBox).not.toBeNull()
+	expect(panelBox).not.toBeNull()
+	const button = buttonBox as { x: number; width: number }
+	const content = panelBox as { x: number; width: number }
+
+	// The same rule the picker itself uses (`pickOptionsPopoverAlign`, panel width 236 plus
+	// an 8px viewport margin).
+	const leftEdgeFits = button.x + content.width + 8 <= viewportWidth
+	expect(await panel.getAttribute("data-align")).toBe(leftEdgeFits ? "start" : "end")
+	if (leftEdgeFits) {
+		// 1px of slack absorbs sub-pixel rounding of the popper's transform.
+		expect(Math.abs(content.x - button.x)).toBeLessThanOrEqual(1)
+	} else if (button.x + button.width - content.width >= 0) {
+		expect(Math.abs(content.x + content.width - (button.x + button.width))).toBeLessThanOrEqual(1)
+	}
 
 	// Changing the level here writes to the model in use — and does not switch models.
 	const levels = panel.locator("[data-icline-effort-option]")
