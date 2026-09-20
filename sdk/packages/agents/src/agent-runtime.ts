@@ -49,9 +49,18 @@ import {
 	trimNonEmpty,
 } from "@cline/shared";
 import { nanoid } from "nanoid";
+import {
+	FABRICATED_TOOL_CALL_HINT,
+	MAX_FABRICATED_TOOL_CALLS,
+	parseFabricatedToolCalls,
+	stripFabricatedToolCallMarkup,
+} from "./fabricated-tool-calls";
 
 const MAX_TOKENS_INCOMPLETE_TURN_MESSAGE =
 	"Model reached the maximum output token limit before completing the turn";
+
+/** Cap on tool names listed in the "unknown tool" result, so the message stays readable. */
+const MAX_TOOL_NAMES_IN_ERROR = 40;
 
 /**
  * How many times to retry a model turn that failed with a transient,
@@ -699,6 +708,65 @@ export class AgentRuntime {
 		)}. Continue working if requirements are not met. If the task is complete, call the appropriate terminal completion tool now.`;
 	}
 
+	/**
+	 * Rewrites a turn whose tool call arrived as text (see
+	 * `fabricated-tool-calls.ts`) into the shape the loop expects: real
+	 * tool-call parts, plus the model's prose without the markup. Returns
+	 * `undefined` when the message carries no fabricated call markup, so an
+	 * ordinary answer is left byte-identical.
+	 *
+	 * A recovered name that is not in the registry is kept on purpose: the
+	 * execution path already answers an unresolvable name with an "unknown tool"
+	 * result, and that result — not silence — is what lets such a model correct
+	 * itself on the next iteration.
+	 */
+	private recoverFabricatedToolCalls(
+		message: AgentMessage,
+	): { message: AgentMessage; toolCalls: AgentToolCallPart[] } | undefined {
+		const toolCalls: AgentToolCallPart[] = [];
+		const content: AgentMessagePart[] = [];
+		let recoveredMarkup = false;
+
+		for (const part of message.content) {
+			if (part.type !== "text") {
+				content.push(part);
+				continue;
+			}
+			const stripped = stripFabricatedToolCallMarkup(part.text);
+			if (stripped === part.text) {
+				content.push(part);
+				continue;
+			}
+			recoveredMarkup = true;
+			const room = MAX_FABRICATED_TOOL_CALLS - toolCalls.length;
+			if (room > 0) {
+				for (const call of parseFabricatedToolCalls(part.text).slice(0, room)) {
+					toolCalls.push({
+						type: "tool-call",
+						toolCallId: createUID("tool"),
+						toolName: call.name,
+						input: call.input,
+					});
+				}
+			}
+			// A part that held nothing but the call disappears rather than leaving an
+			// empty bubble behind.
+			if (stripped.trim() !== "") {
+				content.push({ ...part, text: stripped });
+			}
+		}
+
+		if (!recoveredMarkup) {
+			return undefined;
+		}
+		// The recovered calls join the message itself, not just the execution
+		// list: the transcript needs an assistant turn that *contains* the call it
+		// is answered by, or a replayed conversation would carry a tool result
+		// whose request is missing (and providers reject exactly that shape).
+		content.push(...toolCalls);
+		return { message: { ...message, content }, toolCalls };
+	}
+
 	private getCompletionReminderMessages(): string[] {
 		return [
 			this.getCompletionToolReminderMessage(),
@@ -773,7 +841,7 @@ export class AgentRuntime {
 				// A fresh error slate per turn: nothing from a previous turn may leak
 				// into this turn's error classification or retry decision.
 				this.resetLastError();
-				const { message, finishReason, interrupted } =
+				let { message, finishReason, interrupted } =
 					await this.generateAssistantMessageWithProviderRetry();
 				if (interrupted && message.content.length === 0) {
 					await this.emit({
@@ -805,10 +873,28 @@ export class AgentRuntime {
 						throw new Error("Model returned empty response");
 					}
 				}
-				const toolCalls = message.content.filter(
+				let toolCalls = message.content.filter(
 					(part: AgentMessagePart): part is AgentToolCallPart =>
 						part.type === "tool-call",
 				);
+
+				// A turn whose only "tool call" is markup the model wrote as text has
+				// no tool-call parts, and the branch below would report it as a final
+				// answer: the task stops dead, the raw markup is what the user reads,
+				// and — because the model gets no feedback — the next turn repeats it.
+				// Recover the call instead, so it goes through the ordinary policy,
+				// approval and execution path. See fabricated-tool-calls.ts.
+				if (
+					toolCalls.length === 0 &&
+					finishReason !== "max-tokens" &&
+					finishReason !== "error"
+				) {
+					const recovered = this.recoverFabricatedToolCalls(message);
+					if (recovered) {
+						message = recovered.message;
+						toolCalls = recovered.toolCalls;
+					}
+				}
 
 				finalAssistantMessage = message;
 				this.state.messages.push(message);
@@ -1339,6 +1425,7 @@ export class AgentRuntime {
 		let finishReason: AgentModelFinishReason = "stop";
 		let accumulatedText = "";
 		let accumulatedReasoning = "";
+		let fabricatedMarkupSeen = false;
 
 		for await (const event of stream) {
 			if (steerController.signal.aborted) break;
@@ -1346,6 +1433,17 @@ export class AgentRuntime {
 			switch (event.type) {
 				case "text-delta": {
 					accumulatedText += event.text;
+					// The chat renders the accumulated text on every delta, so fabricated
+					// call markup is stripped here too — otherwise the user watches raw
+					// XML grow and then snap away once the turn ends. The probe is bounded
+					// to the tail of the buffer, so a stream that never mentions a call
+					// block stays linear.
+					if (
+						!fabricatedMarkupSeen &&
+						FABRICATED_TOOL_CALL_HINT.test(accumulatedText.slice(-64))
+					) {
+						fabricatedMarkupSeen = true;
+					}
 					const last = sequence.at(-1);
 					if (last?.type === "part" && last.part.type === "text") {
 						last.part.text += event.text;
@@ -1360,7 +1458,9 @@ export class AgentRuntime {
 						snapshot: this.snapshot(),
 						iteration: this.state.iteration,
 						text: event.text,
-						accumulatedText,
+						accumulatedText: fabricatedMarkupSeen
+							? stripFabricatedToolCallMarkup(accumulatedText)
+							: accumulatedText,
 					});
 					break;
 				}
@@ -1903,6 +2003,21 @@ export class AgentRuntime {
 		return undefined;
 	}
 
+	/**
+	 * Names the tools the model *could* have called. A bare "Unknown tool" leaves
+	 * the model guessing — and a model that guessed a name in the first place
+	 * (a name from another agent runtime, say) will guess again without the list.
+	 */
+	private unknownToolError(toolName: string): string {
+		const available = [...this.tools.keys()];
+		if (available.length === 0) {
+			return `Unknown tool: ${toolName}`;
+		}
+		const listed = available.slice(0, MAX_TOOL_NAMES_IN_ERROR).join(", ");
+		const more = available.length > MAX_TOOL_NAMES_IN_ERROR ? ", …" : "";
+		return `Unknown tool: ${toolName}. Available tools: ${listed}${more}`;
+	}
+
 	private async prepareToolExecution(
 		toolCall: AgentToolCallPart,
 	): Promise<PreparedToolExecution> {
@@ -2061,7 +2176,7 @@ export class AgentRuntime {
 			};
 		} else if (!prepared.tool) {
 			result = {
-				output: { error: `Unknown tool: ${prepared.toolCall.toolName}` },
+				output: { error: this.unknownToolError(prepared.toolCall.toolName) },
 				isError: true,
 			};
 		} else {

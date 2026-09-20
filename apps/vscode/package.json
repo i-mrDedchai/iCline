@@ -443,6 +443,7 @@
 		"test:bun": "bun scripts/run-bun-tests.ts",
 		"test:bun:unit": "bun scripts/run-bun-unit-tests.ts",
 		"repro:editor-write": "bun scripts/repro-editor-write.ts",
+		"repro:tool-call-text": "bun scripts/repro-fabricated-tool-call.ts",
 		"test:coverage": "bun run compile-tests && vscode-test --coverage",
 		"test:sca-server": "bun --watch scripts/test-standalone-core-api-server.ts",
 		"test:tp-orchestrator": "bun scripts/testing-platform-orchestrator.ts",
