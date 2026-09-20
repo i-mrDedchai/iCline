@@ -3,8 +3,10 @@
  * Quick Picker goes through this map — no hardcoded copy inside the component.
  *
  * Scope is deliberately narrow: the guideline's fix.9 boundary is the picker plus the
- * reusable tooltip. Other iCline surfaces stay on their current inline copy until a
- * later round, so this module owns only picker strings.
+ * reusable tooltip, and the Effort-clamp notice that the picker's Options panel shares
+ * with the Settings Effort control (`components/common/ReasoningEffortNotice`). Other
+ * iCline surfaces stay on their current inline copy until a later round, so this module
+ * owns only picker-adjacent strings.
  *
  * Locale resolution order (see `resolvePickerLocale`):
  *   1. an explicit `preferredLanguage` naming Thai → `th`
@@ -76,6 +78,12 @@ const en = {
 	effortHigh: "High",
 	effortXhigh: "X-High",
 	effortMax: "Max",
+	// Effort clamp notice — shown when the SDK gateway will NOT send the level the
+	// user picked (see components/common/ReasoningEffortNotice). `{requested}` and
+	// `{applied}` are level labels.
+	effortClampNearest: "{requested} → {applied} · this model does not accept {requested}, so {applied} is sent",
+	effortClampCatalogUnknown: "{requested} → {applied} · no Effort data for this model, so {applied} is sent",
+	effortClampNoControl: "{requested} is not sent · this model has no Effort control",
 	// Footer
 	footerRefreshTooltip: "Refresh the model list",
 	footerEditTooltip: "Edit this provider in Settings",
@@ -129,6 +137,9 @@ const th: Record<PickerStringKey, string> = {
 	effortHigh: "High",
 	effortXhigh: "X-High",
 	effortMax: "Max",
+	effortClampNearest: "{requested} → {applied} · โมเดลนี้ไม่รับ {requested} จะส่ง {applied} แทน",
+	effortClampCatalogUnknown: "{requested} → {applied} · ไม่มีข้อมูล Effort ของโมเดลนี้ จะส่ง {applied} แทน",
+	effortClampNoControl: "ไม่ส่ง {requested} · โมเดลนี้ไม่มีตัวเลือก Effort",
 	footerRefreshTooltip: "โหลดรายชื่อโมเดลใหม่",
 	footerEditTooltip: "แก้ไข provider นี้ใน Settings",
 	commitFailed: "เปิดใช้งานโมเดลนี้ไม่สำเร็จ",
@@ -142,6 +153,17 @@ export type PickerTranslator = (key: PickerStringKey) => string
 export function createPickerTranslator(locale: PickerLocale): PickerTranslator {
 	const table = PICKER_STRINGS[locale] ?? en
 	return (key) => table[key] ?? en[key] ?? key
+}
+
+/**
+ * Fill `{name}` placeholders in a translated string. Missing values are left as the
+ * literal placeholder rather than rendering "undefined" — a visibly incomplete
+ * sentence is easier to fix than a plausible wrong one.
+ */
+export function formatPickerString(tr: PickerTranslator, key: PickerStringKey, values: Record<string, string | number>): string {
+	return tr(key).replace(/\{(\w+)\}/g, (placeholder, name: string) =>
+		values[name] !== undefined ? String(values[name]) : placeholder,
+	)
 }
 
 /** Reads the two locale inputs the webview actually has, then resolves. */

@@ -181,6 +181,40 @@ function catalogEffortLevel(value: string): EffortLevel {
 }
 
 /**
+ * The levels a control should offer, including the STORED one when the provider's set
+ * does not contain it.
+ *
+ * Effort is stored once per mode, so switching providers leaves the previous level
+ * behind (Sakana has no `minimal`, OCA publishes only what its catalog lists) and the
+ * request carries it regardless. A control that hid it would name a level that is not
+ * the one in force; keeping it is what lets an Effort-clamp notice describe the same
+ * value the user is looking at. A stored value outside the shared vocabulary is
+ * ignored — the control cannot name it.
+ */
+export function levelsWithStoredEffort(levels: readonly EffortLevel[], storedEffort?: string | null): readonly EffortLevel[] {
+	const value = storedEffort?.trim()
+	if (!value || !isOpenaiReasoningEffort(value)) {
+		return levels
+	}
+	if (levels.some((level) => level.value === value)) {
+		return levels
+	}
+	return [...levels, catalogEffortLevel(value)]
+}
+
+/**
+ * Presentation for one stored Effort value — the shared vocabulary's own label
+ * ("X-High", not "Xhigh"), a capitalised label for values a catalog invented.
+ *
+ * Used where a level has to be named OUTSIDE a dropdown built from `EffortLevel`s (the
+ * Effort-clamp notice, a provider's control offering a level stored by another
+ * provider), so no surface can spell a level differently from the one that set it.
+ */
+export function effortLevelForValue(value: string): EffortLevel {
+	return catalogEffortLevel(value)
+}
+
+/**
  * OCA (and, through `resolveEffortLevels`, any provider whose catalog publishes them)
  * declares the levels each model accepts; the catalog IS the metadata here, so the
  * labels are derived from the published values rather than kept in a second list.

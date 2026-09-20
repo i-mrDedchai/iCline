@@ -10,6 +10,7 @@ import {
 	firstOnEffortValue,
 	hasThinkingBudgetConfig,
 	hasThinkingConfig,
+	levelsWithStoredEffort,
 	normalizeEffortValue,
 	OPENAI_COMPATIBLE_POLICY_ID,
 	resolveEffortLevels,
@@ -229,6 +230,24 @@ describe("effort LEVELS are provider metadata", () => {
 			reasoningEffortOptions: ["low", "medium"],
 		})
 		expect(levels.id).toBe("sakana")
+	})
+
+	it("keeps a level stored by another provider in the control, named the same way", () => {
+		// Effort is stored per mode: a level picked for one provider is still what the
+		// next provider's request carries. Hiding it made the control name a different
+		// level from the one in force.
+		const sakana = levelsFor("sakana", "fugu").levels
+		expect(levelsWithStoredEffort(sakana, "medium").map((level) => level.value)).toEqual(["high", "xhigh", "max", "medium"])
+		expect(levelsWithStoredEffort(sakana, "medium").at(-1)?.label).toBe("Medium")
+
+		// Nothing changes when the set already contains the value (the common case).
+		expect(levelsWithStoredEffort(sakana, "max")).toEqual(sakana)
+		expect(levelsWithStoredEffort(sakana, "none")).not.toEqual(sakana)
+		expect(levelsWithStoredEffort(sakana, "none").at(-1)?.isOff).toBe(true)
+		// Empty or unknown values are not invented into the list.
+		expect(levelsWithStoredEffort(sakana, "")).toEqual(sakana)
+		expect(levelsWithStoredEffort(sakana, undefined)).toEqual(sakana)
+		expect(levelsWithStoredEffort(sakana, "ultra")).toEqual(sakana)
 	})
 })
 

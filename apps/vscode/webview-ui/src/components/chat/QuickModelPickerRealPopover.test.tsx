@@ -4,6 +4,7 @@ import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useNormalizedApiConfiguration } from "@/hooks/useNormalizedApiConfiguration"
 import { useProviderListings } from "@/hooks/useProviderListings"
 import { useProviderModels } from "@/hooks/useProviderModels"
+import { clearReasoningEffortOutcomeCache } from "@/hooks/useReasoningEffortOutcome"
 import { ModelsServiceClient } from "@/services/grpc-client"
 import { QuickModelPicker } from "./QuickModelPicker"
 
@@ -32,6 +33,20 @@ vi.mock("@/components/settings/utils/useApiConfigurationHandlers", () => ({
 vi.mock("@/services/grpc-client", () => ({
 	ModelsServiceClient: {
 		commitModelSelection: vi.fn(),
+		// Host answer for "what will this Effort really send?": by default the level is
+		// sent as chosen, so unrelated assertions keep seeing no notice. Tests that
+		// exercise the clamp override this with a real downgrade.
+		resolveReasoningEffort: vi.fn(async (request: { providerId: string; modelId?: string; effort: string }) => ({
+			providerId: request.providerId,
+			modelId: request.modelId ?? "",
+			requested: request.effort,
+			applied: request.effort,
+			supportedEfforts: [request.effort],
+			reason: "exact",
+			clamped: false,
+			suppressedByBudget: false,
+			source: "sdk-registry",
+		})),
 		makeUnaryRequest: vi.fn(async () => ({
 			recommended: [],
 			free: [],
@@ -68,6 +83,9 @@ const LEFTOVER_XAI_MODEL_ID = "grok-composer-2.5-fast"
 describe("QuickModelPicker real Popover", () => {
 	beforeEach(() => {
 		vi.clearAllMocks()
+		// The clamp answers are cached per provider::model::effort for the whole module
+		// registry, so a test must not inherit another test's answer.
+		clearReasoningEffortOutcomeCache()
 		vi.stubGlobal(
 			"ResizeObserver",
 			class ResizeObserver {
@@ -186,6 +204,23 @@ describe("QuickModelPicker real Popover", () => {
 		}
 	}
 
+	/** The status readout of the composer chip (the trigger), not of a row. */
+	const readChip = () => {
+		const chip = document.querySelector("[data-icline-model-status]") as HTMLElement | null
+		return {
+			caps: chip
+				? [...chip.querySelectorAll("[data-icline-capability]")].map((el) => el.getAttribute("data-icline-capability"))
+				: [],
+			states: chip
+				? [...chip.querySelectorAll("[data-icline-capability][data-icline-state]")].map((el) =>
+						el.getAttribute("data-icline-state"),
+					)
+				: [],
+			effort: chip?.querySelector("[data-icline-effort]")?.getAttribute("data-icline-effort") ?? null,
+			effortShort: chip?.querySelector("[data-icline-effort]")?.textContent ?? null,
+		}
+	}
+
 	/** Two Jan models: one declares reasoning, one is plain — for status assertions. */
 	const mockReasoningProviderModels = () => {
 		vi.mocked(useProviderModels).mockImplementation(((providerId: string) => {
@@ -280,6 +315,50 @@ describe("QuickModelPicker real Popover", () => {
 		expect(readStatus("jan-reasoner")).toMatchObject({ rowStates: ["on"], panelSwitch: "on", panelSelectedEffort: "high" })
 	})
 
+	it("shows the active model's readout on the composer chip, matching its row", async () => {
+		// The composer chip carries the same readout as the picker's rows, so the
+		// effort/reasoning state is visible without opening the picker (smoke 2026-09-20:
+		// the row had icons and the chip showed a bare model name).
+		const activeModelId = "grok-4.6-reasoner"
+		const models = { [activeModelId]: { name: "Grok Reasoner", supportsReasoning: true, supportsImages: true } }
+		vi.mocked(useProviderModels).mockImplementation(((providerId: string) => ({
+			models: providerId === "xai" ? models : {},
+			defaultModelId: providerId === "xai" ? activeModelId : "",
+			isLoading: false,
+			isStale: false,
+			error: undefined,
+			refresh: vi.fn(),
+			fingerprint: providerId,
+		})) as typeof useProviderModels)
+		vi.mocked(useExtensionState).mockReturnValue({
+			mode: "act",
+			apiConfiguration: {
+				actModeApiProvider: "xai",
+				actModeApiModelId: activeModelId,
+				actModeReasoningEffort: "high",
+			},
+			providerModelsByProvider: { xai: { models } },
+		} as ReturnType<typeof useExtensionState>)
+		vi.mocked(useNormalizedApiConfiguration).mockReturnValue({
+			selectedProvider: "xai",
+			selectedModelId: activeModelId,
+			selectedModelInfo: models[activeModelId],
+		})
+
+		render(<QuickModelPicker modelDisplayName={activeModelId} />)
+		await waitFor(() => expect(readChip().caps).toEqual(["reasoning", "vision"]))
+		expect(readChip()).toMatchObject({ states: ["on"], effort: "high", effortShort: "H" })
+
+		// The row for the same model reports the very same thing.
+		fireEvent.click(screen.getByRole("button", { name: new RegExp(activeModelId) }))
+		await waitFor(() => expect(readStatus(activeModelId).rowExists).toBe(true))
+		expect(readStatus(activeModelId)).toMatchObject({ rowStates: ["on"], rowEffort: "high" })
+		const row = document.querySelector(`[data-icline-model-id="${activeModelId}"]`) as HTMLElement
+		expect(
+			[...row.querySelectorAll("[data-icline-capability]")].map((el) => el.getAttribute("data-icline-capability")),
+		).toEqual(readChip().caps)
+	})
+
 	it("offers the hovered PROVIDER's own effort levels, not one hardcoded set", async () => {
 		// Sakana maps three levels itself (high/xhigh/max) — the shared provider metadata
 		// (`@/utils/modelThinkingOptions`) names them, so the panel must list those and the
@@ -341,6 +420,116 @@ describe("QuickModelPicker real Popover", () => {
 		await waitFor(() => expect(readStatus("fugu").rowEffort).toBe("max"))
 		expect(readStatus("fugu")).toMatchObject({ panelSelectedEffort: "max", panelSwitch: "on" })
 		expect(document.querySelector('[data-icline-model-id="fugu"] [data-icline-effort]')?.textContent).toBe("M")
+	})
+
+	it("says what will really be sent when the model cannot take the marked level", async () => {
+		// The user's Sakana case: Fugu Ultra advertises high/xhigh, so picking Max sends
+		// X-High. The panel used to show Max selected and nothing else — the downgrade
+		// only surfaced in the provider's own answer.
+		//
+		// Start from a clean model-preference store: other tests in this file write
+		// per-model effort into it, and a leftover `max` would open the panel already
+		// clamped (and add an effort badge to the row's accessible name).
+		localStorage.clear()
+		vi.mocked(useProviderListings).mockReturnValue({
+			providers: [
+				{ id: "xai", name: "xAI" },
+				{ id: "sakana", name: "Sakana" },
+			],
+			isLoading: false,
+			error: undefined,
+			refresh: vi.fn(),
+		} as ReturnType<typeof useProviderListings>)
+		vi.mocked(useProviderModels).mockImplementation(((providerId: string) => {
+			if (providerId === "sakana") {
+				return {
+					models: { fugu: { name: "Fugu", supportsReasoning: true } },
+					defaultModelId: "fugu",
+					isLoading: false,
+					isStale: false,
+					error: undefined,
+					refresh: vi.fn(),
+					fingerprint: "sakana",
+				}
+			}
+			return {
+				models: {},
+				defaultModelId: "",
+				isLoading: false,
+				isStale: false,
+				error: undefined,
+				refresh: vi.fn(),
+				fingerprint: "",
+			}
+		}) as typeof useProviderModels)
+		vi.mocked(ModelsServiceClient.resolveReasoningEffort).mockImplementation((async (request: {
+			providerId: string
+			modelId?: string
+			effort: string
+		}) => ({
+			providerId: request.providerId,
+			modelId: request.modelId ?? "",
+			requested: request.effort,
+			applied: request.effort === "max" ? "xhigh" : request.effort,
+			supportedEfforts: ["high", "xhigh"],
+			reason: request.effort === "max" ? "nearest-supported" : "exact",
+			clamped: request.effort === "max",
+			suppressedByBudget: false,
+			source: "sdk-registry",
+		})) as unknown as typeof ModelsServiceClient.resolveReasoningEffort)
+
+		render(<QuickModelPicker modelDisplayName={LEFTOVER_XAI_MODEL_ID} />)
+		fireEvent.click(screen.getByRole("button", { name: new RegExp(LEFTOVER_XAI_MODEL_ID) }))
+		fireEvent.click(await screen.findByRole("button", { name: "Sakana" }))
+		fireEvent.pointerMove(await screen.findByRole("button", { name: /^Fugu\b/ }))
+		await waitFor(() => expect(readStatus("fugu").panelModelId).toBe("fugu"))
+
+		const notice = () => document.querySelector("[data-icline-picker-options] [data-icline-effort-clamp]")
+		// A level the model accepts says nothing: silence is the normal state.
+		expect(notice()).toBeNull()
+
+		fireEvent.click(document.querySelector('[data-icline-picker-options] [data-icline-effort-option="max"]') as HTMLElement)
+		await waitFor(() => expect(notice()).not.toBeNull())
+		expect(notice()?.getAttribute("data-icline-effort-clamp")).toBe("nearest-supported")
+		expect(notice()?.textContent).toContain("Max → X-High")
+		// The row keeps showing what the user picked — the notice is the explanation,
+		// not a silent rewrite of the selection.
+		expect(readStatus("fugu")).toMatchObject({ panelSelectedEffort: "max" })
+
+		// Going back to a level the model does take removes the notice.
+		fireEvent.click(document.querySelector('[data-icline-picker-options] [data-icline-effort-option="high"]') as HTMLElement)
+		await waitFor(() => expect(notice()).toBeNull())
+	})
+
+	it("stays quiet while a thinking budget is what actually goes out", async () => {
+		mockReasoningProviderModels()
+		vi.mocked(ModelsServiceClient.resolveReasoningEffort).mockImplementation((async (request: {
+			providerId: string
+			modelId?: string
+			effort: string
+		}) => ({
+			providerId: request.providerId,
+			modelId: request.modelId ?? "",
+			requested: request.effort,
+			applied: "high",
+			supportedEfforts: ["low", "medium", "high"],
+			reason: "nearest-supported",
+			clamped: true,
+			// A stored budget means the app sends the budget, not this effort: claiming
+			// a level is in force here would be a false statement.
+			suppressedByBudget: true,
+			source: "sdk-registry",
+		})) as unknown as typeof ModelsServiceClient.resolveReasoningEffort)
+
+		render(<QuickModelPicker modelDisplayName={LEFTOVER_XAI_MODEL_ID} />)
+		fireEvent.click(screen.getByRole("button", { name: new RegExp(LEFTOVER_XAI_MODEL_ID) }))
+		fireEvent.click(await screen.findByRole("button", { name: "Jan" }))
+		fireEvent.pointerMove(await screen.findByRole("button", { name: /Jan Reasoner/ }))
+		await waitFor(() => expect(readStatus("jan-reasoner").panelModelId).toBe("jan-reasoner"))
+		fireEvent.click(document.querySelector('[data-icline-picker-options] [data-icline-effort-option="max"]') as HTMLElement)
+
+		await waitFor(() => expect(ModelsServiceClient.resolveReasoningEffort).toHaveBeenCalled())
+		expect(document.querySelector("[data-icline-picker-options] [data-icline-effort-clamp]")).toBeNull()
 	})
 
 	it("hovering a model row mounts the Options panel and follows the hovered row", async () => {

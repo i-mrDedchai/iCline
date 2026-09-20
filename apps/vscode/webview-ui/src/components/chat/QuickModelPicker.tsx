@@ -48,6 +48,7 @@ import {
 	getChatModelPreferenceKey,
 	setChatModelPreference,
 } from "@/components/chat/chatModelPreferences"
+import { ModelStatusIcons, statusTooltip } from "@/components/chat/ModelStatusIcons"
 import {
 	ACTIVE_MODEL_ATTR,
 	computeOptionsPanelTop,
@@ -62,6 +63,7 @@ import {
 	pickAutoExpandProvider,
 	queryActivePickerScrollTarget,
 } from "@/components/chat/quickModelPickerList"
+import { ReasoningEffortNotice } from "@/components/common/ReasoningEffortNotice"
 import {
 	filterClineSettingsModelIds,
 	partitionClinePickerSections,
@@ -75,10 +77,11 @@ import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useNormalizedApiConfiguration } from "@/hooks/useNormalizedApiConfiguration"
 import { useProviderListings } from "@/hooks/useProviderListings"
 import { useProviderModels } from "@/hooks/useProviderModels"
+import { useReasoningEffortOutcome } from "@/hooks/useReasoningEffortOutcome"
 import { BalloonTooltip } from "@/icline/BalloonTooltip"
 import type { PickerStringKey, PickerTranslator } from "@/icline/i18n/pickerStrings"
 import { usePickerStrings } from "@/icline/i18n/usePickerStrings"
-import { CAPABILITY_COLORS, type CapabilityId, type ModelStatus, resolveModelStatus } from "@/icline/pickerCapabilities"
+import { type CapabilityId, type ModelStatus, resolveModelStatus } from "@/icline/pickerCapabilities"
 import { cn } from "@/lib/utils"
 import { ModelsServiceClient } from "@/services/grpc-client"
 import { firstOnEffortValue, type ProviderEffortLevels, resolveEffortLevels } from "@/utils/modelThinkingOptions"
@@ -170,59 +173,6 @@ function ModelSectionHeader({ label, count, accent }: { label: string; count: nu
 	)
 }
 
-/**
- * Tooltip for the two capability icons that also carry state. It reports what is
- * really in force — on with which effort, off, or not configurable at all — so the
- * row never claims more than the Options panel right next to it.
- */
-function statusTooltip(status: ModelStatus, tr: PickerTranslator): string {
-	if (status.support.builtinReasoning) {
-		return tr("statusThinkingBuiltin")
-	}
-	if (status.enabled) {
-		const effort = status.effort
-		if (status.support.showEffort && effort && effort !== "none") {
-			const key = EFFORT_LABEL_KEYS[effort]
-			return `${tr("statusThinkingOn")} ${key ? tr(key) : effort}`
-		}
-		return tr("statusThinkingBudgetOn")
-	}
-	if (status.support.showEffort || status.support.showThinkingBudget) {
-		return tr("statusThinkingOff")
-	}
-	return tr("statusThinkingFixed")
-}
-
-/**
- * Capability icons for a row. Reasoning and thinking are coloured by REAL state
- * (accent when switched on, muted when off — the 0.1.17 behaviour), while the rest
- * keep their capability colour; the tooltip always explains which is which.
- */
-function CapabilityIcons({ status, tr }: { status: ModelStatus; tr: PickerTranslator }) {
-	const stateTooltip = statusTooltip(status, tr)
-	return (
-		<>
-			{status.caps.map((cap) => {
-				const Icon = CAPABILITY_ICONS[cap.id]
-				const isStateful = cap.id === "reasoning" || cap.id === "thinking"
-				const lit = !isStateful || status.enabled
-				return (
-					<BalloonTooltip key={cap.id} label={isStateful ? stateTooltip : tr(cap.tooltipKey)}>
-						<Icon
-							aria-hidden
-							className={cn("shrink-0", !lit && "opacity-50 text-(--vscode-descriptionForeground)")}
-							data-icline-capability={cap.id}
-							data-icline-state={isStateful ? (status.enabled ? "on" : "off") : undefined}
-							size={11}
-							style={lit ? { color: CAPABILITY_COLORS[cap.id] } : undefined}
-						/>
-					</BalloonTooltip>
-				)
-			})}
-		</>
-	)
-}
-
 function ModelRow({
 	modelId,
 	modelInfo,
@@ -287,17 +237,8 @@ function ModelRow({
 			<span className="truncate flex-1 origin-left transition-transform duration-100 group-hover/model:scale-[1.07]">
 				{modelInfo?.name || modelId}
 			</span>
-			<CapabilityIcons status={status} tr={tr} />
-			{/* The mock's one-letter effort badge; it only exists while an effort is set. */}
-			{status.effortShort && (
-				<BalloonTooltip label={tr("effortBadgeTooltip")}>
-					<span
-						className="shrink-0 rounded-sm border border-(--vscode-editorGroup-border) px-1 text-[9px] text-(--vscode-descriptionForeground)"
-						data-icline-effort={status.effort}>
-						{status.effortShort}
-					</span>
-				</BalloonTooltip>
-			)}
+			{/* The row and the composer's model chip render the same readout. */}
+			<ModelStatusIcons status={status} tr={tr} />
 			{badge ? (
 				<span className="shrink-0 text-[10px] uppercase tracking-wide text-(--vscode-textLink-foreground)">{badge}</span>
 			) : null}
@@ -781,6 +722,34 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 		return withFeatured
 	}, [applyClineSettingsFilter, clineFeaturedFree, clineFeaturedRecommended, expandedProvider, models, warmModelsFor])
 
+	/**
+	 * Model info for the hovered row — the same lookup the Options panel renders from,
+	 * hoisted so the effort answer below and the panel cannot describe different models.
+	 */
+	const hoveredModelInfo = hoveredModel
+		? hoveredModel.providerId === expandedProvider
+			? displayModels[hoveredModel.modelId]
+			: warmModelsFor(hoveredModel.providerId)[hoveredModel.modelId]
+		: undefined
+	const hoveredStatus = hoveredModel
+		? statusForModel(hoveredModel.providerId, hoveredModel.modelId, hoveredModelInfo)
+		: undefined
+
+	/**
+	 * What the level marked in the Options panel will really send for the hovered
+	 * model. The host answers from the SDK's own clamp decision, so a level this model
+	 * cannot take is visible where it was picked rather than only in the reply.
+	 *
+	 * Called at the top level (never inside `renderOptionsPanel`), because the panel's
+	 * presence changes between renders and hooks inside it would reorder.
+	 */
+	const hoveredEffortOutcome = useReasoningEffortOutcome({
+		providerId: hoveredModel?.providerId,
+		modelId: hoveredModel?.modelId,
+		effort: hoveredStatus?.effort,
+		thinkingBudgetTokens: hoveredStatus?.thinkingBudgetTokens,
+	})
+
 	const filteredModelEntries = useMemo(() => {
 		return filterModelsByQuery(displayModels, searchTrimmed)
 	}, [displayModels, searchTrimmed])
@@ -985,7 +954,7 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 			return null
 		}
 		const { providerId, modelId } = hoveredModel
-		const info = providerId === expandedProvider ? displayModels[modelId] : warmModelsFor(providerId)[modelId]
+		const info = hoveredModelInfo
 		const status = statusForModel(providerId, modelId, info)
 		const switchConfigurable = status.support.showEffort || status.support.showThinkingBudget
 		const effortSet = effortLevelsFor(providerId, modelId, info)
@@ -1062,6 +1031,9 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 					</div>
 				)}
 
+				{/* What the SDK will really send for the marked level (host-computed). */}
+				<ReasoningEffortNotice compact outcome={hoveredEffortOutcome} tr={tr} />
+
 				{/* Capability readout — metadata-backed only, neutral colour like the mock */}
 				<div className="mt-2 border-t border-(--vscode-editorGroup-border) pt-1.5" data-icline-options-caps="">
 					{status.caps.length > 0 ? (
@@ -1084,6 +1056,9 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 		)
 	}
 
+	/** The active model's own readout — from the warm catalog, like a row's info. */
+	const currentStatus = statusForModel(currentProvider, currentModelId, warmModelsFor(currentProvider)[currentModelId])
+
 	return (
 		<Popover onOpenChange={handleOpenChange} open={open}>
 			<PopoverTrigger asChild>
@@ -1093,10 +1068,15 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 					className="inline-flex items-center text-xs px-1.5 py-0.5 rounded-sm text-(--vscode-descriptionForeground) hover:bg-(--vscode-list-hoverBackground) hover:text-(--vscode-foreground) disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
 					disabled={disabled}
 					type="button">
-					<BalloonTooltip className="inline-flex items-center gap-1 min-w-0" label={tr("triggerTooltip")}>
+					{/* The name keeps its own balloon; the icons carry theirs, so wrapping the
+				    whole chip in one tooltip would nest them. */}
+					<BalloonTooltip className="inline-flex items-center min-w-0" label={tr("triggerTooltip")}>
 						<span className="truncate max-w-[180px]">{modelDisplayName}</span>
-						<ChevronDown className="shrink-0" size={12} />
 					</BalloonTooltip>
+					{/* The same readout the picker's rows show for the active model, so the
+					    effort/reasoning state is visible without opening the picker. */}
+					<ModelStatusIcons className="ml-1" status={currentStatus} tr={tr} />
+					<ChevronDown className="ml-1 shrink-0" size={12} />
 				</button>
 			</PopoverTrigger>
 			<PopoverContent

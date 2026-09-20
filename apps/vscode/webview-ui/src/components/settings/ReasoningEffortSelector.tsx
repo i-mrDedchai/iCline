@@ -1,10 +1,13 @@
 import { Mode } from "@shared/storage/types"
 import { resolveClaudeOpusAdaptiveThinking } from "@shared/utils/reasoning-support"
-import { memo } from "react"
+import { memo, useMemo } from "react"
+import { ReasoningEffortNotice } from "@/components/common/ReasoningEffortNotice"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useExtensionState } from "@/context/ExtensionStateContext"
-import { type ModelThinkingInfo, resolveEffortLevels } from "@/utils/modelThinkingOptions"
+import { useReasoningEffortOutcome } from "@/hooks/useReasoningEffortOutcome"
+import { usePickerStrings } from "@/icline/i18n/usePickerStrings"
+import { levelsWithStoredEffort, type ModelThinkingInfo, resolveEffortLevels } from "@/utils/modelThinkingOptions"
 import { getModeSpecificFields } from "./utils/providerUtils"
 import { useApiConfigurationHandlers } from "./utils/useApiConfigurationHandlers"
 
@@ -23,6 +26,10 @@ interface ReasoningEffortSelectorProps {
  * the provider metadata in `@/utils/modelThinkingOptions` — the same table that decides
  * whether a model gets this control at all. Nothing here is provider-specific, so a form
  * cannot offer a level its provider does not accept, or drift from the Quick Picker.
+ *
+ * The host's clamp answer (`useReasoningEffortOutcome`) is rendered underneath: effort is
+ * stored per MODE, so a level can be in force for a model that does not accept it — the
+ * SDK gateway then sends a different level, and this is where the user can see that.
  */
 const ReasoningEffortSelector = ({
 	currentMode,
@@ -35,7 +42,16 @@ const ReasoningEffortSelector = ({
 	const { handleModeFieldChange } = useApiConfigurationHandlers()
 	const modeFields = getModeSpecificFields(apiConfiguration, currentMode)
 
+	const tr = usePickerStrings()
 	const effortLevels = resolveEffortLevels({ providerId, modelId: modelId ?? "", modelInfo })
+	const storedEffort = typeof modeFields.reasoningEffort === "string" ? modeFields.reasoningEffort.trim() : ""
+
+	/** The provider's levels, plus the stored one when that set does not contain it. */
+	const displayLevels = useMemo(
+		() => levelsWithStoredEffort(effortLevels.levels, storedEffort),
+		[effortLevels.levels, storedEffort],
+	)
+
 	// Adaptive-thinking models report the effort that is IN FORCE: a leftover thinking
 	// budget with no explicit effort counts as "high" (and a stored `none` as off).
 	const fallback =
@@ -43,9 +59,15 @@ const ReasoningEffortSelector = ({
 			? (resolveClaudeOpusAdaptiveThinking(modeFields.reasoningEffort, modeFields.thinkingBudgetTokens).effort ??
 				effortLevels.default)
 			: (effortLevels.defaultFor?.(modelId ?? "") ?? effortLevels.default)
-	const selectedEffort = effortLevels.levels.some((level) => level.value === modeFields.reasoningEffort)
-		? (modeFields.reasoningEffort as string)
-		: fallback
+	const selectedEffort = displayLevels.some((level) => level.value === storedEffort) ? storedEffort : fallback
+
+	// The level the request will really carry — the same value the dropdown now shows.
+	const effortOutcome = useReasoningEffortOutcome({
+		providerId,
+		modelId,
+		effort: selectedEffort,
+		thinkingBudgetTokens: modeFields.thinkingBudgetTokens,
+	})
 
 	return (
 		<div style={{ marginTop: 10, marginBottom: 5 }}>
@@ -60,7 +82,7 @@ const ReasoningEffortSelector = ({
 					<SelectValue />
 				</SelectTrigger>
 				<SelectContent>
-					{effortLevels.levels.map((level) => (
+					{displayLevels.map((level) => (
 						<SelectItem key={level.value} value={level.value}>
 							{level.label}
 						</SelectItem>
@@ -76,6 +98,8 @@ const ReasoningEffortSelector = ({
 				}}>
 				{effortLevels.description}
 			</p>
+			{/* What the SDK will really send for this level (host-computed; nothing while the answer is unknown). */}
+			<ReasoningEffortNotice outcome={effortOutcome} tr={tr} />
 		</div>
 	)
 }

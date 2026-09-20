@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
 	handleFieldChange: vi.fn(),
 	handleModeFieldChange: vi.fn(),
 	refreshOpenAiModels: vi.fn(),
+	resolveReasoningEffort: vi.fn(),
 	useDynamicProviderSelection: vi.fn(),
 	useExtensionState: vi.fn(),
 	useProviderConfig: vi.fn(),
@@ -32,6 +33,9 @@ vi.mock("@/hooks/useProviderConfig", () => ({
 vi.mock("@/services/grpc-client", () => ({
 	ModelsServiceClient: {
 		refreshOpenAiModels: mocks.refreshOpenAiModels,
+		// The Effort control asks the host what it will really send; here the level is
+		// reported as sent unchanged so unrelated assertions see no notice.
+		resolveReasoningEffort: mocks.resolveReasoningEffort,
 	},
 }))
 
@@ -186,6 +190,19 @@ describe("OpenAICompatibleProvider", () => {
 		mocks.commitSelection.mockResolvedValue(undefined)
 		mocks.write.mockResolvedValue(undefined)
 		mocks.refreshOpenAiModels.mockResolvedValue({ values: [] })
+		mocks.resolveReasoningEffort.mockImplementation(
+			async (request: { providerId: string; modelId?: string; effort: string }) => ({
+				providerId: request.providerId,
+				modelId: request.modelId ?? "",
+				requested: request.effort,
+				applied: request.effort,
+				supportedEfforts: [request.effort],
+				reason: "exact",
+				clamped: false,
+				suppressedByBudget: false,
+				source: "sdk-registry",
+			}),
+		)
 		mocks.useExtensionState.mockReturnValue({
 			apiConfiguration: { azureApiVersion: "2025-04-01-preview", azureIdentity: false },
 			remoteConfigSettings: undefined,

@@ -22,6 +22,19 @@ const mocks = vi.hoisted(() => ({
 		free: [],
 	})),
 	toggleFavoriteModel: vi.fn(async () => undefined),
+	// The Effort control asks the host what it will really send; these tests are
+	// about model lists, so the level is reported as sent unchanged (no notice).
+	resolveReasoningEffort: vi.fn(async (request: { providerId: string; modelId?: string; effort: string }) => ({
+		providerId: request.providerId,
+		modelId: request.modelId ?? "",
+		requested: request.effort,
+		applied: request.effort,
+		supportedEfforts: [request.effort],
+		reason: "exact",
+		clamped: false,
+		suppressedByBudget: false,
+		source: "sdk-registry",
+	})),
 }))
 
 vi.mock("@/context/ExtensionStateContext", () => ({
@@ -43,6 +56,7 @@ vi.mock("@/hooks/useProviderConfig", () => ({
 vi.mock("@/services/grpc-client", () => ({
 	ModelsServiceClient: {
 		makeUnaryRequest: mocks.makeUnaryRequest,
+		resolveReasoningEffort: mocks.resolveReasoningEffort,
 		updateApiConfigurationProto: mocks.updateApiConfigurationProto,
 	},
 	StateServiceClient: {
