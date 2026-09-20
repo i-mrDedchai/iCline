@@ -39,8 +39,22 @@
 - **คำที่แสดง:** `xhigh` = **X-High**, `max` = **Max** (ทั้ง Settings และ picker) — mock v11 เคยเรียก `xhigh` ว่า "Max" ตอนที่ยังไม่มีค่ำ `max` จริง คำที่ต่างกันของค่าเดียวกันคือบั๊ก**การเรียกค่า**ไม่ใช่ค่า (ค่าที่เก็บไม่กระทบ)
 - ห้ามมีปุ่ม "None/Off" ในแผง — การปิดเป็นหน้าที่ของสวิตช์ Thinking
 - ไอคอน capability บนแถวใช้**สีตามสถานะจริง** (ม่วง reasoning · ทอง thinking: สว่างเมื่อเปิด, จาง 50% เมื่อปิด) + tooltip บอกระดับที่ใช้จริง ส่วน vision/audio/video/training เป็นสีประจำความสามารถล้วน
+- **ชุดไอคอน + badge ตัวเดียวกันต้องแสดงที่ชิปโมเดลใต้ช่องแชทด้วย** (ไม่ใช่เฉพาะใน picker) — นิยามที่เดียวคือ `components/chat/ModelStatusIcons.tsx` จาก `status` ก้อนเดียวกับที่แถวใช้ (`resolveModelStatus`) — ห้ามคัดลอกมาร์กอัปไปที่ที่สอง
+- **effort ที่ถูกลดระดับต้องถูกบอก** — เมื่อค่าที่เก็บไว้ทำให้ SDK ส่งค่าอื่น (หรือไม่ส่งเลย) แผง Options และ Effort control ใน Settings ต้องแสดงประโยคเดียวกันจากคำตอบของ host (`ReasoningEffortNotice`) · ถ้าไม่รู้คำตอบหรือส่งตามที่เลือก → เงียบ
+
+## ฟอร์ม Settings: ลำดับ z-index ของ dropdown
+
+- dropdown ของ `vscode-dropdown` วาด list ของตัวเองในคอนเทนเนอร์ ⇒ list ที่ล้นลงไปข้างล่างต้องทับคอนโทรลที่อยู่ **ถัดไป** ด้วย z-index ของคอนเทนเนอร์
+- สอง sibling ที่ `position: relative` + z-index เท่ากัน ตัดสินด้วยลำดับ DOM (ตัวหลังชนะ) ⇒ ฟอร์มที่วางค่าคงที่ให้ทุกตัวจะมีบั๊ก "list ถูกคอนโทรลข้างล่างทับ" เสมอ
+- กติกา: ฟอร์มหนึ่งใช้ `formDropdownZIndex(position)` จาก `common/ModelSelector.tsx` โดย **position 0 = คอนโทรลบนสุด** (z สูงสุด) แล้วไล่ลงตามลำดับในหน้า — ดู Sakana (billing 0 · protocol 1 · model 2 · effort 3) และ ZenMux (protocol 0 · routing 1)
+
+## ชั้นข้อมูลที่ห้ามเขียนทับ (host)
+
+- ลำดับชั้นของ settings คือ `remote > session > task > global` — **remote = นโยบายขององค์กร** เขียนได้จาก control-plane fetch เท่านั้น (`applyRemoteConfig` / `setRemoteConfigField`)
+- การเขียน API configuration ทั่วไป **ห้าม** ป้อนค่าเข้า remote cache — เคยทำแล้วกลายเป็น "pin ปลอม": provider ที่เป็นอยู่ตอนนั้นถูกปักถาวร ทำให้การเลือกโมเดลของ provider อื่น commit สำเร็จแค่โมเดล (หน้า Settings เด้งกลับ provider เดิม)
+- ถ้าจะ "เจาะ" ชั้นเพื่อให้ค่าที่ผู้ใช้เลือกมีผล ต้องเจาะแค่ session/task — remote ไม่เจาะ
 
 ## ขอบเขตการ implement
 
-1. ~~fix.9 — QuickModelPicker ตามสเปกนี้ + reusable tooltip component~~ ✅ ปิดแล้ว (fix.9–fix.14: แผง Options ตามแถว · เนื้อหาตรง mock v11 · สถานะ/ไอคอนตรงกับค่าที่ตั้ง · นโยบาย + ชุดค่า Effort เป็น metadata กลาง · พจนานุกรมค่าเดียวกันทั้งแอป)
+1. ~~fix.9 — QuickModelPicker ตามสเปกนี้ + reusable tooltip component~~ ✅ ปิดแล้ว (fix.9–fix.15: แผง Options ตามแถว · เนื้อหาตรง mock v11 · สถานะ/ไอคอนตรงกับค่าที่ตั้ง · นโยบาย + ชุดค่า Effort เป็น metadata กลาง · พจนานุกรมค่าเดียวกันทั้งแอป · แจ้งเมื่อค่า Effort ถูกลดระดับ · ชุดไอคอน+badge ตัวเดียวบนชิปใต้ช่องแชท · ลำดับ z-index ของ dropdown ในฟอร์ม Settings)
 2. รอบหลัง — ขยายคลุม surface อื่นของ iCline (แทน native title ที่เหลือทั้งแอป) ทีละส่วน

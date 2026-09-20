@@ -1,7 +1,56 @@
-**Last updated:** 2026-09-19
+**Last updated:** 2026-09-20
 **Branch:** `feat/upstream-waves-1-2` (จาก main @ `78ebd0923` — รวม dev.5 แล้ว, tag `pre-merge-dev.5`, ยังไม่ push)
-**HEAD:** ดู `git log` (ไม่ตรึง hash ไว้ตรงนี้ — มันตกหล่นทุกครั้งที่มี commit เอกสารตามหลัง) · commit สุดท้ายที่แตะโค้ด = `bde5f2df1` · **fix.7–fix.14 commit แล้ว ยังไม่ push**
-**vsix (ล่าสุด):** `apps/vscode/dist/i-mrdedchai.iCline-0.1.18-dev.6-fix.14.vsix` (11,962,218 B @ 2026-09-19 16:57Z · About = `dev build 6 · fix.14`) — ⏳ **รอบนี้คือ fix.14** · do not overwrite `fix.1`–`fix.13` ใน `dist/` (repack ทับ fix.14 หลัง lint-staged จัดรูปแบบ 3 ไฟล์ ⇒ bundle ต่างจาก pack แรก 483 B — ของเดิมยังทำงานเหมือนกัน แต่ repack เพื่อให้ artefact ตรงกับ commit)
+**HEAD:** ดู `git log` (ไม่ตรึง hash ไว้ตรงนี้ — มันตกหล่นทุกครั้งที่มี commit เอกสารตามหลัง) · **fix.7–fix.15 commit แล้ว ยังไม่ push**
+**vsix (ล่าสุด):** `apps/vscode/dist/i-mrdedchai.iCline-0.1.18-dev.6-fix.15.vsix` (11,965,343 B @ 2026-09-20 02:09Z · About = `dev build 6 · fix.15`) — ⏳ **รอบนี้คือ fix.15** · do not overwrite `fix.1`–`fix.14` ใน `dist/`
+
+---
+
+## 🔎 dev.6-fix.15 — แจ้งเมื่อ Effort ถูกลดระดับ + Settings เด้งกลับ Cline + dropdown ทับกัน + ไอคอนสถานะใต้ช่องแชท (2026-09-20)
+
+**สถานะ:** ✅ แก้แล้ว + unit/e2e ผ่านบน VS Code จริง · ⏳ รอ maintainer smoke (VSIX `dev.6-fix.15`)
+
+**ที่มา (4 เรื่องรวมรอบเดียว — 3 เรื่องเป็นรายงานจาก maintainer, 1 เรื่องเป็นคิวที่ค้างจาก fix.14):**
+
+1. **คิวจาก fix.14:** "ถ้าอยากให้ผู้ใช้เห็น `Max → X-High` ต้องมี surface แจ้ง (ยังไม่มี)"
+2. **Settings ของ Sakana:** menu dropdown ของ Model โผล่**หลัง**ค่า Effort (maintainer แนบภาพ · ตีกรอบเหลือง)
+3. **xAI Grok (OAuth & Subscription):** เลือกโมเดลในลิสต์ที่หน้า Settings แล้วหน้าเด้งกลับไป Cline (Quick Picker เลือกได้ปกติ)
+4. **ใต้ช่องแชท:** ชื่อโมเดลไม่มีไอคอนสถานะเหมือนที่เมนู picker มี
+
+**รากของ (1):** Effort เก็บที่ระดับ **mode** ไม่ใช่ต่อโมเดล และ dropdown ทุกตัวจงใจเสนอพจนานุกรมเต็ม ⇒ ค่าหนึ่งอาจบังคับใช้กับโมเดลที่ไม่รับค่านั้น แล้ว **SDK gateway** เป็นผู้ลดระดับให้ (ไม่ใช่ UI) — ไม่มีใครบอกผู้ใช้
+
+**วิธีแก้ (1):**
+- SDK: แยกการตัดสินออกมาเป็น **`decideReasoningEffort()`** (ฟังก์ชันเดียวกับที่ `normalizeReasoningRequest` เรียกทุก request) + export ออกจาก `@cline/llms` + เทสต์ `reasoning-options.test.ts` (รวม "โชว์เหตุผลครบทุกแบบ")
+- host: `src/sdk/reasoning-effort-decision.ts` — ตอบ `{requested, applied, supportedEfforts, reason, clamped, suppressedByBudget, source}` โดยอ่าน controls จาก **registry เดียวกับที่ gateway ใช้** (`getProviderCollectionSync` + `toSdkProviderId`, matching ตรงเป๊ะแบบเดียวกับ gateway) · rpc ใหม่ `resolveReasoningEffort` (proto + handler `core/controller/models/resolveReasoningEffort.ts` + protos regenerate) — ไม่แตะ network ⇒ webview ถามทุก hover ได้
+- webview: hook `useReasoningEffortOutcome` (cache ต่อ `provider|model|effort|budget` + กันคำตอบค้างเก่าด้วย key) + คอมโพเนนต์เดียว `ReasoningEffortNotice` ใช้ทั้ง **แผง Options ของ picker** และ **Effort control ใน Settings** ⇒ สองที่ไม่มีทางพูดไม่ตรงกัน · เงียบเมื่อ: ไม่รู้คำตอบ / ส่งตามที่เลือก / สิ่งที่ออกไปคือ thinking budget
+- เทสต์: `reasoning-effort-decision.test.ts` (host) · `ReasoningEffortNotice.test.tsx` (กติกาข้อความ) · `useReasoningEffortOutcome.test.ts` (cache/race) · `ReasoningEffortSelector.test.tsx` · **e2e บน VS Code จริง** `quick-picker-effort-notice`
+- **บทเรียนสำคัญของเทสต์:** รอบแรกผมเขียนเทสต์โดยสมมติว่า "โมเดล Fugu ที่มีปุ่ม Max ต้องถูก clamp" — **ผิด** (`sakana/fugu-max` ใน registry รองรับ `high/xhigh/max` จริง ⇒ `exact`) เทสต์ที่ผ่านในรอบนั้นผ่านเพราะ *ไม่มีการยืนยันอะไรเลย* ตอนนี้เทสต์ **คำนวณความคาดหมายจาก registry เดียวกับ host** (`decideReasoningEffort`) แล้ว assert ทั้งสองด้าน (clamp ต้องมีข้อความพร้อม label ของค่าที่ออกจริง · exact ต้องเงียบ)
+
+**รากของ (2):** `vscode-dropdown` วาง listbox ไว้ในคอนเทนเนอร์ ⇒ list ถูกวาดที่ z-index ของคอนเทนเนอร์ · สอง sibling ที่ `position: relative` และ **z-index เท่ากัน** ตัดสินด้วยลำดับ DOM ⇒ ตัวหลัง (Effort) ทับ list ของตัวก่อน (Model) — ค่าเดิม `DROPDOWN_Z_INDEX - 100` เท่ากันทุกตัวในฟอร์ม
+
+**วิธีแก้ (2):** `formDropdownZIndex(position)` ใน `common/ModelSelector.tsx` + กติกา "ฟอร์มต้องไล่ลง": Sakana billing 0 · protocol 1 · model 2 · effort 3 (ข้ามไฟล์ `SakanaProvider` ↔ `SakanaModelPicker` มีคอมเมนต์กำกับ) · ZenMux protocol 0 · routing 1 · เทสต์ `ModelSelector.test.tsx` ปักทั้ง "ไล่ลงจริง" และ "เรนเดอร์บนคอนเทนเนอร์จริง"
+
+**รากของ (3):** `setApiConfiguration()` ส่ง settings ต่อเข้า **`remoteConfigCache`** (`filterAllowedRemoteConfigFields` เก็บ `planModeApiProvider`/`actModeApiProvider`) — และ remote เป็นชั้น**สูงสุด**ใน `remote > session > task > global` ⇒ **การเขียน settings ทั่วไปกลายเป็น "นโยบายองค์กร" ปลอม**: provider ที่เป็นอยู่ตอนนั้นถูกปักไว้ถาวร หลังจากนั้นการเลือกโมเดลของ provider อื่น commit สำเร็จแค่ *โมเดล* (provider ถูก shadow) — จับได้จาก log ชั้น precedence ของ host เอง:
+
+```
+COMMIT provider=xai model=grok-build mode=act
+BATCH {"actModeApiProvider":"xai", …, "actModeApiModelId":"grok-build"}
+LAYER actModeApiProvider remote=cline session=undefined task=undefined global=xai   ← remote ชนะ
+STATE post plan=cline (grok-build) act=cline (grok-build)
+```
+
+**วิธีแก้ (3):** `setApiConfiguration` ไม่แตะ remote cache อีก (มีคอมเมนต์อธิบาย + ชี้เส้นทางที่ถูกคือ `applyRemoteConfig`/`setRemoteConfigField`) · เทสต์ใหม่ `remote-config/provider-pin.test.ts` — (ก) เขียน provider ธรรมดาต้องไม่ทิ้งร่องรอยใน remote layer (ข) remote pin ที่มาจาก control plane ต้องชนะจริงและ `clearRemoteConfig()` คืนค่าท้องถิ่นได้ · **e2e บน VS Code จริง** `settings-model-selection`: เปิด Settings → เลือก provider xAI → เลือกโมเดล Grok → **provider ต้องยังเป็น xAI** (ก่อนแก้ เห็น `Cline Usage-Billing`)
+
+**รากของ (4):** ไอคอน + badge อยู่เฉพาะในแถวของ picker (`CapabilityIcons` เป็น local function ภายใน `QuickModelPicker.tsx`) ⇒ ชิปใต้ช่องแชทมีแค่ชื่อโมเดล
+
+**วิธีแก้ (4):** แยกเป็นคอมโพเนนต์กลาง `components/chat/ModelStatusIcons.tsx` (capability icons + effort badge + `statusTooltip`) แล้วให้ทั้ง **แถวของ picker** และ **ชิปของ composer** เรนเดอร์ตัวเดียวกันจาก `status` ก้อนเดียวกัน (`statusForModel(currentProvider, currentModelId, warmModelsFor(...))`) · บอลลูนเดิมคร่อมทั้งชิป → ย้ายให้ครอบเฉพาะชื่อโมเดล กันบอลลูนซ้อนบอลลูน · เทสต์ใหม่ใน `QuickModelPickerRealPopover.test.tsx`: ชิปต้องมี caps/states/badge **ชุดเดียวกับแถว** ของโมเดลเดียวกัน
+
+**ผลตรวจ:** webview vitest **477/477** · `tsc -b` (webview) · biome (ไฟล์ที่แตะทั้งหมด) · bun unit `reasoning-effort-parity` 2/2 · sdk vitest `reasoning-options` 16/16 · host vitest ใหม่ (`reasoning-effort-decision` 8/8 · `remote-config/provider-pin` 2/2) · **e2e บน VS Code จริง 4/4** (`quick-picker-effort-notice` 39.8s · `quick-picker-hover` 19.6s · `settings-model-selection` 17.9s)
+
+**หลักฐานว่าแก้ตรงจุด (ข้อ 3):** รัน probe เดิมก่อนแก้ ⇒ ชิป provider = `Cline Usage-Billing` หลังเลือกโมเดล xAI · หลังแก้ ⇒ คงเป็น `xAI Grok (OAuth & Subscription)` ตลอดทั้ง 12 ตัวอย่างที่เก็บ (ทุก 250ms)
+
+**พิสูจน์ว่า e2e เป็นยามจริง (falsification):** ใส่บรรทัด `this.setRemoteConfigState(settingsUpdates)` กลับเข้า `StateManager` ⇒ rebuild VSIX ⇒ e2e `settings-model-selection` **fail จริง** ด้วย `provider-selector-input` = `"Cline Usage-Billing"` (ตรงกับที่ maintainer เห็น) · ถอดออก + rebuild ⇒ ผ่านทั้ง 4 e2e อีกครั้งบน VSIX ที่แพ็กเป็น fix.15
+
+**ยังเหลือ:** (ก) ถ้า remote config ขององค์กรปัก provider จริง ๆ การ commit โมเดล/provider อื่นยังถูก shadow — ควรขึ้นข้อความ "องค์กรปัก provider ไว้" ไม่ใช่ commit เงียบ (P2) (ข) clip ของ `ReasoningEffortNotice` บนโมเดลที่ "ไม่มี effort control เลย" ยังใช้ประโยค `Max →  · …` (ช่อง applied ว่าง) — ควรมีประโยคแยก (P2)
 
 ---
 
