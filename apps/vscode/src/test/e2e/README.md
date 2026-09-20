@@ -32,6 +32,18 @@ The E2E test suite consists of several key components:
 
 ## Running Tests
 
+### Parallel Workers
+
+Each test drives its own VS Code window, and each WORKER gets its own mock API server and its
+own copy of the workspace fixtures, so the suite runs several windows at once by default
+(`workers` in `playwright.config.ts`: 3 locally, 2 on CI). 16 tests take ~2.5 min that way
+against ~4.5 min serially.
+
+```bash
+E2E_WORKERS=1 bun run e2e   # serial, for reading a single failure in order
+E2E_WORKERS=6 bun run e2e   # more windows, more memory
+```
+
 ### Basic Test Execution
 
 To build the test environment and run all E2E tests:
@@ -121,7 +133,16 @@ The test fixtures provide the following objects:
 - **`helper`** - E2ETestHelper instance with utility methods
 - **`page`** - Playwright Page object for the main VS Code window
 - **`app`** - ElectronApplication instance for VS Code
-- **`server`** - Mock API server for backend testing
+- **`server`** - Mock API server for backend testing (this worker's own instance)
+- **`privateWorkspaces`** - Temp dir holding this test's private copy of the fixtures
+- **`workspaceDir`** / **`multiRootWorkspaceDir`** - The test's own copy of a workspace (the
+  extension edits real files in the open folder, so a copy is what keeps parallel tests apart)
+- **`pane`** - Width/location controller for the pane the chat lives in (`utils/pane.ts`):
+  `measure()`, `widenTo(px)` (drags VS Code's own sash), `location()` and
+  `moveToAuxiliaryBar()` (drives VS Code's own `View: Move View` flow)
+- **`widePane`** - A REQUEST, not an assertion: naming it in a test widens the pane to
+  `PANE_WIDE_WIDTH_PX` (900) before the body runs and resolves to the width reached. VS Code's
+  default sidebar (~300px) is narrower than the composer row needs
 
 ### Common Patterns
 
@@ -195,9 +216,14 @@ The test environment includes:
   - Temporary user data and extensions directories
 
 - **Mock API Server:**
-  - Runs on `http://localhost:7777`
+  - One instance per Playwright WORKER, on an OS-assigned port (the `server` fixture starts it with port 0)
+  - The extension under test is pointed at that port through `CLINE_API_BASE_URL`, which
+    `src/config.ts` honours over the environment's own API URL (`local` would otherwise be
+    hard-coded to `localhost:7777`)
   - Provides mock responses for Cline API calls
   - Supports authentication, chat completions, and user management
+  - `scripts/interactive-playwright.ts` and `scripts/test-standalone-core-api-server.ts` still
+    start it on the default `localhost:7777`, which is what the SDK's `local` environment expects
 
 - **Test Workspaces:**
   - Single-root workspace with HTML, TypeScript, and README files

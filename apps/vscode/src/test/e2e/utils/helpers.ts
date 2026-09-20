@@ -1,18 +1,25 @@
 import type { ChildProcess } from "node:child_process"
-import { mkdtempSync, type PathLike, type RmOptions, readdirSync, rmSync } from "node:fs"
+import { cpSync, mkdtempSync, type PathLike, type RmOptions, rmSync } from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { type ElectronApplication, expect, type Frame, type Page, test } from "@playwright/test"
 import { downloadAndUnzipVSCode, SilentReporter } from "@vscode/test-electron"
 import { _electron } from "playwright"
-import { ClineApiServerMock } from "../fixtures/server"
+import { ClineApiServerMock, getMockApiServerUrl } from "../fixtures/server"
 import { createPaneController, PANE_WIDE_WIDTH_PX, type PaneController } from "./pane"
 
 interface E2ETestDirectories {
+	privateWorkspaces: string
 	workspaceDir: string
 	multiRootWorkspaceDir: string
 	userDataDir: string
 	extensionsDir: string
+}
+
+export interface OpenedVSCode {
+	app: ElectronApplication
+	/** The isolated `CLINE_DIR` for this launch — cleaned up by the `app` fixture. */
+	clineTestDir: string
 }
 
 export interface E2ETestConfigs {
@@ -24,6 +31,9 @@ export class E2ETestHelper {
 	// Constants
 	public static readonly CODEBASE_ROOT_DIR = path.resolve(__dirname, "..", "..", "..", "..")
 	public static readonly E2E_TESTS_DIR = path.join(E2ETestHelper.CODEBASE_ROOT_DIR, "src", "test", "e2e")
+	/** The checked-in workspaces a test opens a private copy of (see `privateWorkspaces`). */
+	public static readonly E2E_FIXTURES_DIR = path.join(E2ETestHelper.E2E_TESTS_DIR, "fixtures")
+	private static readonly E2E_FIXTURE_ENTRIES = ["workspace", "workspace_2", "multiroots.code-workspace"]
 	private static readonly TEARDOWN_TIMEOUT_MS = 10_000
 	private static readonly WINDOW_DIAGNOSTIC_TIMEOUT_MS = 1_000
 	private static readonly PROCESS_EXIT_TIMEOUT_MS = 2_000
@@ -89,10 +99,19 @@ export class E2ETestHelper {
 
 				try {
 					const title = await frame.title()
-					if (title.startsWith("Cline")) {
-						this.cachedFrame = frame
-						return frame
+					if (!title.startsWith("Cline")) {
+						continue
 					}
+					// ...but a MOVED view is re-created, and while VS Code loads the new webview its frame
+					// already reports the webview's title while still being the `#pending-frame`
+					// placeholder — a document with none of the chat in it. Only the activated frame is
+					// the chat, so the placeholder is skipped and this keeps waiting for the real one.
+					const element = await frame.frameElement().catch(() => null)
+					if (element && (await element.evaluate((node) => node.id)) === "pending-frame") {
+						continue
+					}
+					this.cachedFrame = frame
+					return frame
 				} catch (error: any) {
 					if (!error.message.includes("detached") && !error.message.includes("navigation")) {
 						throw error
@@ -255,6 +274,24 @@ export class E2ETestHelper {
 		}
 	}
 
+	/**
+	 * Copies the checked-in fixtures into a fresh temp dir and returns it.
+	 *
+	 * The extension edits files in whatever folder VS Code has open (the SDK's `editor`
+	 * tool writes to disk for real), and `file-edit.test.ts` runs twice — once per
+	 * workspace type. With workers in parallel those edits would race on the SAME
+	 * checked-in file, so every test gets its own copy and the repository stays clean.
+	 * The copy is flat: `multiroots.code-workspace` refers to its folders by relative
+	 * path, so `workspace`/`workspace_2` have to travel with it.
+	 */
+	public static createPrivateWorkspaces(): string {
+		const dir = mkdtempSync(path.join(os.tmpdir(), "cline-e2e-workspaces-"))
+		for (const entry of E2ETestHelper.E2E_FIXTURE_ENTRIES) {
+			cpSync(path.join(E2ETestHelper.E2E_FIXTURES_DIR, entry), path.join(dir, entry), { recursive: true })
+		}
+		return dir
+	}
+
 	public async signin(webview: Frame): Promise<void> {
 		await webview.getByRole("button", { name: "Login to Cline" }).click({ delay: 100 })
 
@@ -308,8 +345,12 @@ export class E2ETestHelper {
  * @extends test - Base Playwright test with multiple fixture extensions
  *
  * Fixtures provided:
- * - `server`: Shared ClineApiServerMock instance for API mocking (reused across all tests)
- * - `workspaceDir`: Path to the test workspace directory
+ * - `server`: ClineApiServerMock for API mocking — one per WORKER process, on an OS-assigned
+ *   port. `workers` in playwright.config.ts can therefore be raised: a worker's VS Code
+ *   talks to its own mock, and tests inside a worker still run one at a time
+ * - `privateWorkspaces`: Temp dir holding this test's own copy of the checked-in fixtures
+ * - `workspaceDir`: This test's private copy of the single-root workspace
+ * - `multiRootWorkspaceDir`: This test's private copy of the multi-root workspace file
  * - `userDataDir`: Temporary directory for VS Code user data
  * - `extensionsDir`: Temporary directory for VS Code extensions
  * - `openVSCode`: Function that returns a Promise resolving to an ElectronApplication instance
@@ -353,20 +394,32 @@ export class E2ETestHelper {
 export const e2e = test
 	.extend<{ server: ClineApiServerMock | null }>({
 		server: async ({}, use) => {
-			// Start server if it doesn't exist
+			// Port 0 on purpose: the mock server is shared by everything in THIS worker
+			// process, and several workers run at once, so a fixed port would make the second
+			// worker's listen() fail (or, worse, have two workers talk to one server).
 			if (!ClineApiServerMock.globalSharedServer) {
-				await ClineApiServerMock.startGlobalServer()
+				await ClineApiServerMock.startGlobalServer(0)
 			}
 			await use(ClineApiServerMock.globalSharedServer)
 		},
 	})
 	.extend<E2ETestDirectories>({
-		workspaceDir: async ({}, use) => {
-			await use(path.join(E2ETestHelper.E2E_TESTS_DIR, "fixtures", "workspace"))
+		// A test opens its OWN copy of the fixtures (see createPrivateWorkspaces): the
+		// extension edits real files in the open folder, which would race between workers.
+		privateWorkspaces: async ({}, use) => {
+			const dir = E2ETestHelper.createPrivateWorkspaces()
+			try {
+				await use(dir)
+			} finally {
+				await E2ETestHelper.rmForRetries(dir, { recursive: true, force: true })
+			}
 		},
-		multiRootWorkspaceDir: async ({}, use) => {
+		workspaceDir: async ({ privateWorkspaces }, use) => {
+			await use(path.join(privateWorkspaces, "workspace"))
+		},
+		multiRootWorkspaceDir: async ({ privateWorkspaces }, use) => {
 			// DOCS: https://code.visualstudio.com/docs/editing/workspaces/multi-root-workspaces
-			await use(path.join(E2ETestHelper.E2E_TESTS_DIR, "fixtures", "multiroots.code-workspace"))
+			await use(path.join(privateWorkspaces, "multiroots.code-workspace"))
 		},
 		userDataDir: async ({}, use) => {
 			await use(mkdtempSync(path.join(os.tmpdir(), "vsce")))
@@ -379,8 +432,11 @@ export const e2e = test
 		workspaceType: "single",
 		channel: "stable",
 	})
-	.extend<{ openVSCode: (workspacePath: string) => Promise<ElectronApplication> }>({
-		openVSCode: async ({ userDataDir, channel }, use, testInfo) => {
+	.extend<{ openVSCode: (workspacePath: string) => Promise<OpenedVSCode> }>({
+		// `server` is listed for its side effect, not its value: Playwright builds this worker's
+		// mock API server (and its port, see getMockApiServerUrl) before the launch below.
+		// biome-ignore lint/correctness/noUnusedFunctionParameters: fixture dependency, read through getMockApiServerUrl()
+		openVSCode: async ({ userDataDir, channel, server }, use, testInfo) => {
 			const executablePath = await downloadAndUnzipVSCode(channel, undefined, new SilentReporter())
 
 			await use(async (workspacePath: string) => {
@@ -397,6 +453,9 @@ export const e2e = test
 						CLINE_ENVIRONMENT: "local",
 						CLINE_DIR: clineTestDir, // Isolate test data from user's ~/.cline
 						CLINE_DATA_DIR: clineDataDir, // Keep SDK/shared storage off the user's real Cline data dir
+						// `local` points the SDK at localhost:7777 as a constant; this override is what
+						// lets each test worker mock the API on its own port (see the server fixture).
+						CLINE_API_BASE_URL: getMockApiServerUrl(),
 						GRPC_RECORDER_FILE_NAME: E2ETestHelper.generateTestFileName(testInfo.title, testInfo.project.name),
 						// GRPC_RECORDER_ENABLED: "true",
 						// GRPC_RECORDER_TESTS_FILTERS_ENABLED: "true"
@@ -420,46 +479,29 @@ export const e2e = test
 					],
 				})
 				await E2ETestHelper.waitUntil(() => app.windows().length > 0)
-				return app
+				return { app, clineTestDir }
 			})
 		},
 	})
-	.extend<{ app: ElectronApplication; clineTestDir: string }>({
+	.extend<{ app: ElectronApplication }>({
 		app: async ({ openVSCode, userDataDir, extensionsDir, workspaceType, workspaceDir, multiRootWorkspaceDir }, use) => {
 			const workspacePath = workspaceType === "single" ? workspaceDir : multiRootWorkspaceDir
 
-			const app = await openVSCode(workspacePath)
+			const { app, clineTestDir } = await openVSCode(workspacePath)
 
 			try {
 				await use(app)
 			} finally {
 				await E2ETestHelper.closeAppForTeardown(app)
-				// Cleanup in parallel after the app process has been asked to exit.
-				const cleanupTasks = [
-					E2ETestHelper.rmForRetries(userDataDir, { recursive: true }),
-					E2ETestHelper.rmForRetries(extensionsDir, { recursive: true }),
-				]
-
-				// Clean up the isolated Cline data directory
-				// Find all temp directories matching our pattern
-				const tmpDir = os.tmpdir()
-				try {
-					const entries = readdirSync(tmpDir)
-					for (const entry of entries) {
-						if (entry.startsWith("cline-e2e-")) {
-							cleanupTasks.push(E2ETestHelper.rmForRetries(path.join(tmpDir, entry), { recursive: true }))
-						}
-					}
-				} catch (error) {
-					// Ignore cleanup errors
-				}
-
-				await Promise.allSettled(cleanupTasks)
+				// Cleanup in parallel after the app process has been asked to exit. Every path is
+				// one THIS launch created: with workers in parallel, sweeping os.tmpdir() for
+				// `cline-e2e-*` would delete a peer worker's live Cline data mid-test.
+				await Promise.allSettled([
+					E2ETestHelper.rmForRetries(userDataDir, { recursive: true, force: true }),
+					E2ETestHelper.rmForRetries(extensionsDir, { recursive: true, force: true }),
+					E2ETestHelper.rmForRetries(clineTestDir, { recursive: true, force: true }),
+				])
 			}
-		},
-		clineTestDir: async ({}, use) => {
-			// This will be set by the openVSCode fixture
-			await use("")
 		},
 	})
 	.extend<{ helper: E2ETestHelper }>({
@@ -479,6 +521,7 @@ export const e2e = test
 		},
 	})
 	.extend<{ sidebar: Frame }>({
+		// biome-ignore lint/correctness/noUnusedFunctionParameters: fixture dependency, ordered before the sidebar opens
 		sidebar: async ({ page, helper, server }, use) => {
 			await E2ETestHelper.openClineSidebar(page)
 			const sidebar = await helper.getSidebar(page)
@@ -486,8 +529,10 @@ export const e2e = test
 		},
 	})
 	.extend<{ pane: PaneController }>({
-		pane: async ({ app, page, sidebar }, use) => {
-			await use(createPaneController({ app, page, sidebar }))
+		pane: async ({ app, page, sidebar, helper }, use) => {
+			// `resolveSidebar` is what lets the controller follow the view when a test moves it to
+			// another part: `helper` re-scans for the chat's frame once the old one is detached.
+			await use(createPaneController({ app, page, sidebar, resolveSidebar: () => helper.getSidebar(page) }))
 		},
 	})
 	.extend<{ widePane: number }>({

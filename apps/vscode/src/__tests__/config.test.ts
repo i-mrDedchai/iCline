@@ -702,4 +702,82 @@ describe("ClineEndpoint configuration", () => {
 			}
 		})
 	})
+
+	// The override is what lets the extension host be aimed at an API other than the one its
+	// environment names — the rule the SDK already follows, and what the Playwright suite uses
+	// to give each worker its own mock server on an OS-assigned port.
+	describe("CLINE_API_BASE_URL override", () => {
+		const originalOverride = process.env.CLINE_API_BASE_URL
+		const originalEnvironment = process.env.CLINE_ENVIRONMENT
+		const OVERRIDE = "http://localhost:51234"
+
+		afterEach(() => {
+			// No need to reset the parsed environment: the outer beforeEach rebuilds the
+			// singleton, and it reads CLINE_ENVIRONMENT at construction time.
+			for (const [key, value] of [
+				["CLINE_API_BASE_URL", originalOverride],
+				["CLINE_ENVIRONMENT", originalEnvironment],
+			] as const) {
+				if (value === undefined) {
+					delete process.env[key]
+				} else {
+					process.env[key] = value
+				}
+			}
+		})
+
+		it("should point the local environment's API at the override", async () => {
+			process.env.CLINE_ENVIRONMENT = "local"
+			process.env.CLINE_API_BASE_URL = OVERRIDE
+
+			await ClineEndpoint.initialize(tempDir)
+
+			const config = ClineEndpoint.config
+			config.apiBaseUrl.should.equal(OVERRIDE)
+			// Everything else about `local` is untouched: this is where the API is, not a
+			// different environment.
+			config.environment.should.equal(Environment.local)
+			config.appBaseUrl.should.equal("http://localhost:3000")
+			config.mcpBaseUrl.should.equal("https://api.cline.bot/v1/mcp")
+		})
+
+		it("should leave the local environment alone without an override", async () => {
+			process.env.CLINE_ENVIRONMENT = "local"
+			delete process.env.CLINE_API_BASE_URL
+
+			await ClineEndpoint.initialize(tempDir)
+
+			ClineEndpoint.config.apiBaseUrl.should.equal("http://localhost:7777")
+		})
+
+		it("should ignore a blank override", async () => {
+			process.env.CLINE_ENVIRONMENT = "local"
+			process.env.CLINE_API_BASE_URL = "   "
+
+			await ClineEndpoint.initialize(tempDir)
+
+			ClineEndpoint.config.apiBaseUrl.should.equal("http://localhost:7777")
+		})
+
+		it("should move only the API URL of an on-premise config", async () => {
+			await fs.writeFile(
+				path.join(tempDir, ".cline", "endpoints.json"),
+				JSON.stringify({
+					appBaseUrl: "https://app.enterprise.com",
+					apiBaseUrl: "https://api.enterprise.com",
+					mcpBaseUrl: "https://mcp.enterprise.com",
+				}),
+				"utf8",
+			)
+			process.env.CLINE_API_BASE_URL = OVERRIDE
+
+			await ClineEndpoint.initialize(tempDir)
+
+			const config = ClineEndpoint.config
+			config.environment.should.equal(Environment.selfHosted)
+			config.apiBaseUrl.should.equal(OVERRIDE)
+			config.appBaseUrl.should.equal("https://app.enterprise.com")
+			config.mcpBaseUrl.should.equal("https://mcp.enterprise.com")
+		})
+	})
 })

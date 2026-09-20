@@ -1,8 +1,14 @@
 import { rmSync } from "node:fs"
 import { test as setup } from "@playwright/test"
+import { downloadAndUnzipVSCode, SilentReporter } from "@vscode/test-electron"
 import { E2ETestHelper } from "./helpers"
 
 setup("setup test environment", async () => {
+	// Warm the VS Code download BEFORE any worker asks for it. Each worker resolves the same
+	// cache directory, and on a cold cache they would extract the archive concurrently.
+	// (The `channel` fixture can still ask for insiders; that one downloads in the worker.)
+	await downloadAndUnzipVSCode("stable", undefined, new SilentReporter())
+
 	try {
 		const path = E2ETestHelper.getResultsDir()
 		const options = { recursive: true, force: true }

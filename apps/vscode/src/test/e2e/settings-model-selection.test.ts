@@ -33,10 +33,15 @@ e2e("Settings — a model selection keeps the provider that owns the model", asy
 
 	const dropdown = sidebar.locator("vscode-dropdown#model-id").first()
 	await expect(dropdown).toBeVisible({ timeout: 10_000 })
-	const options = await dropdown
-		.locator("vscode-option")
-		.evaluateAll((els) => els.map((el) => el.getAttribute("value") ?? "").filter((value) => value.length > 0))
-	expect(options.length, "the xAI form listed no models to choose from").toBeGreaterThan(1)
+	// The form fills its model list asynchronously, so read it until it is populated: a single
+	// read raced the render and needed a retry whenever the machine was busy (parallel workers).
+	let options: string[] = []
+	await expect(async () => {
+		options = await dropdown
+			.locator("vscode-option")
+			.evaluateAll((els) => els.map((el) => el.getAttribute("value") ?? "").filter((value) => value.length > 0))
+		expect(options.length, "the xAI form listed no models to choose from").toBeGreaterThan(1)
+	}).toPass({ timeout: 20_000 })
 
 	// Pick a model other than the one already selected, so the commit is a real change.
 	// (`vscode-dropdown` mirrors its selection into `current-value`, like the toolkit's

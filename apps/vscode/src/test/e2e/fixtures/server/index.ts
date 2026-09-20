@@ -14,9 +14,32 @@ import {
 } from "./api"
 import { ClineDataMock } from "./data"
 
+/**
+ * The port the mock API binds when the caller does not ask for a specific one.
+ *
+ * 7777 is what the SDK's `local` environment points at, so the scripts that start a
+ * mock server next to a CLI/standalone core (`scripts/interactive-playwright.ts`,
+ * `scripts/test-standalone-core-api-server.ts`) keep the default. The Playwright suite
+ * asks for port 0 instead: every worker owns its own server (see the `server` fixture in
+ * utils/helpers.ts), and a hard-coded port would make a second worker's `listen` fail.
+ */
 const E2E_API_SERVER_PORT = 7777
 
 export const MOCK_CLINE_API_SERVER_URL = `http://localhost:${E2E_API_SERVER_PORT}`
+
+/**
+ * Where the mock API is actually listening right now.
+ *
+ * Equal to {@link MOCK_CLINE_API_SERVER_URL} until a server is started, and after it is
+ * stopped. Reflects the OS-assigned port when a caller starts the server on port 0 — the
+ * extension under test is pointed at THIS value (`CLINE_API_BASE_URL`), never at a
+ * constant, so several test workers can mock the API at the same time.
+ */
+let mockApiServerUrl = MOCK_CLINE_API_SERVER_URL
+
+export function getMockApiServerUrl(): string {
+	return mockApiServerUrl
+}
 
 const useVerboseLogging = process.env.CLINE_E2E_TESTS_VERBOSE === "true"
 function log(...args: unknown[]) {
@@ -148,7 +171,7 @@ export class ClineApiServerMock {
 	}
 
 	// Starts the global shared server
-	public static async startGlobalServer(): Promise<ClineApiServerMock> {
+	public static async startGlobalServer(requestedPort = E2E_API_SERVER_PORT): Promise<ClineApiServerMock> {
 		log("=== SERVER FIXTURE CALLED ===")
 		if (ClineApiServerMock.globalSharedServer) {
 			log("Using existing global server")
@@ -158,7 +181,7 @@ export class ClineApiServerMock {
 		log("Starting global server...")
 		const server = createServer((req: IncomingMessage, res: ServerResponse) => {
 			// Parse URL and method
-			const parsedUrl = new URL(req.url || "/", MOCK_CLINE_API_SERVER_URL)
+			const parsedUrl = new URL(req.url || "/", mockApiServerUrl)
 			const path = parsedUrl.pathname
 			const query = Object.fromEntries(parsedUrl.searchParams.entries())
 			const method = req.method || "GET"
@@ -810,16 +833,24 @@ export class ClineApiServerMock {
 		})
 
 		await new Promise<void>((resolve, reject) => {
-			server.listen(E2E_API_SERVER_PORT, (error?: Error) => {
+			server.listen(requestedPort, (error?: Error) => {
 				if (error) {
-					console.error(`Failed to start server on port ${E2E_API_SERVER_PORT}:`, error)
+					console.error(`Failed to start server on port ${requestedPort}:`, error)
 					reject(error)
 				} else {
-					log(`ClineApiServerMock listening on port ${E2E_API_SERVER_PORT}`)
 					resolve()
 				}
 			})
 		})
+
+		// Read the port back from the socket: with port 0 the OS picks a free one, and the
+		// extension under test has to be pointed at the port that was actually bound.
+		const address = server.address()
+		if (address === null || typeof address === "string") {
+			throw new Error(`ClineApiServerMock: unexpected server address ${String(address)}`)
+		}
+		mockApiServerUrl = `http://localhost:${address.port}`
+		log(`ClineApiServerMock listening on ${mockApiServerUrl}`)
 
 		return controller
 	}
@@ -848,5 +879,6 @@ export class ClineApiServerMock {
 		})
 
 		ClineApiServerMock.globalSharedServer = null
+		mockApiServerUrl = MOCK_CLINE_API_SERVER_URL
 	}
 }

@@ -4,7 +4,20 @@ import * as path from "path"
 import { Environment, type EnvironmentConfig } from "./shared/config-types"
 import { Logger } from "./shared/services/Logger"
 
-export { Environment } /**
+export { Environment }
+
+/**
+ * Points the extension at a Cline API other than the one its environment would use — the
+ * same override the SDK already honours
+ * (`sdk/packages/shared/src/runtime/cline-environment.ts`), so an extension host and the
+ * SDK it bundles can be aimed at one API together. Only `apiBaseUrl` moves: `local` here
+ * deliberately keeps `mcpBaseUrl` on the public host, and MCP is not what this override is
+ * about. Use it to run against a mock/dev API on a non-default port (the Playwright suite
+ * gives every worker its own mock server, which needs exactly this).
+ */
+const API_BASE_URL_OVERRIDE_ENV = "CLINE_API_BASE_URL"
+
+/**
  * Schema for the endpoints.json configuration file used in on-premise deployments.
  * All fields are required and must be valid URLs.
  */
@@ -292,8 +305,20 @@ class ClineEndpoint {
 	/**
 	 * Returns the current environment configuration.
 	 * If running in on-premise mode, returns the custom endpoints.
+	 * A `CLINE_API_BASE_URL` in the environment wins over the API URL either way — it names
+	 * the API to talk to without changing which environment the build otherwise is.
 	 */
 	public getEnvironment(): EnvironmentConfig {
+		const config = this.getBaseEnvironment()
+		const override = process?.env?.[API_BASE_URL_OVERRIDE_ENV]?.trim()
+
+		return override ? { ...config, apiBaseUrl: override } : config
+	}
+
+	/**
+	 * The environment's own endpoints, before any environment-variable override.
+	 */
+	private getBaseEnvironment(): EnvironmentConfig {
 		// On-premise mode: use custom endpoints from file
 		if (this.onPremiseConfig) {
 			return {

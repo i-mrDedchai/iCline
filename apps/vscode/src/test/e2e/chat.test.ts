@@ -22,7 +22,10 @@ e2e("Chat - can send messages and switch between modes", async ({ helper, sideba
 	// Wait for the (mock) agent turn to finish before navigating away — the task
 	// is persisted to SDK session history when the turn completes, so clicking
 	// "New Task" mid-turn races the history write and "Recent" may not show.
-	await expect(sidebar.getByText("mock Cline API response")).toBeVisible()
+	// A whole turn is what this waits for, so it gets a turn's budget: the suite runs several
+	// VS Code windows in parallel, and the default 5s expect timeout is not enough when the
+	// machine is busy (it was the one test that needed a retry in the parallel runs).
+	await expect(sidebar.getByText("mock Cline API response")).toBeVisible({ timeout: 20_000 })
 
 	// Starting a new task should clear the current chat view and show the recent tasks
 	// Clicked-and-verified with a retry: the chat header re-renders when the mock turn lands, so a

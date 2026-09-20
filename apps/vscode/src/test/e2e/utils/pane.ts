@@ -1,5 +1,5 @@
 /**
- * The width of the pane the chat webview lives in — driven the way a user drives it.
+ * The pane the chat webview lives in — driven the way a user drives it.
  *
  * VS Code opens the view in a ~300px sidebar, which is narrower than the composer row needs:
  * the model chip's truncated name ends up over the Plan/Act switch and swallows the click
@@ -15,12 +15,15 @@
  *     gets to re-decide its anchor while the pane moves (which is how the Options popover's
  *     `resize` path is covered on a real window).
  *
- * The sash is found from the WEBVIEW'S OWN identity (the `id` query parameter its outer
- * `<iframe>` shares with the frame we drive), never from a part id: VS Code nests the webview
- * two iframes deep and decides for itself which part hosts the view (the harness runs it in
- * the primary sidebar; a user can move it to the auxiliary bar — both must work).
+ * The pane's identity is read from the FRAME STACK, not from a part id or the webview's own
+ * `id` query parameter: VS Code nests the webview two iframes deep, re-creates it when a view
+ * changes parts, and decides for itself which part hosts the view. The harness runs it in the
+ * primary sidebar, but a user can move it — `location()` says where it is right now, and
+ * `moveToAuxiliaryBar()` moves it there through VS Code's own UI so that the moved case can
+ * be tested. All three (the sash, the location, the move) share one primitive: step out of
+ * the frame stack to the webview's element and ask the workbench about it.
  */
-import { type ElectronApplication, expect, type Frame, type Page } from "@playwright/test"
+import { type ElectronApplication, type ElementHandle, expect, type Frame, type Locator, type Page } from "@playwright/test"
 
 /** A window this size can hold a 900px pane plus a usable editor. */
 export const PANE_WIDE_WINDOW = { width: 1800, height: 1000 } as const
@@ -31,6 +34,19 @@ export const PANE_WIDE_WIDTH_PX = 900
 /** How far a candidate sash may sit from the webview's edge and still be its pane's. */
 const SASH_EDGE_TOLERANCE_PX = 40
 
+/** Which workbench part hosts the view. */
+export type PaneLocation = "sidebar" | "auxiliarybar" | "panel"
+
+/** VS Code's own words for the flow `moveToAuxiliaryBar` drives. */
+const COMMAND_PALETTE_PLACEHOLDER = "Type the name of a command to run"
+const MOVE_VIEW_QUERY = "Move View"
+const MOVE_VIEW_LABEL = "View: Move View"
+/** The activity bar container the chat's view is contributed into (`viewsContainers`). */
+const CHAT_VIEW_CONTAINER = "iCline"
+const PICK_A_VIEW_PLACEHOLDER = "Select a View to Move"
+const PICK_A_DESTINATION_PLACEHOLDER = "Select a Destination for the View"
+const NEW_SECONDARY_SIDE_BAR_ENTRY = "New Secondary Side Bar Entry"
+
 export interface PaneController {
 	/** Current inner width of the webview pane, in CSS px. */
 	measure(): Promise<number>
@@ -40,21 +56,88 @@ export interface PaneController {
 	 * drag cannot get there, so a silently-narrow pane cannot make a test pass vacuously.
 	 */
 	widenTo(targetWidth?: number): Promise<number>
+	/** Which workbench part hosts the chat right now (null if it cannot be traced). */
+	location(): Promise<PaneLocation | null>
+	/**
+	 * Move the view to the Secondary Side Bar the way a user does it — VS Code's own
+	 * "View: Move View" flow, not a DOM move — and return the frame the chat lives in
+	 * afterwards, because moving between parts can replace the webview's frame.
+	 */
+	moveToAuxiliaryBar(): Promise<Frame>
 }
 
 export function createPaneController({
 	app,
 	page,
 	sidebar,
+	resolveSidebar,
 }: {
 	app: ElectronApplication
 	page: Page
+	/** The chat webview's frame. */
 	sidebar: Frame
+	/** Returns the chat webview's frame again after it may have been re-created. */
+	resolveSidebar: () => Promise<Frame>
 }): PaneController {
-	const measure = () => sidebar.evaluate(() => window.innerWidth)
+	/** The frame the chat lives in right now — a move between parts can replace it. */
+	const current = async (): Promise<Frame> => resolveSidebar().catch(() => sidebar)
 
-	/** The webview's `id` — the only reliable handle on our pane in the workbench document. */
-	const webviewId = () => new URL(sidebar.url()).searchParams.get("id")
+	/**
+	 * The workbench's own webview `<iframe>` element for the frame we drive.
+	 *
+	 * One step out of the frame stack: the frame is the webview's inner `#active-frame`, its
+	 * parent frame is the webview's document, and that document's `frameElement()` is the
+	 * workbench element VS Code laid the webview out with. This is deliberately not "the
+	 * `id` in some outer iframe's `src`": a view that is moved between parts can be given a
+	 * new webview, and then a remembered id points at nothing.
+	 */
+	const findWebviewElement = async (frame: Frame): Promise<ElementHandle<Element> | null> => {
+		const webviewDocument = frame.parentFrame()
+		if (!webviewDocument) {
+			return null
+		}
+		return (await webviewDocument.frameElement().catch(() => null)) as ElementHandle<Element> | null
+	}
+
+	/**
+	 * Which part hosts the view, by GEOMETRY rather than ancestry: VS Code lays a webview out
+	 * in a top-level overlay layer (the workbench's `.part.*` elements are not among its
+	 * ancestors — verified on 1.138), so the part the webview is laid out OVER is the answer.
+	 */
+	const locationOf = async (frame: Frame): Promise<PaneLocation | null> => {
+		const webview = await findWebviewElement(frame)
+		if (!webview) {
+			return null
+		}
+		return (await webview.evaluate((node) => {
+			const rect = node.getBoundingClientRect()
+			const center = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+			const parts: [string, PaneLocation][] = [
+				["workbench.parts.sidebar", "sidebar"],
+				["workbench.parts.auxiliarybar", "auxiliarybar"],
+				["workbench.parts.panel", "panel"],
+			]
+			for (const [id, location] of parts) {
+				const part = document.getElementById(id)
+				if (!part) {
+					continue
+				}
+				const partRect = part.getBoundingClientRect()
+				if (partRect.width === 0 || partRect.height === 0) {
+					continue // the part exists but is not shown (a hidden side bar has no box)
+				}
+				if (
+					center.x >= partRect.left &&
+					center.x <= partRect.right &&
+					center.y >= partRect.top &&
+					center.y <= partRect.bottom
+				) {
+					return location
+				}
+			}
+			return null
+		})) as PaneLocation | null
+	}
 
 	const ensureWindowRoom = async () => {
 		await app.evaluate(({ BrowserWindow }, size) => {
@@ -71,28 +154,25 @@ export function createPaneController({
 
 	/** Where the pane's own sash sits right now, and which way it has to move to grow the pane. */
 	const findSash = async () => {
-		const id = webviewId()
+		const host = await findWebviewElement(await current())
+		expect(host, "the chat webview could not be traced back to a workbench element").not.toBeNull()
+		const paneRect = await (host as ElementHandle<Element>).evaluate((node) => {
+			const rect = node.getBoundingClientRect()
+			return { left: rect.left, right: rect.right }
+		})
 		return page.evaluate(
-			({ id, tolerance }) => {
-				const boxes = (selector: string) =>
-					[...document.querySelectorAll(selector)].map((element) => ({
-						element,
-						rect: element.getBoundingClientRect(),
-					}))
-				const webview = boxes("iframe").find(({ element }) => (element.getAttribute("src") ?? "").includes(`id=${id}`))
-				if (!webview) {
-					return null
-				}
+			({ paneRect, tolerance }) => {
 				let best: { x: number; y: number; distance: number; growsRight: boolean } | null = null
-				for (const { element, rect } of boxes(".monaco-sash")) {
+				for (const element of document.querySelectorAll(".monaco-sash")) {
+					const rect = element.getBoundingClientRect()
 					// Horizontal sashes belong to the panel/editor, and a `disabled` one marks a
 					// boundary that cannot be dragged at all.
 					if (rect.height <= rect.width || element.classList.contains("disabled")) {
 						continue
 					}
 					const x = rect.left + rect.width / 2
-					const toLeft = Math.abs(x - webview.rect.left)
-					const toRight = Math.abs(x - webview.rect.right)
+					const toLeft = Math.abs(x - paneRect.left)
+					const toRight = Math.abs(x - paneRect.right)
 					const distance = Math.min(toLeft, toRight)
 					if (distance > tolerance || (best && distance >= best.distance)) {
 						continue
@@ -101,21 +181,77 @@ export function createPaneController({
 				}
 				return best
 			},
-			{ id, tolerance: SASH_EDGE_TOLERANCE_PX },
+			{ paneRect, tolerance: SASH_EDGE_TOLERANCE_PX },
 		)
 	}
 
+	/**
+	 * The quick input (command palette or a picker behind a command) that is showing
+	 * `placeholder`. VS Code reuses one widget for all of them, so `Move View` hands the same
+	 * box from the palette to two pickers in a row — the placeholder is how each step is
+	 * pinned to the picker it belongs to.
+	 */
+	const quickInput = async (placeholder: string) => {
+		const input = page.locator(".quick-input-box input").first()
+		await input.waitFor({ state: "visible", timeout: 15_000 })
+		await expect(input).toHaveAttribute("placeholder", new RegExp(placeholder))
+		return input
+	}
+
+	/**
+	 * Types into the open quick input. Never clears it first: the command palette's filter IS
+	 * its `>` prefix, and emptying the box drops it back to the file search.
+	 */
+	const type = (input: Locator, text: string) => input.pressSequentially(text, { delay: 25 })
+
+	/**
+	 * Clicks the quick pick row labelled exactly `label`. Accepting the top match is not the
+	 * same thing: typing `Move View` ranks `Move Panel Views To Secondary Side Bar` and
+	 * `Move Secondary Side Bar Views To Panel` above `View: Move View`.
+	 */
+	/**
+	 * Clicks the list row whose own label is exactly `label` — the label wrapper, not the list
+	 * item, because the item's text also carries the group separator it starts
+	 * ("New Secondary Side Bar Entry, Secondary Side Bar", for instance).
+	 */
+	const acceptRow = async (label: string) => {
+		await page
+			.locator(".quick-input-list-row")
+			.filter({ hasText: new RegExp(`^${label}$`) })
+			.first()
+			.click()
+	}
+
+	/**
+	 * Accepts the view picker's row for the chat view.
+	 *
+	 * The view is contributed with an EMPTY name (`contributes.views`), so its row has no
+	 * label to type and nothing to pre-select it either: opening the palette is what blurs the
+	 * view, so `focusedView` is empty by the time `Move View` runs and its picker has no
+	 * selected item. What identifies the row is the group it starts — a picker row carries its
+	 * group's separator label, which for a sidebar view reads "Side Bar / <container>" (the
+	 * chat is the only view in its container, so it starts its group). On VS Code 1.138 the
+	 * row's own accessible label comes out as ", Side Bar / iCline" (the leading comma is the
+	 * empty view name), which is what the selector below matches. Verified against the DOM.
+	 */
+	const acceptUnlabelledViewRow = async (container: string) => {
+		const row = page.locator(`.monaco-list-row[role="option"][aria-label*="Side Bar / ${container}"]`)
+		await expect(row, `no row for the ${container} view in the Move View picker`).toHaveCount(1)
+		await row.click()
+	}
+
 	return {
-		measure,
+		measure: async () => (await current()).evaluate(() => window.innerWidth),
+		location: async () => locationOf(await current()),
 		async widenTo(targetWidth = PANE_WIDE_WIDTH_PX) {
-			let width = await measure()
+			let width = await (await current()).evaluate(() => window.innerWidth)
 			if (width >= targetWidth) {
 				return width
 			}
 			await ensureWindowRoom()
 			for (let attempt = 0; attempt < 3 && width < targetWidth; attempt++) {
 				const sash = await findSash()
-				expect(sash, `no draggable sash at the edge of the chat pane (webview id ${webviewId()})`).not.toBeNull()
+				expect(sash, "no draggable sash at the edge of the chat pane").not.toBeNull()
 				const handle = sash as { x: number; y: number; growsRight: boolean }
 				const delta = (targetWidth - width) * (handle.growsRight ? 1 : -1)
 				await page.mouse.move(handle.x, handle.y)
@@ -123,7 +259,7 @@ export function createPaneController({
 				await page.mouse.move(handle.x + delta, handle.y, { steps: 15 })
 				await page.mouse.up()
 
-				const next = await measure()
+				const next = await (await current()).evaluate(() => window.innerWidth)
 				if (next === width) {
 					break // the drag was ignored, or the pane hit its own maximum
 				}
@@ -135,6 +271,34 @@ export function createPaneController({
 				)
 			}
 			return width
+		},
+		async moveToAuxiliaryBar() {
+			const startedIn = await locationOf(await current())
+
+			// A user's route, through VS Code's own UI: `View: Move View`, then answer its two
+			// pickers. The keyboard goes to whatever has focus and the previous step clicked inside
+			// the webview, so hand focus back to the workbench chrome before pressing F1.
+			await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
+			await page.keyboard.press("F1")
+			await type(await quickInput(COMMAND_PALETTE_PLACEHOLDER), MOVE_VIEW_QUERY)
+			await acceptRow(MOVE_VIEW_LABEL)
+
+			await quickInput(PICK_A_VIEW_PLACEHOLDER)
+			await acceptUnlabelledViewRow(CHAT_VIEW_CONTAINER)
+			const destination = await quickInput(PICK_A_DESTINATION_PLACEHOLDER)
+			await type(destination, NEW_SECONDARY_SIDE_BAR_ENTRY)
+			await acceptRow(NEW_SECONDARY_SIDE_BAR_ENTRY)
+
+			// The move is only real once the part hosting the webview changed. The webview can be
+			// rebuilt on the way, so re-resolve the frame while polling rather than once after.
+			await expect
+				.poll(async () => await locationOf(await current()).catch(() => null), {
+					message: `the chat view should end up in the secondary side bar (it started in ${startedIn})`,
+					timeout: 30_000,
+				})
+				.toBe("auxiliarybar")
+
+			return current()
 		},
 	}
 }
