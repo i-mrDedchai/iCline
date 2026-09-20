@@ -10,9 +10,8 @@ import {
 	resolveEffortLevels,
 	resolveModelThinkingOptions,
 } from "@/utils/modelThinkingOptions"
-import { DROPDOWN_Z_INDEX } from "./ApiOptions"
 import { ModelInfoView } from "./common/ModelInfoView"
-import { DropdownContainer, ModelSelector } from "./common/ModelSelector"
+import { DropdownContainer, formDropdownZIndex, ModelSelector } from "./common/ModelSelector"
 import { getModeSpecificFields } from "./utils/providerUtils"
 import { useApiConfigurationHandlers } from "./utils/useApiConfigurationHandlers"
 
@@ -88,7 +87,8 @@ const SakanaModelPicker: React.FC<SakanaModelPickerProps> = ({ isPopup, currentM
 					models={models}
 					onChange={(e: any) => handleModelChange(e.target.value)}
 					selectedModelId={selectedModelId}
-					zIndex={DROPDOWN_Z_INDEX - 100}
+					// Sakana form ladder: billing 0, protocol 1 (SakanaProvider) — model 2, effort 3.
+					zIndex={formDropdownZIndex(2)}
 				/>
 			</div>
 
@@ -97,7 +97,7 @@ const SakanaModelPicker: React.FC<SakanaModelPickerProps> = ({ isPopup, currentM
 					<label htmlFor="sakana-reasoning-effort">
 						<span style={{ fontWeight: 500 }}>Reasoning Effort</span>
 					</label>
-					<DropdownContainer className="dropdown-container" zIndex={DROPDOWN_Z_INDEX - 100}>
+					<DropdownContainer className="dropdown-container" zIndex={formDropdownZIndex(3)}>
 						<VSCodeDropdown
 							id="sakana-reasoning-effort"
 							onChange={(e: any) =>

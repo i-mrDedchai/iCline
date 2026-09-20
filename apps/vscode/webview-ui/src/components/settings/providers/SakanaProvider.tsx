@@ -3,10 +3,9 @@ import { Mode } from "@shared/storage/types"
 import { VSCodeButton, VSCodeDropdown, VSCodeLink, VSCodeOption } from "@vscode/webview-ui-toolkit/react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { AccountServiceClient } from "@/services/grpc-client"
-import { DROPDOWN_Z_INDEX } from "../ApiOptions"
 import { AuthConnectionBadge } from "../common/AuthConnectionBadge"
 import { DebouncedTextField } from "../common/DebouncedTextField"
-import { DropdownContainer } from "../common/ModelSelector"
+import { DropdownContainer, formDropdownZIndex } from "../common/ModelSelector"
 import SakanaModelPicker from "../SakanaModelPicker"
 import { useApiConfigurationHandlers } from "../utils/useApiConfigurationHandlers"
 
@@ -78,7 +77,8 @@ export const SakanaProvider = ({ showModelOptions, currentMode }: SakanaProvider
 				<label>
 					<span style={{ fontWeight: 500 }}>Billing mode</span>
 				</label>
-				<DropdownContainer className="dropdown-container" zIndex={DROPDOWN_Z_INDEX - 100}>
+				{/* Sakana form ladder: billing 0, protocol 1 — model 2, effort 3 (SakanaModelPicker). */}
+				<DropdownContainer className="dropdown-container" zIndex={formDropdownZIndex(0)}>
 					<VSCodeDropdown
 						onChange={(e: any) => handleFieldChange("sakanaBillingMode", e.target.value as SakanaBillingMode)}
 						style={{ width: "100%", marginTop: 3 }}
@@ -107,7 +107,7 @@ export const SakanaProvider = ({ showModelOptions, currentMode }: SakanaProvider
 				<label>
 					<span style={{ fontWeight: 500 }}>API protocol</span>
 				</label>
-				<DropdownContainer className="dropdown-container" zIndex={DROPDOWN_Z_INDEX - 100}>
+				<DropdownContainer className="dropdown-container" zIndex={formDropdownZIndex(1)}>
 					<VSCodeDropdown
 						onChange={(e: any) => handleFieldChange("sakanaApiProtocol", e.target.value as SakanaApiProtocol)}
 						style={{ width: "100%", marginTop: 3 }}

@@ -3,13 +3,12 @@ import { Mode } from "@shared/storage/types"
 import { VSCodeButton, VSCodeDropdown, VSCodeLink, VSCodeOption } from "@vscode/webview-ui-toolkit/react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { AccountServiceClient } from "@/services/grpc-client"
-import { DROPDOWN_Z_INDEX } from "../ApiOptions"
+import { useZenmuxAccountInfo } from "../../ui/hooks/useZenmuxAccountInfo"
 import { AuthConnectionBadge } from "../common/AuthConnectionBadge"
 import { DebouncedTextField } from "../common/DebouncedTextField"
-import ZenmuxModelPicker from "../ZenmuxModelPicker"
-import { useZenmuxAccountInfo } from "../../ui/hooks/useZenmuxAccountInfo"
-import { DropdownContainer } from "../common/ModelSelector"
+import { DropdownContainer, formDropdownZIndex } from "../common/ModelSelector"
 import { useApiConfigurationHandlers } from "../utils/useApiConfigurationHandlers"
+import ZenmuxModelPicker from "../ZenmuxModelPicker"
 
 interface ZenmuxProviderProps {
 	showModelOptions: boolean
@@ -17,13 +16,7 @@ interface ZenmuxProviderProps {
 	currentMode: Mode
 }
 
-const ZenmuxAccountDisplay = ({
-	apiKey,
-	managementApiKey,
-}: {
-	apiKey?: string
-	managementApiKey?: string
-}) => {
+const ZenmuxAccountDisplay = ({ apiKey, managementApiKey }: { apiKey?: string; managementApiKey?: string }) => {
 	const { paygBalance, subscription, isLoading } = useZenmuxAccountInfo(apiKey, managementApiKey)
 
 	if (isLoading || (!paygBalance && !subscription)) {
@@ -32,15 +25,11 @@ const ZenmuxAccountDisplay = ({
 
 	return (
 		<div style={{ fontSize: "12px", color: "var(--vscode-descriptionForeground)", marginTop: 6 }}>
-			{paygBalance && (
-				<div>
-					PAYG balance: ${paygBalance.totalCredits?.toFixed(2) ?? "—"} USD
-				</div>
-			)}
+			{paygBalance && <div>PAYG balance: ${paygBalance.totalCredits?.toFixed(2) ?? "—"} USD</div>}
 			{subscription && (
 				<div>
-					Subscription ({subscription.tier}): {subscription.remainingFlows?.toFixed(1)} / {subscription.maxFlows}{" "}
-					Flows remaining (5h)
+					Subscription ({subscription.tier}): {subscription.remainingFlows?.toFixed(1)} / {subscription.maxFlows} Flows
+					remaining (5h)
 				</div>
 			)}
 		</div>
@@ -63,7 +52,6 @@ export const ZenmuxProvider = ({ showModelOptions, isPopup, currentMode }: Zenmu
 	return (
 		<div>
 			<AuthConnectionBadge
-				variant={hasZenmuxApiKey ? "oauth" : "disconnected"}
 				detail={
 					hasZenmuxApiKey
 						? apiConfiguration?.zenmuxApiKey?.startsWith("sk-ss-v1-")
@@ -72,6 +60,7 @@ export const ZenmuxProvider = ({ showModelOptions, isPopup, currentMode }: Zenmu
 						: "Create a key on zenmux.ai after signing in"
 				}
 				label={hasZenmuxApiKey ? "Connected — ZenMux API key" : "Not connected — ZenMux API key required"}
+				variant={hasZenmuxApiKey ? "oauth" : "disconnected"}
 			/>
 			<p
 				style={{
@@ -79,8 +68,8 @@ export const ZenmuxProvider = ({ showModelOptions, isPopup, currentMode }: Zenmu
 					color: "var(--vscode-descriptionForeground)",
 					marginBottom: 10,
 				}}>
-				Sign in with Email, GitHub, or Google on ZenMux, then create an API key for Pay As You Go (
-				<code>sk-ai-v1-</code>) or Builder subscription (<code>sk-ss-v1-</code>).{" "}
+				Sign in with Email, GitHub, or Google on ZenMux, then create an API key for Pay As You Go (<code>sk-ai-v1-</code>)
+				or Builder subscription (<code>sk-ss-v1-</code>).{" "}
 				<VSCodeLink href="https://docs.zenmux.ai/guide/quickstart">Docs</VSCodeLink>
 			</p>
 
@@ -128,7 +117,7 @@ export const ZenmuxProvider = ({ showModelOptions, isPopup, currentMode }: Zenmu
 				<label>
 					<span style={{ fontWeight: 500 }}>API Protocol</span>
 				</label>
-				<DropdownContainer className="dropdown-container" zIndex={DROPDOWN_Z_INDEX - 100}>
+				<DropdownContainer className="dropdown-container" zIndex={formDropdownZIndex(0)}>
 					<VSCodeDropdown
 						onChange={(e: any) => handleFieldChange("zenmuxApiProtocol", e.target.value as ZenmuxApiProtocol)}
 						style={{ width: "100%", marginTop: 3 }}
@@ -140,8 +129,8 @@ export const ZenmuxProvider = ({ showModelOptions, isPopup, currentMode }: Zenmu
 					</VSCodeDropdown>
 				</DropdownContainer>
 				<p style={{ fontSize: "12px", color: "var(--vscode-descriptionForeground)", marginTop: 5 }}>
-					ZenMux supports cross-protocol routing — OpenAI protocol can call any model. Use Anthropic/Gemini
-					native protocols when your tool chain requires them.
+					ZenMux supports cross-protocol routing — OpenAI protocol can call any model. Use Anthropic/Gemini native
+					protocols when your tool chain requires them.
 				</p>
 			</div>
 
@@ -149,7 +138,7 @@ export const ZenmuxProvider = ({ showModelOptions, isPopup, currentMode }: Zenmu
 				<label>
 					<span style={{ fontWeight: 500 }}>Provider routing</span>
 				</label>
-				<DropdownContainer className="dropdown-container" zIndex={DROPDOWN_Z_INDEX - 100}>
+				<DropdownContainer className="dropdown-container" zIndex={formDropdownZIndex(1)}>
 					<VSCodeDropdown
 						onChange={(e: any) =>
 							handleFieldChange("zenmuxProviderRouting", e.target.value === "default" ? "" : e.target.value)

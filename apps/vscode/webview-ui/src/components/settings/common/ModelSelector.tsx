@@ -3,6 +3,26 @@ import { VSCodeDropdown, VSCodeOption } from "@vscode/webview-ui-toolkit/react"
 import styled from "styled-components"
 
 /**
+ * Top of the ladder for dropdowns stacked inside one provider form.
+ *
+ * Kept below `DROPDOWN_Z_INDEX` (ApiOptions, 1002) so model pickers and their
+ * tooltips still win — a form's dropdowns only have to outrank each other.
+ */
+export const FORM_DROPDOWN_BASE_Z_INDEX = 900
+
+/**
+ * Z-index for the Nth dropdown of a stacked form (`0` = the first/topmost control).
+ *
+ * A dropdown's open list must paint over every control BELOW it, but two positioned
+ * siblings with the same z-index are decided by DOM order — the later one wins. One
+ * flat value per form therefore covers the earlier control's list with the later
+ * control's box (Sakana: the Reasoning Effort select sat on top of the Model list, and
+ * Zenmux: Provider routing covered API Protocol). A form has to DESCEND, so the first
+ * control takes the top of the ladder and each later one sits below it.
+ */
+export const formDropdownZIndex = (position: number): number => FORM_DROPDOWN_BASE_Z_INDEX - position
+
+/**
  * Container for dropdowns that ensures proper z-index handling
  * This is necessary to ensure dropdown opens downward
  */
