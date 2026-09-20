@@ -617,9 +617,18 @@ export class StateManager {
 			{ settingsUpdates: {} as Partial<Settings>, secretsUpdates: {} as Partial<Secrets> },
 		)
 
-		// Batch update settings (stored in global state)
+		// Batch update settings (stored in global state).
+		//
+		// This deliberately does NOT touch `remoteConfigCache`. The remote layer has the
+		// highest precedence (remote > session > task > global) and is org policy, so it
+		// is written only by the control-plane fetch (`applyRemoteConfig` /
+		// `setRemoteConfigField`). Routing ordinary writes through it made every
+		// settings write a phantom policy: `filterAllowedRemoteConfigFields` keeps the
+		// provider fields, so any partial api-config update pinned whatever provider was
+		// current at that moment — after which a model selection for another provider
+		// committed the model but the provider snapped back (Settings: pick a Grok model,
+		// land on the Cline form again; smoke 2026-09-20).
 		if (Object.keys(settingsUpdates).length > 0) {
-			this.setRemoteConfigState(settingsUpdates)
 			this.setGlobalStateBatch(settingsUpdates)
 		}
 
