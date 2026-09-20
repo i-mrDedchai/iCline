@@ -5,6 +5,7 @@ import { useNormalizedApiConfiguration } from "@/hooks/useNormalizedApiConfigura
 import { useProviderListings } from "@/hooks/useProviderListings"
 import { useProviderModels } from "@/hooks/useProviderModels"
 import { clearReasoningEffortOutcomeCache } from "@/hooks/useReasoningEffortOutcome"
+import { MENU_SURFACE_CLASS, MENU_TEXT_FIELD_CLASS } from "@/icline/menuPopover"
 import { ModelsServiceClient } from "@/services/grpc-client"
 import { QuickModelPicker } from "./QuickModelPicker"
 
@@ -430,8 +431,8 @@ describe("QuickModelPicker real Popover", () => {
 		// id, the gaps and the capability readout are part of the same menu (request of
 		// 2026-09-20). The popover wrapper carries it, and so does the panel itself so the
 		// hover panel inside the model list draws it too.
-		expect(panel()?.className).toContain("cursor-pointer")
-		expect((panel()?.querySelector("[data-icline-options-panel]") as HTMLElement).className).toContain("cursor-pointer")
+		expect(panel()?.className).toContain(MENU_SURFACE_CLASS)
+		expect((panel()?.querySelector("[data-icline-options-panel]") as HTMLElement).className).toContain(MENU_SURFACE_CLASS)
 		expect(panel()?.querySelector("[data-icline-options-model-id]")?.textContent).toBe(activeModelId)
 		expect(panel()?.querySelector("[data-icline-thinking-switch]")?.getAttribute("data-icline-thinking-switch")).toBe("on")
 		expect(panel()?.querySelector("[data-icline-effort-selected]")?.getAttribute("data-icline-effort-option")).toBe("high")
@@ -464,11 +465,30 @@ describe("QuickModelPicker real Popover", () => {
 
 		await waitFor(() => expect(document.querySelector("[data-icline-quick-picker]")).not.toBeNull())
 		const picker = document.querySelector("[data-icline-quick-picker]") as HTMLElement
-		expect(picker.className).toContain("cursor-pointer")
+		expect(picker.className).toContain(MENU_SURFACE_CLASS)
 		expect((document.querySelector('[data-icline-provider="xai"] button') as HTMLElement).className).toContain(
-			"cursor-pointer",
+			MENU_SURFACE_CLASS,
 		)
-		expect((picker.querySelector("input") as HTMLElement).className).toContain("cursor-text")
+		expect((picker.querySelector("input") as HTMLElement).className).toContain(MENU_TEXT_FIELD_CLASS)
+	})
+
+	it("decides each menu's edge on its own — the model list follows its own chip", async () => {
+		// The two menus are different widths hanging off different buttons, so they get their
+		// own answer from the shared anchor: the chip is narrow, but it sits far enough into a
+		// wide pane to open the 320px list to its right (jsdom's 1024px pane)…
+		render(<QuickModelPicker modelDisplayName={LEFTOVER_XAI_MODEL_ID} />)
+		fireEvent.click(screen.getByRole("button", { name: new RegExp(LEFTOVER_XAI_MODEL_ID) }))
+
+		await waitFor(() => expect(document.querySelector("[data-icline-quick-picker]")).not.toBeNull())
+		const picker = document.querySelector("[data-icline-quick-picker]") as HTMLElement
+		expect(picker.getAttribute("data-align")).toBe("start")
+
+		// …while the same chip shoved towards the pane's right edge (what a squeezed pane does
+		// to it) cannot hold the list any more, and the list moves to the chip's right edge.
+		const trigger = document.querySelector("[data-icline-model-trigger]") as HTMLElement
+		trigger.getBoundingClientRect = () => ({ left: 1000, right: 1100, width: 100 }) as DOMRect
+		fireEvent(window, new Event("resize"))
+		await waitFor(() => expect(picker.getAttribute("data-align")).toBe("end"))
 	})
 
 	it("moves the Options anchor from the button's left edge to its right one in a squeezed pane", async () => {

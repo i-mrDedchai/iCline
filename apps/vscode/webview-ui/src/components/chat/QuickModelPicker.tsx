@@ -23,15 +23,13 @@
  * keystroke), and re-pinning the active row into view on open.
  *
  * Two UXUI rounds of 2026-09-20 are folded in here:
- *  - every click target in the chip and in both Options surfaces carries a hand cursor
- *    (`cursor-pointer`), matching the four VSCodeButton icons beside them — plain
- *    `<button>` elements get the OS arrow, VSCodeButton does not;
- *  - the composer's Options popover opens with its LEFT edge on the status button's
- *    left edge (`align="start"`), the same edge rule the model list already used. It
- *    used to be `align="end"`, which slid the 236px panel far to the left of the icon
- *    that opened it. That fallback is kept for a squeezed chat pane, where anchoring on
- *    the left edge cannot fit the panel inside the pane at all — see
- *    `pickOptionsPopoverAlign`.
+ *  - both menus (the model list and the composer's Options popover) follow the shared
+ *    menu conventions of `@/icline/menuPopover`: the hand cursor over the whole menu
+ *    rather than only its rows, the text caret in the search field, and the LEFT edge of
+ *    the menu on the left edge of the button that opened it while the chat pane can hold
+ *    it there. The right-edge anchoring is the fallback for a pane too squeezed for that
+ *    — the 236px Options panel used to always open that way, which slid it far to the
+ *    left of the icon that was clicked.
  */
 
 import { ANTHROPIC_MIN_THINKING_BUDGET } from "@shared/api"
@@ -58,10 +56,8 @@ import {
 	OPTIONS_PANEL_GAP_PX,
 	OPTIONS_PANEL_MAX_HEIGHT_PX,
 	OPTIONS_PANEL_WIDTH_PX,
-	type OptionsPopoverAlign,
 	partitionFreeStandard,
 	pickAutoExpandProvider,
-	pickOptionsPopoverAlign,
 	queryActivePickerScrollTarget,
 } from "@/components/chat/quickModelPickerList"
 import { OrgProviderPolicyNotice } from "@/components/common/OrgProviderPolicyNotice"
@@ -81,6 +77,7 @@ import { useReasoningEffortOutcome } from "@/hooks/useReasoningEffortOutcome"
 import { BalloonTooltip } from "@/icline/BalloonTooltip"
 import { formatPickerString, type PickerTranslator } from "@/icline/i18n/pickerStrings"
 import { usePickerStrings } from "@/icline/i18n/usePickerStrings"
+import { MENU_SURFACE_CLASS, MENU_TEXT_FIELD_CLASS, useMenuPopoverAnchor } from "@/icline/menuPopover"
 import { type OrgProviderBlock, orgProviderBlock } from "@/icline/orgProviderPolicy"
 import { type ModelStatus, resolveModelStatus } from "@/icline/pickerCapabilities"
 import { cn } from "@/lib/utils"
@@ -232,12 +229,6 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 	 * name). Separate from `open` so the two surfaces never fight over one flag.
 	 */
 	const [statusOptionsOpen, setStatusOptionsOpen] = useState(false)
-	/**
-	 * Which edge of the status button that popover hangs from — `start` (the primary rule)
-	 * normally, `end` only when a squeezed pane cannot hold the panel beside it. See
-	 * `pickOptionsPopoverAlign`.
-	 */
-	const [statusOptionsAlign, setStatusOptionsAlign] = useState<OptionsPopoverAlign>("start")
 	/** null = nothing expanded; user may collapse the active provider freely. */
 	const [expandedProvider, setExpandedProvider] = useState<string | null>(null)
 	const [search, setSearch] = useState("")
@@ -264,7 +255,9 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 	const committingRef = useRef(false)
 	const listRef = useRef<HTMLDivElement>(null)
 	const contentRef = useRef<HTMLDivElement>(null)
-	/** The status button the composer's Options popover is anchored to (measured on open). */
+	/** The model-name button the picker hangs off (`useMenuPopoverAnchor` measures it). */
+	const modelTriggerRef = useRef<HTMLButtonElement>(null)
+	/** The status button the composer's Options popover is anchored to. */
 	const statusTriggerRef = useRef<HTMLButtonElement>(null)
 	const userScrolledThisOpenRef = useRef(false)
 	const programmaticScrollRef = useRef(false)
@@ -309,43 +302,27 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 	useEffect(() => () => cancelOptionsClose(), [cancelOptionsClose])
 
 	/**
-	 * Re-read which edge the composer's Options popover should hang from. Measured from the
-	 * TRIGGER, not from the popover: the panel's own geometry is only known after Radix has
-	 * positioned it, and correcting the side then would flash the panel on the wrong edge
-	 * first. Called when the popover opens and whenever the pane is resized while it is up
-	 * (dragging the sidebar is exactly how a user reaches the narrow case).
+	 * Anchor side for the MODEL LIST. Its own menu width is what has to fit beside the chip,
+	 * so the shared hook is called once per menu rather than once per component.
 	 */
-	const measureStatusOptionsAlign = useCallback(() => {
-		const trigger = statusTriggerRef.current
-		if (!trigger) {
-			return
-		}
-		setStatusOptionsAlign(
-			pickOptionsPopoverAlign({
-				triggerLeft: trigger.getBoundingClientRect().left,
-				viewportWidth: window.innerWidth || Number.MAX_SAFE_INTEGER,
-			}),
-		)
-	}, [])
+	const { align: modelPickerAlign, onOpenChange: handleModelPickerOpenChange } = useMenuPopoverAnchor({
+		open,
+		setOpen,
+		panelWidth: PICKER_WIDTH_PX,
+		triggerRef: modelTriggerRef,
+	})
 
-	useEffect(() => {
-		if (!statusOptionsOpen) {
-			return
-		}
-		window.addEventListener("resize", measureStatusOptionsAlign)
-		return () => window.removeEventListener("resize", measureStatusOptionsAlign)
-	}, [statusOptionsOpen, measureStatusOptionsAlign])
-
-	/** Side is decided before the popover mounts, so its first paint is already correct. */
-	const handleStatusOptionsOpenChange = useCallback(
-		(nextOpen: boolean) => {
-			if (nextOpen) {
-				measureStatusOptionsAlign()
-			}
-			setStatusOptionsOpen(nextOpen)
-		},
-		[measureStatusOptionsAlign],
-	)
+	/**
+	 * …and for the composer's Options popover, which is a narrower menu (236px) hanging off
+	 * a much smaller button: the two can disagree about which edge fits, which is exactly
+	 * why the decision is per menu and not per component.
+	 */
+	const { align: statusOptionsAlign, onOpenChange: handleStatusOptionsOpenChange } = useMenuPopoverAnchor({
+		open: statusOptionsOpen,
+		setOpen: setStatusOptionsOpen,
+		panelWidth: OPTIONS_PANEL_WIDTH_PX,
+		triggerRef: statusTriggerRef,
+	})
 
 	/**
 	 * Record the hovered row; the placement itself happens in the layout effect
@@ -440,7 +417,9 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 
 	const handleOpenChange = useCallback(
 		(nextOpen: boolean) => {
-			setOpen(nextOpen)
+			// The shared anchor decides the edge and controls the flag; everything below is
+			// this picker's own open/close bookkeeping.
+			handleModelPickerOpenChange(nextOpen)
 			if (nextOpen) {
 				// Seed expand once on open (dev.4: only active provider open).
 				// Do NOT re-seed when user collapses — that was the force-expand bug.
@@ -456,7 +435,7 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 				closeOptionsNow()
 			}
 		},
-		[currentProvider, refreshClineFeatured, closeOptionsNow],
+		[currentProvider, refreshClineFeatured, closeOptionsNow, handleModelPickerOpenChange],
 	)
 
 	const handleToggleProvider = useCallback(
@@ -1056,6 +1035,7 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 					className="inline-flex items-center text-xs px-1.5 py-0.5 rounded-sm text-(--vscode-descriptionForeground) hover:bg-(--vscode-list-hoverBackground) hover:text-(--vscode-foreground) disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
 					data-icline-model-trigger=""
 					disabled={disabled}
+					ref={modelTriggerRef}
 					type="button">
 					{/* The name keeps its own balloon; the status icons are a button of their own
 					    (below) and carry theirs, so one tooltip around both would nest them. */}
@@ -1067,8 +1047,8 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 				</button>
 			</PopoverTrigger>
 			<PopoverContent
-				align="start"
-				className="relative p-0 gap-0 cursor-pointer"
+				align={modelPickerAlign}
+				className={cn("relative p-0 gap-0", MENU_SURFACE_CLASS)}
 				data-icline-quick-picker=""
 				disablePortal
 				onInteractOutside={(e) => {
@@ -1094,7 +1074,10 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 						{/* biome-ignore lint/a11y/noAutofocus: focusing the search field on popover open is the intended picker UX */}
 						<input
 							autoFocus
-							className="flex-1 bg-transparent border-none outline-none cursor-text text-xs text-(--vscode-foreground) placeholder:text-(--vscode-descriptionForeground)"
+							className={cn(
+								"flex-1 bg-transparent border-none outline-none text-xs text-(--vscode-foreground) placeholder:text-(--vscode-descriptionForeground)",
+								MENU_TEXT_FIELD_CLASS,
+							)}
 							onChange={(e) => setSearch(e.target.value)}
 							placeholder={tr("searchPlaceholder")}
 							type="text"
@@ -1278,19 +1261,17 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 						</button>
 					</PopoverTrigger>
 					{/*
-					 * Primary rule: the panel's left edge stays on the status button's left edge
-					 * (maintainer request, 2026-09-20) — normally the whole 236px panel fits
-					 * beside it, as it does in the ~930px pane the request was made about. When
-					 * the pane is squeezed so narrow that it cannot (`pickOptionsPopoverAlign`),
-					 * the panel falls back to anchoring its RIGHT edge on the button's right edge,
-					 * the way it behaved before, rather than hanging off the side of the pane.
-					 * Radix keeps nudging either one back into view; that collision shift is
-					 * intended, and disabling it would let the panel be clipped by the webview
-					 * edge instead.
+					 * Both menus follow the shared anchoring rule (`@/icline/menuPopover`): the
+					 * LEFT edge of the panel on the left edge of the button that opened it while
+					 * the pane can hold it there — the ~930px working pane — and the older
+					 * right-edge anchoring once it cannot, so a squeezed sidebar still shows the
+					 * whole panel instead of losing it off the side of the pane. Radix keeps
+					 * nudging either one back into view; that collision shift is intended, and
+					 * disabling it would let the panel be clipped by the webview edge instead.
 					 */}
 					<PopoverContent
 						align={statusOptionsAlign}
-						className="relative p-0 gap-0 cursor-pointer"
+						className={cn("relative p-0 gap-0", MENU_SURFACE_CLASS)}
 						data-icline-status-options=""
 						side="top"
 						style={{ width: OPTIONS_PANEL_WIDTH_PX }}>

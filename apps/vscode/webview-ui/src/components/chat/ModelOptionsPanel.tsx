@@ -23,6 +23,7 @@ import { Switch } from "@/components/ui/switch"
 import type { ReasoningEffortOutcome } from "@/hooks/useReasoningEffortOutcome"
 import { BalloonTooltip } from "@/icline/BalloonTooltip"
 import type { PickerTranslator } from "@/icline/i18n/pickerStrings"
+import { MENU_SURFACE_CLASS } from "@/icline/menuPopover"
 import type { ModelStatus } from "@/icline/pickerCapabilities"
 import { cn } from "@/lib/utils"
 import { resolveEffortLevels } from "@/utils/modelThinkingOptions"
@@ -60,11 +61,11 @@ export function ModelOptionsPanel({
 	const effortLevels = effortSet.levels.filter((level) => !level.isOff)
 
 	return (
-		// `cursor-pointer` on the panel itself: this surface only ever appears as a popover
-		// hanging off a click target, so the whole body reads as part of that menu — the
-		// gaps between rows, the model id and the capability readout included (maintainer
-		// request, 2026-09-20: the OS arrow showed up over everything that was not a row).
-		<div className={cn("cursor-pointer", className)} data-icline-options-panel="">
+		// `MENU_SURFACE_CLASS` on the panel itself: this surface only ever appears as a menu
+		// hanging off a click target, so the whole body reads as part of that menu — the gaps
+		// between rows, the model id and the capability readout included (see
+		// `@/icline/menuPopover`: the OS arrow used to come back over everything not a row).
+		<div className={cn(MENU_SURFACE_CLASS, className)} data-icline-options-panel="">
 			{/* Title + model id (mock v11's `h3` + `.mid`) */}
 			<div className="text-xs font-medium text-(--vscode-foreground)">{tr("optionsTitle")}</div>
 			<div
