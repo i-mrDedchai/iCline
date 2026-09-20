@@ -1,7 +1,7 @@
 **Last updated:** 2026-09-20
 **Branch:** `feat/upstream-waves-1-2` (จาก main @ `78ebd0923` — รวม dev.5 แล้ว, tag `pre-merge-dev.5`, ยังไม่ push)
 **HEAD:** ดู `git log` (ไม่ตรึง hash ไว้ตรงนี้ — มันตกหล่นทุกครั้งที่มี commit เอกสารตามหลัง) · **fix.7–fix.21 commit แล้ว ยังไม่ push** (`88ff6028b` fix lifecycle ของวิว · `29c24e71c` e2e ขนาน + fixture auxiliary bar + เทสต์ใหม่ · `af58ebbad`/`8aec05f6c` เอกสาร fix.20 · fix.21 Recent หลายคอลัมน์ + draft รอดการย้ายวิว) · **fix.22 ยังไม่ commit** (รอบปัจจุบัน — เตรียมแพ็กเป็น `fix.22`)
-**vsix (ล่าสุดที่มีอยู่):** `apps/vscode/dist/i-mrdedchai.iCline-0.1.18-dev.6-fix.21.vsix` (12,085,311 B @ 2026-09-20T10:04:27Z · 60 files · About = `dev build 6 · fix.21` — ตรวจแล้วว่าสตริงอยู่ในบันเดิล webview จริง) — ⏳ รอ maintainer smoke · **รอบนี้แก้ webview จริง (Recent หลายคอลัมน์ + draft) ⇒ `fix.20` และก่อนหน้าไม่มีสิ่งเหล่านี้** · do not overwrite `fix.1`–`fix.20` ใน `dist/` (fix.20 = 12,084,123 B @ 2026-09-20T09:28:31Z · fix.19 = 11,967,453 B @ 2026-09-20T06:07:27Z · fix.18 = 11,967,298 B @ 2026-09-20 05:36:02Z)
+**vsix (ล่าสุดที่มีอยู่):** `apps/vscode/dist/i-mrdedchai.iCline-0.1.18-dev.6-fix.22.vsix` (12,086,670 B @ 2026-09-20T12:16:30Z · 60 files · About = `dev build 6 · fix.22` — ตรวจแล้วว่าสตริงอยู่ในบันเดิล webview จริง และ host bundle มีโค้ดใหม่ (`nothing new above the cut to fold` · ตัวประเมินรูป) · สคริปต์คืน `package.json`/`build-metadata.ts` แล้ว ไม่มี `.wip.bak` ตกค้าง) — ⏳ รอ maintainer smoke · **ห้ามใช้ `fix.21` (หรือก่อนหน้า) smoke เรื่อง compaction/รูป — ยังมีบั๊กตัวประเมิน และ Recent ยังไม่มีป้ายเวลา** · do not overwrite `fix.1`–`fix.21` ใน `dist/` (fix.20 = 12,084,123 B @ 2026-09-20T09:28:31Z · fix.19 = 11,967,453 B @ 2026-09-20T06:07:27Z · fix.18 = 11,967,298 B @ 2026-09-20 05:36:02Z)
 
 ---
 
