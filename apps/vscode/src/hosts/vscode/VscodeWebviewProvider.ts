@@ -20,7 +20,19 @@ export class VscodeWebviewProvider extends WebviewProvider implements vscode.Web
 	public static readonly SIDEBAR_ID = ExtensionRegistryInfo.views.Sidebar
 
 	private webview?: vscode.WebviewView
+	/**
+	 * Registrations that live as long as the EXTENSION. Anything tied to one resolved view goes
+	 * into `viewDisposables` instead — see `disposeViewScope()` for why the two are separate.
+	 */
 	private disposables: vscode.Disposable[] = []
+	/** Registrations owned by the currently resolved view. See `disposeViewScope()`. */
+	private viewDisposables: vscode.Disposable[] = []
+	/**
+	 * Whether this extension session has already resolved a view. A view is resolved once per
+	 * part it lives in, and moving it resolves another one — see `resolveWebviewView()`, which
+	 * must not treat a move as the start of a session.
+	 */
+	private hasResolvedView = false
 
 	override getWebviewUrl(path: string) {
 		if (!this.webview) {
@@ -52,6 +64,11 @@ export class VscodeWebviewProvider extends WebviewProvider implements vscode.Web
 	 * @returns A promise that resolves when the webview has been fully initialized
 	 */
 	public async resolveWebviewView(webviewView: vscode.WebviewView): Promise<void> {
+		// Listeners registered below belong to THIS view instance. Moving the view to another part
+		// disposes the instance and resolves a fresh one, so they are tracked per view and released
+		// with it; the provider-wide `disposables` list only ends when the extension deactivates,
+		// which would leak one set of listeners per move.
+		this.disposeViewScope()
 		this.webview = webviewView
 
 		webviewView.webview.options = {
@@ -85,7 +102,7 @@ export class VscodeWebviewProvider extends WebviewProvider implements vscode.Web
 				}
 			},
 			null,
-			this.disposables,
+			this.viewDisposables,
 		)
 
 		// Listen for when the view is disposed.
@@ -101,14 +118,25 @@ export class VscodeWebviewProvider extends WebviewProvider implements vscode.Web
 			() => {
 				if (this.webview === webviewView) {
 					this.webview = undefined
+					this.disposeViewScope()
 				}
 			},
 			null,
-			this.disposables,
+			this.viewDisposables,
 		)
 
-		// if the extension is starting a new session, clear previous task state
-		this.controller.clearTask()
+		// If the extension is starting a new session, clear previous task state.
+		//
+		// Only the FIRST resolve of a session counts as starting one: the view is re-resolved when
+		// it moves to another part (the Secondary Side Bar, the panel), and clearing the task there
+		// would wipe the conversation the user is looking at the moment they move it. The moved
+		// view stays bound to the live controller and re-reads the session's state on mount
+		// (`subscribeToState` sends the current state to a new subscriber), so the chat comes up
+		// where it left off.
+		if (!this.hasResolvedView) {
+			this.hasResolvedView = true
+			await this.controller.clearTask()
+		}
 
 		Logger.log("[VscodeWebviewProvider] Webview view resolved")
 
@@ -145,8 +173,21 @@ export class VscodeWebviewProvider extends WebviewProvider implements vscode.Web
 				this.handleWebviewMessage(message)
 			},
 			null,
-			this.disposables,
+			this.viewDisposables,
 		)
+	}
+
+	/**
+	 * Releases the listener registrations owned by one view instance.
+	 *
+	 * Called when that view is disposed (a move), before a re-resolve adds its own, and when the
+	 * extension deactivates. The array's identity is kept — VS Code holds it as the disposable
+	 * bag of the listeners it registered — so it is drained, not replaced.
+	 */
+	private disposeViewScope() {
+		while (this.viewDisposables.length) {
+			this.viewDisposables.pop()?.dispose()
+		}
 	}
 
 	/**
@@ -203,7 +244,9 @@ export class VscodeWebviewProvider extends WebviewProvider implements vscode.Web
 
 	override async dispose() {
 		// WebviewView doesn't have a dispose method, it's managed by VSCode
-		// We just need to clean up our disposables
+		// We just need to clean up our disposables — the current view's first, in case a view is
+		// still resolved (the extension can be deactivated without the view ever reporting it)
+		this.disposeViewScope()
 		while (this.disposables.length) {
 			const x = this.disposables.pop()
 			if (x) {
