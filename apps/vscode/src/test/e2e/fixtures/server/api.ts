@@ -10,6 +10,7 @@ export const E2E_REGISTERED_MOCK_ENDPOINTS = {
 			"/organizations/{orgId}/remote-config",
 			"/users/me",
 			"/users/me/featurebase-token",
+			"/users/me/remote-config",
 			"/users/{userId}/balance",
 			"/users/{userId}/usages",
 			"/users/{userId}/payments",
@@ -19,7 +20,14 @@ export const E2E_REGISTERED_MOCK_ENDPOINTS = {
 	},
 	"/.test": {
 		GET: [],
-		POST: ["/auth", "/setUserBalance", "/setUserHasOrganization", "/setOrgBalance", "/setSpendLimitExceeded"],
+		POST: [
+			"/auth",
+			"/setUserBalance",
+			"/setUserHasOrganization",
+			"/setOrgBalance",
+			"/setSpendLimitExceeded",
+			"/setRemoteConfig",
+		],
 		PUT: [],
 	},
 	"/health": {
@@ -27,6 +35,35 @@ export const E2E_REGISTERED_MOCK_ENDPOINTS = {
 		GET: ["/", "/ping"],
 		PUT: [],
 	},
+}
+
+/**
+ * The organization an organization provider policy is published for. It is the one
+ * organization `fixtures/server/data.ts` gives every mock user, so a test can switch
+ * the account into it and see the policy applied.
+ */
+export const E2E_REMOTE_CONFIG_ORG_ID = "random-org-id"
+
+/**
+ * The provider policy the mock control plane can publish, shaped like the JSON the
+ * real `GET /api/v1/organizations/{id}/remote-config` returns in its `value` field.
+ * Only the providers named under `providerSettings` are allowed; the host derives
+ * `remoteConfiguredProviders` from them (`transformRemoteConfigToStateShape`).
+ */
+export interface E2ERemoteConfig {
+	version: string
+	providerSettings?: Record<string, Record<string, unknown>>
+}
+
+/**
+ * The policy used by the org-policy e2e test: Cline only. Every other provider in the
+ * Quick Picker must therefore be locked, and a click on one of its models must be
+ * answered with the policy notice instead of a silent revert by the host's remote
+ * (highest precedence) layer.
+ */
+export const E2E_ORG_POLICY_CLINE_ONLY: E2ERemoteConfig = {
+	version: "e2e-org-policy-v1",
+	providerSettings: { Cline: {} },
 }
 
 /**

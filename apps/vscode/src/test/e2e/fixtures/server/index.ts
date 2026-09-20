@@ -9,6 +9,8 @@ import {
 	E2E_MOCK_EDITOR_TOOL_CALL,
 	E2E_MOCK_OVERSIZED_EDITOR_TOOL_CALL,
 	E2E_REGISTERED_MOCK_ENDPOINTS,
+	E2E_REMOTE_CONFIG_ORG_ID,
+	type E2ERemoteConfig,
 } from "./api"
 import { ClineDataMock } from "./data"
 
@@ -32,6 +34,8 @@ export class ClineApiServerMock {
 	private orgBalance = 500.0
 	private userHasOrganization = false
 	private spendLimitExceeded = false
+	/** The organization provider policy this mock control plane publishes, if any. */
+	private remoteConfig: { organizationId: string; config: E2ERemoteConfig } | null = null
 	public generationCounter = 0
 
 	public readonly API_USER = new ClineDataMock("personal")
@@ -65,6 +69,21 @@ export class ClineApiServerMock {
 	 */
 	public setSpendLimitExceeded(exceeded: boolean) {
 		this.spendLimitExceeded = exceeded
+	}
+
+	/**
+	 * Publishes an organization provider policy (or clears it) for the organization in
+	 * `E2E_REMOTE_CONFIG_ORG_ID`. This is the mock control plane the extension's own
+	 * remote-config client reads: `GET /users/me/remote-config` discovers the org and
+	 * `GET /organizations/{id}/remote-config` carries the JSON config.
+	 */
+	public setRemoteConfig(config: E2ERemoteConfig | null, organizationId = E2E_REMOTE_CONFIG_ORG_ID) {
+		this.remoteConfig = config ? { organizationId, config } : null
+	}
+
+	/** The policy currently published, for assertions and diagnostics. */
+	public getRemoteConfig(): { organizationId: string; config: E2ERemoteConfig } | null {
+		return this.remoteConfig
 	}
 
 	public setCurrentUser(user: UserResponse | null) {
@@ -252,6 +271,44 @@ export class ClineApiServerMock {
 						return sendApiResponse({
 							featurebaseJwt: `mock-featurebase-jwt-${currentUser.id}`,
 						})
+					}
+
+					// Remote-config discovery. The backend answers 200 with `data: null` when no
+					// organization publishes one, and the extension treats that as "no policy":
+					// `fetchUserRemoteConfig` allows null data, so `clearRemoteConfig()` runs.
+					if (endpoint === "/users/me/remote-config" && method === "GET") {
+						const published = controller.remoteConfig
+						if (!published) {
+							return sendApiResponse(null)
+						}
+						// `value` is intentionally empty: the extension then resolves the config
+						// through the organization endpoint below, which is the real path an
+						// organization with a dashboard-configured policy takes.
+						return sendApiResponse({
+							organizationId: published.organizationId,
+							value: "",
+						})
+					}
+
+					// The organization's remote config itself, as the dashboard publishes it:
+					// `value` is a JSON string, `enabled` gates whether it is applied at all.
+					if (endpoint === "/organizations/{orgId}/remote-config" && method === "GET") {
+						const { orgId } = params
+						const published = controller.remoteConfig
+						if (!published || published.organizationId !== orgId) {
+							return sendApiResponse({ value: "", enabled: false })
+						}
+						return sendApiResponse({
+							value: JSON.stringify(published.config),
+							enabled: true,
+						})
+					}
+
+					// Provider API keys published with a remote config. The policy test uses
+					// none, but answering keeps a 500 out of the fetch path that runs whenever
+					// an organization configures a provider.
+					if (endpoint === "/organizations/{orgId}/api-keys" && method === "GET") {
+						return sendApiResponse({ providerApiKeys: "{}" })
 					}
 
 					if (endpoint === "/users/{userId}/balance" && method === "GET") {
@@ -715,6 +772,15 @@ export class ClineApiServerMock {
 						const body = await readBody()
 						const { exceeded } = JSON.parse(body)
 						controller.setSpendLimitExceeded(!!exceeded)
+						res.writeHead(200)
+						res.end()
+						return
+					}
+
+					if (endpoint === "/setRemoteConfig" && method === "POST") {
+						const body = await readBody()
+						const { config, organizationId } = JSON.parse(body)
+						controller.setRemoteConfig(config ?? null, organizationId ?? E2E_REMOTE_CONFIG_ORG_ID)
 						res.writeHead(200)
 						res.end()
 						return
