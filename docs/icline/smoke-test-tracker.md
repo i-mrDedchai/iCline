@@ -1,7 +1,7 @@
 **Last updated:** 2026-09-20
 **Branch:** `feat/upstream-waves-1-2` (จาก main @ `78ebd0923` — รวม dev.5 แล้ว, tag `pre-merge-dev.5`, ยังไม่ push)
-**HEAD:** ดู `git log` (ไม่ตรึง hash ไว้ตรงนี้ — มันตกหล่นทุกครั้งที่มี commit เอกสารตามหลัง) · **fix.7–fix.15 commit แล้ว ยังไม่ push**
-**vsix (ล่าสุด):** `apps/vscode/dist/i-mrdedchai.iCline-0.1.18-dev.6-fix.15.vsix` (11,965,343 B @ 2026-09-20 02:09Z · About = `dev build 6 · fix.15`) — ⏳ **รอบนี้คือ fix.15** · do not overwrite `fix.1`–`fix.14` ใน `dist/`
+**HEAD:** ดู `git log` (ไม่ตรึง hash ไว้ตรงนี้ — มันตกหล่นทุกครั้งที่มี commit เอกสารตามหลัง) · **fix.7–fix.16 commit แล้ว ยังไม่ push**
+**vsix (ล่าสุด):** `apps/vscode/dist/i-mrdedchai.iCline-0.1.18-dev.6-fix.16.vsix` (11,966,196 B @ 2026-09-20 02:34Z · About = `dev build 6 · fix.16`) — ⏳ **รอบนี้คือ fix.16** · do not overwrite `fix.1`–`fix.15` ใน `dist/`
 
 ---
 
@@ -50,7 +50,29 @@ STATE post plan=cline (grok-build) act=cline (grok-build)
 
 **พิสูจน์ว่า e2e เป็นยามจริง (falsification):** ใส่บรรทัด `this.setRemoteConfigState(settingsUpdates)` กลับเข้า `StateManager` ⇒ rebuild VSIX ⇒ e2e `settings-model-selection` **fail จริง** ด้วย `provider-selector-input` = `"Cline Usage-Billing"` (ตรงกับที่ maintainer เห็น) · ถอดออก + rebuild ⇒ ผ่านทั้ง 4 e2e อีกครั้งบน VSIX ที่แพ็กเป็น fix.15
 
-**ยังเหลือ:** (ก) ถ้า remote config ขององค์กรปัก provider จริง ๆ การ commit โมเดล/provider อื่นยังถูก shadow — ควรขึ้นข้อความ "องค์กรปัก provider ไว้" ไม่ใช่ commit เงียบ (P2) (ข) clip ของ `ReasoningEffortNotice` บนโมเดลที่ "ไม่มี effort control เลย" ยังใช้ประโยค `Max →  · …` (ช่อง applied ว่าง) — ควรมีประโยคแยก (P2)
+**ยังเหลือ → ปิดใน fix.16 ทั้งสองข้อ:** (ก) การ commit ของ provider ที่องค์กรไม่อนุญาตถูก shadow เงียบ ๆ — ขึ้นข้อความแล้ว (ข) clip ของ `ReasoningEffortNotice` บนโมเดลที่ไม่มี effort control — ตรวจแล้วว่า**เกิดไม่ได้จริง** และปิดด้วยเทสต์สแกน registry
+
+---
+
+## 🏢 dev.6-fix.16 — provider ที่องค์กรไม่อนุญาต + ยามกันข้อความ Effort ผิดรูป (2026-09-20)
+
+**สถานะ:** ✅ เสร็จ + unit/tsc/biome ผ่าน · ⏳ รอ maintainer smoke (VSIX `dev.6-fix.16`)
+
+**ที่มา:** 2 ข้อ P2 ที่ค้างจาก fix.15
+
+**รากของ (ก):** `ApiOptions` กรองรายการ provider ด้วย `remoteConfigSettings.remoteConfiguredProviders` — provider ที่องค์กรไม่อนุญาต**ไม่โผล่**ใน Settings เลย แต่ **Quick Picker โชว์โมเดลของทุก provider** ⇒ คลิกโมเดลของ provider ที่ถูกห้าม = "เหมือนสำเร็จ" แต่ชั้น remote (นโยบายองค์กร, precedence สูงสุด) คง provider เดิมไว้ แล้วการ echo ของ picker ก็อ้างว่าสลับ provider สำเร็จ (ก่อนที่ state push ถัดไปจะกลับ) — อาการเดียวกับบั๊ก pin ของ fix.15 แต่รอบนี้เกิดจากนโยบายจริง
+
+**วิธีแก้ (ก):**
+- `webview-ui/src/icline/orgProviderPolicy.ts` — กติกาเดียวกับฝั่ง host (`isProviderValid`): ลิสต์ว่าง = ไม่มีนโยบาย, provider นอก lisต์ = เลือกไม่ได้ · เทสต์ `orgProviderPolicy.test.ts` 4 เคส (รวมเคสมีช่องว่างในลิสต์)
+- `components/common/OrgProviderPolicyNotice.tsx` + คอมโพเนนต์**เรนเดอร์ใน popover** (ไม่ปิด popover) เพื่อให้คำอธิบายอยู่ตรงที่คลิก
+- picker: (1) provider ที่ถูกห้ามมีไอคอนล็อก `Building2` + บอลลูนอธิบาย (`data-icline-org-blocked`) ⇒ รู้ก่อนคลิก (2) คลิกโมเดลของ provider ที่ถูกห้าม = **ไม่ส่ง commit** และไม่ echo provider (มีคอมเมนต์อธิบายเหตุผล: commit จะเขียนโมเดลที่ provider ที่ถูกปักใช้ไม่ได้ + echo จะอ้างการสลับที่ host ย้อน) แล้วขึ้นข้อความจาก `orgProviderBlocked`
+- i18n: `orgProviderBlocked` / `orgProviderBlockedHint` (en/th)
+
+**รากของ (ข):** ข้อความแจ้งใช้ `{applied}` เมื่อ reason เป็น `nearest-supported`/`catalog-unknown` — ถ้ามีเคสที่ `clamped` แต่ไม่มี `applied` และ reason เป็นสองตัวนั้น จะได้ `Max →  · …` (ช่องว่าง)
+
+**วิธีแก้ (ข):** เขียน **เทสต์สแกน registry ทั้งหมด** (`reasoning-effort-decision.test.ts`) ครอบ provider × model × ระดับทุกตัว (ตัด `none`) assert 3 ข้อ: `clamped` ⇒ reason ไม่ใช่ `exact` · ไม่มี `applied` ⇒ reason ต้องเป็น `no-effort-control` · reason `no-effort-control` ⇒ ต้องไม่มี `applied` · **ผล: ผ่านทั้งหมด ⇒ เคสข้อ (ข) เกิดไม่ได้จริง** — ที่อาจารย์กังวลเป็นเพียงสมมติฐานจากอ่านโค้ด จึงไม่ได้ซ่อมข้อความที่ไม่มีบั๊ก แต่ (1) ยามด้วยเทสต์ (2) เพิ่ม fallback ใน `effortClampNotice`: ถ้าประโยคที่ต้องมีระดับไม่มีระดับ ⇒ ใช้ประโยค "ไม่ส่ง" แทน + เทสต์ (และเทสต์ assert ว่าไม่มี `→` หลุดไปด้วย)
+
+**ผลตรวจ:** webview vitest **485/485** · `tsc -b` · biome · host vitest `reasoning-effort-decision` **9/9** (เดิม 8 + สแกน registry)
 
 ---
 

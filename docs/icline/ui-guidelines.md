@@ -40,13 +40,19 @@
 - ห้ามมีปุ่ม "None/Off" ในแผง — การปิดเป็นหน้าที่ของสวิตช์ Thinking
 - ไอคอน capability บนแถวใช้**สีตามสถานะจริง** (ม่วง reasoning · ทอง thinking: สว่างเมื่อเปิด, จาง 50% เมื่อปิด) + tooltip บอกระดับที่ใช้จริง ส่วน vision/audio/video/training เป็นสีประจำความสามารถล้วน
 - **ชุดไอคอน + badge ตัวเดียวกันต้องแสดงที่ชิปโมเดลใต้ช่องแชทด้วย** (ไม่ใช่เฉพาะใน picker) — นิยามที่เดียวคือ `components/chat/ModelStatusIcons.tsx` จาก `status` ก้อนเดียวกับที่แถวใช้ (`resolveModelStatus`) — ห้ามคัดลอกมาร์กอัปไปที่ที่สอง
-- **effort ที่ถูกลดระดับต้องถูกบอก** — เมื่อค่าที่เก็บไว้ทำให้ SDK ส่งค่าอื่น (หรือไม่ส่งเลย) แผง Options และ Effort control ใน Settings ต้องแสดงประโยคเดียวกันจากคำตอบของ host (`ReasoningEffortNotice`) · ถ้าไม่รู้คำตอบหรือส่งตามที่เลือก → เงียบ
+- **effort ที่ถูกลดระดับต้องถูกบอก** — เมื่อค่าที่เก็บไว้ทำให้ SDK ส่งค่าอื่น (หรือไม่ส่งเลย) แผง Options และ Effort control ใน Settings ต้องแสดงประโยคเดียวกันจากคำตอบของ host (`ReasoningEffortNotice`) · ถ้าไม่รู้คำตอบหรือส่งตามที่เลือก → เงียบ · **ประโยคที่ต้องมีระดับต้องมีระดับจริง** — ถ้าไม่มี `applied` ให้ใช้ประโยค "ไม่ส่ง" เสมอ (ห้ามมี `X →  · …`) และ host มีเทสต์สแกน registry ยืนยันว่ามีแค่ 2 รูปแบบที่อธิบายได้
 
 ## ฟอร์ม Settings: ลำดับ z-index ของ dropdown
 
 - dropdown ของ `vscode-dropdown` วาด list ของตัวเองในคอนเทนเนอร์ ⇒ list ที่ล้นลงไปข้างล่างต้องทับคอนโทรลที่อยู่ **ถัดไป** ด้วย z-index ของคอนเทนเนอร์
 - สอง sibling ที่ `position: relative` + z-index เท่ากัน ตัดสินด้วยลำดับ DOM (ตัวหลังชนะ) ⇒ ฟอร์มที่วางค่าคงที่ให้ทุกตัวจะมีบั๊ก "list ถูกคอนโทรลข้างล่างทับ" เสมอ
 - กติกา: ฟอร์มหนึ่งใช้ `formDropdownZIndex(position)` จาก `common/ModelSelector.tsx` โดย **position 0 = คอนโทรลบนสุด** (z สูงสุด) แล้วไล่ลงตามลำดับในหน้า — ดู Sakana (billing 0 · protocol 1 · model 2 · effort 3) และ ZenMux (protocol 0 · routing 1)
+
+## นโยบาย provider ขององค์กร (remote config)
+
+- `remoteConfiguredProviders` = รายการ provider ที่องค์กรอนุญาต (ว่าง = ไม่มีนโยบาย) — เป็นแหล่งความจริงเดียวของฝั่ง webview (`icline/orgProviderPolicy.ts`) และต้องตรงกับกติกาฝั่ง host (`isProviderValid`)
+- **Settings กรอง provider ที่ไม่อนุญาตออกจาก dropdown + แสดงไอคอนล็อก** ⇒ ผู้ใช้เลือกไม่ได้ตั้งแต่ต้น
+- **Quick Picker โชว์โมเดลของทุก provider** ⇒ provider ที่ถูกห้ามต้องมีไอคอนล็อก (`data-icline-org-blocked`) และเมื่อคลิกโมเดลของ provider นั้นต้อง**ไม่ส่ง commit + ไม่ echo provider** แล้วขึ้นข้อความอธิบายในที่ที่คลิก (`OrgProviderPolicyNotice`) — ห้ามปล่อยให้ดูเหมือนสำเร็จแล้วถูกชั้น remote ย้อนกลับ
 
 ## ชั้นข้อมูลที่ห้ามเขียนทับ (host)
 
