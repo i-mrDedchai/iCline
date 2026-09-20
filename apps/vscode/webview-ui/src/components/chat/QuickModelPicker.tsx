@@ -29,6 +29,7 @@ import { toLegacyApiProvider } from "@shared/model-catalog/provider-helpers"
 import { CommitModelSelectionRequest } from "@shared/proto/cline/models"
 import {
 	Brain,
+	Building2,
 	Check,
 	ChevronDown,
 	Database,
@@ -63,6 +64,7 @@ import {
 	pickAutoExpandProvider,
 	queryActivePickerScrollTarget,
 } from "@/components/chat/quickModelPickerList"
+import { OrgProviderPolicyNotice } from "@/components/common/OrgProviderPolicyNotice"
 import { ReasoningEffortNotice } from "@/components/common/ReasoningEffortNotice"
 import {
 	filterClineSettingsModelIds,
@@ -79,8 +81,9 @@ import { useProviderListings } from "@/hooks/useProviderListings"
 import { useProviderModels } from "@/hooks/useProviderModels"
 import { useReasoningEffortOutcome } from "@/hooks/useReasoningEffortOutcome"
 import { BalloonTooltip } from "@/icline/BalloonTooltip"
-import type { PickerStringKey, PickerTranslator } from "@/icline/i18n/pickerStrings"
+import { formatPickerString, type PickerStringKey, type PickerTranslator } from "@/icline/i18n/pickerStrings"
 import { usePickerStrings } from "@/icline/i18n/usePickerStrings"
+import { type OrgProviderBlock, orgProviderBlock } from "@/icline/orgProviderPolicy"
 import { type CapabilityId, type ModelStatus, resolveModelStatus } from "@/icline/pickerCapabilities"
 import { cn } from "@/lib/utils"
 import { ModelsServiceClient } from "@/services/grpc-client"
@@ -250,8 +253,14 @@ function ModelRow({
 export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPickerProps) {
 	const tr = usePickerStrings()
 	const { providers, isLoading: providersLoading } = useProviderListings()
-	const { mode, apiConfiguration, providerModelsByProvider, planActSeparateModelsSetting, applyApiConfigurationPatch } =
-		useExtensionState()
+	const {
+		mode,
+		apiConfiguration,
+		providerModelsByProvider,
+		planActSeparateModelsSetting,
+		applyApiConfigurationPatch,
+		remoteConfigSettings,
+	} = useExtensionState()
 	const { selectedProvider: currentProvider, selectedModelId: currentModelId } = useNormalizedApiConfiguration(mode)
 	const {
 		recommended: clineRecommendedFeatured,
@@ -267,6 +276,12 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 	/** Bumped after a thinking/effort write so the panel re-measures its height. */
 	const [statusBump, setStatusBump] = useState(0)
 	const [commitError, setCommitError] = useState<string | null>(null)
+	/**
+	 * A provider the organization does not allow, captured at the click that tried it.
+	 * Kept in state (not derived from the config) because the click's intent is gone
+	 * the moment the host's remote layer wins — see icline/orgProviderPolicy.
+	 */
+	const [orgBlock, setOrgBlock] = useState<OrgProviderBlock | null>(null)
 	/**
 	 * Thinking/effort values the user changed in THIS session, keyed provider::model.
 	 * The config write is async and the state push lands later, so without this the
@@ -494,6 +509,18 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 			}
 			committingRef.current = true
 			setCommitError(null)
+			setOrgBlock(null)
+			const legacySelectionProvider = toLegacyApiProvider(providerId)
+			// Organization policy outranks every local write, so this selection cannot
+			// take effect. Say so where the click happened and stop: committing would
+			// only write a model the pinned provider can never use, and the optimistic
+			// provider echo below would claim a switch that the next state push undoes.
+			const blocked = orgProviderBlock(remoteConfigSettings, legacySelectionProvider)
+			if (blocked) {
+				setOrgBlock(blocked)
+				committingRef.current = false
+				return
+			}
 			try {
 				const saved = getChatModelPreference(providerId, modelId)
 				// Apply the saved reasoning effort BEFORE the commit, not after:
@@ -522,12 +549,11 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 				// Optimistic provider echo: reflect the committed selection
 				// immediately instead of waiting for the state push (the display
 				// freeze class). The next push carries the authoritative copy.
-				const legacyProviderId = toLegacyApiProvider(providerId)
 				const providerField = mode === "plan" ? "planModeApiProvider" : "actModeApiProvider"
 				applyApiConfigurationPatch(
 					planActSeparateModelsSetting
-						? { [providerField]: legacyProviderId }
-						: { planModeApiProvider: legacyProviderId, actModeApiProvider: legacyProviderId },
+						? { [providerField]: legacySelectionProvider }
+						: { planModeApiProvider: legacySelectionProvider, actModeApiProvider: legacySelectionProvider },
 				)
 				setOpen(false)
 			} catch (err) {
@@ -537,7 +563,7 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 				committingRef.current = false
 			}
 		},
-		[applyStoredThinking, planActSeparateModelsSetting, applyApiConfigurationPatch, tr],
+		[applyStoredThinking, planActSeparateModelsSetting, applyApiConfigurationPatch, remoteConfigSettings, mode, tr],
 	)
 
 	const handleRefreshModels = useCallback(() => {
@@ -1143,6 +1169,9 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 								const isCurrent = currentProvider === provider.id
 								const displayEmpty = Object.keys(displayModels).length === 0
 								const providerLabel = provider.name || provider.id
+								// Organization policy: the Settings dropdown hides these providers,
+								// so the picker has to mark them (clicking one is answered below).
+								const blockedByOrg = orgProviderBlock(remoteConfigSettings, provider.id) !== undefined
 								return (
 									<div
 										className="border-b border-(--vscode-editorGroup-border)/40 last:border-b-0"
@@ -1170,6 +1199,19 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 												style={{ transformOrigin: "center" }}
 											/>
 											<span className="truncate flex-1">{providerLabel}</span>
+											{blockedByOrg && (
+												<BalloonTooltip
+													label={formatPickerString(tr, "orgProviderBlockedHint", {
+														provider: providerLabel,
+													})}>
+													<Building2
+														aria-hidden
+														className="shrink-0 text-(--vscode-descriptionForeground)"
+														data-icline-org-blocked={provider.id}
+														size={12}
+													/>
+												</BalloonTooltip>
+											)}
 											{isCurrent && (
 												<Check className="text-(--vscode-terminal-ansiGreen) shrink-0" size={13} />
 											)}
@@ -1198,6 +1240,16 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 							})
 						)}
 					</div>
+
+					{orgBlock && (
+						<OrgProviderPolicyNotice
+							block={orgBlock}
+							providerLabel={
+								providers.find((provider) => provider.id === orgBlock.requested)?.name || orgBlock.requested
+							}
+							tr={tr}
+						/>
+					)}
 
 					{commitError && (
 						<div

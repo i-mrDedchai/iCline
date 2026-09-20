@@ -84,6 +84,12 @@ const en = {
 	effortClampNearest: "{requested} → {applied} · this model does not accept {requested}, so {applied} is sent",
 	effortClampCatalogUnknown: "{requested} → {applied} · no Effort data for this model, so {applied} is sent",
 	effortClampNoControl: "{requested} is not sent · this model has no Effort control",
+	// Organization policy (see icline/orgProviderPolicy): the picker lists every
+	// provider's models while Settings filters the blocked ones out, so a click on a
+	// blocked provider has to be answered instead of silently reverted.
+	orgProviderBlocked:
+		"Your organization manages providers — {provider} is not in the allowed list, so this selection was not applied",
+	orgProviderBlockedHint: "Managed by your organization — {provider} is not in the allowed provider list",
 	// Footer
 	footerRefreshTooltip: "Refresh the model list",
 	footerEditTooltip: "Edit this provider in Settings",
@@ -140,6 +146,8 @@ const th: Record<PickerStringKey, string> = {
 	effortClampNearest: "{requested} → {applied} · โมเดลนี้ไม่รับ {requested} จะส่ง {applied} แทน",
 	effortClampCatalogUnknown: "{requested} → {applied} · ไม่มีข้อมูล Effort ของโมเดลนี้ จะส่ง {applied} แทน",
 	effortClampNoControl: "ไม่ส่ง {requested} · โมเดลนี้ไม่มีตัวเลือก Effort",
+	orgProviderBlocked: "องค์กรของคุณจัดการ provider — {provider} ไม่อยู่ในรายการที่อนุญาต จึงไม่ได้เปลี่ยนตามที่เลือก",
+	orgProviderBlockedHint: "องค์กรของคุณจัดการ — {provider} ไม่อยู่ในรายการ provider ที่อนุญาต",
 	footerRefreshTooltip: "โหลดรายชื่อโมเดลใหม่",
 	footerEditTooltip: "แก้ไข provider นี้ใน Settings",
 	commitFailed: "เปิดใช้งานโมเดลนี้ไม่สำเร็จ",
