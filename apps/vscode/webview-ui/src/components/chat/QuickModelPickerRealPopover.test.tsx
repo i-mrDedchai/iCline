@@ -408,11 +408,30 @@ describe("QuickModelPicker real Popover", () => {
 		expect(trigger.querySelector("[data-icline-model-status]")).toBeNull()
 		expect(statusButton.querySelector("[data-icline-model-status]")).not.toBeNull()
 
+		// Both click targets in the chip show the hand cursor, like the four VSCodeButton
+		// icons next to them (plain <button> gets the OS arrow — request of 2026-09-20).
+		expect(trigger.className).toContain("cursor-pointer")
+		expect(statusButton.className).toContain("cursor-pointer")
+
 		// Clicking the readout opens the Options surface for the model in use…
 		fireEvent.click(statusButton)
 		const panel = () => document.querySelector("[data-icline-status-options]")
 		await waitFor(() => expect(panel()).not.toBeNull())
 		expect(panel()?.textContent).toContain("Options")
+		// …whose LEFT edge is anchored to the button's left edge (`align="start"`), not to
+		// its right edge: `align="end"` slid the 236px panel left of the icon that opened
+		// it. jsdom's default pane (1024px) is wide enough for that rule, so the left-edge
+		// anchor is what this render must produce; the narrow fallback has its own test
+		// below. Radix publishes the resolved alignment as `data-align`.
+		expect(panel()?.getAttribute("data-align")).toBe("start")
+		// Effort levels are click targets too, in both Options surfaces.
+		expect((panel()?.querySelector("[data-icline-effort-option]") as HTMLElement).className).toContain("cursor-pointer")
+		// The hand cursor covers the whole Options body, not only its Effort rows: the model
+		// id, the gaps and the capability readout are part of the same menu (request of
+		// 2026-09-20). The popover wrapper carries it, and so does the panel itself so the
+		// hover panel inside the model list draws it too.
+		expect(panel()?.className).toContain("cursor-pointer")
+		expect((panel()?.querySelector("[data-icline-options-panel]") as HTMLElement).className).toContain("cursor-pointer")
 		expect(panel()?.querySelector("[data-icline-options-model-id]")?.textContent).toBe(activeModelId)
 		expect(panel()?.querySelector("[data-icline-thinking-switch]")?.getAttribute("data-icline-thinking-switch")).toBe("on")
 		expect(panel()?.querySelector("[data-icline-effort-selected]")?.getAttribute("data-icline-effort-option")).toBe("high")
@@ -434,6 +453,79 @@ describe("QuickModelPicker real Popover", () => {
 		expect(ModelsServiceClient.commitModelSelection).not.toHaveBeenCalled()
 		// The chip's own readout follows immediately (session state, not a stale push).
 		await waitFor(() => expect(readChip().effort).toBe("max"))
+	})
+
+	it("hands the cursor over the whole model menu, not only its rows", async () => {
+		// Request of 2026-09-20: inside the picker every part is part of the menu, so the OS
+		// arrow must not come back over the headers, the footer or the empty space between
+		// them — only over the one thing that is typed into, the search field.
+		render(<QuickModelPicker modelDisplayName={LEFTOVER_XAI_MODEL_ID} />)
+		fireEvent.click(screen.getByRole("button", { name: new RegExp(LEFTOVER_XAI_MODEL_ID) }))
+
+		await waitFor(() => expect(document.querySelector("[data-icline-quick-picker]")).not.toBeNull())
+		const picker = document.querySelector("[data-icline-quick-picker]") as HTMLElement
+		expect(picker.className).toContain("cursor-pointer")
+		expect((document.querySelector('[data-icline-provider="xai"] button') as HTMLElement).className).toContain(
+			"cursor-pointer",
+		)
+		expect((picker.querySelector("input") as HTMLElement).className).toContain("cursor-text")
+	})
+
+	it("moves the Options anchor from the button's left edge to its right one in a squeezed pane", async () => {
+		// The two rules of the position fix (request of 2026-09-20): the left edge is the
+		// rule while the pane can hold the 236px panel beside the button, and the older
+		// right-edge anchoring comes back only when it cannot — so a squeezed sidebar still
+		// shows the whole panel instead of losing it off the side of the pane.
+		const activeModelId = "grok-4.6-reasoner"
+		const models = { [activeModelId]: { name: "Grok Reasoner", supportsReasoning: true, supportsImages: true } }
+		vi.mocked(useProviderModels).mockImplementation(((providerId: string) => ({
+			models: providerId === "xai" ? models : {},
+			defaultModelId: providerId === "xai" ? activeModelId : "",
+			isLoading: false,
+			isStale: false,
+			error: undefined,
+			refresh: vi.fn(),
+			fingerprint: providerId,
+		})) as typeof useProviderModels)
+		vi.mocked(useExtensionState).mockReturnValue({
+			mode: "act",
+			apiConfiguration: {
+				actModeApiProvider: "xai",
+				actModeApiModelId: activeModelId,
+				actModeReasoningEffort: "high",
+			},
+			providerModelsByProvider: { xai: { models } },
+		} as ReturnType<typeof useExtensionState>)
+		vi.mocked(useNormalizedApiConfiguration).mockReturnValue({
+			selectedProvider: "xai",
+			selectedModelId: activeModelId,
+			selectedModelInfo: models[activeModelId],
+		})
+
+		render(<QuickModelPicker modelDisplayName={activeModelId} />)
+		await waitFor(() => expect(document.querySelector("[data-icline-model-status-button]")).not.toBeNull())
+		const statusButton = document.querySelector("[data-icline-model-status-button]") as HTMLElement
+		// jsdom lays nothing out, so pin what the side is decided from: where the button sits
+		// inside the pane. 640px into jsdom's 1024px pane leaves room for the panel to start
+		// there — the ~930px working pane this rule was asked for.
+		statusButton.getBoundingClientRect = () => ({ left: 640, right: 672, width: 32 }) as DOMRect
+
+		fireEvent.click(statusButton)
+		const panel = () => document.querySelector("[data-icline-status-options]")
+		await waitFor(() => expect(panel()).not.toBeNull())
+		expect(panel()?.getAttribute("data-align")).toBe("start")
+
+		// Now the same thing a squeezed pane does to this button: it ends up near the pane's
+		// right edge, too close to it for the panel to start there. The panel is re-anchored
+		// while it is open, which is what dragging the sidebar produces.
+		statusButton.getBoundingClientRect = () => ({ left: 1000, right: 1032, width: 32 }) as DOMRect
+		fireEvent(window, new Event("resize"))
+		await waitFor(() => expect(panel()?.getAttribute("data-align")).toBe("end"))
+
+		// …and back to the left-edge anchor once there is room again.
+		statusButton.getBoundingClientRect = () => ({ left: 640, right: 672, width: 32 }) as DOMRect
+		fireEvent(window, new Event("resize"))
+		await waitFor(() => expect(panel()?.getAttribute("data-align")).toBe("start"))
 	})
 
 	it("offers the hovered PROVIDER's own effort levels, not one hardcoded set", async () => {

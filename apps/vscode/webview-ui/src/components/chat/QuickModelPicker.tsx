@@ -21,6 +21,17 @@
  * force-reopen), click a model to commit and close, optimistic provider echo after a
  * successful commit, cross-provider search over warm catalogs only (no RPC per
  * keystroke), and re-pinning the active row into view on open.
+ *
+ * Two UXUI rounds of 2026-09-20 are folded in here:
+ *  - every click target in the chip and in both Options surfaces carries a hand cursor
+ *    (`cursor-pointer`), matching the four VSCodeButton icons beside them — plain
+ *    `<button>` elements get the OS arrow, VSCodeButton does not;
+ *  - the composer's Options popover opens with its LEFT edge on the status button's
+ *    left edge (`align="start"`), the same edge rule the model list already used. It
+ *    used to be `align="end"`, which slid the 236px panel far to the left of the icon
+ *    that opened it. That fallback is kept for a squeezed chat pane, where anchoring on
+ *    the left edge cannot fit the panel inside the pane at all — see
+ *    `pickOptionsPopoverAlign`.
  */
 
 import { ANTHROPIC_MIN_THINKING_BUDGET } from "@shared/api"
@@ -47,8 +58,10 @@ import {
 	OPTIONS_PANEL_GAP_PX,
 	OPTIONS_PANEL_MAX_HEIGHT_PX,
 	OPTIONS_PANEL_WIDTH_PX,
+	type OptionsPopoverAlign,
 	partitionFreeStandard,
 	pickAutoExpandProvider,
+	pickOptionsPopoverAlign,
 	queryActivePickerScrollTarget,
 } from "@/components/chat/quickModelPickerList"
 import { OrgProviderPolicyNotice } from "@/components/common/OrgProviderPolicyNotice"
@@ -152,7 +165,7 @@ function ModelRow({
 	return (
 		<button
 			className={cn(
-				"w-full flex items-center gap-1.5 pl-7 pr-3 py-1 text-[11px] text-left group/model",
+				"w-full flex items-center gap-1.5 pl-7 pr-3 py-1 text-[11px] text-left group/model cursor-pointer",
 				"hover:bg-(--vscode-list-hoverBackground) transition-colors",
 				isCurrentModel ? "text-(--vscode-foreground) font-medium" : "text-(--vscode-descriptionForeground)",
 			)}
@@ -219,6 +232,12 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 	 * name). Separate from `open` so the two surfaces never fight over one flag.
 	 */
 	const [statusOptionsOpen, setStatusOptionsOpen] = useState(false)
+	/**
+	 * Which edge of the status button that popover hangs from — `start` (the primary rule)
+	 * normally, `end` only when a squeezed pane cannot hold the panel beside it. See
+	 * `pickOptionsPopoverAlign`.
+	 */
+	const [statusOptionsAlign, setStatusOptionsAlign] = useState<OptionsPopoverAlign>("start")
 	/** null = nothing expanded; user may collapse the active provider freely. */
 	const [expandedProvider, setExpandedProvider] = useState<string | null>(null)
 	const [search, setSearch] = useState("")
@@ -245,6 +264,8 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 	const committingRef = useRef(false)
 	const listRef = useRef<HTMLDivElement>(null)
 	const contentRef = useRef<HTMLDivElement>(null)
+	/** The status button the composer's Options popover is anchored to (measured on open). */
+	const statusTriggerRef = useRef<HTMLButtonElement>(null)
 	const userScrolledThisOpenRef = useRef(false)
 	const programmaticScrollRef = useRef(false)
 
@@ -286,6 +307,45 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 	}, [cancelOptionsClose])
 
 	useEffect(() => () => cancelOptionsClose(), [cancelOptionsClose])
+
+	/**
+	 * Re-read which edge the composer's Options popover should hang from. Measured from the
+	 * TRIGGER, not from the popover: the panel's own geometry is only known after Radix has
+	 * positioned it, and correcting the side then would flash the panel on the wrong edge
+	 * first. Called when the popover opens and whenever the pane is resized while it is up
+	 * (dragging the sidebar is exactly how a user reaches the narrow case).
+	 */
+	const measureStatusOptionsAlign = useCallback(() => {
+		const trigger = statusTriggerRef.current
+		if (!trigger) {
+			return
+		}
+		setStatusOptionsAlign(
+			pickOptionsPopoverAlign({
+				triggerLeft: trigger.getBoundingClientRect().left,
+				viewportWidth: window.innerWidth || Number.MAX_SAFE_INTEGER,
+			}),
+		)
+	}, [])
+
+	useEffect(() => {
+		if (!statusOptionsOpen) {
+			return
+		}
+		window.addEventListener("resize", measureStatusOptionsAlign)
+		return () => window.removeEventListener("resize", measureStatusOptionsAlign)
+	}, [statusOptionsOpen, measureStatusOptionsAlign])
+
+	/** Side is decided before the popover mounts, so its first paint is already correct. */
+	const handleStatusOptionsOpenChange = useCallback(
+		(nextOpen: boolean) => {
+			if (nextOpen) {
+				measureStatusOptionsAlign()
+			}
+			setStatusOptionsOpen(nextOpen)
+		},
+		[measureStatusOptionsAlign],
+	)
 
 	/**
 	 * Record the hovered row; the placement itself happens in the layout effect
@@ -993,7 +1053,7 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 				    <button> as its direct child, so the balloon cannot wrap it from outside. */}
 				{/* No aria-label: the model name IS the accessible name (the balloon explains it). */}
 				<button
-					className="inline-flex items-center text-xs px-1.5 py-0.5 rounded-sm text-(--vscode-descriptionForeground) hover:bg-(--vscode-list-hoverBackground) hover:text-(--vscode-foreground) disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+					className="inline-flex items-center text-xs px-1.5 py-0.5 rounded-sm text-(--vscode-descriptionForeground) hover:bg-(--vscode-list-hoverBackground) hover:text-(--vscode-foreground) disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
 					data-icline-model-trigger=""
 					disabled={disabled}
 					type="button">
@@ -1008,7 +1068,7 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 			</PopoverTrigger>
 			<PopoverContent
 				align="start"
-				className="relative p-0 gap-0"
+				className="relative p-0 gap-0 cursor-pointer"
 				data-icline-quick-picker=""
 				disablePortal
 				onInteractOutside={(e) => {
@@ -1034,7 +1094,7 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 						{/* biome-ignore lint/a11y/noAutofocus: focusing the search field on popover open is the intended picker UX */}
 						<input
 							autoFocus
-							className="flex-1 bg-transparent border-none outline-none text-xs text-(--vscode-foreground) placeholder:text-(--vscode-descriptionForeground)"
+							className="flex-1 bg-transparent border-none outline-none cursor-text text-xs text-(--vscode-foreground) placeholder:text-(--vscode-descriptionForeground)"
 							onChange={(e) => setSearch(e.target.value)}
 							placeholder={tr("searchPlaceholder")}
 							type="text"
@@ -1082,7 +1142,7 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 											aria-expanded={isExpanded}
 											aria-label={providerLabel}
 											className={cn(
-												"w-full flex items-center gap-1.5 px-3 py-1.5 text-xs text-left",
+												"w-full flex items-center gap-1.5 px-3 py-1.5 text-xs text-left cursor-pointer",
 												"hover:bg-(--vscode-list-hoverBackground) transition-colors",
 												"text-(--vscode-foreground)",
 												isCurrent && "font-semibold",
@@ -1166,7 +1226,7 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 							<BalloonTooltip label={tr("footerRefreshTooltip")}>
 								<button
 									aria-label={tr("footerRefreshTooltip")}
-									className="flex items-center text-(--vscode-descriptionForeground) hover:text-(--vscode-foreground) disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+									className="flex items-center text-(--vscode-descriptionForeground) hover:text-(--vscode-foreground) disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
 									disabled={!expandedProvider || modelsLoading}
 									onClick={handleRefreshModels}
 									type="button">
@@ -1176,7 +1236,7 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 							<BalloonTooltip label={tr("footerEditTooltip")}>
 								<button
 									aria-label={tr("footerEditTooltip")}
-									className="flex items-center text-(--vscode-descriptionForeground) hover:text-(--vscode-foreground) transition-colors"
+									className="flex items-center text-(--vscode-descriptionForeground) hover:text-(--vscode-foreground) transition-colors cursor-pointer"
 									onClick={() => {
 										setOpen(false)
 										window.dispatchEvent(new CustomEvent("icline:navigate-to-settings-model-picker"))
@@ -1204,21 +1264,33 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 			 * be changed without switching models.
 			 */}
 			{showStatusTrigger && (
-				<Popover onOpenChange={setStatusOptionsOpen} open={statusOptionsOpen}>
+				<Popover onOpenChange={handleStatusOptionsOpenChange} open={statusOptionsOpen}>
 					<PopoverTrigger asChild>
 						<button
 							aria-label={tr("statusOptionsTooltip")}
-							className="ml-0.5 inline-flex items-center text-xs px-1 py-0.5 rounded-sm text-(--vscode-descriptionForeground) hover:bg-(--vscode-list-hoverBackground) hover:text-(--vscode-foreground) disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+							className="ml-0.5 inline-flex items-center text-xs px-1 py-0.5 rounded-sm text-(--vscode-descriptionForeground) hover:bg-(--vscode-list-hoverBackground) hover:text-(--vscode-foreground) disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
 							data-icline-model-status-button=""
 							disabled={disabled}
+							ref={statusTriggerRef}
 							type="button">
 							{/* The icons keep their own balloons; the button's own name is its a11y label. */}
 							<ModelStatusIcons status={currentStatus} tr={tr} />
 						</button>
 					</PopoverTrigger>
+					{/*
+					 * Primary rule: the panel's left edge stays on the status button's left edge
+					 * (maintainer request, 2026-09-20) — normally the whole 236px panel fits
+					 * beside it, as it does in the ~930px pane the request was made about. When
+					 * the pane is squeezed so narrow that it cannot (`pickOptionsPopoverAlign`),
+					 * the panel falls back to anchoring its RIGHT edge on the button's right edge,
+					 * the way it behaved before, rather than hanging off the side of the pane.
+					 * Radix keeps nudging either one back into view; that collision shift is
+					 * intended, and disabling it would let the panel be clipped by the webview
+					 * edge instead.
+					 */}
 					<PopoverContent
-						align="end"
-						className="relative p-0 gap-0"
+						align={statusOptionsAlign}
+						className="relative p-0 gap-0 cursor-pointer"
 						data-icline-status-options=""
 						side="top"
 						style={{ width: OPTIONS_PANEL_WIDTH_PX }}>

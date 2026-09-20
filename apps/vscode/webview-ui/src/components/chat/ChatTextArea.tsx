@@ -95,6 +95,13 @@ interface GitCommit {
 
 const PLAN_MODE_COLOR = "var(--vscode-activityWarningBadge-background)"
 const ACT_MODE_COLOR = "var(--vscode-focusBorder)"
+/**
+ * Edge length of one attachment thumbnail inside the composer, in px. Bigger than the
+ * transcript's 34px default because this row is what the user aims at while attaching
+ * (maintainer request, 2026-09-20) — the transcript thumbnails keep `Thumbnails`'s own
+ * default.
+ */
+const COMPOSER_THUMBNAIL_PX = 44
 
 const SwitchContainer = styled.div<{ disabled: boolean }>`
 	display: flex;
@@ -1463,7 +1470,10 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 							borderRight: isTextAreaFocused ? 0 : undefined,
 							borderTop: isTextAreaFocused ? 0 : undefined,
 							borderBottom: isTextAreaFocused ? 0 : undefined,
-							padding: `9px 28px ${9 + thumbnailsHeight}px 9px`,
+							// Attachments sit at the TOP of the box, so the text is pushed DOWN: this
+							// layer's top padding must mirror the textarea's transparent top border,
+							// otherwise the mention/slash highlights drift up by the row's height.
+							padding: `${9 + thumbnailsHeight}px 28px 9px 9px`,
 						}}
 					/>
 					<DynamicTextArea
@@ -1515,12 +1525,15 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 							overflowX: "hidden",
 							overflowY: "scroll",
 							scrollbarWidth: "none",
-							// Since we have maxRows, when text is long enough it starts to overflow the bottom padding, appearing behind the thumbnails. To fix this, we use a transparent border to push the text up instead. (https://stackoverflow.com/questions/42631947/maintaining-a-padding-inside-of-text-area/52538410#52538410)
-							// borderTop: "9px solid transparent",
+							// The thumbnails sit at the TOP, so the transparent border that reserves their
+							// space is on the top now (it used to be the bottom one). It is a border and not
+							// padding because once maxRows is reached the textarea scrolls: scrolled text
+							// would slide up behind the row inside a padding box, while a border stays
+							// outside the scrollable content box. (https://stackoverflow.com/questions/42631947/maintaining-a-padding-inside-of-text-area/52538410#52538410)
 							borderLeft: 0,
 							borderRight: 0,
-							borderTop: 0,
-							borderBottom: `${thumbnailsHeight}px solid transparent`,
+							borderTop: `${thumbnailsHeight}px solid transparent`,
+							borderBottom: 0,
 							borderColor: "transparent",
 							// borderRight: "54px solid transparent",
 							// borderLeft: "9px solid transparent", // NOTE: react-textarea-autosize doesn't calculate correct height when using borderLeft/borderRight so we need to use horizontal padding instead
@@ -1552,12 +1565,18 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 							onHeightChange={handleThumbnailsHeightChange}
 							setFiles={setSelectedFiles}
 							setImages={setSelectedImages}
+							size={COMPOSER_THUMBNAIL_PX}
 							style={{
 								position: "absolute",
-								paddingTop: 4,
-								bottom: 14,
+								// Top of the box, still inside the composer's own frame (it was pinned above
+								// the input's bottom edge). The template's first text line is pushed below
+								// this row by the textarea's transparent top border, which reserves exactly
+								// `thumbnailsHeight`. No `paddingTop`: the text column below starts at the
+								// border, and `top: 14` already clears the box's 10px padding.
+								top: 14,
 								left: 22,
 								right: 47, // (54 + 9) + 4 extra padding
+								paddingBottom: 4,
 								zIndex: 2,
 							}}
 						/>

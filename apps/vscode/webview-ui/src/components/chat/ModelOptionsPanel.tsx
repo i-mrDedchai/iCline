@@ -60,7 +60,11 @@ export function ModelOptionsPanel({
 	const effortLevels = effortSet.levels.filter((level) => !level.isOff)
 
 	return (
-		<div className={className} data-icline-options-panel="">
+		// `cursor-pointer` on the panel itself: this surface only ever appears as a popover
+		// hanging off a click target, so the whole body reads as part of that menu — the
+		// gaps between rows, the model id and the capability readout included (maintainer
+		// request, 2026-09-20: the OS arrow showed up over everything that was not a row).
+		<div className={cn("cursor-pointer", className)} data-icline-options-panel="">
 			{/* Title + model id (mock v11's `h3` + `.mid`) */}
 			<div className="text-xs font-medium text-(--vscode-foreground)">{tr("optionsTitle")}</div>
 			<div
@@ -97,7 +101,7 @@ export function ModelOptionsPanel({
 						return (
 							<button
 								className={cn(
-									"w-full flex items-center justify-between rounded-sm px-2 py-1 text-xs transition-colors",
+									"w-full flex items-center justify-between rounded-sm px-2 py-1 text-xs transition-colors cursor-pointer",
 									"hover:bg-(--vscode-list-hoverBackground)",
 									selected ? "text-(--vscode-foreground)" : "text-(--vscode-descriptionForeground)",
 								)}

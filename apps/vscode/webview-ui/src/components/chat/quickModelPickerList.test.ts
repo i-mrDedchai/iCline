@@ -11,8 +11,11 @@ import {
 	type ModelEntry,
 	modelsMatchQuery,
 	OPTIONS_PANEL_MIN_TOP_PX,
+	OPTIONS_PANEL_WIDTH_PX,
+	OPTIONS_POPOVER_VIEWPORT_MARGIN_PX,
 	partitionFreeStandard,
 	pickAutoExpandProvider,
+	pickOptionsPopoverAlign,
 	providersMatchingModelQuery,
 	queryActivePickerScrollTarget,
 	type WarmModelsByProvider,
@@ -309,5 +312,39 @@ describe("computeOptionsPanelTop", () => {
 	it("never rises above the minimum top, even for a row at the very top", () => {
 		expect(place(10, 264)).toBe(OPTIONS_PANEL_MIN_TOP_PX)
 		expect(place(0, 264)).toBe(OPTIONS_PANEL_MIN_TOP_PX)
+	})
+})
+
+/**
+ * Which edge of its button the composer's Options popover hangs from (maintainer request,
+ * 2026-09-20). Two rules, in this order: the panel's LEFT edge on the button's left edge
+ * while the pane can hold the panel beside it — the ~930px working pane, and the shape the
+ * request describes — and the older RIGHT-edge anchoring only once the pane is too narrow
+ * for that, so a squeezed sidebar still shows the whole panel instead of losing it off the
+ * side of the pane.
+ */
+describe("pickOptionsPopoverAlign", () => {
+	it("anchors on the button's left edge while the panel fits beside it", () => {
+		// The pane the request was made about (~930px), with the status button near its end.
+		expect(pickOptionsPopoverAlign({ triggerLeft: 640, viewportWidth: 930 })).toBe("start")
+	})
+
+	it("falls back to the button's right edge when the pane cannot hold the panel", () => {
+		// VS Code's default sidebar (~300px) with the composer row already filled by the
+		// four icons and the model chip: the panel cannot start where the button starts.
+		expect(pickOptionsPopoverAlign({ triggerLeft: 250, viewportWidth: 297 })).toBe("end")
+	})
+
+	it("switches exactly at panel width plus the viewport margin", () => {
+		const exactlyFits = OPTIONS_PANEL_WIDTH_PX + OPTIONS_POPOVER_VIEWPORT_MARGIN_PX
+		expect(pickOptionsPopoverAlign({ triggerLeft: 0, viewportWidth: exactlyFits })).toBe("start")
+		expect(pickOptionsPopoverAlign({ triggerLeft: 1, viewportWidth: exactlyFits })).toBe("end")
+	})
+
+	it("keeps the left edge as the rule for every pane wide enough for it", () => {
+		// Widening the pane never takes the left-edge anchor away again.
+		for (const viewportWidth of [600, 800, 1200, 1920]) {
+			expect(pickOptionsPopoverAlign({ triggerLeft: 300, viewportWidth })).toBe("start")
+		}
 	})
 })

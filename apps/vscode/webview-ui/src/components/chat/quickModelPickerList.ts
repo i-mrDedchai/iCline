@@ -71,6 +71,39 @@ export function computeOptionsPanelTop(params: {
 	return Math.max(OPTIONS_PANEL_MIN_TOP_PX, Math.min(desiredTop, maxTop))
 }
 
+/**
+ * Which edge of its trigger the composer's Options popover hangs from: `start` puts the
+ * panel's LEFT edge on the trigger's left edge, `end` puts its RIGHT edge on the
+ * trigger's right edge (the older behaviour).
+ */
+export type OptionsPopoverAlign = "start" | "end"
+
+/** Breathing room kept between the popover's far edge and the pane's edge. */
+export const OPTIONS_POPOVER_VIEWPORT_MARGIN_PX = 8
+
+/**
+ * Alignment for the Options popover, honouring BOTH anchoring rules (maintainer
+ * request, 2026-09-20: "make the left edge the main rule, but keep the way it was for a
+ * squeezed chat pane — support both").
+ *
+ * `start` is the primary rule: the panel opens from the button that was clicked, so its
+ * left edge must sit on the button's left edge. It is only given up when the panel
+ * cannot fit there — a narrow sidebar (VS Code's default ~300px against a 236px panel)
+ * — where the panel falls back to the old right-edge anchoring instead of hanging off
+ * the side of the pane. Radix still nudges whatever it finally renders back into view;
+ * this decides which edge the panel is anchored to on the way there.
+ */
+export function pickOptionsPopoverAlign(params: {
+	triggerLeft: number
+	viewportWidth: number
+	panelWidth?: number
+	marginPx?: number
+}): OptionsPopoverAlign {
+	const panelWidth = params.panelWidth ?? OPTIONS_PANEL_WIDTH_PX
+	const margin = params.marginPx ?? OPTIONS_POPOVER_VIEWPORT_MARGIN_PX
+	return params.triggerLeft + panelWidth + margin <= params.viewportWidth ? "start" : "end"
+}
+
 function escapeAttrSelector(value: string): string {
 	if (typeof CSS !== "undefined" && typeof CSS.escape === "function") {
 		return CSS.escape(value)
