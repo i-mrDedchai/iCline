@@ -16,8 +16,12 @@ import type { PickerStringKey, PickerTranslator } from "@/icline/i18n/pickerStri
 import { CAPABILITY_COLORS, type CapabilityId, type ModelStatus } from "@/icline/pickerCapabilities"
 import { cn } from "@/lib/utils"
 
-/** Guideline กฎที่ 2 icons — all already present in the webview's Lucide set. */
-const CAPABILITY_ICONS: Record<CapabilityId, LucideIcon> = {
+/**
+ * Guideline กฎที่ 2 icons — all already present in the webview's Lucide set.
+ * Exported so the Options panel's capability list uses the same glyph per capability
+ * instead of keeping a second table that could drift from the icon a row shows.
+ */
+export const CAPABILITY_ICONS: Record<CapabilityId, LucideIcon> = {
 	reasoning: Brain,
 	thinking: Sparkles,
 	vision: Eye,

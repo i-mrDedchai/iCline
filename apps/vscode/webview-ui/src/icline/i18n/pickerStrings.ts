@@ -24,6 +24,7 @@ export { PICKER_LOCALES, resolvePickerLocale }
 const en = {
 	// Trigger + tooltips
 	triggerTooltip: "Switch model",
+	statusOptionsTooltip: "Thinking & Effort of the model in use — click to change them without switching models",
 	// Search
 	searchPlaceholder: "Search providers or models…",
 	// Provider list states
@@ -101,6 +102,7 @@ export type PickerStringKey = keyof typeof en
 
 const th: Record<PickerStringKey, string> = {
 	triggerTooltip: "สลับโมเดล",
+	statusOptionsTooltip: "สถานะ Thinking & Effort ของโมเดลที่ใช้อยู่ — คลิกเพื่อตั้งค่าโดยไม่ต้องสลับโมเดล",
 	searchPlaceholder: "ค้นหา provider หรือโมเดล…",
 	loadingProviders: "กำลังโหลด provider…",
 	noProvidersFound: "ไม่พบ provider",

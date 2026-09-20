@@ -24,10 +24,17 @@ vi.mock("@/hooks/useProviderModels", () => ({
 	useProviderModels: vi.fn(),
 }))
 
+/**
+ * The configuration writes are spied through `vi.hoisted` so a test can assert what the
+ * composer's Options popover really sends for the ACTIVE model (the status-button test).
+ */
+const handlerSpies = vi.hoisted(() => ({
+	handleModeFieldChange: vi.fn(async () => undefined),
+	handleModeFieldsChange: vi.fn(async () => undefined),
+}))
+
 vi.mock("@/components/settings/utils/useApiConfigurationHandlers", () => ({
-	useApiConfigurationHandlers: () => ({
-		handleModeFieldChange: vi.fn(),
-	}),
+	useApiConfigurationHandlers: () => handlerSpies,
 }))
 
 vi.mock("@/services/grpc-client", () => ({
@@ -357,6 +364,76 @@ describe("QuickModelPicker real Popover", () => {
 		expect(
 			[...row.querySelectorAll("[data-icline-capability]")].map((el) => el.getAttribute("data-icline-capability")),
 		).toEqual(readChip().caps)
+	})
+
+	it("splits the composer chip: the status button opens Options for the ACTIVE model", async () => {
+		// Smoke 2026-09-20: the readout was glued to the model-name button, so changing the
+		// Effort of the model already in use meant opening the model list and finding its row.
+		// The readout is its own button now, and it opens the same Options surface for the
+		// ACTIVE model — Thinking/Effort without a model switch.
+		const activeModelId = "grok-4.6-reasoner"
+		const models = { [activeModelId]: { name: "Grok Reasoner", supportsReasoning: true, supportsImages: true } }
+		vi.mocked(useProviderModels).mockImplementation(((providerId: string) => ({
+			models: providerId === "xai" ? models : {},
+			defaultModelId: providerId === "xai" ? activeModelId : "",
+			isLoading: false,
+			isStale: false,
+			error: undefined,
+			refresh: vi.fn(),
+			fingerprint: providerId,
+		})) as typeof useProviderModels)
+		vi.mocked(useExtensionState).mockReturnValue({
+			mode: "act",
+			apiConfiguration: {
+				actModeApiProvider: "xai",
+				actModeApiModelId: activeModelId,
+				actModeReasoningEffort: "high",
+			},
+			providerModelsByProvider: { xai: { models } },
+		} as ReturnType<typeof useExtensionState>)
+		vi.mocked(useNormalizedApiConfiguration).mockReturnValue({
+			selectedProvider: "xai",
+			selectedModelId: activeModelId,
+			selectedModelInfo: models[activeModelId],
+		})
+
+		render(<QuickModelPicker modelDisplayName={activeModelId} />)
+
+		// The readout is NOT inside the model-name button any more.
+		const trigger = document.querySelector("[data-icline-model-trigger]") as HTMLElement
+		expect(trigger).not.toBeNull()
+		await waitFor(() => expect(document.querySelector("[data-icline-model-status-button]")).not.toBeNull())
+		const statusButton = document.querySelector("[data-icline-model-status-button]") as HTMLElement
+		expect(trigger.contains(statusButton)).toBe(false)
+		expect(trigger.querySelector("[data-icline-model-status]")).toBeNull()
+		expect(statusButton.querySelector("[data-icline-model-status]")).not.toBeNull()
+
+		// Clicking the readout opens the Options surface for the model in use…
+		fireEvent.click(statusButton)
+		const panel = () => document.querySelector("[data-icline-status-options]")
+		await waitFor(() => expect(panel()).not.toBeNull())
+		expect(panel()?.textContent).toContain("Options")
+		expect(panel()?.querySelector("[data-icline-options-model-id]")?.textContent).toBe(activeModelId)
+		expect(panel()?.querySelector("[data-icline-thinking-switch]")?.getAttribute("data-icline-thinking-switch")).toBe("on")
+		expect(panel()?.querySelector("[data-icline-effort-selected]")?.getAttribute("data-icline-effort-option")).toBe("high")
+		// …and NOT the model list (that stays the model-name button's job).
+		expect(document.querySelector("[data-icline-quick-picker]")).toBeNull()
+
+		// A level picked here writes through to the ACTIVE model's running configuration —
+		// the same write Settings makes — and never commits a model selection.
+		const maxLevel = panel()?.querySelector('[data-icline-effort-option="max"]') as HTMLElement
+		expect(maxLevel).not.toBeNull()
+		fireEvent.click(maxLevel)
+		await waitFor(() =>
+			expect(handlerSpies.handleModeFieldChange).toHaveBeenCalledWith(
+				{ plan: "planModeReasoningEffort", act: "actModeReasoningEffort" },
+				"max",
+				"act",
+			),
+		)
+		expect(ModelsServiceClient.commitModelSelection).not.toHaveBeenCalled()
+		// The chip's own readout follows immediately (session state, not a stale push).
+		await waitFor(() => expect(readChip().effort).toBe("max"))
 	})
 
 	it("offers the hovered PROVIDER's own effort levels, not one hardcoded set", async () => {

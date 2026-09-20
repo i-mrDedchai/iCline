@@ -27,21 +27,7 @@ import { ANTHROPIC_MIN_THINKING_BUDGET } from "@shared/api"
 import { CLINE_RECOMMENDED_MODELS_FALLBACK } from "@shared/cline/recommended-models"
 import { toLegacyApiProvider } from "@shared/model-catalog/provider-helpers"
 import { CommitModelSelectionRequest } from "@shared/proto/cline/models"
-import {
-	Brain,
-	Building2,
-	Check,
-	ChevronDown,
-	Database,
-	Eye,
-	type LucideIcon,
-	Music,
-	Pencil,
-	RefreshCw,
-	Search,
-	Sparkles,
-	Video,
-} from "lucide-react"
+import { Building2, Check, ChevronDown, Pencil, RefreshCw, Search } from "lucide-react"
 import { type PointerEvent as ReactPointerEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import {
 	type ChatModelPreference,
@@ -49,7 +35,8 @@ import {
 	getChatModelPreferenceKey,
 	setChatModelPreference,
 } from "@/components/chat/chatModelPreferences"
-import { ModelStatusIcons, statusTooltip } from "@/components/chat/ModelStatusIcons"
+import { ModelOptionsPanel } from "@/components/chat/ModelOptionsPanel"
+import { ModelStatusIcons } from "@/components/chat/ModelStatusIcons"
 import {
 	ACTIVE_MODEL_ATTR,
 	computeOptionsPanelTop,
@@ -65,7 +52,6 @@ import {
 	queryActivePickerScrollTarget,
 } from "@/components/chat/quickModelPickerList"
 import { OrgProviderPolicyNotice } from "@/components/common/OrgProviderPolicyNotice"
-import { ReasoningEffortNotice } from "@/components/common/ReasoningEffortNotice"
 import {
 	filterClineSettingsModelIds,
 	partitionClinePickerSections,
@@ -74,20 +60,19 @@ import {
 import { getModeSpecificFields } from "@/components/settings/utils/providerUtils"
 import { useApiConfigurationHandlers } from "@/components/settings/utils/useApiConfigurationHandlers"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Switch } from "@/components/ui/switch"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useNormalizedApiConfiguration } from "@/hooks/useNormalizedApiConfiguration"
 import { useProviderListings } from "@/hooks/useProviderListings"
 import { useProviderModels } from "@/hooks/useProviderModels"
 import { useReasoningEffortOutcome } from "@/hooks/useReasoningEffortOutcome"
 import { BalloonTooltip } from "@/icline/BalloonTooltip"
-import { formatPickerString, type PickerStringKey, type PickerTranslator } from "@/icline/i18n/pickerStrings"
+import { formatPickerString, type PickerTranslator } from "@/icline/i18n/pickerStrings"
 import { usePickerStrings } from "@/icline/i18n/usePickerStrings"
 import { type OrgProviderBlock, orgProviderBlock } from "@/icline/orgProviderPolicy"
-import { type CapabilityId, type ModelStatus, resolveModelStatus } from "@/icline/pickerCapabilities"
+import { type ModelStatus, resolveModelStatus } from "@/icline/pickerCapabilities"
 import { cn } from "@/lib/utils"
 import { ModelsServiceClient } from "@/services/grpc-client"
-import { firstOnEffortValue, type ProviderEffortLevels, resolveEffortLevels } from "@/utils/modelThinkingOptions"
+import { firstOnEffortValue, resolveEffortLevels } from "@/utils/modelThinkingOptions"
 
 interface QuickModelPickerProps {
 	/** Display string shown in the chat header button. */
@@ -96,51 +81,10 @@ interface QuickModelPickerProps {
 	disabled?: boolean
 }
 
-/** Guideline กฎที่ 2 icons — all already present in the webview's Lucide set. */
-const CAPABILITY_ICONS: Record<CapabilityId, LucideIcon> = {
-	reasoning: Brain,
-	thinking: Sparkles,
-	vision: Eye,
-	audio: Music,
-	video: Video,
-	training: Database,
-}
-
 /** Popover width from the locked mock (v11); the Options-panel geometry lives in quickModelPickerList. */
 const PICKER_WIDTH_PX = 320
 /** Closing the hover panel is delayed so the pointer can travel row → panel. */
 const OPTIONS_PANEL_CLOSE_DELAY_MS = 260
-
-/**
- * Wording for the levels the provider metadata names. The VALUES come from
- * `resolveEffortLevels` (every level the app can store, Sakana's High/X-High/Max,
- * whatever OCA publishes) — only the translation lives here. Mock v11 called `xhigh`
- * "Max"; now that `xhigh` and `max` are both real, separately storeable levels, the
- * picker uses the same wording as Settings so the two buttons cannot read alike.
- */
-const EFFORT_LABEL_KEYS: Record<string, PickerStringKey> = {
-	minimal: "effortMinimal",
-	low: "effortLow",
-	medium: "effortMedium",
-	high: "effortHigh",
-	xhigh: "effortXhigh",
-	max: "effortMax",
-}
-
-/** The picker's own label when it has one, else the metadata's label. */
-function effortLabelFor(value: string, label: string, tr: PickerTranslator): string {
-	const key = EFFORT_LABEL_KEYS[value]
-	return key ? tr(key) : label
-}
-
-/**
- * The levels a model's provider metadata defines. The panel offers all of them except
- * the OFF level — turning reasoning off is the Thinking switch's job, so `none` is
- * never a button here.
- */
-function effortLevelsFor(providerId: string, modelId: string, modelInfo?: ModelInfoLike | null): ProviderEffortLevels {
-	return resolveEffortLevels({ providerId, modelId, modelInfo })
-}
 
 /**
  * Single source of truth for the active provider+model lives in
@@ -270,6 +214,11 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 	} = useClineSettingsModelList()
 	const { handleModeFieldChange, handleModeFieldsChange } = useApiConfigurationHandlers()
 	const [open, setOpen] = useState(false)
+	/**
+	 * The composer's own Options popover (opened by the status icons next to the model
+	 * name). Separate from `open` so the two surfaces never fight over one flag.
+	 */
+	const [statusOptionsOpen, setStatusOptionsOpen] = useState(false)
 	/** null = nothing expanded; user may collapse the active provider freely. */
 	const [expandedProvider, setExpandedProvider] = useState<string | null>(null)
 	const [search, setSearch] = useState("")
@@ -776,6 +725,22 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 		thinkingBudgetTokens: hoveredStatus?.thinkingBudgetTokens,
 	})
 
+	/** The active model's own readout — from the warm catalog, like a row's info. */
+	const currentModelInfo = warmModelsFor(currentProvider)[currentModelId]
+	const currentStatus = statusForModel(currentProvider, currentModelId, currentModelInfo)
+	/**
+	 * The same clamp answer the hover panel shows, for the active model — the composer's
+	 * Options popover must not claim a level this model will not be sent.
+	 */
+	const currentEffortOutcome = useReasoningEffortOutcome({
+		providerId: currentProvider,
+		modelId: currentModelId,
+		effort: currentStatus.effort,
+		thinkingBudgetTokens: currentStatus.thinkingBudgetTokens,
+	})
+	/** A status button with nothing to show is not a click target. */
+	const showStatusTrigger = currentStatus.caps.length > 0 || Boolean(currentStatus.effortShort)
+
 	const filteredModelEntries = useMemo(() => {
 		return filterModelsByQuery(displayModels, searchTrimmed)
 	}, [displayModels, searchTrimmed])
@@ -982,9 +947,6 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 		const { providerId, modelId } = hoveredModel
 		const info = hoveredModelInfo
 		const status = statusForModel(providerId, modelId, info)
-		const switchConfigurable = status.support.showEffort || status.support.showThinkingBudget
-		const effortSet = effortLevelsFor(providerId, modelId, info)
-		const effortLevels = effortSet.levels.filter((level) => !level.isOff)
 
 		return (
 			<div
@@ -1001,107 +963,46 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 						? { left: `calc(100% + ${OPTIONS_PANEL_GAP_PX}px)` }
 						: { right: `calc(100% + ${OPTIONS_PANEL_GAP_PX}px)` }),
 				}}>
-				{/* Title + model id (mock v11's `h3` + `.mid`) */}
-				<div className="text-xs font-medium text-(--vscode-foreground)">{tr("optionsTitle")}</div>
-				<div
-					className="mt-0.5 mb-2 break-all text-[10.5px] text-(--vscode-descriptionForeground)"
-					data-icline-options-model-id="">
-					{modelId}
-				</div>
-
-				{/* Thinking switch: on/off exactly as the model's reasoning is configured */}
-				<div className="flex items-center justify-between gap-2 text-xs text-(--vscode-foreground)">
-					<span>{tr("optionsThinkingLabel")}</span>
-					<BalloonTooltip label={statusTooltip(status, tr)}>
-						<Switch
-							aria-label={tr("optionsToggleThinking")}
-							checked={status.enabled}
-							data-icline-thinking-switch={status.enabled ? "on" : "off"}
-							disabled={!switchConfigurable}
-							onCheckedChange={(next) => void handleThinkingToggle(providerId, modelId, info, next)}
-						/>
-					</BalloonTooltip>
-				</div>
-
 				{/*
-				 * Effort levels — the mock's four, not five with an "Off" button. Picking a
-				 * level switches reasoning on for that model; the Thinking switch is the
-				 * explicit off (it writes `none`).
+				 * The panel body is shared with the composer's status popover
+				 * (ModelOptionsPanel), so the hover panel and the "raise Effort of the model
+				 * I am already using" popover cannot drift apart.
 				 */}
-				<div className="pt-2 text-xs text-(--vscode-foreground)">{tr("optionsEffortLabel")}</div>
-				{status.support.showEffort ? (
-					<div className="pt-0.5" data-icline-effort-set={effortSet.id}>
-						{effortLevels.map((level) => {
-							const selected = status.effort === level.value
-							return (
-								<button
-									className={cn(
-										"w-full flex items-center justify-between rounded-sm px-2 py-1 text-xs transition-colors",
-										"hover:bg-(--vscode-list-hoverBackground)",
-										selected ? "text-(--vscode-foreground)" : "text-(--vscode-descriptionForeground)",
-									)}
-									data-icline-effort-option={level.value}
-									data-icline-effort-selected={selected ? "true" : undefined}
-									key={level.value}
-									onClick={() => void handleEffortChange(providerId, modelId, level.value)}
-									type="button">
-									<span>{effortLabelFor(level.value, level.label, tr)}</span>
-									{selected && <Check size={11} />}
-								</button>
-							)
-						})}
-					</div>
-				) : (
-					<div className="px-2 pt-0.5 text-[11px] italic text-(--vscode-descriptionForeground)">
-						{tr("optionsNoEffort")}
-					</div>
-				)}
-
-				{/* What the SDK will really send for the marked level (host-computed). */}
-				<ReasoningEffortNotice compact outcome={hoveredEffortOutcome} tr={tr} />
-
-				{/* Capability readout — metadata-backed only, neutral colour like the mock */}
-				<div className="mt-2 border-t border-(--vscode-editorGroup-border) pt-1.5" data-icline-options-caps="">
-					{status.caps.length > 0 ? (
-						status.caps.map((cap) => {
-							const Icon = CAPABILITY_ICONS[cap.id]
-							return (
-								<div
-									className="flex items-center gap-1.5 pt-1 text-[11px] text-(--vscode-descriptionForeground)"
-									key={cap.id}>
-									<Icon aria-hidden data-icline-capability={cap.id} size={11} />
-									<span className="truncate">{tr(cap.labelKey)}</span>
-								</div>
-							)
-						})
-					) : (
-						<div className="pt-1 text-[11px] italic text-(--vscode-descriptionForeground)">{tr("optionsNoCaps")}</div>
-					)}
-				</div>
+				<ModelOptionsPanel
+					effortOutcome={hoveredEffortOutcome}
+					modelId={modelId}
+					modelInfo={info}
+					onEffortChange={(targetProviderId, targetModelId, effort) =>
+						void handleEffortChange(targetProviderId, targetModelId, effort)
+					}
+					onThinkingToggle={(targetProviderId, targetModelId, targetInfo, next) =>
+						void handleThinkingToggle(targetProviderId, targetModelId, targetInfo, next)
+					}
+					providerId={providerId}
+					status={status}
+					tr={tr}
+				/>
 			</div>
 		)
 	}
-
-	/** The active model's own readout — from the warm catalog, like a row's info. */
-	const currentStatus = statusForModel(currentProvider, currentModelId, warmModelsFor(currentProvider)[currentModelId])
 
 	return (
 		<Popover onOpenChange={handleOpenChange} open={open}>
 			<PopoverTrigger asChild>
 				{/* The tooltip anchors to the button's own content: `asChild` needs the real
 				    <button> as its direct child, so the balloon cannot wrap it from outside. */}
+				{/* No aria-label: the model name IS the accessible name (the balloon explains it). */}
 				<button
 					className="inline-flex items-center text-xs px-1.5 py-0.5 rounded-sm text-(--vscode-descriptionForeground) hover:bg-(--vscode-list-hoverBackground) hover:text-(--vscode-foreground) disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+					data-icline-model-trigger=""
 					disabled={disabled}
 					type="button">
-					{/* The name keeps its own balloon; the icons carry theirs, so wrapping the
-				    whole chip in one tooltip would nest them. */}
+					{/* The name keeps its own balloon; the status icons are a button of their own
+					    (below) and carry theirs, so one tooltip around both would nest them. */}
 					<BalloonTooltip className="inline-flex items-center min-w-0" label={tr("triggerTooltip")}>
 						<span className="truncate max-w-[180px]">{modelDisplayName}</span>
 					</BalloonTooltip>
-					{/* The same readout the picker's rows show for the active model, so the
-					    effort/reasoning state is visible without opening the picker. */}
-					<ModelStatusIcons className="ml-1" status={currentStatus} tr={tr} />
+					{/* This button switches the MODEL only. */}
 					<ChevronDown className="ml-1 shrink-0" size={12} />
 				</button>
 			</PopoverTrigger>
@@ -1294,6 +1195,52 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 				{/* Anchored outside the picker; the list above stays scrollable. */}
 				{renderOptionsPanel()}
 			</PopoverContent>
+
+			{/*
+			 * The active model's status, split out of the model-name button (smoke 2026-09-20:
+			 * the icons were glued to the picker trigger, so raising the Effort of the model in
+			 * use meant opening the model list and finding its row). Clicking it opens the SAME
+			 * Options surface the picker's rows show, for the ACTIVE model — Thinking/Effort can
+			 * be changed without switching models.
+			 */}
+			{showStatusTrigger && (
+				<Popover onOpenChange={setStatusOptionsOpen} open={statusOptionsOpen}>
+					<PopoverTrigger asChild>
+						<button
+							aria-label={tr("statusOptionsTooltip")}
+							className="ml-0.5 inline-flex items-center text-xs px-1 py-0.5 rounded-sm text-(--vscode-descriptionForeground) hover:bg-(--vscode-list-hoverBackground) hover:text-(--vscode-foreground) disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+							data-icline-model-status-button=""
+							disabled={disabled}
+							type="button">
+							{/* The icons keep their own balloons; the button's own name is its a11y label. */}
+							<ModelStatusIcons status={currentStatus} tr={tr} />
+						</button>
+					</PopoverTrigger>
+					<PopoverContent
+						align="end"
+						className="relative p-0 gap-0"
+						data-icline-status-options=""
+						side="top"
+						style={{ width: OPTIONS_PANEL_WIDTH_PX }}>
+						<div className="overflow-y-auto px-3 py-2.5" style={{ maxHeight: OPTIONS_PANEL_MAX_HEIGHT_PX }}>
+							<ModelOptionsPanel
+								effortOutcome={currentEffortOutcome}
+								modelId={currentModelId}
+								modelInfo={currentModelInfo}
+								onEffortChange={(targetProviderId, targetModelId, effort) =>
+									void handleEffortChange(targetProviderId, targetModelId, effort)
+								}
+								onThinkingToggle={(targetProviderId, targetModelId, targetInfo, next) =>
+									void handleThinkingToggle(targetProviderId, targetModelId, targetInfo, next)
+								}
+								providerId={currentProvider}
+								status={currentStatus}
+								tr={tr}
+							/>
+						</div>
+					</PopoverContent>
+				</Popover>
+			)}
 		</Popover>
 	)
 }
