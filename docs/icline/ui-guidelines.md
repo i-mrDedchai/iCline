@@ -24,6 +24,21 @@
 - ไอคอนทุกตัวต้องมี tooltip อธิบาย (ตัวที่ยังไม่มีข้อมูลจริง เช่น audio/video/training จะ**ซ่อน**จนกว่าจะมี metadata — ห้ามเดา)
 - ชุดไอคอนมาตรฐาน = Lucide ที่มีใน webview อยู่แล้ว: `Brain`, `Sparkles`, `Eye`, `Music`, `Video`, `Database`
 
+## กฎที่ 3 — เป้าคลิกต้องเป็นรูปมือ (`cursor: pointer`)
+
+- **ปุ่ม `<button>` เปล่า ๆ ใน webview ได้ลูกศรของ OS** (ไม่ใช่รูปมือ) ขณะที่ `VSCodeButton` (ไอคอน 4 ตัวแรกใต้ช่องแชท: Add Context · Add Files & Images · Servers · Cline Rules) ได้รูปมือมาเอง ⇒ ปุ่มที่ iCline วาดเองทุกตัวต้องเติม `cursor-pointer`
+- ใช้กับ **ทุกเป้าคลิกที่ผู้ใช้ตั้งใจกด**: ชิปโมเดล (`data-icline-model-trigger`) · ชิปสถานะ (`data-icline-model-status-button`) · แถวโมเดล (`data-icline-model-row`) · หัว provider · ไอคอน footer (refresh/edit) · ปุ่มระดับ Effort ในแผง Options
+- **เมนูทั้งแผงเป็นพื้นที่ของเมนู ไม่ใช่แค่แถวที่กดได้** (คำขอ 2026-09-20: "ไอคอนและทุกส่วนของ Picker ทั้งสอง และหน้าเมนูโมเดลและแผง Options") ⇒ ใส่ `cursor-pointer` ที่ *ตัวห่อ popover* ทั้งสองตัว (`data-icline-quick-picker` และ `data-icline-status-options`) และที่รากของ `ModelOptionsPanel` ด้วย เพื่อให้หัวข้อ · model id · ระยะห่างระหว่างแถว · แถว capability · ข้อความ "Active ·" ขึ้นรูปมือทั้งหมด (cursor ของลูกสืบทอดจากตัวห่อ)
+- ข้อยกเว้นเดียว: **ช่องค้นหา** (`input` ใน picker) ต้องเป็น `cursor-text` (I-beam) — เป็นที่พิมพ์ ไม่ใช่เป้าคลิก · และปุ่ม `disabled` ที่ขึ้น `not-allowed` ตามด้านล่าง
+- ปุ่มที่ `disabled` ยังต้องขึ้น `not-allowed` — `disabled:cursor-not-allowed` มี specificity สูงกว่า `cursor-pointer` จึงไม่ถูกกลืน (อย่าสลับเป็น inline style)
+
+## กฎที่ 4 — popover ของ Options เกาะขอบซ้ายของปุ่ม เป็นหลัก และถอยไปขอบขวาเมื่อหน้าแชทถูกบีบ
+
+- **กฎหลัก:** popover ของชิปสถานะ (`data-icline-status-options`, เปิดด้วย `data-icline-model-status-button`) ใช้ `align="start"` ⇒ **ขอบซ้ายของแผง = ขอบซ้ายของปุ่ม** (เดิม `align="end"` ⇒ ขอบ**ขวา**ของแผงไปตรงกับขอบขวาของปุ่ม ทำให้แผง 236px เลื่อนไปทางซ้ายไกลจากไอคอนที่กด) — ใช้ได้จริงในหน้าแชทกว้างประมาณ 930px ซึ่งเป็นความกว้างที่ผู้ใช้ทำงาน
+- **กฎถอย (fallback):** เมื่อหน้าแชทแคบจนวางแผง 236px เริ่มที่ขอบซ้ายของปุ่มไม่พอ (sidebar ปริยายของ VS Code ~300px) ให้กลับไปใช้ขอบ**ขวา**ของปุ่มแบบเดิม ⇒ **รองรับทั้งสองแบบ** ตัดสินด้วย `pickOptionsPopoverAlign({ triggerLeft, viewportWidth })` ใน `quickModelPickerList.ts` (ระยะ margin 8px จากขอบหน้า) วัดจาก **ตัวปุ่ม** (trigger) ตอนเปิด ไม่ใช่วัดจากตัวแผง เพราะแผงยังไม่ถูกจัดตำแหน่งตอนนั้น
+- วัดซ้ำขณะเปิดอยู่เมื่อมี `resize` (การลากขอบ sidebar กว้าง/แคบคือทางที่ผู้ใช้เข้าถึงเคสแคบจริง ๆ) และเปลี่ยน `align` ได้โดยไม่ต้องปิด-เปิดใหม่
+- **ต้องคง `avoidCollisions` (ค่าปริยาย) ไว้** — Radix จะเลื่อนแผงกลับเข้ากรอบอีกชั้นเมื่อขอบที่เลือกก็ยังล้น ⇒ การตรวจ "ขอบตรงกันเป๊ะ" ทำได้เมื่อมีที่พอเท่านั้น (มีเทสต์หน่วยปักสูตร + เทสต์ webview ปักการสลับข้าง + e2e วัดบนหน้าต่างจริง) **ห้ามปิด collision เพื่อบังคับให้ตรง** เพราะแผงจะล้นออกนอก webview แล้วโดนตัด
+
 ## Quick Picker (ออกแบบล็อกแล้ว — สรุป)
 
 - ความกว้าง popover 320px · hover Options panel **236px** ด้านขวา (top-align กับแถว ถ้าล้นขอบล่างเลื่อนขึ้นพอดีขอบ margin 10px + max-height 320px · gap 4px · ไม่ต่ำกว่า 38px จากขอบบนของ picker เพื่อไม่ทับช่องค้นหา) — สูตรจริงอยู่ใน `computeOptionsPanelTop` (`quickModelPickerList.ts`) และ mock ที่ล็อก
@@ -31,6 +46,11 @@
 - Search ค้นทั้งชื่อ provider และโมเดล · footer เป็นไอคอนล้วน + balloon tooltip · ข้อความ "Active ·" สีเขียว
 - Chevron provider: ลูกศรเส้น (Lucide `ChevronDown`) ตัวเดียวหน้าชื่อ หมุนรอบจุดกึ่งกลาง · subtitle (เช่น SuperGrok / Premium+) แสดงเฉพาะตอนขยาย
 - ภาษา: Free/Standard + tooltip ทุกข้อความ ผูกกับ Language setting (General Settings, default ตามภาษา VS Code)
+
+### รูปย่อไฟล์/รูปภาพในช่องแชท (แชท composer)
+
+- รูปย่อเกาะ **ด้านบนของกล่องข้อความ** (`top` ไม่ใช่ `bottom`) และยังอยู่ในกรอบของช่องแชท — ที่ว่างของบรรทัดแรกจองด้วย **`border-top` โปร่งใสของ textarea** ที่สูงเท่า `thumbnailsHeight` (ไม่ใช่ padding เพราะพอถึง `maxRows` แล้ว textarea จะ scroll ⇒ ข้อความที่ scroll จะเลื่อนขึ้นไปทับรูปย่อในกล่อง padding แต่ไม่เข้าเขต border) · highlight layer ของ mention/slash ต้องเติม padding-top เท่ากันเสมอ ถ้าไม่ตรงกันไฮไลต์จะลอยขึ้นเท่าความสูงของแถวรูป
+- ขนาดชิปในช่องแชท **ใหญ่กว่า transcript** (44px vs 34px) — ส่งผ่าน prop `size` ของ `components/common/Thumbnails.tsx` · ขนาดของป้ายลบ (badge), offset, ไอคอน codicon และฟอนต์ชื่อไฟล์ **คำนวณจาก `size` ตัวเดียว** ⇒ ห้ามฮาร์ดโค้ดตัวเลขของชิปที่สอง (มีเทสต์ปักคู่ขนาด 34/44)
 
 ### แผง Options ตอน hover (ล็อกจาก mock v11 — implement แล้วใน fix.11–fix.14)
 

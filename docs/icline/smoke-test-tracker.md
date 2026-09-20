@@ -1,7 +1,48 @@
 **Last updated:** 2026-09-20
 **Branch:** `feat/upstream-waves-1-2` (จาก main @ `78ebd0923` — รวม dev.5 แล้ว, tag `pre-merge-dev.5`, ยังไม่ push)
-**HEAD:** ดู `git log` (ไม่ตรึง hash ไว้ตรงนี้ — มันตกหล่นทุกครั้งที่มี commit เอกสารตามหลัง) · **fix.7–fix.17 commit แล้ว ยังไม่ push**
-**vsix (ล่าสุด):** `apps/vscode/dist/i-mrdedchai.iCline-0.1.18-dev.6-fix.17.vsix` (11,966,957 B @ 2026-09-20T03:45:49Z · About = `dev build 6 · fix.17`) — ⏳ **รอบนี้คือ fix.17** · do not overwrite `fix.1`–`fix.16` ใน `dist/` (ของ fix.16 = 11,966,196 B @ 2026-09-20 02:34Z)
+**HEAD:** ดู `git log` (ไม่ตรึง hash ไว้ตรงนี้ — มันตกหล่นทุกครั้งที่มี commit เอกสารตามหลัง) · **fix.7–fix.18 commit แล้ว ยังไม่ push** (fix.18 = `3012c6df5` feat + `ddf4a372a` e2e + commit เอกสารนี้)
+**vsix (ล่าสุด):** `apps/vscode/dist/i-mrdedchai.iCline-0.1.18-dev.6-fix.18.vsix` (11,967,298 B @ 2026-09-20T05:36:02Z · About = `dev build 6 · fix.18`) — ⏳ **รอบนี้คือ fix.18 (รอ maintainer smoke)** · do not overwrite `fix.1`–`fix.17` ใน `dist/` (ของ fix.17 = 11,966,957 B @ 2026-09-20 03:45:49Z · fix.16 = 11,966,196 B @ 2026-09-20 02:34Z)
+
+---
+
+## 🔎 dev.6-fix.18 — ตำแหน่ง popover ของ Options · เคอร์เซอร์รูปมือ · รูปย่อในช่องแชทขึ้นด้านบนและใหญ่ขึ้น (2026-09-20)
+
+**สถานะ:** ✅ เสร็จ · webview vitest **494/494** · `tsc` สะอาดทั้งสองฝั่ง · biome ไม่มี finding ใหม่ (warning เท่ากับ HEAD) · e2e บน VS Code จริงผ่าน **5/5** (`composer-status-options` + `quick-picker-hover` + `quick-picker-effort-notice` + `quick-picker-org-policy`) · **commit แล้ว** (`3012c6df5` feat · `ddf4a372a` test(e2e)) · **แพ็กแล้ว:** `dist/i-mrdedchai.iCline-0.1.18-dev.6-fix.18.vsix` (11,967,298 B @ 2026-09-20T05:36:02Z, About = `dev build 6 · fix.18`) · ⏳ **รอ maintainer smoke**
+
+**ที่มา (3 เรื่องจาก maintainer, อนุมัติพร้อมกัน + เสริมรอบถัดมา):**
+
+1. **ตำแหน่ง popover ของ Options** — ขอบซ้ายของแผงต้องอยู่ที่ขอบซ้ายของปุ่มที่เปิดมัน **เป็นหลัก** และ **รองรับทั้งสองแบบ**: ถ้าหน้าแชทถูกบีบแคบจริง ๆ ให้กลับไปเกาะขอบขวาของปุ่มแบบเดิม (ความกว้างที่ maintainer ทำงาน ≈ 930px — ดูภาพที่แนบมา)
+2. **เคอร์เซอร์** — Quick Picker ทั้ง "ของโมเดล" และ "ของ Option" รวมทั้ง **หน้าเมนูโมเดลและแผง Options ทั้งหมด** (ไม่ใช่แค่แถวที่กดได้) ต้องเป็นรูปมือเหมือนไอคอน 4 ตัวแรกใต้ช่องแชท (Add Context · Add Files · Servers · Cline Rules)
+3. **รูปย่อในช่องแชท** — ย้ายจากด้านล่างขึ้นด้านบน (ยังอยู่ในช่องแชท) และเพิ่มขนาดขึ้น
+
+**รากของ (1):** `PopoverContent` ของชิปสถานะตั้ง `align="end"` ⇒ ขอบ**ขวา**ของแผง 236px ไปตรงกับขอบขวาของปุ่มสถานะ (ปุ่มกว้าง ~32px) ⇒ แผงเลื่อนไปทางซ้ายไกลจากไอคอนที่กด
+**แก้ (1):** ขอบซ้าย (align="start") เป็น **ค่าตั้งต้น** และใช้ `pickOptionsPopoverAlign({ triggerLeft, viewportWidth })` ใน `quickModelPickerList.ts` ตัดสินข้างจาก **ตำแหน่งของปุ่ม** ตอนเปิด ⇒ `triggerLeft + 236 + 8 ≤ viewportWidth` = `start` ไม่งั้นถอยเป็น `end` (ค่าเดิม) · วัดซ้ำเมื่อมี `resize` ขณะแผงเปิดอยู่ ⇒ ลาก sidebar แคบ/กว้างแล้วแผงสลับข้างเองได้ · ตรวจได้จาก `data-align` ใน DOM (กว้าง ~930px ได้ `start`, sidebar ปริยาย ~300px ได้ `end`)
+
+**รากของ (2):** ปุ่มที่ iCline วาดเองเป็น `<button>` เปล่า ⇒ webview คืนลูกศรของ OS ขณะที่ `VSCodeButton` (ไอคอน 4 ตัวนั้น) ให้รูปมือเอง
+**แก้ (2):** เติม `cursor-pointer` ให้ทุกเป้าคลิกที่ผู้ใช้ตั้งใจกด — ชิปโมเดล · ชิปสถานะ · แถวโมเดล · หัว provider · ไอคอน footer (refresh/edit) · ปุ่มระดับ Effort ในแผง Options · สวิตช์ Thinking (มี pointer จาก `ui/switch`) · **และคลุมทั้งเมนู**: ตัวห่อ popover ทั้งสองตัว + รากของ `ModelOptionsPanel` ⇒ หัวข้อ/model id/ระยะหว่างแถว/แถว capability/ข้อความ "Active ·" เป็นรูปมือทั้งหมด (ลูกสืบทอด cursor จากตัวห่อ) · ข้อยกเว้นเดียวคือช่องค้นหาที่เป็น `cursor-text` (I-beam) · ปุ่มที่ `disabled` ยังขึ้น `not-allowed` เพราะ specificity ของ `disabled:` สูงกว่า
+
+**รากของ (3):** `ChatTextArea` วาง `Thumbnails` แบบ `absolute` ที่ `bottom: 14` และป้อน `border-bottom` โปร่งใสของ textarea ด้วย `thumbnailsHeight` ⇒ ช่องว่างสำหรับรูปถูกจองที่ **ล่าง** · ขนาดชิปฮาร์ดโค้ด 34px เท่ากับ transcript
+**แก้ (3):**
+- ย้ายไป `top: 14` (ยังในกรอบช่องแชท) และย้ายที่ว่างไปเป็น **`border-top` โปร่งใส** ของ textarea + `padding-top` ของ highlight layer (ต้องตรงกัน ไม่งั้นไฮไลต์ mention/slash ลอยขึ้น)
+- **เหตุผลที่ยังใช้ border ไม่เปลี่ยนไปใช้ padding:** พอถึง `maxRows` textarea จะ scroll — ข้อความที่ scroll จะเลื่อนขึ้นไปทับรูปย่อในเขต padding แต่ไม่เข้าเขต border (คอมเมนต์ในโค้ดอธิบายไว้)
+- เพิ่ม prop `size` ให้ `components/common/Thumbnails.tsx` (ปริยาย 34 = transcript ไม่เปลี่ยน) และให้ composer ส่ง **44px** · ขนาดป้ายลบ/offset/ไอคอน/ฟอนต์ชื่อไฟล์คำนวณจาก `size` ตัวเดียว
+
+**เทสต์ที่ปักไว้:**
+- unit `quickModelPickerList.test.ts`: สูตร `pickOptionsPopoverAlign` — หน้าแชท ~930px ได้ `start` · sidebar ~300px ได้ `end` · สลับที่ `panel + margin` พอดีเป๊ะ · กว้างขึ้นแล้วไม่ถอยกลับไป `end`
+- unit `QuickModelPickerRealPopover.test.tsx`: `data-align` = `start` ในหน้าแชทกว้าง · **สลับเป็น `end` เมื่อปุ่มถูกดันไปชิดขอบขวา แล้วกลับเป็น `start` เมื่อมีที่พออีกครั้ง** (จำลองด้วย `getBoundingClientRect` + `resize`) · ตัวห่อ popover ทั้งสอง + ราก `ModelOptionsPanel` มี `cursor-pointer` · ช่องค้นหามี `cursor-text` · ชิปโมเดล/ชิปสถานะ/หัว provider/ปุ่มระดับ Effort มี `cursor-pointer`
+- unit **ใหม่** `components/common/Thumbnails.test.tsx`: ไม่ส่ง `size` = 34px (transcript คงเดิม) · ส่ง 44 = ชิป 44px + ป้ายลบ 17px + ฟอนต์ชื่อไฟล์ 9px (กัน "ชิปใหญ่แต่ป้ายลบเท่าเดิม")
+- e2e `composer-status-options` (บน VS Code จริง): `data-align` ต้องตรงกับสูตรของ pane จริง (`start` เมื่อปุ่ม + 236px + 8px พอ · ไม่งั้น `end`) · เมื่อมีที่พอของข้างที่เลือก **ขอบต้องตรงกัน ≤1px** (ซ้ายกับ `start` / ขวากับ `end`)
+
+**สิ่งที่ต้องรู้ (harness):** sidebar ของ e2e กว้างปริยาย ~297px (CSS) ขณะที่แผง 236px และแถว composer เต็มไปด้วยไอคอน 4 ตัว + ชื่อโมเดล ⇒ หน้าต่างนี้ **ตกไปที่โหมดถอย (`align="end"`)** ซึ่งเป็นโหมดที่เทสต์ยืนยันบนหน้าต่างจริง ส่วนโหมดหลัก (`start`) ถูกปักด้วยเทสต์หน่วย (สูตร + การสลับข้าง) และเทสต์ webview ที่จำลองหน้าแชทกว้าง · Radix ยังคงเลื่อนแผงกลับเข้ากรอบอีกชั้น ⇒ "ขอบตรงกันเป๊ะ" ตรวจได้เมื่อมีที่พอเท่านั้น **ห้ามปิด `avoidCollisions`** เพื่อบังคับให้ตรง
+
+**จุด smoke (fix.18):**
+1. ช่องแชท: คลิกชิปโมเดล → popover รายการโมเดล · **hover ทุกส่วนของเมนู (หัวข้อ provider, แถวโมเดล, ระยะหว่างแถว, footer, ข้อความ Active) ต้องเป็นรูปมือ** (เทียบกับไอคอน 4 ตัวซ้าย) ยกเว้นช่องค้นหาที่ยังเป็น I-beam
+2. คลิกชิปสถานะ (ชุดไอคอน/badge) → แผง Options: **ขอบซ้ายของแผงต้องอยู่ที่ขอบซ้ายของปุ่มสถานะ** (ที่ความกว้างแชทปกติ ~930px) · ลากขอบ sidebar ให้แคบลงเรื่อย ๆ ⇒ แผงสลับไปเกาะ**ขอบขวา**ของปุ่มแทนโดยไม่ล้นออกนอกหน้าต่าง · ทุกส่วนในแผง (หัวข้อ, model id, ปุ่ม Effort, capability) เป็นรูปมือ
+3. แนบ/วางรูปในช่องแชท → รูปย่ออยู่ **ด้านบน** ของช่องแชท ใหญ่กว่าเดิม (44px) · พิมพ์ข้อความยาวถึงบรรทัดสูงสุดแล้วเลื่อน ข้อความ **ห้ามทับรูปย่อ** · ไฮไลต์ `@`/`/` ต้องอยู่ตรงกับตัวอักษรจริง
+4. เปิด picker ตอนมีรูปแนบ — รูปย่อยังอยู่ด้านบน ไม่ทับช่องค้นหาหรือแถว provider
+5. About: `dev build 6 · fix.18` (ตรวจแล้วในบันเดิลที่แพ็ก — `webview-ui/build/assets` มีสตริงนี้จริง)
+
+**ยังไม่ทำ:** ไม่ได้แตะ hover Options panel ของ picker (ด้านขวาของแถว — โครงสร้างล็อกจาก mock v11 ยังเดิม) · ไม่ได้แก้ `chat.test.ts` ที่ fail อยู่ก่อนรอบนี้ (ปุ่ม Plan/Act ถูก `<span class="truncate max-w-[180px]">` ของชิปโมเดลบังใน sidebar ~300px — อาการ layout ก่อนรอบนี้ ไม่เกี่ยวกับ diff รอบนี้)
 
 ---
 
