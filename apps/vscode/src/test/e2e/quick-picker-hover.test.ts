@@ -29,9 +29,11 @@ import { e2e } from "./utils/helpers"
 e2e("Quick Picker — Options panel appears on hover and tracks the row", async ({ helper, sidebar, page }) => {
 	await helper.signin(sidebar)
 
-	// The trigger is the model-name button in the chat header (label span is
-	// capped at max-w-[180px]); provider headers live inside the popover.
-	const trigger = sidebar.locator('button:has(span[class~="max-w-[180px]"])').first()
+	// The trigger is the model-name button under the chat input; provider headers live
+	// inside the popover. The status readout is a button of its own since fix.17, so the
+	// marker — not the label's width class — identifies the model-list trigger.
+	const trigger = sidebar.locator("[data-icline-model-trigger]")
+	await expect(trigger).toHaveCount(1)
 	await expect(trigger).toBeVisible()
 	await trigger.click({ delay: 30 })
 

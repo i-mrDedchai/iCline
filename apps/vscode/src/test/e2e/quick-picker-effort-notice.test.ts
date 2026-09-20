@@ -59,7 +59,8 @@ e2e("Quick Picker — an Effort level the model cannot take says what will reall
 	// with nothing stored.
 	await sidebar.evaluate(() => localStorage.removeItem("icline-chat-model-preferences-v1"))
 
-	const trigger = sidebar.locator('button:has(span[class~="max-w-[180px]"])').first()
+	// The model-name button (the status readout is a button of its own since fix.17).
+	const trigger = sidebar.locator("[data-icline-model-trigger]")
 	await expect(trigger).toBeVisible()
 
 	const picker = sidebar.locator("[data-icline-quick-picker]")
