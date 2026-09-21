@@ -1,4 +1,5 @@
 import { type ProviderErrorClass, safeJsonParse } from "@cline/shared";
+import { StreamIdleTimeoutError } from "./stream-idle-watchdog";
 import { AISDKError, APICallError, RetryError, TypeValidationError } from "ai";
 
 /**
@@ -447,6 +448,17 @@ export function isRetryableProviderError(error: unknown): boolean {
  * {@link isRetryableProviderError}.
  */
 export function isRetryableBeyondSdkRetries(error: unknown): boolean {
+	// A stream the idle watchdog aborted (see `stream-idle-watchdog`) is retryable on
+	// purpose, and this is the layer that decides it. Nothing failed on its own: the
+	// gateway simply stopped producing, so no other layer has spent an attempt on it and
+	// re-running the turn cannot multiply anything. It is checked BEFORE the typed
+	// classifiers because an abort is otherwise read as a user cancel — terminal, and
+	// correctly so — and because a `RetryError` carrying this cause would otherwise end
+	// the turn for good (smoke 2026-09-21: a free-tier turn crawled, went quiet, and died
+	// on the provider's own "Upstream idle timeout exceeded" minutes later, unretried).
+	if (error instanceof StreamIdleTimeoutError) {
+		return true
+	}
 	// Guarded like the other typed checks: `RetryError.isInstance` throws when
 	// the "ai" module is only partially available (tests mock it with a subset
 	// of exports), and the classifier below is the correct fallback then.

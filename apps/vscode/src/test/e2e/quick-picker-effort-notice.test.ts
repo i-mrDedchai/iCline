@@ -17,7 +17,9 @@ import { e2e } from "./utils/helpers"
  * calls — from the same registry the host resolves the model from, so a catalog update
  * changes what the test expects instead of breaking it.
  *
- * The stored level is seeded into the picker's own preference store rather than clicked,
+ * Pass 1 pins what the panel does NOT offer (a level this model clamps, since fix.27); pass 2
+ * seeds the level and pins what it then SAYS. The level is seeded into the preference store
+ * rather than clicked,
  * because of a separate, still-open geometry problem: at the default window the sidebar
  * webview is ~297px wide while the Options panel is placed at `pickerRight + 8` and
  * measures 236px wide, so it sits entirely outside the frame and a real mouse click
@@ -161,8 +163,17 @@ e2e("Quick Picker — an Effort level the model cannot take says what will reall
 		const { panel, notice, maxOption } = panelOf(picker)
 		await hover(row)
 		await expect(panel).toBeVisible({ timeout: 5_000 })
-		// The scenario only exists when the level that will be clamped is offered.
-		await expect(maxOption).toHaveCount(1)
+		/*
+		 * Pass 1's premise changed in fix.27, and this is where it is pinned: the panel used to
+		 * list the provider's whole vocabulary here — `Max` included, on a model that caps it —
+		 * and the clamp notice explained the difference after the fact. The list is now narrowed
+		 * to what the model takes, so the level this model CLAMPS must NOT be offered (the clamp
+		 * scenario below is created by a STORED level, which is what pass 2 seeds). Asserting the
+		 * old `Max` button here would demand the very lie the panel stopped telling.
+		 */
+		if (fateOf(candidate).applied !== "max") {
+			await expect(maxOption, `${candidate} offers Max even though Max is not what goes out`).toHaveCount(0)
+		}
 		// The panel must describe the model under the cursor, not the previous one.
 		await expect(panel.locator("[data-icline-options-model-id]")).toHaveText(candidate)
 		await page.waitForTimeout(500)

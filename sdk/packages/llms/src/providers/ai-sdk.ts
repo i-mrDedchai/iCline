@@ -50,6 +50,7 @@ import {
 } from "./error-classification";
 import { extractErrorMessage } from "./format";
 import { createRetryEmptyResponseMiddleware } from "./middleware/retry-empty-response";
+import { createStreamIdleWatchdog } from "./stream-idle-watchdog";
 import {
 	isAnthropicCompatibleModel,
 	isCerebrasProvider,
@@ -1462,6 +1463,8 @@ async function* emitAiSdkEvents(
 	pricingValue?: unknown,
 	capturedError?: { current: CapturedStreamError | undefined },
 	modelToolAdapters?: BuiltModelTools,
+	/** Called once per part: proof the stream is alive, for the idle watchdog. */
+	onPart?: () => void,
 ): AsyncIterable<AgentModelEvent> {
 	let sawToolCalls = false;
 	const emittedToolCallIds = new Set<string>();
@@ -1490,6 +1493,7 @@ async function* emitAiSdkEvents(
 	try {
 		if (stream.fullStream) {
 			for await (const part of stream.fullStream) {
+				onPart?.()
 				if (part.type === "text-delta") {
 					const text =
 						(part.textDelta as string | undefined) ??
@@ -1831,6 +1835,7 @@ async function* emitAiSdkEvents(
 			}
 		} else if (stream.textStream) {
 			for await (const text of stream.textStream) {
+				onPart?.()
 				yield { type: "text-delta", text };
 			}
 		}
@@ -2101,6 +2106,31 @@ function createAiSdkProvider(
 			const kind = resolveModelProviderKind(defaultKind, context);
 			const log = context.logger;
 			let stream: AiSdkStreamResult | undefined;
+			/*
+			 * A stream that goes QUIET is the one failure nothing downstream can see: the
+			 * request is open, so nothing errors, so nothing retries, and the turn hangs
+			 * until the provider's own gateway gives up minutes later (smoke 2026-09-21:
+			 * Cline's free tier crawled and then died as "Upstream idle timeout exceeded").
+			 * The watchdog aborts the vendor call after STREAM_IDLE_TIMEOUT_MS of NO output
+			 * and the catch below reports it as a retryable provider error, which puts it
+			 * back on the paths that already exist instead of inventing a second one.
+			 *
+			 * Every part of the stream touches it, INCLUDING reasoning and tool-call parts:
+			 * "idle" means no output at all, never "no answer text yet" — a reasoning model
+			 * is legitimately silent while it thinks.
+			 */
+			const idleWatchdog = createStreamIdleWatchdog({
+				signal: request.signal,
+				onIdle: ({ silentMs }) => {
+					log?.log?.(
+						`[ai-sdk] stream produced nothing for ${Math.round(silentMs / 1000)}s — aborting so the turn can retry`,
+						{
+							providerId: request.providerId,
+							severity: "warn",
+						},
+					);
+				},
+			});
 			const capturedError: { current: CapturedStreamError | undefined } = {
 				current: undefined,
 			};
@@ -2297,7 +2327,9 @@ function createAiSdkProvider(
 							messages: messages as never,
 							...(useSystemOption ? { system: systemPrompt } : {}),
 							...(tools ? { tools } : {}),
-							abortSignal: request.signal,
+							// The watchdog's signal, not the caller's: it carries the caller's abort
+							// AND the idle deadline, so both reach the vendor as the same cancel.
+							abortSignal: idleWatchdog.signal,
 							maxRetries: MODEL_REQUEST_MAX_RETRIES,
 							experimental_repairToolCall: repairMalformedToolCall as never,
 							telemetry: {
@@ -2372,11 +2404,15 @@ function createAiSdkProvider(
 					context.model.metadata?.pricing,
 					capturedError,
 					modelToolAdapters,
+					() => idleWatchdog.touch(),
 				);
 			} catch (error) {
 				suppressDanglingStreamPromises(stream);
 				// Prefer the real provider error captured in onError over the generic
 				// NoOutputGeneratedError that the AI SDK throws when 0 steps are recorded.
+				// An idle-timeout abort arrives here as its own error too, and is classified
+				// retryable by its TYPE (`isRetryableBeyondSdkRetries`), so the turn-level
+				// retry takes it without a second special case for this one path.
 				const captured = capturedError.current ?? captureStreamError(error);
 				const msg = captured.message;
 				if (log?.error) {
@@ -2412,6 +2448,10 @@ function createAiSdkProvider(
 					errorRetryable: captured.retryable,
 					errorReported: reported || captured.reported,
 				};
+			} finally {
+				// The stream is over, however it ended: a watchdog that outlived it could only
+				// abort a request nobody is reading.
+				idleWatchdog.stop();
 			}
 		},
 	});
