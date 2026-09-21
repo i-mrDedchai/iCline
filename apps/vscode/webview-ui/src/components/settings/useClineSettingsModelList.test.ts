@@ -64,4 +64,33 @@ describe("partitionClinePickerSections", () => {
 		expect(sections.standard.map((row) => row.id)).toEqual(["aion-2.0"])
 		expect(isFreeModel("z-ai/glm-5.3-flash", "GLM-5.3-Flash")).toBe(false)
 	})
+
+	it("keeps the catalog's capability fields on a featured row", () => {
+		// A featured row is what the Options panel renders its Thinking switch and its
+		// capability readout from. Passing only `{ name }` is why a free model showed
+		// "No capability data" while its catalog entry listed reasoning support.
+		const catalog: ModelEntry[] = [
+			[
+				"z-ai/glm-5.3-flash",
+				{
+					name: "GLM-5.3-Flash (free)",
+					supportsReasoning: true,
+					supportsImages: true,
+					reasoningEffortOptions: ["low", "high", "max"],
+				},
+			],
+		]
+		const featuredFree = [{ id: "z-ai/glm-5.3-flash", name: "glm-5.3-flash", tags: ["FREE"] }]
+
+		const sections = partitionClinePickerSections(catalog, [], featuredFree)
+
+		// The feed's display name still wins…
+		expect(sections.free[0]?.info.name).toBe("GLM-5.3-Flash (free)")
+		// …and the rest of the entry comes with it.
+		expect(sections.free[0]?.info).toMatchObject({
+			supportsReasoning: true,
+			supportsImages: true,
+			reasoningEffortOptions: ["low", "high", "max"],
+		})
+	})
 })

@@ -205,19 +205,27 @@ async function mergeKnownModels(
 
 	if (providerId === "cline") {
 		// Cline recommendations can use Vercel-style ids while the broader
-		// catalog includes OpenRouter aliases for the same models. Image-output
-		// models are temporarily unavailable through Cline's inference backend,
-		// so filter them only at the Cline catalog boundary. buildClineModels
+		// catalog includes OpenRouter aliases for the same models. Both ids are
+		// kept, deliberately: they are DIFFERENT routes (`z-ai/glm-5.3-flash` is the
+		// free Cline route, `zai/glm-5.3-flash` the paid OpenRouter one) and the
+		// bundled Cline catalog describes each with its own pricing, context window
+		// and reasoning controls. Dropping the alias because a canonical sibling
+		// exists (`preferCanonicalModelIds`) is what left the free ids the app
+		// actually offers — `cline-recommended.generated.ts` is keyed by
+		// `z-ai/glm-5.3-flash` — with NO metadata at all: no capability icons, a
+		// Thinking switch that only existed while a value was already set (turning it
+		// off made the model permanently unconfigurable), and an Effort selection the
+		// gateway could not clamp against the model's real levels (smoke 2026-09-21).
+		//
+		// Image-output models are temporarily unavailable through Cline's inference
+		// backend, so filter them only at the Cline catalog boundary. buildClineModels
 		// applies the same restriction to the bundled catalog. User overrides are
 		// also subject to this filter — the backend rejects image output
 		// regardless of where the model was configured. Remove both filter call
 		// sites together when the backend gains image-output support.
 		return Llms.sortModelsByReleaseDate(
 			Llms.filterImageOutputModels({
-				...Llms.preferCanonicalModelIds(
-					knownModelsWithoutUserOverrides,
-					Llms.VERCEL_OPENROUTER_MODEL_ID_ALIAS_RULES,
-				),
+				...knownModelsWithoutUserOverrides,
 				...userKnownModels,
 			}),
 		);

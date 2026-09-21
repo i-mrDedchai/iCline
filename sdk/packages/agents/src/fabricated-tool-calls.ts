@@ -27,12 +27,35 @@
  *   2. the older Cline form `<x><parameter name="y">v</parameter></x>`, where
  *      the element name is the tool name;
  *   3. a JSON body inside a `<tool_call(s)>` wrapper, as some vendors document:
- *      `{"name": "x", "arguments": {…}}`.
+ *      `{"name": "x", "arguments": {…}}`;
+ *   4. the same wrapper in the form that same model actually wrote in the
+ *      `dev.6-fix.25` smoke round — **the tool name, then its arguments as a bare
+ *      JSON object, and NO closing tag at all**:
+ *
+ *        …ตั้งลำดับโฟลเดอร์ให้ถูกต้องครับ<tool_call>run_commands{"commands": ["dir /b …"]}
+ *
+ *      Dialect 3's regex needs `</tool_call>` to exist, so an unclosed block parsed
+ *      as no call at all: the raw markup stayed in the transcript, nothing ran, and
+ *      the model — told nothing — wrote the identical block again on the next turn.
+ *      That is why dialect 4 is scanned by hand (`scanWrapperCalls`) with a
+ *      brace-matching reader instead of a closing-tag regex.
+ *
+ * A block left *unfinished* by the model is never recovered: the JSON reader refuses
+ * a value that does not close, so a turn cut off by the output limit cannot be turned
+ * into a call with half its arguments. The runtime additionally skips recovery
+ * entirely on a `max-tokens`/`error` finish reason.
  *
  * Nothing here decides whether a call is *allowed*: the runtime resolves every
  * recovered call against its tool registry — and the policies and approval
  * callbacks hanging off it — exactly as it does a native one, so an unknown name
  * becomes an ordinary "unknown tool" result instead of a silently finished run.
+ *
+ * The recovered ARGUMENT SHAPES are intentionally left as the model wrote them
+ * (`{cmd: "dir /b …"}`, `{paths: ["…"]}`). The shipped tools already accept these
+ * spellings — `RunCommandsInputUnionSchema` carries `cmd`, `ReadFilesInputUnionSchema`
+ * carries `paths` as a string or a list — so no per-tool alias table is needed here,
+ * and a name the runtime does not know is answered with the ordinary "unknown tool"
+ * result rather than being silently rewritten.
  */
 
 export interface FabricatedToolCall {
@@ -78,6 +101,14 @@ const parameterPattern = () =>
 	/<\s*(?:parameter|param)\b([^>]*)>([\s\S]*?)<\s*\/\s*(?:parameter|param)\s*>/gi;
 const wrapperTagPattern = () =>
 	/<\s*\/?\s*(?:tool_calls?|function_calls?|invoke)\b[^>]*>/gi;
+/** Opening tag of a wrapper whose body is read by hand — see `scanWrapperCalls`. */
+const wrapperOpenPattern = () =>
+	/<\s*(?:tool_calls?|function_calls?)\b[^>]*>/gi;
+/** A wrapper closing tag immediately after a body, when the model did write one. */
+const TRAILING_WRAPPER_CLOSE =
+	/^\s*<\s*\/\s*(?:tool_calls?|function_calls?)\s*>/;
+/** The tool name that begins a dialect-4 body: `run_commands{…}`. */
+const BARE_CALL_NAME = /^[A-Za-z_][A-Za-z0-9_.:-]*/;
 const HAS_PARAMETER_TAG = /<\s*(?:parameter|param)\b/i;
 const NAME_ATTRIBUTE = /\bname\s*=\s*(?:"([^"]*)"|'([^']*)')/i;
 
@@ -144,6 +175,45 @@ function readJsonCall(value: unknown): FabricatedToolCall | undefined {
 	return { name, input: isRecord(parsed) ? parsed : {} };
 }
 
+/**
+ * End offset (exclusive) of the JSON value starting at `start`, or `undefined` when it
+ * never closes. Strings and escapes are tracked, so a `}` inside a quoted command line
+ * cannot end the value early — and an unfinished value (the stream was cut, or the block
+ * was never JSON) is refused rather than guessed at.
+ */
+function endOfJsonValue(text: string, start: number): number | undefined {
+	if (text[start] !== "{" && text[start] !== "[") {
+		return undefined;
+	}
+	let depth = 0;
+	let inString = false;
+	let escaped = false;
+	for (let i = start; i < text.length; i += 1) {
+		const char = text[i];
+		if (inString) {
+			if (escaped) {
+				escaped = false;
+			} else if (char === "\\") {
+				escaped = true;
+			} else if (char === '"') {
+				inString = false;
+			}
+			continue;
+		}
+		if (char === '"') {
+			inString = true;
+		} else if (char === "{" || char === "[") {
+			depth += 1;
+		} else if (char === "}" || char === "]") {
+			depth -= 1;
+			if (depth === 0) {
+				return i + 1;
+			}
+		}
+	}
+	return undefined;
+}
+
 function readJsonCalls(body: string): FabricatedToolCall[] {
 	const parsed = readJson(body);
 	if (parsed === undefined) {
@@ -164,6 +234,91 @@ function readJsonCalls(body: string): FabricatedToolCall[] {
 	return calls;
 }
 
+/**
+ * A call read out of a wrapper body, with the span of text it occupies. The span is what
+ * display text has to lose, and it is measured on the ORIGINAL string: the strip removes
+ * every span at once, so no offset can go stale halfway through.
+ */
+interface WrapperCall extends FabricatedToolCall {
+	start: number;
+	end: number;
+}
+
+/**
+ * Reads `<tool_call(s)>` / `<function_call(s)>` bodies, with or WITHOUT a closing tag.
+ *
+ * Two body shapes, both seen in the wild:
+ *   - `<tool_call>run_commands{"commands": […]}` — the tool NAME, then its arguments as
+ *     a bare JSON value (this is the `dev.6-fix.25` smoke round's shape);
+ *   - `<tool_call>{"name": "x", "arguments": {…}}` — a JSON call object, which vendors
+ *     document and some models emit unclosed.
+ *
+ * A body whose first non-space character is neither a name nor JSON (`<tool_call><invoke …>`
+ * being the common one) is left alone: other scanners own those shapes, and reading them
+ * here would report the same call twice.
+ */
+function scanWrapperCalls(text: string): WrapperCall[] {
+	const calls: WrapperCall[] = [];
+	for (const match of text.matchAll(wrapperOpenPattern())) {
+		const start = match.index ?? 0;
+		let cursor = start + match[0].length;
+		while (cursor < text.length && /\s/.test(text[cursor] as string)) {
+			cursor += 1;
+		}
+
+		const name = BARE_CALL_NAME.exec(text.slice(cursor));
+		if (name) {
+			let argumentsStart = cursor + name[0].length;
+			while (
+				argumentsStart < text.length &&
+				/\s/.test(text[argumentsStart] as string)
+			) {
+				argumentsStart += 1;
+			}
+			const argumentsEnd = endOfJsonValue(text, argumentsStart);
+			if (argumentsEnd === undefined) {
+				continue;
+			}
+			// Objects only. Prose that *describes* the markup — "a call looks like
+			// `<tool_call>read_files{...}`" — has a brace body that is not JSON, and a
+			// tool call is not a thing to infer from something that does not parse.
+			const parsed = readJson(text.slice(argumentsStart, argumentsEnd));
+			if (!isRecord(parsed)) {
+				continue;
+			}
+			calls.push({
+				name: name[0],
+				input: parsed,
+				start,
+				end: endAfterWrapperClose(text, argumentsEnd),
+			});
+			continue;
+		}
+
+		const argumentsEnd = endOfJsonValue(text, cursor);
+		if (argumentsEnd === undefined) {
+			continue;
+		}
+		const jsonCalls = readJsonCalls(text.slice(cursor, argumentsEnd));
+		if (jsonCalls.length === 0) {
+			continue;
+		}
+		const end = endAfterWrapperClose(text, argumentsEnd);
+		for (const call of jsonCalls) {
+			calls.push({ ...call, start, end });
+		}
+	}
+	return calls;
+}
+
+/** Swallows the closing tag too, so no orphan `</tool_call>` is left in the prose. */
+function endAfterWrapperClose(text: string, end: number): number {
+	const close = TRAILING_WRAPPER_CLOSE.exec(text.slice(end));
+	return close ? end + close[0].length : end;
+}
+
+/*
+ * ---------------------------------------------------------------------------
 /**
  * Tool calls found in `text`, in the order they appear. Returns `[]` for
  * ordinary prose, which is the overwhelming majority of assistant text.
@@ -209,7 +364,29 @@ export function parseFabricatedToolCalls(text: string): FabricatedToolCall[] {
 		calls.push({ name: tag, input: readParameters(body) });
 	}
 
+	// Wrapper bodies, closed or not. A closed JSON wrapper is one of the shapes above
+	// too, so identical calls are reported once: executing a recovered call twice is
+	// the one outcome worse than not recovering it at all.
+	const seen = new Set(calls.map(callSignature));
+	for (const scanned of scanWrapperCalls(text)) {
+		const signature = callSignature(scanned);
+		if (seen.has(signature)) {
+			continue;
+		}
+		seen.add(signature);
+		calls.push({ name: scanned.name, input: scanned.input });
+	}
+
 	return calls.slice(0, MAX_FABRICATED_TOOL_CALLS);
+}
+
+/** Identity of a call, for the duplicate check above. */
+function callSignature(call: FabricatedToolCall): string {
+	try {
+		return `${call.name}:${JSON.stringify(call.input)}`;
+	} catch {
+		return `${call.name}:?`;
+	}
 }
 
 /**
@@ -227,41 +404,54 @@ export function stripFabricatedToolCallMarkup(text: string): string {
 	if (!text || !text.includes("<")) {
 		return text;
 	}
-	let removedBlock = false;
 
-	// 1. `<invoke …>…</invoke>`, with or without a wrapper around it.
-	let stripped = text.replace(invokeBlockPattern(), () => {
-		removedBlock = true;
-		return "";
-	});
-
-	// 2. Wrapper bodies carrying JSON, kept only when the body really is a call.
-	stripped = stripped.replace(jsonWrapperPattern(), (match, body: string) => {
-		if (readJsonCalls(String(body ?? "")).length === 0) {
-			return match;
-		}
-		removedBlock = true;
-		return "";
-	});
-
-	// 3. Classic `<tool><parameter name="…">…</parameter></tool>`.
-	stripped = stripped.replace(
-		genericBlockPattern(),
-		(match, tag: string, _attributes: string, body: string) => {
-			if (RESERVED_TAGS.has(String(tag).toLowerCase())) {
-				return match;
-			}
-			if (!HAS_PARAMETER_TAG.test(String(body))) {
-				return match;
-			}
-			removedBlock = true;
-			return "";
-		},
-	);
-
-	if (removedBlock) {
-		stripped = stripped.replace(wrapperTagPattern(), "");
+	// Every span is measured against `text` itself, then removed in one descending pass:
+	// removing a block changes every later offset, and the previous chained-`replace`
+	// version could only ever handle one dialect at a time.
+	const spans: Array<{ start: number; end: number }> = [];
+	for (const match of text.matchAll(invokeBlockPattern())) {
+		spans.push({
+			start: match.index ?? 0,
+			end: (match.index ?? 0) + match[0].length,
+		});
 	}
+	for (const match of text.matchAll(genericBlockPattern())) {
+		const tag = match[1] ?? "";
+		if (
+			RESERVED_TAGS.has(tag.toLowerCase()) ||
+			!HAS_PARAMETER_TAG.test(match[3] ?? "")
+		) {
+			continue;
+		}
+		spans.push({
+			start: match.index ?? 0,
+			end: (match.index ?? 0) + match[0].length,
+		});
+	}
+	// Wrapper blocks whose body is a JSON call — with or without a closing tag.
+	for (const call of scanWrapperCalls(text)) {
+		spans.push({ start: call.start, end: call.end });
+	}
+	// A closed wrapper carrying JSON is covered by both the JSON regex and the scanner;
+	// overlapping spans are merged below, so the shared text is only removed once.
+	if (spans.length === 0) {
+		return text;
+	}
+
+	let stripped = "";
+	let cursor = 0;
+	for (const span of spans.sort((a, b) => a.start - b.start)) {
+		if (span.start < cursor) {
+			cursor = Math.max(cursor, span.end);
+			continue;
+		}
+		stripped += text.slice(cursor, span.start);
+		cursor = span.end;
+	}
+	stripped += text.slice(cursor);
+
+	// Wrapper tags around a removed block (`<tool_call>` left without its body) go too.
+	stripped = stripped.replace(wrapperTagPattern(), "");
 
 	if (stripped === text) {
 		return text;

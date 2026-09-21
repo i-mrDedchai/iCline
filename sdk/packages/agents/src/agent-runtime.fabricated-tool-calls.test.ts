@@ -103,6 +103,110 @@ describe("AgentRuntime fabricated tool-call recovery", () => {
 		]);
 	});
 
+	it("executes the unclosed `name{json}` block the fix.25 smoke round produced", async () => {
+		// The shape that stalled that round: the tool name, then bare JSON, and no
+		// closing tag at all — so the turn looked like a finished answer, nothing
+		// ran, and the model wrote the identical block again on the next turn.
+		const model = new ScriptedModel([
+			() => [
+				{
+					type: "text-delta",
+					text: 'จะสำรวจก่อนครับ<tool_call>echo{"text": "hi"}',
+				},
+				{ type: "finish", reason: "stop" },
+			],
+			() => [
+				{ type: "text-delta", text: "done" },
+				{ type: "finish", reason: "stop" },
+			],
+		]);
+		const runtime = new AgentRuntime({ model, tools: [createEchoTool()] });
+
+		const result = await runtime.run("สำรวจ workspace");
+
+		expect(result.status).toBe("completed");
+		expect(toolResults(result.messages)).toEqual([{ echoed: "hi" }]);
+		expect(model.requests).toHaveLength(2);
+		const recoveredTurn = result.messages.find(
+			(message) =>
+				message.role === "assistant" &&
+				message.content.some((part) => part.type === "tool-call"),
+		);
+		expect(recoveredTurn?.content).toMatchObject([
+			{ type: "text", text: "จะสำรวจก่อนครับ" },
+			{ type: "tool-call", toolName: "echo", input: { text: "hi" } },
+		]);
+		// The next request carries the recovered call AND its result: that feedback
+		// is the only thing that stops the model repeating the markup.
+		const secondRequest = JSON.stringify(model.requests[1]);
+		expect(secondRequest).toContain("echoed");
+	});
+
+	it("announces the recovery in the transcript instead of doing it silently", async () => {
+		const model = new ScriptedModel([
+			() => [
+				{ type: "text-delta", text: 'ครับ<tool_call>echo{"text": "hi"}' },
+				{ type: "finish", reason: "stop" },
+			],
+			() => [
+				{ type: "text-delta", text: "done" },
+				{ type: "finish", reason: "stop" },
+			],
+		]);
+		const runtime = new AgentRuntime({ model, tools: [createEchoTool()] });
+		const notices: Array<{
+			message: string;
+			metadata?: Record<string, unknown>;
+		}> = [];
+		runtime.subscribe((event: AgentRuntimeEvent) => {
+			if (event.type === "status-notice") {
+				notices.push({ message: event.message, metadata: event.metadata });
+			}
+		});
+
+		await runtime.run("hi");
+
+		const recovered = notices.filter(
+			(notice) => notice.metadata?.kind === "fabricated_tool_calls_recovered",
+		);
+		expect(recovered).toHaveLength(1);
+		expect(recovered[0]?.message).toContain("echo");
+		expect(recovered[0]?.message).toContain("as text");
+	});
+
+	it("strips stray markup from a turn that already made a real call", async () => {
+		// A native call and leftover markup in the same turn: the call runs once,
+		// and the user still never reads wire format.
+		const model = new ScriptedModel([
+			() => [
+				{ type: "text-delta", text: "ทำเลยครับ" },
+				{
+					type: "tool-call-delta",
+					toolCallId: "call_1",
+					toolName: "echo",
+					input: { text: "native" },
+				},
+				{ type: "text-delta", text: '<tool_call>echo{"text": "duplicated"}' },
+				{ type: "finish", reason: "stop" },
+			],
+			() => [
+				{ type: "text-delta", text: "done" },
+				{ type: "finish", reason: "stop" },
+			],
+		]);
+		const runtime = new AgentRuntime({ model, tools: [createEchoTool()] });
+
+		const result = await runtime.run("hi");
+
+		expect(toolResults(result.messages)).toEqual([{ echoed: "native" }]);
+		const assistantText = result.messages
+			.flatMap((message) => message.content)
+			.filter((part) => part.type === "text")
+			.map((part) => (part.type === "text" ? part.text : ""))
+			.join("\n");
+		expect(assistantText).not.toContain("tool_call");
+	});
+
 	it("answers a recovered call with an unknown name by listing the real tools", async () => {
 		const model = new ScriptedModel([
 			() => [

@@ -48,7 +48,15 @@ function featuredRow(
 	const cat = catalog.get(id)
 	return {
 		id,
-		info: { name: cat?.name || model.name || id },
+		/*
+		 * The catalog entry WHOLE, not just its name: this row is what the Options panel
+		 * renders its Thinking switch and capability readout from, and a `{ name }`-only
+		 * info is why a featured free model showed "No capability data" while the same
+		 * model's catalog entry listed reasoning support and its effort levels. The
+		 * featured NAME still wins, because the feed's display names are the ones the
+		 * Free list is known by.
+		 */
+		info: cat ? { ...cat, name: cat.name || model.name || id } : { name: model.name || id },
 		badge: featuredBadge(model.tags, fallbackBadge),
 	}
 }

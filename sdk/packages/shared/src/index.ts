@@ -522,6 +522,7 @@ export {
 	NO_DEFAULT_CURRENT_DIRECTORY_IN_EXE_PATH_ENV,
 } from "./runtime/windows-exe-path";
 export type {
+	CaptureAgentRecoveredTextToolCallsInput,
 	CaptureAgentUnexpectedReasoningTokensInput,
 	CaptureSdkErrorInput,
 	CaptureTaskLifecycleEventInput,
@@ -538,9 +539,11 @@ export type {
 	TelemetryValue,
 } from "./services/telemetry";
 export {
+	AGENT_RECOVERED_TEXT_TOOL_CALLS_EVENT,
 	AGENT_UNEXPECTED_REASONING_TOKENS_EVENT,
 	buildSdkErrorProperties,
 	CORE_SPAWN_REASONS,
+	captureAgentRecoveredTextToolCalls,
 	captureAgentUnexpectedReasoningTokens,
 	captureSdkError,
 	captureTaskLifecycleEvent,

@@ -103,6 +103,34 @@ describe("resolveModelStatus", () => {
 		expect(builtin.support.builtinReasoning).toBe(true)
 	})
 
+	it("keeps a model reconfigurable after its reasoning is switched OFF", () => {
+		// The dev.6-fix.26 smoke round's dead end: `z-ai/glm-5.3-flash` has no catalog
+		// entry in the app's own list for its id, so the ONLY trace of it being a
+		// reasoning model was the effort already set. Writing the OFF level made the
+		// switch disable itself and the model could never be switched back on.
+		const off = resolveModelStatus({
+			providerId: "cline",
+			modelId: "z-ai/glm-5.3-flash",
+			reasoningEffort: "none",
+		})
+		expect(off.enabled).toBe(false)
+		expect(off.support.showEffort).toBe(true)
+		expect(off.effortSource ?? off.support.effortSource).toBe("stored-preference")
+		// The capability icons come back with the control, because a model that can be
+		// configured is reasoned-capable whatever the setting is right now.
+		expect(off.caps.map((cap) => cap.id)).toContain("reasoning")
+
+		// A reasoning model the catalog DOES describe keeps its controls either way.
+		const declared = resolveModelStatus({
+			providerId: "cline",
+			modelId: "z-ai/glm-5.3-flash",
+			modelInfo: { supportsReasoning: true },
+			reasoningEffort: "none",
+		})
+		expect(declared).toMatchObject({ enabled: false })
+		expect(declared.support.showEffort).toBe(true)
+	})
+
 	it("never claims controls for a model with nothing to configure", () => {
 		const status = resolveModelStatus({ providerId: "jan", modelId: "jan-local-7b", modelInfo: {} })
 		expect(status).toMatchObject({ enabled: false, effort: undefined, effortShort: "" })

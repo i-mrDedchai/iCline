@@ -33,6 +33,7 @@ import type {
 	ToolPolicy,
 } from "@cline/shared";
 import {
+	captureAgentRecoveredTextToolCalls,
 	captureAgentUnexpectedReasoningTokens,
 	captureSdkError,
 	captureTaskLifecycleEvent,
@@ -719,9 +720,14 @@ export class AgentRuntime {
 	 * execution path already answers an unresolvable name with an "unknown tool"
 	 * result, and that result — not silence — is what lets such a model correct
 	 * itself on the next iteration.
+	 *
+	 * `adoptCalls` decides whether the text's calls may become real ones. The strip
+	 * runs regardless: a turn that made proper calls and *also* left markup behind
+	 * still must not show the markup to the user.
 	 */
 	private recoverFabricatedToolCalls(
 		message: AgentMessage,
+		options: { adoptCalls: boolean },
 	): { message: AgentMessage; toolCalls: AgentToolCallPart[] } | undefined {
 		const toolCalls: AgentToolCallPart[] = [];
 		const content: AgentMessagePart[] = [];
@@ -738,7 +744,9 @@ export class AgentRuntime {
 				continue;
 			}
 			recoveredMarkup = true;
-			const room = MAX_FABRICATED_TOOL_CALLS - toolCalls.length;
+			const room = options.adoptCalls
+				? MAX_FABRICATED_TOOL_CALLS - toolCalls.length
+				: 0;
 			if (room > 0) {
 				for (const call of parseFabricatedToolCalls(part.text).slice(0, room)) {
 					toolCalls.push({
@@ -765,6 +773,48 @@ export class AgentRuntime {
 		// whose request is missing (and providers reject exactly that shape).
 		content.push(...toolCalls);
 		return { message: { ...message, content }, toolCalls };
+	}
+
+	/**
+	 * Says out loud that a call was read out of the text channel. This path used to be
+	 * completely silent: the chat showed raw markup, nothing ran, and the run reported
+	 * success — which is why a smoke round spent two attempts diagnosing a model that
+	 * was merely writing its calls in the wrong dialect. The notice is the transcript's
+	 * record of it; the log and the telemetry event are for the aggregate view.
+	 */
+	private async announceRecoveredToolCalls(
+		toolCalls: AgentToolCallPart[],
+	): Promise<void> {
+		const names = toolCalls.map((call) => call.toolName);
+		const list = names.join(", ");
+		this.config.logger?.log?.("Recovered tool calls the model wrote as text", {
+			toolNames: names,
+			count: names.length,
+			iteration: this.state.iteration,
+		});
+		captureAgentRecoveredTextToolCalls(this.config.telemetry, {
+			sessionId: trimNonEmpty(this.config.sessionId),
+			agentId: this.state.agentId,
+			runId: this.state.runId,
+			iteration: this.state.iteration,
+			providerId: this.telemetryProviderId,
+			modelId: this.telemetryModelId,
+			toolNames: list,
+			toolCount: names.length,
+		});
+		await this.emit({
+			type: "status-notice",
+			snapshot: this.snapshot(),
+			message:
+				toolCalls.length === 1
+					? `the model wrote its tool call as text — recovered and ran \`${list}\``
+					: `the model wrote ${toolCalls.length} tool calls as text — recovered and ran \`${list}\``,
+			metadata: {
+				kind: "fabricated_tool_calls_recovered",
+				toolNames: names,
+				iteration: this.state.iteration,
+			},
+		});
 	}
 
 	private getCompletionReminderMessages(): string[] {
@@ -884,15 +934,25 @@ export class AgentRuntime {
 				// and — because the model gets no feedback — the next turn repeats it.
 				// Recover the call instead, so it goes through the ordinary policy,
 				// approval and execution path. See fabricated-tool-calls.ts.
-				if (
-					toolCalls.length === 0 &&
-					finishReason !== "max-tokens" &&
-					finishReason !== "error"
-				) {
-					const recovered = this.recoverFabricatedToolCalls(message);
+				//
+				// Two separate jobs, on purpose:
+				//  - the markup is stripped from the text even when the turn made its
+				//    calls properly, because wire format is not something a user should
+				//    ever read;
+				//  - calls are only *adopted* from the text when the turn produced none
+				//    of its own, or a stray markup block would run work twice.
+				// A turn cut off by the output limit is left completely alone either
+				// way: its block may be missing arguments, and half a call is not a call.
+				if (finishReason !== "max-tokens" && finishReason !== "error") {
+					const recovered = this.recoverFabricatedToolCalls(message, {
+						adoptCalls: toolCalls.length === 0,
+					});
 					if (recovered) {
 						message = recovered.message;
-						toolCalls = recovered.toolCalls;
+						if (recovered.toolCalls.length > 0) {
+							toolCalls = recovered.toolCalls;
+							await this.announceRecoveredToolCalls(recovered.toolCalls);
+						}
 					}
 				}
 

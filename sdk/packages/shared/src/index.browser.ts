@@ -436,6 +436,7 @@ export {
 	resolveClineEnvironment,
 } from "./runtime/cline-environment";
 export type {
+	CaptureAgentRecoveredTextToolCallsInput,
 	CaptureAgentUnexpectedReasoningTokensInput,
 	CaptureSdkErrorInput,
 	CaptureTaskLifecycleEventInput,
@@ -451,8 +452,10 @@ export type {
 	TelemetryValue,
 } from "./services/telemetry";
 export {
+	AGENT_RECOVERED_TEXT_TOOL_CALLS_EVENT,
 	AGENT_UNEXPECTED_REASONING_TOKENS_EVENT,
 	buildSdkErrorProperties,
+	captureAgentRecoveredTextToolCalls,
 	captureAgentUnexpectedReasoningTokens,
 	captureSdkError,
 	captureTaskLifecycleEvent,

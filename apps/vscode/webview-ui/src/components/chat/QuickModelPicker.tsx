@@ -988,8 +988,16 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 		const status = statusForModel(providerId, modelId, info)
 
 		return (
+			/*
+			 * `overflow-x-hidden` on purpose: the panel only ever needs to scroll DOWN (a tall
+			 * model meets the 320px max-height). Leaving the sideways axis at the implicit
+			 * `auto` — which is what a bare `overflow-y-auto` computes to — let the browser
+			 * draw a horizontal scrollbar along the panel's bottom edge the moment any child
+			 * reached past its right side, and a grey strip under the capability readout
+			 * reads as a broken panel (smoke report, dev.6-fix.25).
+			 */
 			<div
-				className="absolute z-40 overflow-y-auto rounded border border-(--vscode-editorGroup-border) bg-(--vscode-editorWidget-background) px-3 py-2.5 shadow-lg"
+				className="absolute z-40 overflow-y-auto overflow-x-hidden rounded border border-(--vscode-editorGroup-border) bg-(--vscode-editorWidget-background) px-3 py-2.5 shadow-lg"
 				data-icline-picker-options=""
 				onPointerEnter={cancelOptionsClose}
 				onPointerLeave={scheduleOptionsClose}
@@ -1086,8 +1094,11 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 					</div>
 
 					{/* Provider + model list */}
+					{/* Scrolling is vertical only: rows truncate instead of running wide, and the
+					    hovered row's name zooms by 7%, which is enough to reach past the row's
+					    right padding and let a bare `overflow-y-auto` grow a scrollbar. */}
 					<div
-						className="flex-1 overflow-y-auto min-h-0"
+						className="flex-1 overflow-y-auto overflow-x-hidden min-h-0"
 						data-icline-picker-list=""
 						onPointerMove={handleListPointerMove}
 						onScroll={() => {

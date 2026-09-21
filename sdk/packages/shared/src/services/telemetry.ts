@@ -60,6 +60,21 @@ export interface CaptureAgentUnexpectedReasoningTokensInput {
 	reasoningTokenCount: number;
 }
 
+export const AGENT_RECOVERED_TEXT_TOOL_CALLS_EVENT =
+	"agent.tool_calls.recovered_from_text";
+
+export interface CaptureAgentRecoveredTextToolCallsInput {
+	sessionId?: string;
+	agentId: string;
+	runId?: string;
+	iteration: number;
+	providerId?: string;
+	modelId?: string;
+	/** Comma-joined tool names, as the model wrote them. */
+	toolNames: string;
+	toolCount: number;
+}
+
 export const TASK_PROVIDER_REQUEST_STARTED_EVENT =
 	"task.provider_request_started";
 export const TASK_PROVIDER_STREAM_STARTED_EVENT =
@@ -268,6 +283,31 @@ export function captureAgentUnexpectedReasoningTokens(
 			modelId: input.modelId,
 			requestedThinking: input.requestedThinking,
 			reasoningTokenCount: input.reasoningTokenCount,
+		}),
+	});
+}
+
+/**
+ * The model put its tool call in the TEXT channel (see the agents package's
+ * `fabricated-tool-calls.ts`). Worth counting: it is a model/provider behaviour, not a
+ * user mistake, and a runtime that recovers it silently cannot tell whether a rising
+ * recovered-call rate is a model regression or a parsing gap.
+ */
+export function captureAgentRecoveredTextToolCalls(
+	telemetry: ITelemetryService | undefined,
+	input: CaptureAgentRecoveredTextToolCallsInput,
+): void {
+	telemetry?.capture({
+		event: AGENT_RECOVERED_TEXT_TOOL_CALLS_EVENT,
+		properties: stripUndefinedTelemetryProperties({
+			sessionId: input.sessionId,
+			agentId: input.agentId,
+			runId: input.runId,
+			iteration: input.iteration,
+			providerId: input.providerId,
+			modelId: input.modelId,
+			toolNames: input.toolNames,
+			toolCount: input.toolCount,
 		}),
 	});
 }

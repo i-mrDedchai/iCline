@@ -67,7 +67,14 @@ describe("cline builtin models", () => {
 		expect(findClineSpec().defaultModelId).toBe(CLINE_DEFAULT_MODEL_ID);
 	});
 
-	it("prefers Vercel-style Z.ai model ids over equivalent OpenRouter ids", async () => {
+	it("keeps both Z.ai id spellings, each with its own metadata", async () => {
+		// The two spellings are different ROUTES, not two ways of writing one model:
+		// `zai/*` is the paid OpenRouter route the Vercel gateway needs, `z-ai/*` the free
+		// Cline route the Free list and real sessions use. Dropping the alias whenever a
+		// canonical sibling exists (`preferCanonicalModelIds`) is what left every free
+		// model without metadata — no capability icons, and a Thinking switch that only
+		// existed while a level was already set, so turning it off disabled it for good
+		// (smoke 2026-09-21, `z-ai/glm-5.3-flash`).
 		const models = await getModelsForProvider("cline");
 
 		expect(models["zai/glm-5.2"]).toMatchObject({
@@ -79,7 +86,13 @@ describe("cline builtin models", () => {
 		expect(models["zai/glm-5.1"]).toMatchObject({
 			id: "zai/glm-5.1",
 		});
-		expect(models["z-ai/glm-5.2"]).toBeUndefined();
+		// …and the free route is here as well, described by the same bundled catalog.
+		expect(models["z-ai/glm-5.2"]).toMatchObject({ id: "z-ai/glm-5.2" })
+		expect(models["z-ai/glm-5.3-flash"]).toMatchObject({
+			id: "z-ai/glm-5.3-flash",
+			reasoningOptions: expect.arrayContaining([expect.objectContaining({ type: "effort" })]),
+		})
+		expect(models["cline-free/solar-pro4"]).toMatchObject({ id: "cline-free/solar-pro4" })
 	});
 
 	it("includes Vercel-only allowlisted models the OpenRouter catalog lacks", async () => {

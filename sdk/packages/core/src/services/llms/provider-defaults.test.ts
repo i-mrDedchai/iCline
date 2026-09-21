@@ -476,7 +476,13 @@ describe("resolveProviderConfig", () => {
 		).toBeUndefined();
 	});
 
-	it("prefers Vercel-style Z.ai ids in Cline known models", async () => {
+	it("keeps both Z.ai ids in Cline known models, each with its own metadata", async () => {
+		// The two ids are different ROUTES, not two spellings of one model: the
+		// free Cline route is `z-ai/*` (the spelling `cline-recommended.generated.ts`
+		// and the Settings Free list use) and the paid OpenRouter route is `zai/*`
+		// (the spelling the Vercel gateway needs). Dropping the alias because its
+		// canonical sibling exists left every free model the app offers without any
+		// capability metadata at all (smoke 2026-09-21).
 		const resolved = await resolveProviderConfig("cline");
 
 		expect(resolved?.knownModels?.["zai/glm-5.2"]).toMatchObject({
@@ -485,7 +491,15 @@ describe("resolveProviderConfig", () => {
 			contextWindow: 1_000_000,
 			maxInputTokens: 1_000_000,
 		});
-		expect(resolved?.knownModels?.["z-ai/glm-5.2"]).toBeUndefined();
+		// The alias keeps the metadata the picker and the request path both read:
+		// reasoning support and the effort levels this route really accepts.
+		expect(resolved?.knownModels?.["z-ai/glm-5.2"]).toMatchObject({
+			id: "z-ai/glm-5.2",
+			capabilities: expect.arrayContaining(["reasoning"]),
+		});
+		expect(
+			resolved?.knownModels?.["z-ai/glm-5.2"]?.reasoningOptions,
+		).toBeDefined();
 	});
 
 	it("preserves explicit Cline known model overrides for alias ids", async () => {

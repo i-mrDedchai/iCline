@@ -2175,7 +2175,7 @@ describe("listLocalProviders", () => {
 		).toBe(false);
 	});
 
-	it("uses Cline-specific Z.ai aliases in the built-in model list", async () => {
+	it("keeps both Z.ai id spellings in the built-in Cline model list", async () => {
 		manager.saveProviderSettings(
 			{
 				provider: "cline",
@@ -2199,8 +2199,14 @@ describe("listLocalProviders", () => {
 		);
 
 		expect(cline?.modelList?.length).toBeGreaterThan(0);
+		// Both spellings are real routes and both are listed: `zai/*` is the paid
+		// OpenRouter route the Vercel gateway needs, `z-ai/*` the free Cline route the
+		// Free list and sessions actually use (see `buildClineModels`).
 		expect(clineModelIds).toContain("zai/glm-5.2");
-		expect(clineModelIds).not.toContain("z-ai/glm-5.2");
+		expect(clineModelIds).toContain("z-ai/glm-5.2");
+		// …and the Cline Free route exists here as well, with its own metadata.
+		expect(clineModelIds).toContain("z-ai/glm-5.3-flash");
+		expect(clineModelIds).toContain("cline-free/solar-pro4");
 		expect(openrouterModelIds).toContain("z-ai/glm-5.2");
 	});
 

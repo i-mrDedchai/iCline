@@ -45,6 +45,18 @@ const GLM_TURN = `แผนของผม:
 </invoke>
 </tool_call>`
 
+/**
+ * The dev.6-fix.25 round's own turn, byte-for-byte from its transcript
+ * (`~/.cline/data/sessions/1789940859679_34wsx`): the tool NAME, then its arguments as
+ * bare JSON, and NO closing tag — the dialect that round's parser could not see at all.
+ * Its tool name is a real one, so a recovered call must actually RUN, which is the part
+ * the invoke-shaped fixture above cannot prove (it only ever reaches the unknown-name
+ * branch).
+ */
+const GLM_FIX25_TURN =
+	"ผมจะสำรวจ workspace ก่อนครับ แล้วสร้างงานให้ทันที — เริ่มจากเช็คว่ามีโฟลเดอร์/ไฟล์อะไรอยู่แล้วบ้าง" +
+	'<tool_call>run_commands{"commands": ["echo iCline-dialect-four-ok"]}'
+
 interface Check {
 	name: string
 	ok: boolean
@@ -183,6 +195,66 @@ async function main(): Promise<void> {
 		},
 	]
 
+	// ---------------------------------------------------------------------------------
+	// Scenario 2: the dialect the NEXT smoke round hit — an unclosed `name{json}` block
+	// naming a tool that really exists. Recovery must execute it, not just describe it.
+	// ---------------------------------------------------------------------------------
+	const dialectModel = new ScriptedModel([
+		() => [
+			{ type: "text-delta", text: GLM_FIX25_TURN },
+			{ type: "finish", reason: "stop" },
+		],
+		() => [
+			{ type: "text-delta", text: "สำรวจเสร็จแล้วครับ" },
+			{ type: "finish", reason: "stop" },
+		],
+	])
+	const dialectAgent = new Agent({
+		providerId: "anthropic",
+		modelId: "claude-fable-5",
+		apiKey: "unused-scripted-model",
+		model: dialectModel,
+		tools,
+	})
+	const dialectResult = await dialectAgent.run("สร้าง template HTML สวยๆ ในโฟลเดอร์ของตัวเอง")
+	const dialectAssistantTurns = dialectResult.messages.filter((message) => message.role === "assistant")
+	const dialectText = dialectAssistantTurns.map((message) => textOf(message)).join("\n")
+	const dialectToolResults = dialectResult.messages
+		.flatMap((message) => message.content)
+		.filter((part): part is { type: "tool-result"; output: unknown } => part?.type === "tool-result")
+	const dialectRecoveredTurn = dialectAssistantTurns[0]
+	const dialectHasRunCommands = dialectRecoveredTurn?.content.some(
+		(part) => part.type === "tool-call" && part.toolName === "run_commands",
+	)
+	// The command's own output is the proof it executed rather than being reported.
+	const dialectRan = JSON.stringify(dialectToolResults.map((part) => part.output)).includes("iCline-dialect-four-ok")
+	checks.push(
+		{
+			name: "[dialect 4] the unclosed `name{json}` block is stripped from the text",
+			ok: !dialectText.includes("tool_call") && !dialectText.includes("commands"),
+			detail: `assistant text: ${JSON.stringify(dialectText.slice(0, 60))}…`,
+		},
+		{
+			name: "[dialect 4] the prose before the block survives",
+			ok: dialectText.includes("เริ่มจากเช็คว่ามีโฟลเดอร์"),
+		},
+		{
+			name: "[dialect 4] the recovered call becomes a real run_commands part on the turn itself",
+			ok: dialectHasRunCommands === true,
+		},
+		{
+			name: "[dialect 4] the recovered call really ran (its output came back)",
+			ok: dialectRan,
+			detail: `tool results=${dialectToolResults.length} requests=${dialectModel.requests.length}`,
+		},
+		{
+			name: "[dialect 4] the run completes and the model gets the result to act on",
+			ok: dialectResult.status === "completed" && dialectModel.requests.length === 2,
+			detail: `status=${dialectResult.status}`,
+		},
+	)
+
+	// ---------------------------------------------------------------------------------
 	let failed = 0
 	for (const check of checks) {
 		if (!check.ok) {

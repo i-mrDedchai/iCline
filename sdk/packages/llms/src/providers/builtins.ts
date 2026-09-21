@@ -15,7 +15,6 @@ import { getGeneratedModelsForProvider } from "../catalog/catalog.generated-acce
 import { filterImageOutputModels } from "../catalog/model-filters";
 import {
 	isCanonicalModelIdForAliasRules,
-	preferCanonicalModelIds,
 	VERCEL_OPENROUTER_MODEL_ID_ALIAS_RULES,
 } from "../catalog/model-id-aliases";
 import type {
@@ -509,13 +508,23 @@ function buildClineModels(): Record<string, ModelInfo> {
 				) || VERCEL_ONLY_CLINE_MODEL_IDS.includes(modelId),
 		),
 	);
-	const models = preferCanonicalModelIds(
-		{
-			...generatedModels("openrouter"),
-			...vercelAliasModels,
-		},
-		VERCEL_OPENROUTER_MODEL_ID_ALIAS_RULES,
-	);
+	// The ids the Cline Free/recommended feed itself offers, each described by the
+	// bundled Cline catalog with ITS OWN pricing, context window and reasoning
+	// controls. They are a different ROUTE from the OpenRouter spelling of the same
+	// model (`z-ai/glm-5.3-flash` is free, `zai/glm-5.3-flash` is billed), and they
+	// are the ids sessions actually run on, so they must resolve here: without them
+	// the free models had no metadata anywhere, which is how the Quick Picker came to
+	// show "No capability data" and a Thinking switch that disabled itself once it was
+	// turned off (smoke 2026-09-21).
+	//
+	// The alias ids are kept as well, deliberately: dropping them whenever a canonical
+	// sibling exists (`preferCanonicalModelIds`) is what removed the free route from
+	// this catalog while the picker still listed it.
+	const models = {
+		...generatedModels("openrouter"),
+		...vercelAliasModels,
+		...generatedModels("cline"),
+	};
 
 	// Cline's inference backend currently rejects image-output models. Keep
 	// those models in their native OpenRouter and Vercel catalogs. This filter

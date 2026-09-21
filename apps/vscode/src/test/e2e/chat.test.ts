@@ -34,7 +34,11 @@ e2e("Chat - can send messages and switch between modes", async ({ helper, sideba
 		await sidebar.getByRole("button", { name: "New Task", exact: true }).first().click({ timeout: 5_000 })
 		await expect(sidebar.getByText(/recent/i).first()).toBeVisible({ timeout: 1_500 })
 	}).toPass({ timeout: 20_000 })
-	await expect(sidebar.getByText("Hello, Cline!")).toBeVisible()
+	// The Recent CARD's own description, not the pane's whole text: since fix.24 the live
+	// background banner carries the task title too ("Still working in the background:
+	// Hello, Cline!"), so a bare text locator became a strict-mode violation — the test
+	// only passed on retry whenever the banner happened to be up.
+	await expect(sidebar.locator(".history-task-description", { hasText: "Hello, Cline!" })).toBeVisible()
 
 	// Makes sure the act and plan switches are working correctly
 	// Aria-checked state should be true for Act and false for Plan

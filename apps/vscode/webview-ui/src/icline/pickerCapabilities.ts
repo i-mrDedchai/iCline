@@ -144,7 +144,14 @@ export function resolveModelStatus(input: {
 		providerId: input.providerId,
 		modelId: input.modelId,
 		modelInfo: input.modelInfo,
-		effortIsSet: explicitOn,
+		/*
+		 * A level the user EXPLICITLY set keeps its control reachable — including the OFF
+		 * level. `none` is a choice someone made, and it is the only trace of a
+		 * reasoning-capable model whose catalog entry the app does not have: reading it as
+		 * "nothing is set" made the Thinking switch disable itself the moment it was turned
+		 * off, with no way back (smoke 2026-09-21, `z-ai/glm-5.3-flash`).
+		 */
+		effortIsSet: explicit !== undefined,
 		budgetIsSet: budget > 0,
 	})
 	let effort = explicitOn ? explicit : undefined
