@@ -26,7 +26,7 @@ import type { PickerTranslator } from "@/icline/i18n/pickerStrings"
 import { MENU_SURFACE_CLASS } from "@/icline/menuPopover"
 import type { ModelStatus } from "@/icline/pickerCapabilities"
 import { cn } from "@/lib/utils"
-import { resolveEffortLevels } from "@/utils/modelThinkingOptions"
+import { resolveEffortLevels, withSupportedEfforts } from "@/utils/modelThinkingOptions"
 
 export interface ModelOptionsPanelProps {
 	providerId: string
@@ -55,10 +55,36 @@ export function ModelOptionsPanel({
 	className,
 }: ModelOptionsPanelProps) {
 	const switchConfigurable = status.support.showEffort || status.support.showThinkingBudget
-	// The levels this model's provider metadata defines; the OFF level is never a button
-	// here — turning reasoning off is the Thinking switch's job.
-	const effortSet = resolveEffortLevels({ providerId, modelId, modelInfo })
+	/*
+	 * The levels this model really takes. The host's `supportedEfforts` NARROWS the
+	 * provider's vocabulary to the model's own (`z-ai/glm-5.3-flash` takes
+	 * Low/High/Max — offering it the generic six was a lie the SDK silently clamped,
+	 * smoke 2026-09-21); an answer that names nothing leaves the vocabulary alone,
+	 * because a catalog without the model is not a model without levels. The stored
+	 * level survives either way, so the marked level and the clamp notice below tell
+	 * the same story. The OFF level is never a button here — turning reasoning off is
+	 * the Thinking switch's job.
+	 */
+	const effortSet = withSupportedEfforts(
+		resolveEffortLevels({ providerId, modelId, modelInfo }),
+		effortOutcome?.supportedEfforts,
+		status.effort,
+	)
 	const effortLevels = effortSet.levels.filter((level) => !level.isOff)
+	/**
+	 * "This model has an effort control, but no levels" — a toggle-only model.
+	 *
+	 * The host answers with the levels straight from the model's registry entry, whose
+	 * `reasoningOptions` is a bare toggle for these models: reasoning is on or off and
+	 * every level sends the same thing. Offering the provider's six levels there is a lie
+	 * in both directions — they all mean "on" — so the switch is shown as the control it
+	 * is, and the list says so. An UNKNOWN model (`registry-missing-model`) must not be
+	 * treated this way: no entry is not the same as no levels.
+	 */
+	const noLevelsToOffer =
+		(effortOutcome?.supportedEfforts ?? []).every((value) => value.trim() === "") &&
+		effortOutcome?.reason === "no-effort-control" &&
+		effortOutcome.source === "sdk-registry"
 
 	return (
 		// `MENU_SURFACE_CLASS` on the panel itself: this surface only ever appears as a menu
@@ -94,7 +120,7 @@ export function ModelOptionsPanel({
 			 * explicit off (it writes `none`).
 			 */}
 			<div className="pt-2 text-xs text-(--vscode-foreground)">{tr("optionsEffortLabel")}</div>
-			{status.support.showEffort ? (
+			{status.support.showEffort && !noLevelsToOffer ? (
 				<div className="pt-0.5" data-icline-effort-set={effortSet.id}>
 					{effortLevels.map((level) => {
 						const selected = status.effort === level.value

@@ -142,6 +142,73 @@ describe("AgentRuntime fabricated tool-call recovery", () => {
 		expect(secondRequest).toContain("echoed");
 	});
 
+	it("executes the element-form turn the fix.26 smoke round produced", async () => {
+		// The shape that stalled that round: the tool name as the tag, its arguments as
+		// child elements (`<cmd>…`), the closing tag written twice, and no call syntax
+		// anywhere — so every earlier dialect walked past it.
+		const model = new ScriptedModel([
+			() => [
+				{
+					type: "text-delta",
+					text: 'จะเริ่มเลยครับ ✨<echo>\n<text>hi</text>\n</echo></echo>',
+				},
+				{ type: "finish", reason: "stop" },
+			],
+			() => [
+				{ type: "text-delta", text: "done" },
+				{ type: "finish", reason: "stop" },
+			],
+		]);
+		const runtime = new AgentRuntime({ model, tools: [createEchoTool()] });
+
+		const result = await runtime.run("hi");
+
+		expect(result.status).toBe("completed");
+		expect(toolResults(result.messages)).toEqual([{ echoed: "hi" }]);
+		expect(model.requests).toHaveLength(2);
+		const recoveredTurn = result.messages.find(
+			(message) =>
+				message.role === "assistant" &&
+				message.content.some((part) => part.type === "tool-call"),
+		);
+		// Prose kept, block gone, call adopted — and no orphan `</echo>` behind it.
+		expect(recoveredTurn?.content).toMatchObject([
+			{ type: "text", text: "จะเริ่มเลยครับ ✨" },
+			{ type: "tool-call", toolName: "echo", input: { text: "hi" } },
+		]);
+	});
+
+	it("leaves real HTML in a turn that also made a call", async () => {
+		// The same smoke round asked for an HTML page, so markup the model is *writing*
+		// shares the text channel with the markup it is *calling* with. Only the call
+		// goes: an element whose name is not a tool stays exactly as written.
+		const model = new ScriptedModel([
+			() => [
+				{
+					type: "text-delta",
+					text: '<section class="hero"><h1>Theme</h1></section>\n<echo>\n<text>hi</text>\n</echo>',
+				},
+				{ type: "finish", reason: "stop" },
+			],
+			() => [
+				{ type: "text-delta", text: "done" },
+				{ type: "finish", reason: "stop" },
+			],
+		]);
+		const runtime = new AgentRuntime({ model, tools: [createEchoTool()] });
+
+		const result = await runtime.run("hi");
+
+		expect(toolResults(result.messages)).toEqual([{ echoed: "hi" }]);
+		const assistantText = result.messages
+			.flatMap((message) => message.content)
+			.filter((part) => part.type === "text")
+			.map((part) => (part.type === "text" ? part.text : ""))
+			.join("\n");
+		expect(assistantText).toContain('<section class="hero"><h1>Theme</h1></section>');
+		expect(assistantText).not.toContain("<echo>");
+	});
+
 	it("announces the recovery in the transcript instead of doing it silently", async () => {
 		const model = new ScriptedModel([
 			() => [

@@ -57,18 +57,20 @@ vi.mock("@/components/settings/utils/useApiConfigurationHandlers", () => ({
 vi.mock("@/services/grpc-client", () => ({
 	ModelsServiceClient: {
 		commitModelSelection: vi.fn(),
-		// The Options panel's Effort notice reads the host's clamp answer; these tests
-		// are about rows and commits, so the level is reported as sent unchanged.
+		// The Options panel's Effort notice reads the host's clamp answer AND draws its
+		// level list from it; these tests are about rows and commits, so the host reports
+		// no catalog entry: nothing is clamped and the panel keeps its provider
+		// vocabulary (an unknown model is not a level-less one).
 		resolveReasoningEffort: vi.fn(async (request: { providerId: string; modelId?: string; effort: string }) => ({
 			providerId: request.providerId,
 			modelId: request.modelId ?? "",
 			requested: request.effort,
 			applied: request.effort,
-			supportedEfforts: [request.effort],
-			reason: "exact",
+			supportedEfforts: [],
+			reason: "catalog-unknown",
 			clamped: false,
 			suppressedByBudget: false,
-			source: "sdk-registry",
+			source: "registry-missing-model",
 		})),
 		makeUnaryRequest: vi.fn(async () => ({
 			recommended: [],

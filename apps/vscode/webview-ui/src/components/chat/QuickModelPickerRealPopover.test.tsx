@@ -7,6 +7,7 @@ import { useProviderModels } from "@/hooks/useProviderModels"
 import { clearReasoningEffortOutcomeCache } from "@/hooks/useReasoningEffortOutcome"
 import { MENU_SURFACE_CLASS, MENU_TEXT_FIELD_CLASS } from "@/icline/menuPopover"
 import { ModelsServiceClient } from "@/services/grpc-client"
+import { setChatModelPreference } from "./chatModelPreferences"
 import { QuickModelPicker } from "./QuickModelPicker"
 
 vi.mock("@/context/ExtensionStateContext", () => ({
@@ -41,19 +42,21 @@ vi.mock("@/components/settings/utils/useApiConfigurationHandlers", () => ({
 vi.mock("@/services/grpc-client", () => ({
 	ModelsServiceClient: {
 		commitModelSelection: vi.fn(),
-		// Host answer for "what will this Effort really send?": by default the level is
-		// sent as chosen, so unrelated assertions keep seeing no notice. Tests that
-		// exercise the clamp override this with a real downgrade.
+		// Host answer for "what will this Effort really send?": by default the catalog
+		// does not carry the model (`registry-missing-model`), so nothing is clamped and
+		// the panel keeps its provider vocabulary. That is the shape most of these tests
+		// want — and the one that must NOT be read as "this model has no levels". Tests
+		// that exercise real host levels override this.
 		resolveReasoningEffort: vi.fn(async (request: { providerId: string; modelId?: string; effort: string }) => ({
 			providerId: request.providerId,
 			modelId: request.modelId ?? "",
 			requested: request.effort,
 			applied: request.effort,
-			supportedEfforts: [request.effort],
-			reason: "exact",
+			supportedEfforts: [],
+			reason: "catalog-unknown",
 			clamped: false,
 			suppressedByBudget: false,
-			source: "sdk-registry",
+			source: "registry-missing-model",
 		})),
 		makeUnaryRequest: vi.fn(async () => ({
 			recommended: [],
@@ -283,6 +286,141 @@ describe("QuickModelPicker real Popover", () => {
 		])
 		// The reasoning model offers levels; a model without any declared capability does not.
 		expect(panel()?.textContent).not.toContain("No effort options for this model")
+	})
+
+	it("offers the levels the model really takes, from the host answer", async () => {
+		// The dev.6-fix.26 smoke question: "what may GLM 5.3 Flash be set to?" Cline's own
+		// catalog advertises `low`/`high`/`max` for `z-ai/glm-5.3-flash`, and the panel was
+		// offering the generic six (Minimal/Low/Medium/High/X-High/Max) — levels the SDK
+		// silently clamps on the way out. The host answers the same question with
+		// `decideReasoningEffort`, so the list is exactly what this model accepts.
+		localStorage.clear()
+		mockReasoningProviderModels()
+		vi.mocked(ModelsServiceClient.resolveReasoningEffort).mockImplementation((async (request: {
+			providerId: string
+			modelId?: string
+			effort: string
+		}) => ({
+			providerId: request.providerId,
+			modelId: request.modelId ?? "",
+			requested: request.effort,
+			applied: request.effort || undefined,
+			supportedEfforts: ["low", "high", "max"],
+			reason: request.effort ? "exact" : "not-applicable",
+			clamped: false,
+			suppressedByBudget: false,
+			source: "sdk-registry",
+		})) as unknown as typeof ModelsServiceClient.resolveReasoningEffort)
+
+		render(<QuickModelPicker modelDisplayName={LEFTOVER_XAI_MODEL_ID} />)
+		fireEvent.click(screen.getByRole("button", { name: new RegExp(LEFTOVER_XAI_MODEL_ID) }))
+		fireEvent.click(await screen.findByRole("button", { name: "Jan" }))
+		fireEvent.pointerMove(await screen.findByRole("button", { name: /Jan Reasoner/ }))
+
+		const options = () =>
+			[...document.querySelectorAll("[data-icline-picker-options] [data-icline-effort-option]")].map((el) =>
+				el.getAttribute("data-icline-effort-option"),
+			)
+		await waitFor(() => expect(options()).toEqual(["low", "high", "max"]))
+		expect(readStatus("jan-reasoner").panelText).not.toContain("No effort options for this model")
+
+		// …and switching reasoning on lands on a level this model TAKES: the generic set's
+		// first level is `minimal`, which this model does not accept and the SDK would
+		// clamp back to `low` after the fact.
+		fireEvent.click(screen.getByRole("switch", { name: "Toggle thinking mode" }))
+		await waitFor(() => expect(readStatus("jan-reasoner").rowEffort).toBe("low"))
+		expect(readStatus("jan-reasoner")).toMatchObject({ panelSwitch: "on", panelSelectedEffort: "low" })
+	})
+
+	it("does not flash the provider vocabulary while the Thinking switch moves the level", async () => {
+		// dev.6-fix.27 smoke, on several models: clicking the switch made the panel
+		// "jump around and not stay on its own model's row". The switch changes the
+		// LEVEL, and the panel used to answer both "what does this level send" and
+		// "which levels does this model take" from one keyed answer — so the levels
+		// vanished for as long as the switch's own question took, and the panel drew the
+		// provider vocabulary (six levels, including `Minimal`) in the meantime. The
+		// model's levels are a fact about the MODEL, and they are already known here.
+		localStorage.clear()
+		// A level is already in force, so the switch starts ON and the click in this
+		// test is the OFF one — the direction the report named.
+		setChatModelPreference("jan", "jan-reasoner", { reasoningEffort: "low" })
+		mockReasoningProviderModels()
+		vi.mocked(ModelsServiceClient.resolveReasoningEffort).mockImplementation((async (request: {
+			providerId: string
+			modelId?: string
+			effort: string
+		}) => {
+			if (request.effort !== "low") {
+				// The switch's own question ("what does OFF send?", i.e. no level) —
+				// deliberately never answered, so the test sees exactly what the panel
+				// renders while it is in flight.
+				return new Promise(() => {})
+			}
+			return {
+				providerId: request.providerId,
+				modelId: request.modelId ?? "",
+				requested: request.effort,
+				applied: request.effort || undefined,
+				supportedEfforts: ["low", "high", "max"],
+				reason: request.effort ? "exact" : "not-applicable",
+				clamped: false,
+				suppressedByBudget: false,
+				source: "sdk-registry",
+			}
+		}) as unknown as typeof ModelsServiceClient.resolveReasoningEffort)
+
+		render(<QuickModelPicker modelDisplayName={LEFTOVER_XAI_MODEL_ID} />)
+		fireEvent.click(screen.getByRole("button", { name: new RegExp(LEFTOVER_XAI_MODEL_ID) }))
+		fireEvent.click(await screen.findByRole("button", { name: "Jan" }))
+		fireEvent.pointerMove(await screen.findByRole("button", { name: /Jan Reasoner/ }))
+
+		const options = () =>
+			[...document.querySelectorAll("[data-icline-picker-options] [data-icline-effort-option]")].map((el) =>
+				el.getAttribute("data-icline-effort-option"),
+			)
+		await waitFor(() => expect(options()).toEqual(["low", "high", "max"]))
+		await waitFor(() => expect(readStatus("jan-reasoner").panelSwitch).toBe("on"))
+
+		fireEvent.click(screen.getByRole("switch", { name: "Toggle thinking mode" }))
+		await waitFor(() => expect(readStatus("jan-reasoner").panelSwitch).toBe("off"))
+
+		// Still this model's own three levels, and no clamp notice about a level that
+		// belongs to a vocabulary this model does not speak.
+		expect(options()).toEqual(["low", "high", "max"])
+		expect(readStatus("jan-reasoner").panelText).not.toContain("Minimal")
+	})
+
+	it("says a toggle-only model has no levels instead of offering the vocabulary's", async () => {
+		// A model whose catalog entry is a bare toggle (`reasoningOptions: [{ type:
+		// "toggle" }]`) reasons, but every level sends the same thing. Offering it six
+		// levels is a lie in both directions; the Thinking switch is the whole control.
+		localStorage.clear()
+		mockReasoningProviderModels()
+		vi.mocked(ModelsServiceClient.resolveReasoningEffort).mockImplementation((async (request: {
+			providerId: string
+			modelId?: string
+			effort: string
+		}) => ({
+			providerId: request.providerId,
+			modelId: request.modelId ?? "",
+			requested: request.effort,
+			supportedEfforts: [],
+			reason: "no-effort-control",
+			clamped: false,
+			suppressedByBudget: false,
+			source: "sdk-registry",
+		})) as unknown as typeof ModelsServiceClient.resolveReasoningEffort)
+
+		render(<QuickModelPicker modelDisplayName={LEFTOVER_XAI_MODEL_ID} />)
+		fireEvent.click(screen.getByRole("button", { name: new RegExp(LEFTOVER_XAI_MODEL_ID) }))
+		fireEvent.click(await screen.findByRole("button", { name: "Jan" }))
+		fireEvent.pointerMove(await screen.findByRole("button", { name: /Jan Reasoner/ }))
+
+		await waitFor(() => expect(readStatus("jan-reasoner").panelText).toContain("No effort options for this model"))
+		expect(document.querySelector("[data-icline-picker-options] [data-icline-effort-option]")).toBeNull()
+		// The switch is still the control, and still says what is really on.
+		expect(readStatus("jan-reasoner")).toMatchObject({ panelSwitch: "off" })
+		expect(screen.getByRole("switch", { name: "Toggle thinking mode" })).not.toBeDisabled()
 	})
 
 	it("keeps the row badge and icon state in step with the Options panel", async () => {
@@ -612,14 +750,17 @@ describe("QuickModelPicker real Popover", () => {
 	})
 
 	it("says what will really be sent when the model cannot take the marked level", async () => {
-		// The user's Sakana case: Fugu Ultra advertises high/xhigh, so picking Max sends
-		// X-High. The panel used to show Max selected and nothing else — the downgrade
-		// only surfaced in the provider's own answer.
+		// The user's Sakana case: Fugu advertises high/xhigh, so an Effort stored as Max
+		// (effort is stored once per MODE, so another model can leave one behind) is sent
+		// as X-High. The panel used to show Max selected and nothing else — the downgrade
+		// only surfaced in the provider's own answer, and now the level the model does not
+		// take stays in the list only because it is the one in force.
 		//
 		// Start from a clean model-preference store: other tests in this file write
 		// per-model effort into it, and a leftover `max` would open the panel already
 		// clamped (and add an effort badge to the row's accessible name).
 		localStorage.clear()
+		setChatModelPreference("sakana", "fugu", { reasoningEffort: "max" })
 		vi.mocked(useProviderListings).mockReturnValue({
 			providers: [
 				{ id: "xai", name: "xAI" },
@@ -674,20 +815,24 @@ describe("QuickModelPicker real Popover", () => {
 		await waitFor(() => expect(readStatus("fugu").panelModelId).toBe("fugu"))
 
 		const notice = () => document.querySelector("[data-icline-picker-options] [data-icline-effort-clamp]")
-		// A level the model accepts says nothing: silence is the normal state.
-		expect(notice()).toBeNull()
+		const options = () =>
+			[...document.querySelectorAll("[data-icline-picker-options] [data-icline-effort-option]")].map((el) =>
+				el.getAttribute("data-icline-effort-option"),
+			)
 
-		fireEvent.click(document.querySelector('[data-icline-picker-options] [data-icline-effort-option="max"]') as HTMLElement)
+		// The host narrowed the list to what Fugu takes, and the level in force is kept —
+		// it is what is really configured, so hiding it would name a level that is not on.
+		expect(options()).toEqual(["high", "xhigh", "max"])
+		expect(readStatus("fugu")).toMatchObject({ panelSelectedEffort: "max", panelSwitch: "on" })
+		// "Max is not what goes out" is exactly what the panel must say here.
 		await waitFor(() => expect(notice()).not.toBeNull())
 		expect(notice()?.getAttribute("data-icline-effort-clamp")).toBe("nearest-supported")
 		expect(notice()?.textContent).toContain("Max → X-High")
-		// The row keeps showing what the user picked — the notice is the explanation,
-		// not a silent rewrite of the selection.
-		expect(readStatus("fugu")).toMatchObject({ panelSelectedEffort: "max" })
 
-		// Going back to a level the model does take removes the notice.
+		// Choosing a level the model does take removes the notice.
 		fireEvent.click(document.querySelector('[data-icline-picker-options] [data-icline-effort-option="high"]') as HTMLElement)
 		await waitFor(() => expect(notice()).toBeNull())
+		expect(readStatus("fugu")).toMatchObject({ panelSelectedEffort: "high" })
 	})
 
 	it("stays quiet while a thinking budget is what actually goes out", async () => {
@@ -715,7 +860,9 @@ describe("QuickModelPicker real Popover", () => {
 		fireEvent.click(await screen.findByRole("button", { name: "Jan" }))
 		fireEvent.pointerMove(await screen.findByRole("button", { name: /Jan Reasoner/ }))
 		await waitFor(() => expect(readStatus("jan-reasoner").panelModelId).toBe("jan-reasoner"))
-		fireEvent.click(document.querySelector('[data-icline-picker-options] [data-icline-effort-option="max"]') as HTMLElement)
+		// A level the host did NOT advertise is not offered, so pick one it did — the
+		// suppression under test is about the budget, not about the level list.
+		fireEvent.click(document.querySelector('[data-icline-picker-options] [data-icline-effort-option="high"]') as HTMLElement)
 
 		await waitFor(() => expect(ModelsServiceClient.resolveReasoningEffort).toHaveBeenCalled())
 		expect(document.querySelector("[data-icline-picker-options] [data-icline-effort-clamp]")).toBeNull()

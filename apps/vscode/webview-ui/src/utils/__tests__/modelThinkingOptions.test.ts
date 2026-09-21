@@ -15,6 +15,7 @@ import {
 	OPENAI_COMPATIBLE_POLICY_ID,
 	resolveEffortLevels,
 	resolveModelThinkingOptions,
+	withSupportedEfforts,
 } from "../modelThinkingOptions"
 
 const options = (
@@ -248,6 +249,49 @@ describe("effort LEVELS are provider metadata", () => {
 		expect(levelsWithStoredEffort(sakana, "")).toEqual(sakana)
 		expect(levelsWithStoredEffort(sakana, undefined)).toEqual(sakana)
 		expect(levelsWithStoredEffort(sakana, "ultra")).toEqual(sakana)
+	})
+})
+
+describe("withSupportedEfforts — the model's own levels beat the vocabulary's", () => {
+	it("narrows an OpenAI-style set to the levels the host reported", () => {
+		// `z-ai/glm-5.3-flash` (smoke 2026-09-21): Cline's catalog advertises
+		// low/high/max, so the six-level vocabulary was offering choices the SDK only
+		// clamped after the fact.
+		const narrowed = withSupportedEfforts(resolveEffortLevels({ providerId: "cline", modelId: "z-ai/glm-5.3-flash" }), [
+			"low",
+			"high",
+			"max",
+		])
+		expect(narrowed.levels.map((level) => level.value)).toEqual(["low", "high", "max"])
+		expect(narrowed.levels.map((level) => level.label)).toEqual(["Low", "High", "Max"])
+		// An ON switch lands on the model's first level, not `minimal`.
+		expect(firstOnEffortValue(narrowed)).toBe("low")
+	})
+
+	it("narrows a provider's OWN set too, and keeps the level in force", () => {
+		// Sakana's High/X-High/Max is its vocabulary; Fugu takes the first two. Max stays
+		// only because it is what the request really carries — the clamp notice names it.
+		const narrowed = withSupportedEfforts(
+			resolveEffortLevels({ providerId: "sakana", modelId: "fugu" }),
+			["high", "xhigh"],
+			"max",
+		)
+		expect(narrowed.levels.map((level) => level.value)).toEqual(["high", "xhigh", "max"])
+		expect(narrowed.levels.at(-1)?.label).toBe("Max")
+		expect(firstOnEffortValue(narrowed)).toBe("high")
+	})
+
+	it("leaves the set alone when the host named no levels", () => {
+		// `registry-missing-model`: no entry is not the same as no levels, and a
+		// toggle-only model is said out loud by the answer's `reason` instead.
+		const base = resolveEffortLevels({ providerId: "cline", modelId: "some-model-the-catalog-lacks" })
+		expect(withSupportedEfforts(base, []).levels).toEqual(base.levels)
+		expect(withSupportedEfforts(base, undefined).levels).toEqual(base.levels)
+		// Blank values are not levels (an answer with only empty strings is "unknown").
+		expect(withSupportedEfforts(base, ["", "  "]).levels).toEqual(base.levels)
+		// A published `none` is still the OFF level, so it never becomes a button.
+		const withOff = withSupportedEfforts(base, ["none", "high"])
+		expect(withOff.levels.filter((level) => level.isOff).map((level) => level.value)).toEqual(["none"])
 	})
 })
 

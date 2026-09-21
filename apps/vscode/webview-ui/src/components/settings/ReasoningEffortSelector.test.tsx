@@ -91,12 +91,31 @@ describe("ReasoningEffortSelector", () => {
 		expect(document.querySelector("[data-icline-effort-clamp]")?.textContent).toContain("Medium → High")
 	})
 
-	it("asks nothing while reasoning is off", () => {
+	it("claims nothing while reasoning is off — and still asks which levels the model takes", async () => {
+		// The ask is not only "what does this level send". The host also answers with the
+		// model's OWN levels (`supportedEfforts`), and a control that draws its list needs
+		// them before anything is set — gating the question on a level already being set
+		// is what left the Quick Picker's panel unable to name a level it did not hold
+		// (smoke 2026-09-21). Being off changes the ANSWER, not the question.
 		setState("none")
+		// `none` forwards no effort at all: the answer names the model's levels and has
+		// no downgrade to report (`applied` stays undefined).
+		resolveReasoningEffort.mockImplementation((async (request: { providerId: string; modelId?: string; effort: string }) => ({
+			providerId: request.providerId,
+			modelId: request.modelId ?? "",
+			requested: request.effort,
+			supportedEfforts: ["high", "xhigh"],
+			reason: "not-applicable",
+			clamped: false,
+			suppressedByBudget: false,
+			source: "sdk-registry",
+		})) as unknown as typeof ModelsServiceClient.resolveReasoningEffort)
 
 		render(<ReasoningEffortSelector currentMode="act" {...SAKANA} />)
 
-		expect(resolveReasoningEffort).not.toHaveBeenCalled()
+		await waitFor(() => expect(resolveReasoningEffort).toHaveBeenCalledWith(expect.objectContaining({ effort: "none" })))
+		// Silence is the promise that matters: nothing is sent for `none`, so nothing is
+		// claimed about a level.
 		expect(document.querySelector("[data-icline-effort-clamp]")).toBeNull()
 	})
 })

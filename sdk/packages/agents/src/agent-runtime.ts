@@ -499,6 +499,8 @@ export class AgentRuntime {
 	private readonly listeners = new Set<AgentEventListener>();
 	// biome-ignore lint/suspicious/noExplicitAny: tool input/output types vary per tool
 	private readonly tools = new Map<string, AgentTool<any, any>>();
+	/** Memoized {@link getRegisteredToolNames} — the registry is fixed after init. */
+	private registeredToolNames?: ReadonlySet<string>;
 	private hooks: HookBag = {
 		beforeRun: [],
 		afterRun: [],
@@ -689,6 +691,17 @@ export class AgentRuntime {
 		if (hooks.onEvent) this.hooks.onEvent.push(hooks.onEvent);
 	}
 
+	/**
+	 * The tool names this run can actually resolve — handed to the fabricated-call
+	 * recovery so its element-form recognizer can tell a call from prose about markup
+	 * (see `fabricated-tool-calls.ts`). Computed once: the registry is filled during
+	 * `initialize()`, before the first turn.
+	 */
+	private getRegisteredToolNames(): ReadonlySet<string> {
+		this.registeredToolNames ??= new Set(this.tools.keys());
+		return this.registeredToolNames;
+	}
+
 	private getRequiredCompletionToolNames(): string[] {
 		if (this.config.completionPolicy?.requireCompletionTool !== true) {
 			return [];
@@ -731,6 +744,7 @@ export class AgentRuntime {
 	): { message: AgentMessage; toolCalls: AgentToolCallPart[] } | undefined {
 		const toolCalls: AgentToolCallPart[] = [];
 		const content: AgentMessagePart[] = [];
+		const knownToolNames = this.getRegisteredToolNames();
 		let recoveredMarkup = false;
 
 		for (const part of message.content) {
@@ -738,7 +752,7 @@ export class AgentRuntime {
 				content.push(part);
 				continue;
 			}
-			const stripped = stripFabricatedToolCallMarkup(part.text);
+			const stripped = stripFabricatedToolCallMarkup(part.text, { knownToolNames });
 			if (stripped === part.text) {
 				content.push(part);
 				continue;
@@ -748,7 +762,7 @@ export class AgentRuntime {
 				? MAX_FABRICATED_TOOL_CALLS - toolCalls.length
 				: 0;
 			if (room > 0) {
-				for (const call of parseFabricatedToolCalls(part.text).slice(0, room)) {
+				for (const call of parseFabricatedToolCalls(part.text, { knownToolNames }).slice(0, room)) {
 					toolCalls.push({
 						type: "tool-call",
 						toolCallId: createUID("tool"),
@@ -1519,7 +1533,9 @@ export class AgentRuntime {
 						iteration: this.state.iteration,
 						text: event.text,
 						accumulatedText: fabricatedMarkupSeen
-							? stripFabricatedToolCallMarkup(accumulatedText)
+							? stripFabricatedToolCallMarkup(accumulatedText, {
+									knownToolNames: this.getRegisteredToolNames(),
+								})
 							: accumulatedText,
 					});
 					break;

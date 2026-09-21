@@ -57,6 +57,20 @@ const GLM_FIX25_TURN =
 	"ผมจะสำรวจ workspace ก่อนครับ แล้วสร้างงานให้ทันที — เริ่มจากเช็คว่ามีโฟลเดอร์/ไฟล์อะไรอยู่แล้วบ้าง" +
 	'<tool_call>run_commands{"commands": ["echo iCline-dialect-four-ok"]}'
 
+/**
+ * The dev.6-fix.26 round's own turn, again from its transcript
+ * (`~/.cline/data/sessions/1789940859679_34wsx`): NO call syntax at all — the tag IS the
+ * tool name, its arguments are CHILD elements, and the closing tag is written twice.
+ * Every earlier scanner walked past it, so the markup stayed in the chat, nothing ran,
+ * and the turn was reported as a finished answer. Two calls in one turn on purpose: a
+ * recovered call must be resolved against the real registry, and the runtime has to be
+ * able to run more than one of them.
+ */
+const GLM_FIX26_TURN = (target: string) =>
+	"ผมจะเริ่มด้วยการตรวจสอบ workspace ก่อนว่ามีอะไรอยู่แล้ว เพื่อเลือกธีมที่ไม่ซ้ำ ✨" +
+	"<run_commands>\n<cmd>echo iCline-dialect-five-ok</cmd>\n</run_commands></run_commands>\n\n" +
+	`ให้ผมตรวจสอบ:<read_files>\n<paths><path>${target}</path></paths>\n</read_files></read_files>`
+
 interface Check {
 	name: string
 	ok: boolean
@@ -255,6 +269,72 @@ async function main(): Promise<void> {
 	)
 
 	// ---------------------------------------------------------------------------------
+	// Scenario 3: the element-form dialect the fix.26 smoke round hit. Names come from
+	// the REGISTRY, so both calls must really execute — the assertion on the command's
+	// own output is what proves it, not the presence of a tool-call part.
+	// ---------------------------------------------------------------------------------
+	const elementModel = new ScriptedModel([
+		() => [
+			{ type: "text-delta", text: GLM_FIX26_TURN(target) },
+			{ type: "finish", reason: "stop" },
+		],
+		() => [
+			{ type: "text-delta", text: "ตรวจสอบเสร็จแล้วครับ" },
+			{ type: "finish", reason: "stop" },
+		],
+	])
+	const elementAgent = new Agent({
+		providerId: "anthropic",
+		modelId: "claude-fable-5",
+		apiKey: "unused-scripted-model",
+		model: elementModel,
+		tools,
+	})
+	const elementResult = await elementAgent.run("สร้าง template HTML สวยๆ ในโฟลเดอร์ของตัวเอง")
+	const elementAssistantTurns = elementResult.messages.filter((message) => message.role === "assistant")
+	const elementText = elementAssistantTurns.map((message) => textOf(message)).join("\n")
+	const elementToolResults = elementResult.messages
+		.flatMap((message) => message.content)
+		.filter((part): part is { type: "tool-result"; output: unknown } => part?.type === "tool-result")
+	const elementTurn = elementAssistantTurns[0]
+	const elementCallNames = (elementTurn?.content ?? [])
+		.filter((part): part is { type: "tool-call"; toolName: string } => part.type === "tool-call")
+		.map((part) => part.toolName)
+	const elementOutput = JSON.stringify(elementToolResults.map((part) => part.output))
+	checks.push(
+		{
+			name: "[dialect 5] the element-form block is stripped from the text",
+			ok: !elementText.includes("run_commands") && !elementText.includes("read_files") && !elementText.includes("<cmd>"),
+			detail: `assistant text: ${JSON.stringify(elementText.slice(0, 60))}…`,
+		},
+		{
+			name: "[dialect 5] the prose around both blocks survives",
+			ok: elementText.includes("เพื่อเลือกธีมที่ไม่ซ้ำ") && elementText.includes("ให้ผมตรวจสอบ:"),
+		},
+		{
+			name: "[dialect 5] both calls become real tool-call parts on the turn itself",
+			ok: elementCallNames.join(",") === "run_commands,read_files",
+			detail: `recovered: ${elementCallNames.join(", ") || "none"}`,
+		},
+		{
+			name: "[dialect 5] the command really ran, with the model's own argument shape",
+			ok: elementOutput.includes("iCline-dialect-five-ok"),
+		},
+		{
+			name: "[dialect 5] the read really ran too (the file's contents came back)",
+			ok: elementOutput.includes("doctype html"),
+		},
+		{
+			name: "[dialect 5] the run completes and the model gets both results",
+			ok: elementResult.status === "completed" && elementModel.requests.length === 2 && elementToolResults.length >= 2,
+			detail: `status=${elementResult.status} tool results=${elementToolResults.length}`,
+		},
+		{
+			name: "[dialect 5] a turn of real HTML that also made no call is left alone",
+			ok: elementText.includes("เพื่อเลือกธีมที่ไม่ซ้ำ") && !elementText.includes("</read_files>"),
+		},
+	)
+
 	let failed = 0
 	for (const check of checks) {
 		if (!check.ok) {

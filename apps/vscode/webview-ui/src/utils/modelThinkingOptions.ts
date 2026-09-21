@@ -309,6 +309,43 @@ export function resolveEffortLevels(input: ModelThinkingInput): ProviderEffortLe
 	return policy.effortDefault ? { ...base, default: policy.effortDefault } : base
 }
 
+/**
+ * Narrow a provider's set to the levels the HOST says this model really takes.
+ *
+ * The sets above are provider VOCABULARIES. For a provider like `cline` the OpenAI set
+ * is right about the shape of the control (an effort value) and wrong about which
+ * values exist: `z-ai/glm-5.3-flash` advertises `low`/`high`/`max`, and the Options
+ * panel offered it six levels (smoke 2026-09-21, dev.6-fix.26). The host answers with
+ * `supportedEfforts` from `decideReasoningEffort` — the same function the request path
+ * clamps with — so a list built from it cannot name a level the model will not be sent.
+ *
+ * An EMPTY answer leaves the set alone on purpose. The catalog may simply not carry
+ * the model (`registry-missing-model`); "no entry" is not "no levels", and narrowing
+ * on it would hide levels the model really takes. A **toggle-only** model is the one
+ * case worth saying out loud, and the panel says it from `reason` instead.
+ *
+ * The stored level is kept even when the answer does not name it, so the marked level
+ * and the clamp notice keep describing the same value.
+ */
+export function withSupportedEfforts(
+	levels: ProviderEffortLevels,
+	supportedEfforts?: readonly string[] | null,
+	storedEffort?: string | null,
+): ProviderEffortLevels {
+	const values = (supportedEfforts ?? []).map((value) => value.trim()).filter((value) => value.length > 0)
+	if (values.length === 0) {
+		return levels
+	}
+	const declared = values.map(catalogEffortLevel)
+	return {
+		...levels,
+		levels: levelsWithStoredEffort(declared, storedEffort),
+		// What an ON switch lands on with nothing remembered: the model's own first real
+		// level (`low`), not the generic vocabulary's (`minimal`).
+		default: values[0],
+	}
+}
+
 /** Providers whose Settings form always offers effort (custom/compatible endpoints). */
 export const OPENAI_COMPATIBLE_POLICY_ID = "openai-compatible"
 

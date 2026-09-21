@@ -31,6 +31,20 @@ const GLM_FIX25_TURN =
 	"ผมจะสำรวจ workspace ก่อนครับ แล้วสร้างงานให้ทันที — เริ่มจากเช็คว่ามีโฟลเดอร์/ไฟล์อะไรอยู่แล้วบ้าง เพื่อเลือกธีมที่ไม่ซ้ำและตั้งลำดับโฟลเดอร์ให้ถูกต้องครับ" +
 	'<tool_call>run_commands{"commands": ["dir /b \\"d:\\\\.opencode\\\\Test-models\\"", "dir /b /ad \\"d:\\\\.opencode\\\\Test-models\\""]}';
 
+// Byte-for-byte the assistant turn that stalled the dev.6-fix.26 smoke round
+// (`~/.cline/data/sessions/1789945837096_cdf8b`, model `z-ai/glm-5.3-flash`):
+// ELEMENT form — no `<tool_call>` wrapper, no `<parameter>` children, the tool name
+// as the tag and the argument names as its child elements — and the closing tag
+// written twice. Every earlier dialect needed call *syntax*, so nothing was
+// recovered, nothing ran, and the raw markup was what the user read.
+const GLM_FIX26_TURN =
+	"ผมจะเริ่มด้วยการตรวจสอบ workspace ก่อนว่ามีอะไรอยู่แล้ว เพื่อเลือกธีมที่ไม่ซ้ำ ✨<run_commands>\n" +
+	'<cmd>dir /b "d:\\.opencode\\Test-models"</cmd>\n' +
+	"</run_commands></run_commands>\n\n" +
+	"ให้ผมตรวจสอบเนื้อหาที่มีอยู่ในพื้นที่ทำงาน (workspace) ก่อน เพื่อหลีกเลี่ยงการซ้ำกับธีมที่มีอยู่แล้ว:<read_files>\n" +
+	"<paths><path>d:\\.opencode\\Test-models</path></paths>\n" +
+	"</read_files></read_files>";
+
 describe("parseFabricatedToolCalls", () => {
 	it("recovers the unclosed `name{json}` wrapper the fix.25 smoke round produced", () => {
 		expect(parseFabricatedToolCalls(GLM_FIX25_TURN)).toEqual([
@@ -147,6 +161,48 @@ describe("parseFabricatedToolCalls", () => {
 		).toEqual([{ name: "search_codebase", input: { query: "foo" } }]);
 	});
 
+	it("recovers the element-form turn the fix.26 smoke round produced", () => {
+		expect(parseFabricatedToolCalls(GLM_FIX26_TURN)).toEqual([
+			{ name: "run_commands", input: { cmd: 'dir /b "d:\\.opencode\\Test-models"' } },
+			{ name: "read_files", input: { paths: ["d:\\.opencode\\Test-models"] } },
+		]);
+	});
+
+	it("reads a child that holds elements as a list, not as text", () => {
+		expect(
+			parseFabricatedToolCalls(
+				"<read_files><paths><path>/a.ts</path><path>/b.ts</path></paths></read_files>",
+			),
+		).toEqual([{ name: "read_files", input: { paths: ["/a.ts", "/b.ts"] } }]);
+	});
+
+	it("keeps a command's own markup inside its argument, verbatim", () => {
+		// The task in that same smoke round was "build me an HTML page", so markup in
+		// the text channel is expected. A `<b>` inside a command string is part of the
+		// command; only real child elements become arguments.
+		expect(
+			parseFabricatedToolCalls('<run_commands><cmd>echo "<b>hi</b>"</cmd></run_commands>'),
+		).toEqual([{ name: "run_commands", input: { cmd: 'echo "<b>hi</b>"' } }]);
+	});
+
+	it("recovers an element-form call the registry knows, and only those without one", () => {
+		const tags = "<editor><command>write</command><path>/a.html</path></editor>";
+		// A name the registry does not carry has to be snake_case to be read at all.
+		expect(parseFabricatedToolCalls(tags)).toEqual([]);
+		expect(parseFabricatedToolCalls(tags, { knownToolNames: ["editor"] })).toEqual([
+			{ name: "editor", input: { command: "write", path: "/a.html" } },
+		]);
+		expect(
+			parseFabricatedToolCalls("<widget><title>hello</title></widget>", {
+				knownToolNames: ["editor"],
+			}),
+		).toEqual([]);
+	});
+
+	it("does not read an element-form block that never closes", () => {
+		expect(parseFabricatedToolCalls("<run_commands>\n<cmd>dir /b")).toEqual([]);
+	});
+
 	it("returns nothing for ordinary prose, even prose containing XML", () => {
 		expect(parseFabricatedToolCalls("สวัสดีครับ ผมคือ iCline")).toEqual([]);
 		expect(parseFabricatedToolCalls("")).toEqual([]);
@@ -223,6 +279,22 @@ describe("stripFabricatedToolCallMarkup", () => {
 	it("keeps a wrapper whose body is not a call", () => {
 		const text = '<tool_call>{"unrelated": true}</tool_call>';
 		expect(stripFabricatedToolCallMarkup(text)).toBe(text);
+	});
+
+	it("drops an element-form block and the doubled closing tag with it", () => {
+		const stripped = stripFabricatedToolCallMarkup(GLM_FIX26_TURN);
+		expect(stripped).not.toContain("run_commands");
+		expect(stripped).not.toContain("read_files");
+		expect(stripped).not.toContain("<cmd>");
+		expect(stripped).toContain("เพื่อเลือกธีมที่ไม่ซ้ำ ✨");
+		expect(stripped).toContain("ให้ผมตรวจสอบเนื้อหาที่มีอยู่ในพื้นที่ทำงาน");
+	});
+
+	it("leaves real HTML alone even when a call block was removed elsewhere", () => {
+		const text = '<section class="hero"><h1>Title</h1></section>\n<run_commands><cmd>ls</cmd></run_commands>';
+		const stripped = stripFabricatedToolCallMarkup(text);
+		expect(stripped).toContain('<section class="hero"><h1>Title</h1></section>');
+		expect(stripped).not.toContain("run_commands");
 	});
 
 	it("drops the unclosed `name{json}` block and keeps the prose before it", () => {

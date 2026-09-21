@@ -73,7 +73,7 @@ import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useNormalizedApiConfiguration } from "@/hooks/useNormalizedApiConfiguration"
 import { useProviderListings } from "@/hooks/useProviderListings"
 import { useProviderModels } from "@/hooks/useProviderModels"
-import { useReasoningEffortOutcome } from "@/hooks/useReasoningEffortOutcome"
+import { readReasoningEffortLevels, useReasoningEffortOutcome } from "@/hooks/useReasoningEffortOutcome"
 import { BalloonTooltip } from "@/icline/BalloonTooltip"
 import { formatPickerString, type PickerTranslator } from "@/icline/i18n/pickerStrings"
 import { usePickerStrings } from "@/icline/i18n/usePickerStrings"
@@ -82,7 +82,7 @@ import { type OrgProviderBlock, orgProviderBlock } from "@/icline/orgProviderPol
 import { type ModelStatus, resolveModelStatus } from "@/icline/pickerCapabilities"
 import { cn } from "@/lib/utils"
 import { ModelsServiceClient } from "@/services/grpc-client"
-import { firstOnEffortValue, resolveEffortLevels } from "@/utils/modelThinkingOptions"
+import { firstOnEffortValue, resolveEffortLevels, withSupportedEfforts } from "@/utils/modelThinkingOptions"
 
 interface QuickModelPickerProps {
 	/** Display string shown in the chat header button. */
@@ -215,7 +215,11 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 		applyApiConfigurationPatch,
 		remoteConfigSettings,
 	} = useExtensionState()
-	const { selectedProvider: currentProvider, selectedModelId: currentModelId } = useNormalizedApiConfiguration(mode)
+	const {
+		selectedProvider: currentProvider,
+		selectedModelId: currentModelId,
+		selectedModelInfo,
+	} = useNormalizedApiConfiguration(mode)
 	const {
 		recommended: clineRecommendedFeatured,
 		free: clineFreeFeatured,
@@ -656,9 +660,21 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 			const status = statusForModel(providerId, modelId, modelInfo)
 			if (status.support.showEffort) {
 				const key = getChatModelPreferenceKey(providerId, modelId)
-				// Re-enabling restores what the model last used; with nothing remembered it
-				// starts at the provider metadata's first real level (Sakana: High/X-High).
-				const levels = resolveEffortLevels({ providerId, modelId, modelInfo })
+				/*
+				 * Re-enabling restores what the model last used; with nothing remembered it
+				 * starts at the model's OWN first level. The levels come from the model's
+				 * answer (`readReasoningEffortLevels`, keyed by the model rather than by the
+				 * level in force, so it is still there while this very toggle is changing
+				 * that level), because a vocabulary's first level is often one the model does
+				 * not take — `z-ai/glm-5.3-flash` takes Low/High/Max, so writing the generic
+				 * `minimal` was only ever clamped back to `low` by the SDK after reaching the
+				 * wire.
+				 */
+				const levels = withSupportedEfforts(
+					resolveEffortLevels({ providerId, modelId, modelInfo }),
+					readReasoningEffortLevels({ providerId, modelId })?.supportedEfforts,
+					status.effort,
+				)
 				const effort: string = nextEnabled
 					? (status.effort ?? lastEffortRef.current.get(key) ?? firstOnEffortValue(levels))
 					: "none"
@@ -764,8 +780,18 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 		thinkingBudgetTokens: hoveredStatus?.thinkingBudgetTokens,
 	})
 
-	/** The active model's own readout — from the warm catalog, like a row's info. */
-	const currentModelInfo = warmModelsFor(currentProvider)[currentModelId]
+	/**
+	 * The active model's own readout.
+	 *
+	 * The warm catalog first, and — when it does not carry this exact id — the
+	 * host-resolved info the composer already asked for (`useNormalizedApiConfiguration`,
+	 * which also resolves a catalog alias like the free route's `z-ai/glm-5.3-flash`).
+	 * Without the second source the composer's Options popover drew the ACTIVE model from
+	 * no metadata at all: no capability icons, and a Thinking switch that existed only
+	 * while a level was set — so turning Thinking off disabled the switch for good
+	 * (smoke 2026-09-21).
+	 */
+	const currentModelInfo = warmModelsFor(currentProvider)[currentModelId] ?? (selectedModelInfo as ModelInfoLike | undefined)
 	const currentStatus = statusForModel(currentProvider, currentModelId, currentModelInfo)
 	/**
 	 * The same clamp answer the hover panel shows, for the active model — the composer's

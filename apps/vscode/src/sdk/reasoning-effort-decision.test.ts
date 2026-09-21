@@ -1,7 +1,7 @@
 import { decideReasoningEffort, getProviderCollectionSync, getProviderIds } from "@cline/llms"
 import { OPENAI_REASONING_EFFORT_OPTIONS } from "@shared/storage/types"
 import { describe, expect, it } from "vitest"
-import { resolveReasoningEffortOutcome } from "./reasoning-effort-decision"
+import { resolveReasoningEffortOutcome, resolveReasoningModelLevels } from "./reasoning-effort-decision"
 
 /**
  * These cases go through the REAL SDK registry (baked catalog + provider
@@ -97,6 +97,21 @@ describe("resolveReasoningEffortOutcome", () => {
 		for (const effort of ["none", "", "   ", undefined, null, "ultra"]) {
 			expect(resolveReasoningEffortOutcome({ providerId: "sakana", modelId: "fugu-ultra", effort })).toBeUndefined()
 		}
+	})
+
+	it("names the levels a model takes even when no level is set", () => {
+		// The question a control asks while drawing its list. It must not depend on a
+		// level already being stored: the panel needs the answer BEFORE the first pick.
+		const cline = resolveReasoningModelLevels({ providerId: "cline", modelId: "z-ai/glm-5.3-flash" })
+		expect(cline.supportedEfforts).toEqual(["low", "high", "max"])
+		expect(cline.source).toBe("sdk-registry")
+
+		const toggleOnly = resolveReasoningModelLevels({ providerId: "sakana", modelId: "fugu-ultra" })
+		expect(toggleOnly.supportedEfforts.length).toBeGreaterThan(0)
+
+		// No registry entry is not the same as no levels: the caller keeps its own set.
+		const unknown = resolveReasoningModelLevels({ providerId: "openrouter", modelId: "deepseek/deepseek-flash-latest" })
+		expect(unknown).toMatchObject({ supportedEfforts: [], source: "registry-missing-model" })
 	})
 
 	it("resolves by exact id and nothing friendlier", () => {

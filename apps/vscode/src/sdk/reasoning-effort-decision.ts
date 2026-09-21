@@ -16,7 +16,7 @@
 // The webview cannot import `@cline/llms` (no workspace alias, node-only build),
 // so this boundary exists to hand it a plain, serializable answer.
 
-import { decideReasoningEffort, getProviderCollectionSync, type ReasoningEffortDecision } from "@cline/llms"
+import { decideReasoningEffort, getProviderCollectionSync, type ReasoningEffort, type ReasoningEffortDecision } from "@cline/llms"
 import type { ModelReasoningOption } from "@cline/shared"
 import { isReasoningEffortValue } from "@shared/storage/types"
 import { toSdkProviderId } from "./model-catalog/sdk-provider-id"
@@ -61,6 +61,39 @@ interface RegistryModelControls {
 function findRegistryModel(sdkProviderId: string, modelId: string): RegistryModelControls | undefined {
 	const model = getProviderCollectionSync(sdkProviderId)?.models[modelId]
 	return model ? { id: modelId, reasoningOptions: model.reasoningOptions } : undefined
+}
+
+/**
+ * The Effort levels one model really accepts, straight from the registry entry the
+ * gateway resolves — the answer a control can offer as "levels this model takes".
+ *
+ * Empty when the catalog carries no entry for the id or advertises no levels (a
+ * toggle-only model), which is itself worth saying: the UI must not offer six levels
+ * to a model whose wire format has one.
+ *
+ * The levels come from `decideReasoningEffort` — the same function the request path
+ * calls — so a control built on them can be wrong only if the wire is.
+ */
+export function resolveReasoningModelLevels(input: { providerId: string; modelId: string }): ReasoningModelLevels {
+	const model = findRegistryModel(toSdkProviderId(input.providerId), input.modelId)
+	return {
+		...(model ? { registryModelId: model.id } : {}),
+		source: model ? "sdk-registry" : "registry-missing-model",
+		// The requested level does not affect `supportedEfforts`; any probe answers the
+		// model's advertised set identically.
+		supportedEfforts: decideReasoningEffort({
+			effort: "medium",
+			reasoningOptions: model?.reasoningOptions,
+		}).supportedEfforts,
+	}
+}
+
+export interface ReasoningModelLevels {
+	/** Levels the model advertises, ascending (empty when it has no level control). */
+	supportedEfforts: readonly ReasoningEffort[]
+	/** Registry entry the levels came from, when the catalog has one. */
+	registryModelId?: string
+	source: ReasoningEffortControlSource
 }
 
 /**

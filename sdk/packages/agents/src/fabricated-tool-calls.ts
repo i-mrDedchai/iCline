@@ -40,6 +40,24 @@
  *      That is why dialect 4 is scanned by hand (`scanWrapperCalls`) with a
  *      brace-matching reader instead of a closing-tag regex.
  *
+ * And the dialect the `dev.6-fix.26` smoke round wrote — **element form**, no wrapper and
+ * no `<parameter>` children: the tag is the tool name and the CHILD element names are its
+ * arguments:
+ *
+ *   …เพื่อเลือกธีมที่ไม่ซ้ำ ✨<run_commands>
+ *   <cmd>dir /b "d:\.opencode\Test-models"</cmd>
+ *   </run_commands></run_commands>
+ *
+ *   …ก่อน:<read_files>
+ *   <paths><path>d:\.opencode\Test-models</path></paths>
+ *   </read_files></read_files>
+ *
+ * Dialects 1–4 all need call SYNTAX (`<invoke>`, `<parameter>`, a wrapper tag, a JSON
+ * body); this one has none of it, so every earlier scanner walked straight past it: the
+ * markup stayed in the chat and the turn was reported as a finished answer. It is read
+ * by {@link scanElementCalls}, and it is the one dialect that must be *conservative*,
+ * because prose about HTML looks exactly like it — see the recognition rule there.
+ *
  * A block left *unfinished* by the model is never recovered: the JSON reader refuses
  * a value that does not close, so a turn cut off by the output limit cannot be turned
  * into a call with half its arguments. The runtime additionally skips recovery
@@ -61,6 +79,17 @@
 export interface FabricatedToolCall {
 	name: string;
 	input: Record<string, unknown>;
+}
+
+/**
+ * What the caller knows about the run.
+ *
+ * `knownToolNames` is the tool registry the recovered call will be resolved against.
+ * Element-form recognition needs it for its guard against prose (below); every other
+ * dialect works without it, so a caller that passes nothing still recovers those.
+ */
+export interface FabricatedToolCallOptions {
+	knownToolNames?: Iterable<string>;
 }
 
 /**
@@ -116,9 +145,16 @@ const NAME_ATTRIBUTE = /\bname\s*=\s*(?:"([^"]*)"|'([^']*)')/i;
  * Cheap probe for the streaming path: does this chunk contain the start of a
  * call block? Used to decide whether the (more expensive) strip is worth
  * running on the accumulated text.
+ *
+ * The second alternative is element form: an opening or closing tag whose name is
+ * snake_case. Every tool this runtime ships and every tool a model seems to invent for
+ * it (`read_files`, `run_commands`, `list_files`, `execute_command`, `search_codebase`)
+ * is written that way, and no HTML element is, so the probe can fire on the shape
+ * without knowing the registry. A false positive only costs the strip below, which
+ * returns its input untouched when nothing matches.
  */
 export const FABRICATED_TOOL_CALL_HINT =
-	/<\s*\/?(?:tool_calls?|function_calls?|invoke)\b/i;
+	/<\s*\/?(?:tool_calls?|function_calls?|invoke)\b|<\s*\/?[a-z][a-z0-9]*_[a-z0-9_]*(?:\s|>)/i;
 
 function readName(attributes: string): string | undefined {
 	const match = NAME_ATTRIBUTE.exec(attributes);
@@ -319,11 +355,197 @@ function endAfterWrapperClose(text: string, end: number): number {
 
 /*
  * ---------------------------------------------------------------------------
+ * Element form: `<run_commands><cmd>dir</cmd></run_commands>`
+ * ---------------------------------------------------------------------------
+ */
+
+/** Any opening tag — element form reads the tag itself as the tool name. */
+const elementOpenPattern = () => /<\s*([a-z][a-z0-9_]*)\b([^<>]*)>/gi;
+/** A tag whose name can only be a tool name, not an HTML element. */
+const TOOLISH_TAG = /_/;
+
+/**
+ * Is this tag a call rather than markup the model is writing *about*?
+ *
+ * The registry is the first answer: a name the runtime actually ships is a call. The
+ * second is the shape of the name — **every** tool this runtime and the models that
+ * target it write is snake_case (`read_files`, `run_commands`, `list_files`,
+ * `execute_command`), and no HTML element name contains an underscore. That matters
+ * because a session whose task is "build me an HTML page" puts real markup in the same
+ * text channel: only the NAMES are different, so `<section><h1>Title</h1></section>`
+ * must stay prose while `<editor><command>write</command></editor>` is read as a call.
+ */
+function looksLikeElementCall(tag: string, knownToolNames?: ReadonlySet<string>): boolean {
+	const lower = tag.toLowerCase();
+	if (RESERVED_TAGS.has(lower)) {
+		return false;
+	}
+	return knownToolNames?.has(tag) === true || TOOLISH_TAG.test(tag);
+}
+
+/**
+ * Reads the child elements of an element-form call body.
+ *
+ * A child's value is its inner text — JSON-decoded when it is JSON — or, when the child
+ * itself holds elements, those children's values as a LIST. That second rule is what
+ * turns the forms models actually write into the shape the tools already accept:
+ * `<paths><path>a</path><path>b</path></paths>` reads as `paths: ["a", "b"]`, and
+ * `<commands><cmd>a</cmd></commands>` as `commands: ["a"]`.
+ */
+function readElementChildren(body: string, depth = 0): Record<string, unknown> | undefined {
+	const input: Record<string, unknown> = {};
+	let found = 0;
+	// Offset of the end of the last element already read: a nested tag inside a
+	// container child (`<paths>` swallowing its `<path>`s) must not be read a second
+	// time as a sibling argument.
+	let cursor = 0;
+	for (const match of body.matchAll(elementOpenPattern())) {
+		const start = match.index ?? 0;
+		if (start < cursor) {
+			continue;
+		}
+		const tag = match[1] as string;
+		if (RESERVED_TAGS.has(tag.toLowerCase())) {
+			// `<parameter>`/`<param>` bodies belong to the other dialects, which read
+			// them with their `name` attribute; reading them here would report the
+			// same call twice.
+			continue;
+		}
+		const innerStart = start + match[0].length;
+		const closeIndex = indexOfCloseTag(body, tag, innerStart);
+		if (closeIndex === undefined) {
+			continue;
+		}
+		const inner = body.slice(innerStart, closeIndex);
+		const nested = depth < 4 ? readElementChildren(inner, depth + 1) : undefined;
+		const hasNested = !!nested && Object.keys(nested).length > 0;
+		// A child is a CONTAINER only when nothing but its elements is inside it
+		// (`<paths><path>a</path><path>b</path></paths>` is a list of paths). A shell
+		// command that happens to contain markup (`echo "<b>hi</b>"`) keeps its own
+		// text, verbatim: reading that `<b>` as an argument would invent an argument
+		// the model never wrote, and would lose the command it did write.
+		const isContainer = hasNested && contentOutsideChildren(inner) === "";
+		const value = isContainer ? Object.values(nested as Record<string, unknown>).flat() : readScalar(inner);
+		const existing = input[tag];
+		if (existing === undefined) {
+			input[tag] = value;
+		} else if (Array.isArray(existing)) {
+			existing.push(...(Array.isArray(value) ? value : [value]));
+		} else {
+			input[tag] = [existing, ...(Array.isArray(value) ? value : [value])];
+		}
+		found += 1;
+		cursor = closeIndex + (`</${tag}>`.length as number);
+	}
+	return found > 0 ? input : undefined;
+}
+
+/**
+ * What is left of `inner` once its child ELEMENTS (tags and their content) are gone.
+ * Whitespace means the children are the whole body — the only case that reads as a
+ * container rather than as text that happens to contain markup.
+ */
+function contentOutsideChildren(inner: string): string {
+	let leftover = "";
+	let cursor = 0;
+	for (const match of inner.matchAll(elementOpenPattern())) {
+		const start = match.index ?? 0;
+		if (start < cursor) {
+			continue;
+		}
+		const tag = match[1] as string;
+		const innerStart = start + match[0].length;
+		const closeIndex = indexOfCloseTag(inner, tag, innerStart);
+		if (closeIndex === undefined) {
+			continue;
+		}
+		leftover += inner.slice(cursor, start);
+		cursor = closeIndex + (`</${tag}>`.length as number);
+	}
+	leftover += inner.slice(cursor);
+	return stripTags(leftover).trim();
+}
+
+/** `inner` without its tags — used only to ask whether a child holds elements or text. */
+function stripTags(inner: string): string {
+	return inner.replace(/<\s*\/?\s*[a-z][a-z0-9_]*\b[^<>]*>/gi, "");
+}
+
+/** A child's text: JSON when it is JSON, otherwise the trimmed text as written. */
+function readScalar(inner: string): unknown {
+	const trimmed = inner.trim();
+	if (trimmed === "") {
+		return "";
+	}
+	return readJson(trimmed) ?? trimmed;
+}
+
+/** Offset of `</tag>` at or after `from`, or `undefined` when it never closes. */
+function indexOfCloseTag(text: string, tag: string, from: number): number | undefined {
+	const closePattern = new RegExp(`<\\s*\\/\\s*${tag}\\s*>`, "i");
+	const match = closePattern.exec(text.slice(from));
+	return match ? from + (match.index ?? 0) : undefined;
+}
+
+/**
+ * End of the block, swallowing closing tags the model wrote twice
+ * (`</run_commands></run_commands>` — the fix.26 transcript's habit, and one that would
+ * otherwise leave an orphan tag behind in the prose).
+ */
+function endAfterElementClose(text: string, tag: string, closeIndex: number): number {
+	const closePattern = new RegExp(`^\\s*<\\s*\\/\\s*${tag}\\s*>`, "i");
+	let end = closeIndex + (`</${tag}>`.length as number);
+	for (;;) {
+		const next = closePattern.exec(text.slice(end));
+		if (!next) {
+			return end;
+		}
+		end += next[0].length;
+	}
+}
+
+/**
+ * Element-form calls in `text` — the tag is the tool name, its children its arguments.
+ *
+ * Only a body made of child elements (or of a JSON object) is read: `<b>note</b>` is
+ * prose, `<editor><command>write</command></editor>` is a call.
+ */
+function scanElementCalls(
+	text: string,
+	knownToolNames?: ReadonlySet<string>,
+): WrapperCall[] {
+	const calls: WrapperCall[] = [];
+	for (const match of text.matchAll(elementOpenPattern())) {
+		const tag = match[1] as string;
+		if (!looksLikeElementCall(tag, knownToolNames)) {
+			continue;
+		}
+		const start = match.index ?? 0;
+		const bodyStart = start + match[0].length;
+		const closeIndex = indexOfCloseTag(text, tag, bodyStart);
+		if (closeIndex === undefined) {
+			continue;
+		}
+		const body = text.slice(bodyStart, closeIndex);
+		const jsonEnd = endOfJsonValue(body.trimStart(), 0);
+		const jsonInput = jsonEnd === undefined ? undefined : readJson(body.trimStart().slice(0, jsonEnd));
+		const input = isRecord(jsonInput) ? jsonInput : readElementChildren(body);
+		if (!input || Object.keys(input).length === 0) {
+			continue;
+		}
+		calls.push({ name: tag, input, start, end: endAfterElementClose(text, tag, closeIndex) });
+	}
+	return calls;
+}
+
 /**
  * Tool calls found in `text`, in the order they appear. Returns `[]` for
  * ordinary prose, which is the overwhelming majority of assistant text.
  */
-export function parseFabricatedToolCalls(text: string): FabricatedToolCall[] {
+export function parseFabricatedToolCalls(
+	text: string,
+	options: FabricatedToolCallOptions = {},
+): FabricatedToolCall[] {
 	if (!text || !text.includes("<")) {
 		return [];
 	}
@@ -368,7 +590,10 @@ export function parseFabricatedToolCalls(text: string): FabricatedToolCall[] {
 	// too, so identical calls are reported once: executing a recovered call twice is
 	// the one outcome worse than not recovering it at all.
 	const seen = new Set(calls.map(callSignature));
-	for (const scanned of scanWrapperCalls(text)) {
+	for (const scanned of [
+		...scanWrapperCalls(text),
+		...scanElementCalls(text, toNameSet(options.knownToolNames)),
+	]) {
 		const signature = callSignature(scanned);
 		if (seen.has(signature)) {
 			continue;
@@ -378,6 +603,13 @@ export function parseFabricatedToolCalls(text: string): FabricatedToolCall[] {
 	}
 
 	return calls.slice(0, MAX_FABRICATED_TOOL_CALLS);
+}
+
+function toNameSet(names?: Iterable<string>): Set<string> | undefined {
+	if (!names) {
+		return undefined;
+	}
+	return names instanceof Set ? names : new Set(names);
 }
 
 /** Identity of a call, for the duplicate check above. */
@@ -400,7 +632,10 @@ function callSignature(call: FabricatedToolCall): string {
  * block go too, but a bare mention — "`<tool_call>` is the wire format" — is left
  * alone unless a real block was removed from the same text.
  */
-export function stripFabricatedToolCallMarkup(text: string): string {
+export function stripFabricatedToolCallMarkup(
+	text: string,
+	options: FabricatedToolCallOptions = {},
+): string {
 	if (!text || !text.includes("<")) {
 		return text;
 	}
@@ -430,6 +665,12 @@ export function stripFabricatedToolCallMarkup(text: string): string {
 	}
 	// Wrapper blocks whose body is a JSON call — with or without a closing tag.
 	for (const call of scanWrapperCalls(text)) {
+		spans.push({ start: call.start, end: call.end });
+	}
+	// Element-form blocks: the tag names the tool. Same recognition rule as the
+	// parser, so a block this strip removes is always a block the parser would have
+	// recovered from (and a block the parser refuses is never removed).
+	for (const call of scanElementCalls(text, toNameSet(options.knownToolNames))) {
 		spans.push({ start: call.start, end: call.end });
 	}
 	// A closed wrapper carrying JSON is covered by both the JSON regex and the scanner;
