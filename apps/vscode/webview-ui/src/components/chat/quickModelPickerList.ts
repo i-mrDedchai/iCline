@@ -55,15 +55,32 @@ export const OPTIONS_PANEL_BOTTOM_MARGIN_PX = 10
  *   maxTop     = pickerHeight - panelHeight - 10
  *   top        = max(38, min(desiredTop, maxTop))
  *
- * `panelHeight` must be the panel's REAL height, not its 320px max-height:
- * content varies per model (157–264px in mock v11), and clamping against the
- * max-height pinned every row past ~90px to a single top — so the panel only
- * appeared to follow the first few rows (fix.9 report).
+ * `panelHeight` is the panel's REAL height, not its 320px max-height: content varies per
+ * model (157–264px in mock v11), and clamping against the max-height pinned every row
+ * past ~90px to a single top — so the panel only appeared to follow the first few rows
+ * (fix.9 report). Using the real height is also what keeps the panel's `max-height` at a
+ * flat 320px: the panel always FULLY FITS above the picker's bottom margin, so there is
+ * nothing for a scrollbar to do.
+ *
+ * The caller's layout effect must then run on the ANCHOR alone. The panel's height is
+ * content, and the Thinking switch changes content, so re-running this when the content
+ * changed slid the panel up or down on every click, off its own row, under the cursor
+ * (dev.6-fix.27: "the Options page jumps around and is not in line with its own model
+ * row", several models).
+ *
+ * dev.6-fix.28 tried to make that safe from the other end — pinning `top` to the row and
+ * bounding the panel's height by the room left under it — and the smoke report rejected
+ * the trade outright: a low row then met a scrollbar instead of a whole panel ("take the
+ * scrollbar out and let it expand fully"). So the panel grows to its content, and the
+ * lift is what keeps it inside the picker. A content change after placement (the clamp
+ * notice appearing on a toggle) moves nothing; it only grows or shrinks the panel from
+ * the top the user is already reading.
  */
 export function computeOptionsPanelTop(params: {
 	rowTop: number
 	pickerTop: number
 	pickerHeight: number
+	/** The panel's rendered height for this row, measured when it was placed. */
 	panelHeight: number
 }): number {
 	const desiredTop = params.rowTop - params.pickerTop - OPTIONS_PANEL_ROW_NUDGE_PX

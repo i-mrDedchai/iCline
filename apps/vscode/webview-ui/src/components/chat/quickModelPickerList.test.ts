@@ -10,6 +10,8 @@ import {
 	isFreeModel,
 	type ModelEntry,
 	modelsMatchQuery,
+	OPTIONS_PANEL_BOTTOM_MARGIN_PX,
+	OPTIONS_PANEL_MAX_HEIGHT_PX,
 	OPTIONS_PANEL_MIN_TOP_PX,
 	partitionFreeStandard,
 	pickAutoExpandProvider,
@@ -273,42 +275,69 @@ describe("queryActivePickerScrollTarget", () => {
 })
 
 /**
- * Options-panel placement, pinned against measurements taken from the locked
- * mock v11 (picker height 504px). Expected values are the mock's own rendered
- * `options.style.top` for the same row/panel-height pairs.
+ * Options-panel placement, pinned against measurements taken from the locked mock v11
+ * (picker height 504px): the panel's top is the row's top, nudged 6px, lifted only as far
+ * as the panel's own height needs so the WHOLE panel stays inside the picker.
+ *
+ * The three rounds of real reports behind this rule, in order: clamping against the
+ * panel's 320px MAX-height pinned every row past ~90px to one top, so the panel stopped
+ * following the list (fix.9); clamping against the panel's REAL height is right for the
+ * placement but was re-run on every content change, so the Thinking switch — which
+ * changes content — slid the panel off its row on each click (dev.6-fix.27); bounding the
+ * panel's HEIGHT by the room left under a row-anchored top fixed that by handing low rows
+ * a scrollbar instead of a whole panel, which the next smoke report rejected outright
+ * (dev.6-fix.28: "take the scrollbar out and let it expand fully", 2026-09-21).
+ *
+ * What keeps it still is WHERE this is called from, not the maths: the picker's layout
+ * effect depends on the hovered row alone, so the panel is measured once per row and a
+ * toggle can no longer move it. `quick-picker-hover.test.ts` clicks a real switch on a
+ * real row and fails if the box moves.
  */
 describe("computeOptionsPanelTop", () => {
 	const PICKER_HEIGHT = 504
 	const place = (rowTop: number, panelHeight: number) =>
 		computeOptionsPanelTop({ rowTop, pickerTop: 0, pickerHeight: PICKER_HEIGHT, panelHeight })
+	/** What the panel really measured for a model with a Thinking switch and three levels. */
+	const THREE_LEVELS = 260
 
 	it("top-aligns the panel with the row (mock nudge of 6px)", () => {
-		// Mock: row 109px, panel 264px → top 103 (rendered 104 after rounding).
-		expect(place(109, 264)).toBe(103)
-		// Mock: row 132px, panel 171px → top 126.
-		expect(place(132, 171)).toBe(126)
+		// Mock: row 109px → top 103 (rendered 104 after rounding); row 132px → 126.
+		expect(place(109, THREE_LEVELS)).toBe(103)
+		expect(place(132, THREE_LEVELS)).toBe(126)
 	})
 
-	it("keeps following lower rows while the panel fits (uses the REAL panel height)", () => {
-		// Mock: row 311px, panel 227px → top 267 (the panel would end 10px above 504).
-		expect(place(311, 227)).toBe(267)
+	it("lifts a low row only as far as that panel's own height needs", () => {
+		// 504 - 260 - 10 = 234, so the panel's bottom rests exactly on the picker's
+		// bottom margin — the whole panel is readable, with nothing to scroll.
+		expect(place(440, THREE_LEVELS)).toBe(234)
+		expect(place(999, THREE_LEVELS)).toBe(234)
+		expect(place(440, THREE_LEVELS) + THREE_LEVELS + OPTIONS_PANEL_BOTTOM_MARGIN_PX).toBe(PICKER_HEIGHT)
+		// A taller panel is lifted a little further; a shorter one less. The lift follows
+		// the CONTENT, which is why the caller must measure it once per row.
+		expect(place(440, 210)).toBe(284)
+	})
+
+	it("follows every row that has room below it — no pin to one top", () => {
 		// Regression for the fix.9 report: clamping against the 320px max-height
 		// instead gave 504 - 10 - 320 = 174 for every row, so the panel stopped
 		// tracking after the first ~90px of list.
-		expect(place(311, 227)).not.toBe(174)
-		expect(place(500, 227)).toBe(267)
+		expect(place(311, 100)).toBe(305)
+		expect(place(311, THREE_LEVELS)).not.toBe(PICKER_HEIGHT - OPTIONS_PANEL_MAX_HEIGHT_PX - OPTIONS_PANEL_BOTTOM_MARGIN_PX)
 	})
 
-	it("pins a taller panel higher up — the pin depends on the model's own height", () => {
-		// Mock: row 439px with a 260px panel → top 234, while the same row with a
-		// 157px panel would still follow to 337.
-		expect(place(439, 260)).toBe(234)
-		expect(place(352, 157)).toBe(337)
+	it("keeps the entire panel inside the picker for any height a model can draw", () => {
+		for (const rowTop of [60, 150, 250, 350, 460, 999]) {
+			for (const panelHeight of [140, 210, THREE_LEVELS, OPTIONS_PANEL_MAX_HEIGHT_PX]) {
+				const top = place(rowTop, panelHeight)
+				expect(top).toBeGreaterThanOrEqual(OPTIONS_PANEL_MIN_TOP_PX)
+				expect(top + panelHeight + OPTIONS_PANEL_BOTTOM_MARGIN_PX).toBeLessThanOrEqual(PICKER_HEIGHT)
+			}
+		}
 	})
 
 	it("never rises above the minimum top, even for a row at the very top", () => {
-		expect(place(10, 264)).toBe(OPTIONS_PANEL_MIN_TOP_PX)
-		expect(place(0, 264)).toBe(OPTIONS_PANEL_MIN_TOP_PX)
+		expect(place(10, THREE_LEVELS)).toBe(OPTIONS_PANEL_MIN_TOP_PX)
+		expect(place(0, THREE_LEVELS)).toBe(OPTIONS_PANEL_MIN_TOP_PX)
 	})
 })
 

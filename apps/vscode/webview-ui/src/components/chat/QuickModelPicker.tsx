@@ -55,6 +55,7 @@ import {
 	modelsMatchQuery,
 	OPTIONS_PANEL_GAP_PX,
 	OPTIONS_PANEL_MAX_HEIGHT_PX,
+	OPTIONS_PANEL_MIN_TOP_PX,
 	OPTIONS_PANEL_WIDTH_PX,
 	partitionFreeStandard,
 	pickAutoExpandProvider,
@@ -236,8 +237,6 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 	/** null = nothing expanded; user may collapse the active provider freely. */
 	const [expandedProvider, setExpandedProvider] = useState<string | null>(null)
 	const [search, setSearch] = useState("")
-	/** Bumped after a thinking/effort write so the panel re-measures its height. */
-	const [statusBump, setStatusBump] = useState(0)
 	const [commitError, setCommitError] = useState<string | null>(null)
 	/**
 	 * A provider the organization does not allow, captured at the click that tried it.
@@ -268,7 +267,7 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 
 	// Hover-driven Options panel state.
 	const [hoveredModel, setHoveredModel] = useState<{ providerId: string; modelId: string } | null>(null)
-	const [optionsTop, setOptionsTop] = useState(0)
+	const [optionsTop, setOptionsTop] = useState(OPTIONS_PANEL_MIN_TOP_PX)
 	const [optionsSide, setOptionsSide] = useState<"right" | "left">("right")
 	const optionsRef = useRef<HTMLDivElement>(null)
 	/** Row the panel is anchored to — re-measured live when the panel is placed. */
@@ -356,12 +355,22 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 	)
 
 	/**
-	 * Place the panel with the mock's exact rule: top-align the row, never above
-	 * 38px (the search row), never past the picker's bottom minus a 10px margin.
-	 * This runs as a layout effect because the clamp needs the panel's REAL height,
-	 * which varies per model (157–264px in mock v11) and is only known after it
-	 * has rendered: clamping against the 320px max-height instead pinned every row
-	 * past ~90px to one top, so the panel only followed the first few rows.
+	 * Place the panel beside its own row (`computeOptionsPanelTop`) — as a layout effect
+	 * so it lands on the first paint.
+	 *
+	 * The panel is lifted when the row is too low for its height, so it always fits above
+	 * the picker's bottom margin and its `max-height` can stay the mock's flat 320px —
+	 * nothing to scroll.
+	 *
+	 * The dep array is the anchor ALONE, and that is load-bearing twice over:
+	 *
+	 *  - it re-measures per hovered row, so a row near the bottom still gets its own lift; and
+	 *  - it does NOT re-measure when the panel's content changes. It used to re-run on a
+	 *    counter bumped by every thinking/effort write, and since the lift reads the
+	 *    panel's own height, clicking Thinking (which adds or drops the clamp notice, and
+	 *    used to swap the level list) slid the panel off its row under the cursor —
+	 *    dev.6-fix.27. A content change after the click only grows or shrinks the panel
+	 *    from the top it was given.
 	 */
 	useLayoutEffect(() => {
 		if (!hoveredModel) {
@@ -384,8 +393,7 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 				panelHeight: panel.getBoundingClientRect().height,
 			}),
 		)
-		// biome-ignore lint/correctness/useExhaustiveDependencies: re-measure follows the anchor/status changes, not the refs
-	}, [hoveredModel, statusBump])
+	}, [hoveredModel])
 
 	/**
 	 * Delegated hover: ONE move handler on the list re-anchors the panel to
@@ -618,8 +626,10 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 	const rememberThinking = useCallback((providerId: string, modelId: string, patch: ChatModelPreference) => {
 		setChatModelPreference(providerId, modelId, patch)
 		const key = getChatModelPreferenceKey(providerId, modelId)
+		// Session state alone carries the change to the row icons and the panel: this
+		// re-render is also what used to re-measure the panel's height, which is the
+		// height-driven jump the anchor-only effect above is written to avoid.
 		setSessionThinking((prev) => ({ ...prev, [key]: { ...prev[key], ...patch } }))
-		setStatusBump((n) => n + 1)
 	}, [])
 
 	/**
