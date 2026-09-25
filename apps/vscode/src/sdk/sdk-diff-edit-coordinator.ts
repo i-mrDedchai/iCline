@@ -188,7 +188,7 @@ export class SdkDiffEditCoordinator {
 		} catch {
 			originalContent = undefined
 		}
-		if (input.insert_line != null && originalContent === undefined) {
+		if (normalizeInsertLine(input.insert_line) != null && originalContent === undefined) {
 			// The SDK's insert path requires an existing file; skip the preview and let
 			// the executor produce its canonical error.
 			throw new Error(`cannot insert into missing file ${absolutePath}`)
@@ -285,6 +285,21 @@ export class SdkDiffEditCoordinator {
 }
 
 /**
+ * Mirror of core's `normalizeInsertLine` (@cline/core extensions/tools/schemas.ts), which
+ * this layer cannot import as a value: vitest aliases `@cline/core` to a stub.
+ *
+ * 0 is a filler for the optional `insert_line`, not a boundary — zod's `coerce` turns
+ * "", "   " and false into 0, so the same call can carry 0 without the model having chosen it,
+ * and a model that meant to insert at the top writes 1 once the error says "positive
+ * one-based". The dev.6-fix.30 log refused `Invalid insert_line: 0` eleven times while the model
+ * re-sent the identical call. Reading it here the way the executor reads it is what keeps this
+ * preview from skipping a tab (with a warning) for a write the executor goes on to perform.
+ */
+function normalizeInsertLine(insertLine: number | null | undefined): number | undefined {
+	return insertLine == null || insertLine === 0 ? undefined : insertLine
+}
+
+/**
  * Computes the full proposed file content for an `editor` tool input, mirroring the
  * SDK executor's semantics (sdk/packages/core/src/extensions/tools/executors/editor.ts)
  * so the preview shows exactly what the executor will write. Inputs the SDK would
@@ -312,15 +327,16 @@ export function computeNewEditorContent(
 		)
 	}
 
-	if (input.insert_line != null) {
+	const insertLine = normalizeInsertLine(input.insert_line)
+	if (insertLine != null) {
 		const lines = originalContent.split("\n")
 		const maxBoundaryLine = lines.length + 1
-		if (input.insert_line < 1 || input.insert_line > maxBoundaryLine) {
+		if (insertLine < 1 || insertLine > maxBoundaryLine) {
 			throw new Error(
-				`Invalid insert_line: ${input.insert_line}. insert_line must be a positive one-based boundary line in the range 1-${maxBoundaryLine}. Use ${maxBoundaryLine} to append at EOF.`,
+				`Invalid insert_line: ${insertLine}. insert_line must be a positive one-based boundary line in the range 1-${maxBoundaryLine}. Use ${maxBoundaryLine} to append at EOF.`,
 			)
 		}
-		lines.splice(input.insert_line - 1, 0, ...input.new_text.split("\n"))
+		lines.splice(insertLine - 1, 0, ...input.new_text.split("\n"))
 		return lines.join("\n")
 	}
 

@@ -91,6 +91,16 @@ describe("computeNewEditorContent", () => {
 		)
 	})
 
+	// A 0 here is a filler for the optional field, not a boundary: the model that
+	// produced `Invalid insert_line: 0` eleven times in the dev.6-fix.30 log re-sent the
+	// identical call each time, and zod's coerce is how "" / "   " / false arrive as 0.
+	// The preview must read the same call the executor reads, or the tab is skipped with a
+	// warning while the write succeeds.
+	it("previews a filler insert_line as the replacement the call describes", () => {
+		const input: EditFileInput = { path: filePath, old_text: "b", new_text: "x", insert_line: 0 }
+		expect(computeNewEditorContent("a\nb\nc", input, filePath, "modify")).toBe("a\nx\nc")
+	})
+
 	// The runtime refuses new_text above the hard ceiling before touching disk (core
 	// getEditorSizeError), so the preview must skip such a call instead of showing an
 	// edit that will never happen — while files above the OLD 32k wall (the size the

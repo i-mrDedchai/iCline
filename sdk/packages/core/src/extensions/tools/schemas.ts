@@ -255,6 +255,23 @@ export const EditFileInputSchema = z
 	);
 
 /**
+ * Read `insert_line` the way the executor does: 0 means the model did not mean to insert.
+ *
+ * Zero is never a valid one-based boundary, and it is how a filler for this optional field
+ * arrives — `z.coerce.number()` above turns "", "   " and false into 0, so a call can carry
+ * 0 without the model having chosen it. The dev.6-fix.30 log refused `Invalid insert_line: 0`
+ * eleven times while the model re-sent the identical call, and re-sending rather than
+ * correcting is the tell for a filler instead of a boundary: a model that meant to insert
+ * at the top writes 1 once the error says "positive one-based". (The same pattern is why
+ * `old_text == null` gets its own spelled-out recovery in `executors/editor.ts`.) Treating 0
+ * as not-provided therefore loses nothing and lets the replacement the call describes run,
+ * instead of failing the whole call over a field the model did not intend to set.
+ */
+export function normalizeInsertLine(insertLine: number | null | undefined): number | undefined {
+	return insertLine == null || insertLine === 0 ? undefined : insertLine
+}
+
+/**
  * Schema for apply_patch tool input
  */
 export const ApplyPatchInputSchema = z

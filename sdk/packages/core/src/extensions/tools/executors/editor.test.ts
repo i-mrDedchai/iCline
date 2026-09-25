@@ -304,7 +304,37 @@ describe("createEditorExecutor", () => {
 		});
 	});
 
-	it("rejects insert_line 0 with the valid one-based boundary range", async () => {
+	// The dev.6-fix.30 log refused `Invalid insert_line: 0` eleven times while the model
+	// re-sent the identical call, which is the tell for a filler in an optional field rather
+	// than a boundary it meant to use: zod's coerce turns "", "   " and false into 0, and a
+	// model that meant to insert at the top writes 1 once the error says "positive one-based".
+	// 0 is never a valid one-based boundary, so it means "not provided" — the replacement the
+	// call describes runs instead of the whole call failing over a field nobody set.
+	it("treats insert_line 0 as not provided and applies the replacement", async () => {
+		const dir = await fs.mkdtemp(path.join(os.tmpdir(), "agents-editor-"));
+		const filePath = path.join(dir, "example.txt");
+		await fs.writeFile(filePath, "one\ntwo", "utf-8");
+
+		try {
+			const editor = createEditorExecutor();
+
+			await editor(
+				{ path: filePath, old_text: "two", new_text: "TWO", insert_line: 0 },
+				dir,
+				{
+					agentId: "agent-1",
+					conversationId: "conv-1",
+					iteration: 1,
+				},
+			);
+
+			await expect(fs.readFile(filePath, "utf-8")).resolves.toBe("one\nTWO");
+		} finally {
+			await fs.rm(dir, { recursive: true, force: true });
+		}
+	});
+
+	it("still rejects an insert_line that is a real but unusable boundary", async () => {
 		const dir = await fs.mkdtemp(path.join(os.tmpdir(), "agents-editor-"));
 		const filePath = path.join(dir, "example.txt");
 		await fs.writeFile(filePath, "one\ntwo", "utf-8");
@@ -314,11 +344,7 @@ describe("createEditorExecutor", () => {
 
 			await expect(
 				editor(
-					{
-						path: filePath,
-						new_text: "invalid",
-						insert_line: 0,
-					},
+					{ path: filePath, new_text: "invalid", insert_line: -1 },
 					dir,
 					{
 						agentId: "agent-1",
@@ -327,7 +353,7 @@ describe("createEditorExecutor", () => {
 					},
 				),
 			).rejects.toThrow(
-				"Invalid insert_line: 0. insert_line must be a positive one-based boundary line in the range 1-3. Use 3 to append at EOF.",
+				"Invalid insert_line: -1. insert_line must be a positive one-based boundary line in the range 1-3. Use 3 to append at EOF.",
 			);
 			await expect(fs.readFile(filePath, "utf-8")).resolves.toBe("one\ntwo");
 		} finally {

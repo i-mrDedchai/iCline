@@ -7,7 +7,7 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import type { AgentToolContext } from "@cline/shared";
-import type { EditFileInput } from "../schemas";
+import { type EditFileInput, normalizeInsertLine } from "../schemas";
 import type { EditorExecutor } from "../types";
 import { writeFileToDisk } from "./file-writes";
 import {
@@ -236,11 +236,13 @@ export function createEditorExecutor(
 		_context: AgentToolContext,
 	): Promise<string> => {
 		const filePath = resolveFilePath(cwd, input.path, restrictToCwd);
+		// 0 is a filler for the optional field, not a boundary (see normalizeInsertLine).
+		const insertLine = normalizeInsertLine(input.insert_line);
 
-		if (input.insert_line != null) {
+		if (insertLine != null) {
 			return insertInFile(
 				filePath,
-				input.insert_line, // One-based index
+				insertLine, // One-based index
 				input.new_text,
 				encoding,
 			);

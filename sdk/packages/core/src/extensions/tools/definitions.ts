@@ -44,6 +44,7 @@ import {
 	EditFileInputSchema,
 	type FetchWebContentInput,
 	FetchWebContentInputSchema,
+	normalizeInsertLine,
 	type ReadFileRequest,
 	type ReadFilesInput,
 	ReadFilesInputSchema,
@@ -713,7 +714,7 @@ export function createEditorTool(
 		maxRetries: 0,
 		execute: async (input, context) => {
 			const validatedInput = validateWithZod(EditFileInputSchema, input);
-			const operation = validatedInput.insert_line == null ? "edit" : "insert";
+			const operation = normalizeInsertLine(validatedInput.insert_line) == null ? "edit" : "insert";
 			const sizeError = getEditorSizeError(validatedInput);
 
 			if (sizeError) {

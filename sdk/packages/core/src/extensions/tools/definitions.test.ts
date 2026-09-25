@@ -2065,6 +2065,34 @@ describe("default editor tool", () => {
 		);
 	});
 
+	it("labels a call whose insert_line is a filler as the edit it describes", async () => {
+		const execute = vi.fn(async () => "patched");
+		const tool = createEditorTool(execute);
+		const context = {
+			agentId: "agent-1",
+			conversationId: "conv-1",
+			iteration: 1,
+		};
+		// 0 is a filler for the optional field, not a boundary (see normalizeInsertLine in
+		// schemas.ts): zod's coerce turns "", "   " and false into 0, and the dev.6-fix.30 log
+		// refused `Invalid insert_line: 0` eleven times while the model re-sent the identical
+		// call. The transcript must not call such a call an insert — the executor treats it as
+		// the replacement it describes, which executors/editor.test.ts pins on a real file.
+		const fillerInput = (insert_line: unknown) =>
+			({
+				path: "/tmp/example.ts",
+				old_text: "before",
+				new_text: "after",
+				insert_line,
+			}) as EditFileInput;
+
+		for (const filler of [0, "", "   ", false]) {
+			expect((await tool.execute(fillerInput(filler), context)).query).toBe("edit:/tmp/example.ts");
+		}
+		// A boundary the model really chose is still an insert.
+		expect((await tool.execute(fillerInput(2), context)).query).toBe("insert:/tmp/example.ts");
+	});
+
 	it("writes a payload above the old 32k wall straight through to the executor", async () => {
 		const execute = vi.fn(async () => "patched");
 		const tools = createDefaultTools({
