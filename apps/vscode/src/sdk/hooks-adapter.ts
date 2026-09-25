@@ -26,7 +26,7 @@ import { HookFactory } from "@/core/hooks/hook-factory"
 import { getHooksEnabledSafe } from "@/core/hooks/hooks-utils"
 import type { StateManager } from "@/core/storage/StateManager"
 import { HostProvider } from "@/hosts/host-provider"
-import { EDITOR_INPUT_CHAR_LIMIT, getLargeWriteGuidance, verifyWrittenFile } from "@/icline/harness/guardrails"
+import { EDITOR_INPUT_CHAR_LIMIT, getLargeWriteGuidance, hasChunkRecipe, verifyWrittenFile } from "@/icline/harness/guardrails"
 import { recordToolTrace } from "@/icline/harness/tool-trace"
 import { isIclineBuild } from "@/registry"
 
@@ -476,11 +476,12 @@ async function runIclinePostWriteVerification(ctx: AgentAfterToolContext): Promi
 
 		const envelopeFailure = readToolEnvelopeFailure(ctx.result.output)
 		if (envelopeFailure) {
-			// When the failure IS the size rejection, the tool's own message already
-			// carries the size, "nothing was written" and the chunk recipe — appending
-			// our explanation would show the model (and the chat) the same notice twice.
-			// The extra line is only for a failure from elsewhere on an oversized input.
-			const guidance = envelopeFailure.includes("per-call limit") ? undefined : describeOversizeInput(ctx.input)
+			// When the failure IS the size rejection and already carries the chunk
+			// recipe, appending our explanation would show the model (and the chat)
+			// the same notice twice. Key on the RECIPE, not on "per-call limit": a
+			// message can name the limit without saying how to re-send, and those
+			// must still get the recipe (see hasChunkRecipe).
+			const guidance = hasChunkRecipe(envelopeFailure) ? undefined : describeOversizeInput(ctx.input)
 			Logger.log(
 				`[HooksAdapter] iCline guardrail: ${toolName} returned a failure envelope without the error flag; surfacing it to the model: ${envelopeFailure.slice(0, 200)}`,
 			)

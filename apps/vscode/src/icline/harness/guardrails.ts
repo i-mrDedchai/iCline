@@ -77,6 +77,20 @@ export function getLargeWriteGuidance(): string {
 	return `Write it in chunks: create the file with a first chunk of at most ${EDITOR_CHUNK_CHAR_LIMIT} characters of new_text, then append the remaining chunks with \`insert_line\` (line_count + 1 appends at EOF). Do not re-send the oversized call unchanged.`
 }
 
+/**
+ * Whether a failure message already carries the chunk recipe (a first chunk plus
+ * `insert_line` appends). The guardrail appends its own guidance only when the
+ * message lacks it — and it must key on the RECIPE, not on the words "per-call
+ * limit": a message can name the limit and still never say how to re-send (the
+ * preview mirror's "nothing will be written" does exactly that), and suppressing
+ * the recipe on those words would hand the model a rejection with no way out.
+ * This matches both wordings in play (core `getEditorSizeError` and
+ * `getLargeWriteGuidance` above).
+ */
+export function hasChunkRecipe(message: string): boolean {
+	return message.includes("first chunk") && message.includes("insert_line")
+}
+
 export interface PostWriteVerificationResult {
 	ok: boolean
 	message: string

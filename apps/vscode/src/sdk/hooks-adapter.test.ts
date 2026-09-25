@@ -23,6 +23,7 @@ vi.mock("@/icline/harness/guardrails", () => ({
 	EDITOR_INPUT_CHAR_LIMIT: 2_000_000,
 	EDITOR_CHUNK_CHAR_LIMIT: 32_000,
 	getLargeWriteGuidance: () => "Write it in chunks: create the file with a first chunk, then append with `insert_line`.",
+	hasChunkRecipe: (message: string) => message.includes("first chunk") && message.includes("insert_line"),
 }))
 
 vi.mock("@/icline/harness/tool-trace", () => ({
@@ -184,6 +185,35 @@ describe("hooks-adapter iCline post-write verification", () => {
 		expect(output).toContain("Editor operation failed: ENOSPC")
 		expect(output).toContain(`The call carried ${chars} characters of new_text`)
 		// From the mocked getLargeWriteGuidance — the recipe the overlay no longer prints.
+		expect(output).toContain("Write it in chunks")
+		expect((result?.result as { isError: boolean }).isError).toBe(true)
+	})
+
+	// The dedupe key is the RECIPE, not the words "per-call limit": a failure
+	// message can name the per-call limit and still tell the model nothing about
+	// how to re-send (the preview mirror's message — "nothing will be written" with
+	// no recipe — does exactly that). Suppressing the guidance on those words alone
+	// would leave the model with a rejection and no way to send it in chunks — the
+	// re-send loop this guardrail exists to end.
+	it("appends the chunk recipe to a size rejection that lacks it", async () => {
+		const hooks = buildAgentHooks(makeStateManager())
+		const chars = 2_000_001
+		const message = `Editor input too large: new_text was ${chars} characters, above the 2000000-character per-call limit; nothing will be written.`
+		const result = await hooks.afterTool?.(
+			makeAfterToolCtx({
+				input: { path: "/workspace/file.ts", new_text: "x".repeat(chars) },
+				output: {
+					query: "edit:/workspace/file.ts",
+					result: "",
+					error: message,
+					success: false,
+				},
+			}),
+		)
+		const output = (result?.result as { output: string; isError: boolean }).output
+		expect(output).toContain(message)
+		// From the mocked getLargeWriteGuidance — the recipe must come back even
+		// though the message already said "per-call limit".
 		expect(output).toContain("Write it in chunks")
 		expect((result?.result as { isError: boolean }).isError).toBe(true)
 	})
