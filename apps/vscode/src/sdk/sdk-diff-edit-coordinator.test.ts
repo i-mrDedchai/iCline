@@ -3,6 +3,7 @@ import * as fs from "fs/promises"
 import * as os from "os"
 import * as path from "path"
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "vitest"
+import { EDITOR_INPUT_CHAR_LIMIT } from "@/icline/harness/guardrails"
 import { buildEditPreviewAnimation, EditPreview, type EditPreviewContent } from "@/integrations/editor/EditPreview"
 import { computeNewEditorContent, SdkDiffEditCoordinator } from "./sdk-diff-edit-coordinator"
 
@@ -38,6 +39,11 @@ describe("computeNewEditorContent", () => {
 	it("replaces a single occurrence", () => {
 		const input: EditFileInput = { path: filePath, old_text: "b", new_text: "x" }
 		expect(computeNewEditorContent("a\nb\nc", input, filePath, "modify")).toBe("a\nx\nc")
+	})
+
+	it("matches LF edit text against CRLF file content and preserves CRLF in the preview", () => {
+		const input: EditFileInput = { path: filePath, old_text: "b\nc", new_text: "B\nC\nX" }
+		expect(computeNewEditorContent("a\r\nb\r\nc\r\nd", input, filePath, "modify")).toBe("a\r\nB\r\nC\r\nX\r\nd")
 	})
 
 	it("returns new_text verbatim for created files", () => {
@@ -82,6 +88,30 @@ describe("computeNewEditorContent", () => {
 		const input: EditFileInput = { path: filePath, new_text: "x", insert_line: 5 }
 		expect(() => computeNewEditorContent("a\nb", input, filePath, "modify")).toThrow(
 			"Invalid insert_line: 5. insert_line must be a positive one-based boundary line in the range 1-3. Use 3 to append at EOF.",
+		)
+	})
+
+	// The runtime refuses new_text above the hard ceiling before touching disk (core
+	// getEditorSizeError), so the preview must skip such a call instead of showing an
+	// edit that will never happen — while files above the OLD 32k wall (the size the
+	// fix.29 smoke chat was refused at) must preview and write like any other.
+	it("previews a file above the old 32k wall instead of blocking it", () => {
+		const big = "x".repeat(40_243)
+		const input: EditFileInput = { path: filePath, new_text: big }
+		expect(computeNewEditorContent("", input, filePath, "create")).toBe(big)
+	})
+
+	it("throws for new_text above the hard per-call ceiling", () => {
+		const input: EditFileInput = { path: filePath, new_text: "x".repeat(EDITOR_INPUT_CHAR_LIMIT + 1) }
+		expect(() => computeNewEditorContent("", input, filePath, "create")).toThrow(
+			`Editor input too large: new_text was ${EDITOR_INPUT_CHAR_LIMIT + 1} characters, above the ${EDITOR_INPUT_CHAR_LIMIT}-character per-call limit`,
+		)
+	})
+
+	it("throws for old_text above the hard per-call ceiling", () => {
+		const input: EditFileInput = { path: filePath, old_text: "a".repeat(EDITOR_INPUT_CHAR_LIMIT + 1), new_text: "x" }
+		expect(() => computeNewEditorContent("a", input, filePath, "modify")).toThrow(
+			`above the ${EDITOR_INPUT_CHAR_LIMIT}-character per-call limit`,
 		)
 	})
 })

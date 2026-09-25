@@ -12,6 +12,7 @@ import type { AgentToolContext } from "@cline/shared"
 import * as fs from "fs/promises"
 import * as path from "path"
 import { HostProvider } from "@/hosts/host-provider"
+import { EDITOR_INPUT_CHAR_LIMIT } from "@/icline/harness/guardrails"
 import type { EditPreview } from "@/integrations/editor/EditPreview"
 import { Logger } from "@/shared/services/Logger"
 
@@ -287,7 +288,8 @@ export class SdkDiffEditCoordinator {
  * Computes the full proposed file content for an `editor` tool input, mirroring the
  * SDK executor's semantics (sdk/packages/core/src/extensions/tools/executors/editor.ts)
  * so the preview shows exactly what the executor will write. Inputs the SDK would
- * reject throw here too, and the preview is simply skipped.
+ * reject throw here too — including one above the runtime's per-call size ceiling —
+ * and the preview is simply skipped.
  */
 export function computeNewEditorContent(
 	originalContent: string,
@@ -295,6 +297,21 @@ export function computeNewEditorContent(
 	filePath: string,
 	editType: "create" | "modify",
 ): string {
+	// Mirror of the runtime's size guard (core `getEditorSizeError`): opening a
+	// preview for a call the executor will refuse would show the user an edit that
+	// never happens. The throw is caught by the preview openers and skips the tab;
+	// the executor's own envelope still reaches the model unchanged.
+	if (typeof input.new_text === "string" && input.new_text.length > EDITOR_INPUT_CHAR_LIMIT) {
+		throw new Error(
+			`Editor input too large: new_text was ${input.new_text.length} characters, above the ${EDITOR_INPUT_CHAR_LIMIT}-character per-call limit; nothing will be written.`,
+		)
+	}
+	if (typeof input.old_text === "string" && input.old_text.length > EDITOR_INPUT_CHAR_LIMIT) {
+		throw new Error(
+			`Editor input too large: old_text was ${input.old_text.length} characters, above the ${EDITOR_INPUT_CHAR_LIMIT}-character per-call limit; nothing will be written.`,
+		)
+	}
+
 	if (input.insert_line != null) {
 		const lines = originalContent.split("\n")
 		const maxBoundaryLine = lines.length + 1
@@ -315,14 +332,17 @@ export function computeNewEditorContent(
 		throw new Error("Parameter `old_text` is required when editing an existing file without `insert_line`")
 	}
 
-	const occurrences = input.old_text.length === 0 ? 0 : originalContent.split(input.old_text).length - 1
+	const lineEnding = originalContent.includes("\r\n") ? "\r\n" : "\n"
+	const oldText = input.old_text.split(/\r\n|\n/).join(lineEnding)
+	const newText = (input.new_text ?? "").split(/\r\n|\n/).join(lineEnding)
+	const occurrences = oldText.length === 0 ? 0 : originalContent.split(oldText).length - 1
 	if (occurrences === 0) {
 		throw new Error(`No replacement performed: text not found in ${filePath}.`)
 	}
 	if (occurrences > 1) {
 		throw new Error(`No replacement performed: multiple occurrences of text found in ${filePath}.`)
 	}
-	return originalContent.replace(input.old_text, input.new_text ?? "")
+	return originalContent.replace(oldText, () => newText)
 }
 
 /** Mirrors the SDK executor's resolveFilePath (restrictToCwd=true): absolute paths pass through. */
