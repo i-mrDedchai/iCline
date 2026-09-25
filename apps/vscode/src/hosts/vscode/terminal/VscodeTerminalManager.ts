@@ -299,6 +299,13 @@ export class VscodeTerminalManager {
 		if (matchingTerminal) {
 			Logger.log(`[TerminalManager] Found matching terminal ${matchingTerminal.id} in correct cwd`)
 			this.terminalIds.add(matchingTerminal.id)
+			// Reserve it for this caller before returning. Only runCommand() sets this
+			// flag otherwise, which is a tick too late: two tool calls built from the
+			// same model response each ran getOrCreateTerminal to completion first and
+			// both got this terminal, so two commands were written into one shell
+			// session a millisecond apart (1-Cline.log, terminal 19 x3). runCommand()
+			// clears the flag when the command it runs completes.
+			matchingTerminal.busy = true
 			// Cast to ITerminalInfo for interface compatibility
 			return matchingTerminal as unknown as ITerminalInfo
 		}
@@ -339,7 +346,10 @@ export class VscodeTerminalManager {
 				} finally {
 					availableTerminal.pendingCwdChange = undefined
 					availableTerminal.cwdResolved = undefined
-					availableTerminal.busy = false
+					// busy stays true: the terminal is reserved for the caller that is about
+					// to run the command it was fetched for. Clearing it here reopened the
+					// window this reservation exists to close (see the matching-terminal
+					// path), because runCommand() does not check the flag — it only sets it.
 				}
 				this.terminalIds.add(availableTerminal.id)
 				// Cast to ITerminalInfo for interface compatibility
