@@ -133,6 +133,12 @@ export interface CoreCompactionBudgetMetadata {
 export interface CoreCompactionResult {
 	messages: MessageWithMetadata[];
 	budget?: CoreCompactionBudgetMetadata;
+	/** Measured request token usage before and after compaction. */
+	contextUsage?: {
+		tokens_before: number;
+		tokens_after: number;
+		max_input_tokens: number;
+	};
 }
 
 export interface CoreCompactionSummarizerConfig {

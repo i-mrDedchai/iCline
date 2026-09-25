@@ -19,7 +19,10 @@ import type {
 	CoreSessionConfig,
 } from "../../types/config";
 import type { ProviderConfig } from "../../types/provider-settings";
-import { runAgenticCompaction } from "./agentic-compaction";
+import {
+	type AgenticCompactionDeclineReason,
+	runAgenticCompaction,
+} from "./agentic-compaction";
 import { runBasicCompaction } from "./basic-compaction";
 import {
 	COMPACTION_TRIGGER_RATIO,
@@ -59,6 +62,12 @@ export interface ContextPipelinePrepareTurnInput {
 export interface ContextPipelinePrepareTurnResult {
 	messages: CoreCompactionContext["messages"];
 	systemPrompt?: string;
+	/**
+	 * Measured request token usage around the compaction that produced
+	 * `messages`. Hosts persist this so a client can show the post-compaction
+	 * size immediately and after reopening a chat, instead of estimating it.
+	 */
+	contextUsage?: CoreCompactionResult["contextUsage"];
 }
 
 export type ContextPipelinePrepareTurn = (
@@ -73,6 +82,13 @@ type BuiltinCompactionStrategyOptions = {
 	compaction: CoreCompactionConfig | undefined;
 	estimateMessageTokens: EstimateMessageTokens;
 	logger: Pick<CoreSessionConfig, "logger">["logger"];
+	/**
+	 * Set by the agentic strategy when it produces no transcript; ignored by
+	 * every other strategy. The reason decides whether a basic fold may run.
+	 */
+	onDecline?: (reason: AgenticCompactionDeclineReason) => void;
+	/** Used by the agentic summarizer to recover from a credential failure. */
+	onAuthError?: () => Promise<boolean> | boolean;
 };
 
 type BuiltinCompactionStrategyRunner = (
@@ -85,6 +101,13 @@ type BuiltinCompactionStrategyRunner = (
 export interface ContextCompactionPrepareTurnOptions {
 	mode?: CoreCompactionMode;
 	manualTargetRatio?: number;
+	/**
+	 * Refresh provider credentials after the summarizer fails with an auth error,
+	 * and retry the summary once. Hosts pass the same handler their chat-turn
+	 * auth retry uses, so a rotated token does not silently downgrade every
+	 * compaction to a basic fold.
+	 */
+	onAuthError?: () => Promise<boolean> | boolean;
 }
 
 const LONG_CONVERSATION_TARGET_RATIO = 0.5;
@@ -161,6 +184,8 @@ const BUILTIN_COMPACTION_STRATEGIES = {
 		compaction,
 		estimateMessageTokens,
 		logger,
+		onDecline,
+		onAuthError,
 	}) =>
 		runAgenticCompaction({
 			context,
@@ -172,6 +197,8 @@ const BUILTIN_COMPACTION_STRATEGIES = {
 			),
 			estimateMessageTokens,
 			logger,
+			onDecline,
+			onAuthError,
 		}),
 } satisfies Record<CoreCompactionStrategy, BuiltinCompactionStrategyRunner>;
 
@@ -421,6 +448,7 @@ export function createContextCompactionPrepareTurn(
 		const beforeMessageCount = context.messages.length;
 		const startedAt = Date.now();
 
+		let agenticDeclineReason: AgenticCompactionDeclineReason | undefined;
 		const builtinOptions = {
 			context: compactionContext,
 			providerConfig: {
@@ -430,6 +458,10 @@ export function createContextCompactionPrepareTurn(
 			compaction: userCompaction,
 			estimateMessageTokens,
 			logger: config.logger,
+			onDecline: (reason: AgenticCompactionDeclineReason) => {
+				agenticDeclineReason = reason;
+			},
+			onAuthError: options.onAuthError,
 		};
 		let executedStrategy = telemetryStrategy;
 		let result: CoreCompactionResult | undefined;
@@ -519,6 +551,27 @@ export function createContextCompactionPrepareTurn(
 				executedStrategy = "basic";
 				result = await BUILTIN_COMPACTION_STRATEGIES.basic(builtinOptions);
 			}
+			// Only a summarizer that ran and produced no usable text is recoverable
+			// by a deterministic basic fold. Every other agentic decline is a
+			// deliberate skip (too short, no cut boundary, nothing new to fold,
+			// budgets exhausted): folding anyway would re-run basic compaction every
+			// turn while the estimate stays over the trigger, which is the per-turn
+			// compaction storm the "nothing new above the cut" guard prevents.
+			if (
+				!result?.messages &&
+				strategy === "agentic" &&
+				agenticDeclineReason === "no_summary_text"
+			) {
+				if (context.abortSignal.aborted) {
+					return undefined;
+				}
+				config.logger?.log(
+					"Agentic compaction returned no result; falling back to basic compaction",
+					{ severity: "warn", reason: "no_summary_text" },
+				);
+				executedStrategy = "basic";
+				result = await BUILTIN_COMPACTION_STRATEGIES.basic(builtinOptions);
+			}
 		}
 
 		const durationMs = Date.now() - startedAt;
@@ -539,6 +592,11 @@ export function createContextCompactionPrepareTurn(
 				0,
 			);
 			const afterRequestTokens = requestOverheadTokens + afterMessageTokens;
+			result.contextUsage = {
+				tokens_before: requestInputTokens,
+				tokens_after: afterRequestTokens,
+				max_input_tokens: maxInputTokens,
+			};
 			config.logger?.log("Context compaction completed", {
 				severity: "info",
 				strategy: executedStrategy,
@@ -757,6 +815,7 @@ export function createCompactionStateAwarePrepareTurn(input: {
 					compactedMessages: result.messages,
 					conversationId: context.conversationId,
 					systemPrompt,
+					contextUsage: result.contextUsage ?? existingState.context_usage,
 				});
 				await input.saveState?.(nextState, context.messages);
 				return {
@@ -780,6 +839,7 @@ export function createCompactionStateAwarePrepareTurn(input: {
 				compactedMessages: result.messages,
 				conversationId: context.conversationId,
 				systemPrompt: result.systemPrompt,
+				contextUsage: result.contextUsage,
 			});
 			await input.saveState?.(nextState, context.messages);
 		}

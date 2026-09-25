@@ -39,6 +39,39 @@ describe("compactSessionMessages", () => {
 		expect(createContextCompactionPrepareTurn).not.toHaveBeenCalled()
 	})
 
+	it("measures the full request around manual compaction and persists the measured context usage", async () => {
+		const compact = vi.fn().mockResolvedValue({
+			messages: [{ role: "user", content: "summary" }],
+			contextUsage: { tokens_before: 90_000, tokens_after: 2_345, max_input_tokens: 100_000 },
+		})
+		createContextCompactionPrepareTurn.mockReturnValueOnce(compact)
+		const messages = [{ role: "user" as const, content: "Build the feature" }]
+		const config = {
+			...baseConfig,
+			systemPrompt: "persistent system prompt",
+			knownModels: { claude: { id: "claude", maxInputTokens: 100_000 } },
+			extraTools: [{ name: "editor", description: "edit a file", inputSchema: { type: "object" } }],
+		} as unknown as Parameters<typeof compactSessionMessages>[0]["config"]
+
+		await compactSessionMessages({ config, sessionId: "s1", messages })
+
+		// The compaction request must be measured against the same system prompt,
+		// tool definitions and model limit the real turn uses.
+		expect(compact).toHaveBeenCalledWith(
+			expect.objectContaining({
+				systemPrompt: "persistent system prompt",
+				tools: config.extraTools,
+				model: expect.objectContaining({ info: { id: "claude", maxInputTokens: 100_000 } }),
+			}),
+		)
+		// The measured usage must reach the persisted sidecar state.
+		expect(createSessionCompactionState).toHaveBeenCalledWith(
+			expect.objectContaining({
+				contextUsage: { tokens_before: 90_000, tokens_after: 2_345, max_input_tokens: 100_000 },
+			}),
+		)
+	})
+
 	it("builds a manual-mode prepareTurn and force-enables compaction", async () => {
 		const compact = vi
 			.fn()

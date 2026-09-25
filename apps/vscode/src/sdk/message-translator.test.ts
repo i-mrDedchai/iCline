@@ -230,6 +230,37 @@ describe("translateSessionEvent — pending prompts", () => {
 // translateSessionEvent — agent_event (content_start)
 // ---------------------------------------------------------------------------
 
+describe("translateSessionEvent — agent_event notice", () => {
+	it("emits measured compaction usage to the context bar without affecting totals", () => {
+		const state = new MessageTranslatorState()
+		const result = translateSessionEvent(
+			{
+				type: "agent_event",
+				payload: {
+					sessionId: "session-compact",
+					event: {
+						type: "notice",
+						noticeType: "status",
+						message: "auto-compacted",
+						metadata: {
+							kind: "auto_compaction",
+							phase: "completed",
+							tokensBefore: 100_000,
+							tokensAfter: 2_345,
+							maxInputTokens: 100_000,
+						},
+					} as AgentEvent,
+				},
+			},
+			state,
+		)
+
+		const usage = result.messages.find((message) => message.say === "api_req_started")
+		expect(JSON.parse(usage?.text ?? "{}")).toMatchObject({ tokensIn: 2_345, excludeFromTotals: true })
+		expect(result.messages.find((message) => message.say === "info")?.text).toBe("auto-compacted")
+	})
+})
+
 describe("translateSessionEvent — agent_event content_start", () => {
 	it("reuses the approved tool prompt row for the matching tool lifecycle", () => {
 		const state = new MessageTranslatorState()

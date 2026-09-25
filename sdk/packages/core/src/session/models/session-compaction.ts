@@ -31,6 +31,11 @@ export const SessionCompactionStateSchema = z.object({
 	source_last_message_key: z.string().min(1).optional(),
 	messages: z.array(MessageWithMetadataSchema),
 	system_prompt: z.string().optional(),
+	context_usage: z.object({
+		tokens_before: z.number().nonnegative(),
+		tokens_after: z.number().nonnegative(),
+		max_input_tokens: z.number().positive(),
+	}).optional(),
 });
 
 export type SessionCompactionState = z.infer<
@@ -136,6 +141,7 @@ export function createSessionCompactionState(input: {
 	compactedMessages: readonly MessageWithMetadata[];
 	conversationId?: string;
 	systemPrompt?: string;
+	contextUsage?: SessionCompactionState["context_usage"];
 	updatedAt?: string;
 }): SessionCompactionState {
 	const lastSourceMessage = input.sourceMessages.at(-1);
@@ -155,6 +161,7 @@ export function createSessionCompactionState(input: {
 		...(input.systemPrompt !== undefined
 			? { system_prompt: input.systemPrompt }
 			: {}),
+		...(input.contextUsage ? { context_usage: input.contextUsage } : {}),
 	});
 }
 

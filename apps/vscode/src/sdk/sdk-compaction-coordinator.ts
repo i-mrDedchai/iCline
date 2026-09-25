@@ -139,6 +139,8 @@ export class SdkCompactionCoordinator {
 				compaction: config.compaction,
 				logger: config.logger,
 				telemetry: config.telemetry,
+				systemPrompt: config.systemPrompt,
+				extraTools: config.extraTools,
 			},
 			sessionId,
 			messages,
@@ -161,9 +163,13 @@ export class SdkCompactionCoordinator {
 		// Refresh the context-window progress bar immediately. The bar reads
 		// `getLastApiReqTotalTokens` from the last `api_req_started` usage
 		// snapshot — which still reflects pre-compact size until the next
-		// live turn. Scale the previous usage by the message-count ratio so
-		// the UI no longer stays stuck at 100%+/400k after a successful compact.
-		this.emitPostCompactUsageEstimate(sessionId, messagesBefore, result.messages.length)
+		// live turn. Prefer the measured post-compaction request size; fall back
+		// to scaling the previous usage by the message-count ratio when no
+		// measured value is available, so the bar never stays stuck at 100%+/400k.
+		this.emitPostCompactUsageEstimate(sessionId, result.compactionState.context_usage?.tokens_after, {
+			messagesBefore,
+			messagesAfter: result.messages.length,
+		})
 
 		this.emitInfo(this.formatCompactionStatus(messagesBefore, result.messages.length), sessionId)
 		await this.options.postStateToWebview()
@@ -173,21 +179,31 @@ export class SdkCompactionCoordinator {
 
 	/**
 	 * Emit a synthetic api_req_started usage row so ContextWindow.tsx updates
-	 * before the next model turn. Prefer scaling the last real usage; if none
-	 * exists, leave the bar alone (emit nothing with total 0).
+	 * before the next model turn. Prefers the measured post-compaction request
+	 * size and falls back to scaling the last real usage by the message-count
+	 * ratio; emits nothing when neither is available.
 	 */
-	private emitPostCompactUsageEstimate(sessionId: string, messagesBefore: number, messagesAfter: number): void {
+	private emitPostCompactUsageEstimate(
+		sessionId: string,
+		measuredTokensAfter: number | undefined,
+		counts: { messagesBefore: number; messagesAfter: number },
+	): void {
 		const activeSessionId = this.options.sessions.getActiveSession()?.sessionId
 		if (activeSessionId !== sessionId) {
 			return
 		}
-		const clineMessages = this.readClineMessages()
-		const lastTotal = getLastApiReqTotalTokens(clineMessages)
-		if (lastTotal <= 0) {
+		let tokensAfter = measuredTokensAfter
+		if (tokensAfter === undefined) {
+			const lastTotal = getLastApiReqTotalTokens(this.readClineMessages())
+			if (lastTotal <= 0) {
+				return
+			}
+			tokensAfter = estimatePostCompactTokens(lastTotal, counts.messagesBefore, counts.messagesAfter)
+		}
+		if (tokensAfter <= 0) {
 			return
 		}
-		const estimated = estimatePostCompactTokens(lastTotal, messagesBefore, messagesAfter)
-		this.options.messages.appendAndEmit([buildPostCompactUsageMessage(estimated)], {
+		this.options.messages.appendAndEmit([buildPostCompactUsageMessage(tokensAfter)], {
 			type: "status",
 			payload: { sessionId, status: "running" },
 		})

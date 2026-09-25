@@ -1401,6 +1401,29 @@ function translateAgentEvent(event: AgentEvent, state: MessageTranslatorState): 
 		}
 
 		case "notice": {
+			// Auto-compaction notices carry measured usage for the display bar.
+			// Preserve a synthetic API usage row while keeping it out of totals.
+			if (
+				event.noticeType === "status" &&
+				event.metadata?.phase === "completed" &&
+				typeof event.metadata.tokensAfter === "number"
+			) {
+				const usage: ClineApiReqInfo = {
+					tokensIn: event.metadata.tokensAfter,
+					tokensOut: 0,
+					cacheWrites: 0,
+					cacheReads: 0,
+					cost: 0,
+					excludeFromTotals: true,
+				}
+				messages.push({
+					ts: state.nextTs(),
+					type: "say",
+					say: "api_req_started",
+					text: JSON.stringify(usage),
+					partial: false,
+				})
+			}
 			// Agent notices are informational
 			messages.push({
 				ts: state.nextTs(),

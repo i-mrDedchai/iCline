@@ -26,6 +26,21 @@ describe("applyDurablePostCompactEstimate", () => {
 		expect(JSON.parse(compacted[compacted.length - 1].text ?? "{}").excludeFromTotals).toBe(true)
 	})
 
+	it("uses measured post-compact tokens from the sidecar when reopening history", () => {
+		const messages: ClineMessage[] = [usageRow(100_000)]
+		const compacted = applyDurablePostCompactEstimate(messages, {
+			source_message_count: 10,
+			messages: [{}, {}],
+			context_usage: {
+				tokens_before: 100_000,
+				tokens_after: 2_345,
+				max_input_tokens: 100_000,
+			},
+		})
+
+		expect(getLastApiReqTotalTokens(compacted)).toBe(2_345)
+	})
+
 	it("does not append a second estimate when the live compact row is already present", () => {
 		const estimated = estimatePostCompactTokens(100_000, 10, 2)
 		const messages: ClineMessage[] = [usageRow(100_000), usageRow(estimated, { excludeFromTotals: true })]

@@ -28,12 +28,26 @@ export interface CompactSessionMessagesInput {
 	/** Provider/model/compaction config for the active session. */
 	config: Pick<
 		CoreSessionConfig,
-		"providerConfig" | "providerId" | "modelId" | "knownModels" | "compaction" | "logger" | "telemetry"
+		| "providerConfig"
+		| "providerId"
+		| "modelId"
+		| "knownModels"
+		| "compaction"
+		| "logger"
+		| "telemetry"
+		| "systemPrompt"
+		| "extraTools"
 	>
 	/** The active session id (used for telemetry keying). */
 	sessionId: string
 	/** The conversation transcript to compact (SDK message shape). */
 	messages: SdkMessage[]
+	/**
+	 * Tool definitions to measure the request with. Defaults to the config's
+	 * `extraTools`. Core's own built-in definitions are not resolvable at this
+	 * adapter, so the measured total is a lower bound on the real request.
+	 */
+	tools?: unknown[]
 }
 
 export interface CompactSessionMessagesResult {
@@ -97,8 +111,8 @@ export async function compactSessionMessages(input: CompactSessionMessagesInput)
 		messages: input.messages,
 		apiMessages: input.messages,
 		abortSignal: new AbortController().signal,
-		systemPrompt: "",
-		tools: [],
+		systemPrompt: input.config.systemPrompt,
+		tools: input.tools ?? input.config.extraTools ?? [],
 		model: {
 			id: input.config.modelId,
 			provider: input.config.providerId,
@@ -116,6 +130,7 @@ export async function compactSessionMessages(input: CompactSessionMessagesInput)
 			compactedMessages: result.messages,
 			conversationId: input.sessionId,
 			systemPrompt: result.systemPrompt,
+			contextUsage: result.contextUsage,
 		}),
 	}
 }

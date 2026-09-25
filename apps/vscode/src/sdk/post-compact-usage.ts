@@ -1,9 +1,17 @@
+import type { SessionCompactionState } from "@cline/core"
 import type { ClineApiReqInfo, ClineMessage } from "@shared/ExtensionMessage"
 import { getLastApiReqTotalTokens } from "@shared/getApiMetrics"
 
+/**
+ * The subset of the persisted compaction sidecar this module reads. The measured
+ * usage shape is owned by the core state (`SessionCompactionState`) — do not
+ * redeclare it here, or the two definitions drift and the app reads a field the
+ * runtime never writes.
+ */
 export interface CompactSidecarLike {
 	source_message_count: number
 	messages: readonly unknown[]
+	context_usage?: SessionCompactionState["context_usage"]
 }
 
 export function estimatePostCompactTokens(lastTotal: number, messagesBefore: number, messagesAfter: number): number {
@@ -48,7 +56,9 @@ export function applyDurablePostCompactEstimate(
 	if (lastTotal <= 0) {
 		return messages
 	}
-	const estimated = estimatePostCompactTokens(lastTotal, compaction.source_message_count, compaction.messages.length)
+	const estimated =
+		compaction.context_usage?.tokens_after ??
+		estimatePostCompactTokens(lastTotal, compaction.source_message_count, compaction.messages.length)
 	if (lastTotal <= estimated) {
 		return messages
 	}

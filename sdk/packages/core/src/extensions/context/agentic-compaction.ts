@@ -1,5 +1,5 @@
 import { createHandlerAsync } from "@cline/llms";
-import type { BasicLogger } from "@cline/shared";
+import { type BasicLogger, isLikelyAuthError } from "@cline/shared";
 import { countUserRunMessages } from "../../session/user-run-messages";
 import type {
 	CoreCompactionContext,
@@ -113,6 +113,24 @@ function safeJsonSize(value: unknown): number {
 	}
 }
 
+/**
+ * Why the agentic strategy produced no transcript.
+ *
+ * Only `no_summary_text` means the summarizer ran and failed to produce usable
+ * output, which a deterministic basic fold can recover from. Every other reason
+ * is a deliberate skip: folding anyway re-runs basic compaction on every turn
+ * while the estimate stays over the trigger, which is the per-turn compaction
+ * storm the "nothing new above the cut" guard exists to prevent. Declaring the
+ * reason here keeps that policy decision with the caller that owns it.
+ */
+export type AgenticCompactionDeclineReason =
+	| "transcript_too_short"
+	| "no_cut_boundary"
+	| "nothing_new_to_fold"
+	| "summarizer_budget_exhausted"
+	| "summary_input_budget_failed"
+	| "no_summary_text";
+
 export async function runAgenticCompaction(options: {
 	context: CoreCompactionContext;
 	providerConfig: ProviderConfig;
@@ -120,6 +138,15 @@ export async function runAgenticCompaction(options: {
 	preserveRecentTokens: number;
 	estimateMessageTokens: EstimateMessageTokens;
 	logger?: BasicLogger;
+	/** Called with the reason when no transcript is produced. */
+	onDecline?: (reason: AgenticCompactionDeclineReason) => void;
+	/**
+	 * Refresh provider credentials after an auth failure from the summarizer.
+	 * Resolves `true` when new credentials were installed and the call is worth
+	 * retrying. Chat turns already recover this way; without it a rotated OAuth
+	 * token loses the summary on every compaction.
+	 */
+	onAuthError?: () => Promise<boolean> | boolean;
 }): Promise<CoreCompactionResult | undefined> {
 	const messages = options.context.messages;
 	if (messages.length < 2) {
@@ -127,6 +154,7 @@ export async function runAgenticCompaction(options: {
 			"Skipped agentic compaction: transcript too short to fold",
 			{ messageCount: messages.length },
 		);
+		options.onDecline?.("transcript_too_short");
 		return undefined;
 	}
 
@@ -144,6 +172,7 @@ export async function runAgenticCompaction(options: {
 				preserveRecentTokens: options.preserveRecentTokens,
 			},
 		);
+		options.onDecline?.("no_cut_boundary");
 		return undefined;
 	}
 
@@ -171,6 +200,7 @@ export async function runAgenticCompaction(options: {
 				preservedMessages: messages.length - cutIndex,
 			},
 		);
+		options.onDecline?.("nothing_new_to_fold");
 		return undefined;
 	}
 
@@ -223,6 +253,7 @@ export async function runAgenticCompaction(options: {
 				summaryRequestOverheadTokens,
 			},
 		);
+		options.onDecline?.("summarizer_budget_exhausted");
 		return undefined;
 	}
 	const summaryInputBudget = buildAgenticSummaryInputBudget({
@@ -244,6 +275,7 @@ export async function runAgenticCompaction(options: {
 				summarizerModelId: summarizerProviderConfig.modelId,
 			},
 		);
+		options.onDecline?.("summary_input_budget_failed");
 		return undefined;
 	}
 	const fileOps = extractFileOps(summaryInputBudget.messages);
@@ -274,11 +306,36 @@ export async function runAgenticCompaction(options: {
 		maxInputTokens: options.context.budget.request.maxInputTokens,
 		triggerTokens: options.context.budget.request.triggerTokens,
 	});
-	const summaryResult = await generateSummary({
-		providerConfig: summarizerProviderConfig,
-		request: summaryRequest,
-		logger: options.logger,
-	});
+	const runSummarizer = (providerConfig: ProviderConfig) =>
+		generateSummary({
+			providerConfig,
+			request: summaryRequest,
+			logger: options.logger,
+		});
+	let summaryResult: SummaryGenerationResult;
+	try {
+		summaryResult = await runSummarizer(summarizerProviderConfig);
+	} catch (error) {
+		if (!options.onAuthError || !isLikelyAuthError(error)) {
+			throw error;
+		}
+		const refreshed = await options.onAuthError();
+		if (!refreshed) {
+			throw error;
+		}
+		options.logger?.log(
+			"Summarizer rejected the credentials; retrying the compaction summary after refreshing them",
+			{ severity: "warn" },
+		);
+		// Re-resolve for the retry: `resolveSummarizerConfig` returns a copy, so it
+		// would otherwise re-send the token that just failed.
+		summaryResult = await runSummarizer(
+			resolveSummarizerConfig({
+				activeProviderConfig: options.providerConfig,
+				summarizer: options.summarizer,
+			}),
+		);
+	}
 	const rawSummary = summaryResult.text;
 	if (!rawSummary) {
 		options.logger?.log(
@@ -296,6 +353,7 @@ export async function runAgenticCompaction(options: {
 						: "empty_response",
 			},
 		);
+		options.onDecline?.("no_summary_text");
 		return undefined;
 	}
 

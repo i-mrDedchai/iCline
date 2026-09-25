@@ -5,9 +5,11 @@ import { SdkCompactionCoordinator, type SdkCompactionCoordinatorOptions } from "
 
 vi.mock("@cline/core", () => ({
 	createContextCompactionPrepareTurn: vi.fn(),
-	createSessionCompactionState: vi.fn((input: { compactedMessages: unknown[] }) => ({
+	// Mirrors the real factory: the measured usage rides on the persisted state.
+	createSessionCompactionState: vi.fn((input: { compactedMessages: unknown[]; contextUsage?: unknown }) => ({
 		version: 1,
 		messages: input.compactedMessages,
+		...(input.contextUsage ? { context_usage: input.contextUsage } : {}),
 	})),
 	CORE_BUILD_VERSION: "test-core-version",
 }))
@@ -206,6 +208,44 @@ describe("SdkCompactionCoordinator", () => {
 			[expect.objectContaining({ say: "info", text: "Compacted 3 messages to 1." })],
 			expect.anything(),
 		)
+	})
+
+	it("prefers the measured post-compact usage over the message-count estimate", async () => {
+		const activeSession = makeActiveSession()
+		activeSession.sdkHost.readMessages.mockResolvedValueOnce([
+			{ role: "user", content: "1" },
+			{ role: "assistant", content: "2" },
+			{ role: "user", content: "3" },
+		])
+		const { coordinator, options } = makeCoordinator({
+			activeSession,
+			clineMessages: [
+				{
+					ts: 1,
+					type: "say",
+					say: "api_req_started",
+					text: JSON.stringify({ tokensIn: 1000, tokensOut: 200, cacheWrites: 0, cacheReads: 0, cost: 0.4 }),
+				},
+			],
+		})
+		// 3 messages to 1 would estimate 400 from the 1200-token last real usage.
+		mockCreateContextCompactionPrepareTurn.mockReturnValueOnce(
+			vi.fn().mockResolvedValue({
+				messages: [{ role: "user", content: "summary" }],
+				contextUsage: { tokens_before: 1200, tokens_after: 2345, max_input_tokens: 100_000 },
+			}),
+		)
+
+		await coordinator.compactTask()
+
+		const usageCall = options.messages.appendAndEmit.mock.calls.find(([messages]) =>
+			messages.some((message: { say?: string }) => message.say === "api_req_started"),
+		)
+		expect(usageCall).toBeDefined()
+		expect(JSON.parse(usageCall?.[0][0].text ?? "{}")).toMatchObject({
+			tokensIn: 2345,
+			excludeFromTotals: true,
+		})
 	})
 
 	it("reports a failure when compaction throws", async () => {

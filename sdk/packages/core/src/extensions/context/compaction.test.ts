@@ -1267,10 +1267,10 @@ describe("createContextCompactionPrepareTurn", () => {
 		expect(explicitWins.maxOutputTokens).toBe(6_000);
 	});
 
-	it("skips with a diagnostic warning when the summarizer only produced reasoning output", async () => {
+	it("falls back to basic compaction when the summarizer only produced reasoning output", async () => {
 		// Repro for CLINE-2911: a reasoning model can spend the entire output
 		// budget thinking. Reasoning chunks are discarded, so no summary text
-		// arrives and compaction is skipped — that skip must be diagnosable.
+		// arrives; deterministic basic compaction must still shrink the context.
 		const logger = { debug: vi.fn(), log: vi.fn() };
 		const emitStatusNotice = vi.fn();
 		createHandlerMock.mockReturnValue({
@@ -1306,6 +1306,12 @@ describe("createContextCompactionPrepareTurn", () => {
 			logger,
 		});
 
+		const messages: MessageWithMetadata[] = [
+			{ role: "user", content: "Old turn" },
+			{ role: "assistant", content: "Old answer" },
+			{ role: "user", content: "Latest turn" },
+			{ role: "assistant", content: "Latest answer" },
+		];
 		const result = await prepareTurn?.({
 			agentId: "agent-1",
 			conversationId: "conv-1",
@@ -1314,18 +1320,8 @@ describe("createContextCompactionPrepareTurn", () => {
 			abortSignal: new AbortController().signal,
 			systemPrompt: "You are helpful.",
 			tools: [],
-			messages: [
-				{ role: "user", content: "Old turn" },
-				{ role: "assistant", content: "Old answer" },
-				{ role: "user", content: "Latest turn" },
-				{ role: "assistant", content: "Latest answer" },
-			],
-			apiMessages: [
-				{ role: "user", content: "Old turn" },
-				{ role: "assistant", content: "Old answer" },
-				{ role: "user", content: "Latest turn" },
-				{ role: "assistant", content: "Latest answer" },
-			],
+			messages,
+			apiMessages: messages,
 			model: {
 				id: "local-reasoner",
 				provider: "openai",
@@ -1334,10 +1330,12 @@ describe("createContextCompactionPrepareTurn", () => {
 			emitStatusNotice,
 		});
 
-		expect(result).toBeUndefined();
+		expect(result?.messages).toBeDefined();
+		expect(result?.messages.length).toBeLessThan(messages.length);
+		expect(result?.messages[0]?.metadata).toMatchObject({ kind: "compaction" });
 		expect(emitStatusNotice).toHaveBeenCalledWith(
-			"auto-compaction-skipped",
-			expect.objectContaining({ phase: "skipped" }),
+			"auto-compacted",
+			expect.objectContaining({ phase: "completed", tokensAfter: expect.any(Number) }),
 		);
 		expect(logger.log).toHaveBeenCalledWith(
 			"Skipped agentic compaction: summarizer returned no summary text",
@@ -1348,6 +1346,201 @@ describe("createContextCompactionPrepareTurn", () => {
 				likelyCause: "output_budget_consumed_by_reasoning",
 			}),
 		);
+		expect(logger.log).toHaveBeenCalledWith(
+			"Agentic compaction returned no result; falling back to basic compaction",
+			expect.objectContaining({ reason: "no_summary_text" }),
+		);
+	});
+
+	it("refreshes credentials and retries the summarizer once after an auth failure", async () => {
+		// A rotated OAuth token reaches chat turns through syncOAuthCredentials, but
+		// the summarizer used to 401 and drop straight to basic compaction (seen in
+		// the dev.6-fix.30 log). It must get the same refresh-then-retry recovery a
+		// chat turn gets, so a rotated token does not lose the summary each time.
+		const logger = { debug: vi.fn(), log: vi.fn() };
+		const onAuthError = vi.fn(async () => true);
+		let attempts = 0;
+		createHandlerMock.mockImplementation(() => ({
+			createMessage: vi.fn(() => {
+				attempts += 1;
+				if (attempts === 1) {
+					return (async function* (): AsyncGenerator<FakeChunk> {
+						throw new Error(
+							"Unauthorized: Please make sure you're using the latest version of Cline and re-authenticate your Cline account.",
+						);
+					})();
+				}
+				return streamChunks([
+					{ type: "text", text: "## Summary\n\nContinued work with next steps." },
+					{ type: "done", id: "summary-ok", success: true },
+				]);
+			}),
+		}));
+
+		const prepareTurn = createContextCompactionPrepareTurn(
+			{
+				providerId: "cline",
+				modelId: "stealth/space-bunny-alpha",
+				providerConfig: {
+					providerId: "cline",
+					modelId: "stealth/space-bunny-alpha",
+				} as LlmsProviders.ProviderConfig,
+				compaction: {
+					enabled: true,
+					strategy: "agentic",
+					preserveRecentTokens: 1,
+				},
+				logger,
+			},
+			{ onAuthError },
+		);
+
+		const messages: MessageWithMetadata[] = [
+			{ role: "user", content: "Old turn" },
+			{ role: "assistant", content: "Old answer" },
+			{ role: "user", content: "Latest turn" },
+			{ role: "assistant", content: "Latest answer" },
+		];
+		const result = await prepareTurn?.({
+			agentId: "agent-1",
+			conversationId: "conv-1",
+			parentAgentId: null,
+			iteration: 1,
+			abortSignal: new AbortController().signal,
+			systemPrompt: "You are helpful.",
+			tools: [],
+			messages,
+			apiMessages: messages,
+			model: {
+				id: "stealth/space-bunny-alpha",
+				provider: "cline",
+				info: { id: "stealth/space-bunny-alpha", maxInputTokens: 10 },
+			},
+		});
+
+		expect(onAuthError).toHaveBeenCalledTimes(1);
+		expect(attempts).toBe(2);
+		// The retry must produce the real agentic summary, not the basic fallback.
+		expect(result?.messages[0]?.metadata).toMatchObject({ kind: "compaction_summary" });
+		expect(logger.log).not.toHaveBeenCalledWith(
+			"Agentic compaction failed; falling back to basic compaction",
+			expect.anything(),
+		);
+	});
+
+	it("keeps a long reasoning-heavy conversation below the overflow threshold across repeated compactions", async () => {
+		let summaryAttempts = 0;
+		createHandlerMock.mockImplementation(() => ({
+			createMessage: vi.fn(() => {
+				summaryAttempts += 1;
+				return streamChunks([
+					{
+						type: "reasoning",
+						id: `long-summary-${summaryAttempts}`,
+						reasoning: "r".repeat(5_000),
+					},
+					{
+						type: "done",
+						id: `long-summary-${summaryAttempts}`,
+						success: true,
+						incompleteReason: "max_output_tokens",
+					},
+				]);
+			}),
+		}));
+
+		const systemPrompt = "You are a persistent coding agent.";
+		const model = {
+			id: "local-reasoner",
+			provider: "openai",
+			info: { id: "local-reasoner", maxInputTokens: 5_000, maxTokens: 1_000 },
+		};
+		const prepareTurn = createContextCompactionPrepareTurn({
+			providerId: "openai",
+			modelId: "local-reasoner",
+			providerConfig: {
+				providerId: "openai",
+				modelId: "local-reasoner",
+			} as LlmsProviders.ProviderConfig,
+			compaction: { enabled: true, strategy: "agentic", preserveRecentTokens: 1_000 },
+			logger: undefined,
+		});
+		let messages: MessageWithMetadata[] = [];
+		for (let turn = 0; turn < 14; turn += 1) {
+			messages.push(
+				{ role: "user", content: `Request ${turn}: keep implementing the task.` },
+				{
+					role: "assistant",
+					content: [{
+						type: "tool_use",
+						id: `long-tool-${turn}`,
+						name: "read_files",
+						input: { file_paths: [`/tmp/file-${turn}.ts`] },
+					}],
+				},
+				{
+					role: "user",
+					content: [{
+						type: "tool_result",
+						tool_use_id: `long-tool-${turn}`,
+						name: "read_files",
+						content: "x".repeat(2_200),
+					}],
+				},
+				{ role: "assistant", content: `Finished work for turn ${turn}.` },
+			);
+		}
+
+		let successfulCompactions = 0;
+		for (let iteration = 1; iteration <= 14; iteration += 1) {
+			const result = await prepareTurn?.({
+				agentId: "agent-long-run",
+				conversationId: "conv-long-run",
+				parentAgentId: null,
+				iteration,
+				abortSignal: new AbortController().signal,
+				systemPrompt,
+				tools: [],
+				messages,
+				apiMessages: messages,
+				model,
+			});
+			if (result?.messages) {
+				successfulCompactions += 1;
+				messages = result.messages;
+				const requestTokens = estimateRequestInputTokens({ systemPrompt, messages, tools: [] });
+				expect(requestTokens).toBeLessThan(model.info.maxInputTokens * 0.9);
+			}
+
+			const turn = 14 + iteration;
+			const followUp: MessageWithMetadata[] = [
+				{ role: "user", content: `Follow-up ${turn}: continue the implementation.` },
+				{
+					role: "assistant",
+					content: [{
+						type: "tool_use",
+						id: `long-tool-${turn}`,
+						name: "read_files",
+						input: { file_paths: [`/tmp/file-${turn}.ts`] },
+					}],
+				},
+				{
+					role: "user",
+					content: [{
+						type: "tool_result",
+						tool_use_id: `long-tool-${turn}`,
+						name: "read_files",
+						content: "y".repeat(2_200),
+					}],
+				},
+				{ role: "assistant", content: `Finished work for turn ${turn}.` },
+			];
+			messages = [...messages, ...followUp];
+		}
+
+		expect(summaryAttempts).toBeGreaterThan(1);
+		expect(successfulCompactions).toBeGreaterThan(1);
+		expect(messages.length).toBeLessThan(14 * 4 + 14 * 4);
 	});
 
 	it("preserves summarizer modelInfo without a nested providerConfig", () => {
