@@ -375,7 +375,17 @@ export class Controller {
 			},
 			shouldAutoApproveTool: (request) => {
 				const autoApprovalSettings = this.stateManager.getGlobalSettingsKey("autoApprovalSettings")
-				return autoApprovalSettings ? isToolAutoApproved(request.toolName, autoApprovalSettings, this.mcpHub) : false
+				if (!autoApprovalSettings) {
+					return false
+				}
+				// Re-read YOLO on every call so toggling it mid-task takes effect, the
+				// same way the per-action toggles below do.
+				return isToolAutoApproved(
+					request.toolName,
+					autoApprovalSettings,
+					this.mcpHub,
+					this.stateManager.getGlobalSettingsKey("yoloModeToggled") === true,
+				)
 			},
 		})
 		this.sessions = new SdkSessionLifecycle({

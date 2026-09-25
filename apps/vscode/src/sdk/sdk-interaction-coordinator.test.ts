@@ -1,5 +1,6 @@
 import type { AgentEvent } from "@cline/shared"
 import { describe, expect, it, vi } from "vitest"
+import { Logger } from "@/shared/services/Logger"
 import { MessageTranslatorState, translateSessionEvent } from "./message-translator"
 import { SdkInteractionCoordinator } from "./sdk-interaction-coordinator"
 import { SdkMessageCoordinator } from "./sdk-message-coordinator"
@@ -50,6 +51,38 @@ describe("SdkInteractionCoordinator", () => {
 		expect(coordinator.resolvePendingToolApproval(undefined, "yesButtonClicked")).toBe(true)
 		expect(recordApprovedToolMessage).toHaveBeenCalledWith("tool-call", clineMessages[0].ts)
 		await expect(approvalPromise).resolves.toEqual({ approved: true })
+	})
+
+	it("logs the tool that could not be auto-approved, so a stall is diagnosable", async () => {
+		// With auto-approve (or YOLO) on, a command that still asks is invisible: no
+		// other line records the decision that produced the ask. Name the tool and
+		// the policy that was consulted so the next occurrence is diagnosable.
+		const logSpy = vi.spyOn(Logger, "log").mockImplementation(() => {})
+		const task = createTaskProxy("session-123", vi.fn(), vi.fn())
+		const messages = new SdkMessageCoordinator({ getTask: () => task })
+		const coordinator = new SdkInteractionCoordinator({
+			messages,
+			getSessionId: () => "session-123",
+			postStateToWebview: vi.fn().mockResolvedValue(undefined),
+			shouldAutoApproveTool: () => false,
+		})
+
+		const approvalPromise = coordinator.handleRequestToolApproval({
+			agentId: "agent",
+			conversationId: "conversation",
+			iteration: 1,
+			toolCallId: "tool-call",
+			toolName: "run_commands",
+			input: { commands: ["git status"] },
+			policy: { autoApprove: false },
+		})
+		await vi.waitFor(() => expect(task.messageStateHandler.getClineMessages()).toHaveLength(1))
+
+		expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("tool=run_commands"))
+
+		coordinator.resolvePendingToolApproval(undefined, "yesButtonClicked")
+		await expect(approvalPromise).resolves.toEqual({ approved: true })
+		logSpy.mockRestore()
 	})
 
 	it("records the real approval row timestamp that the translator reuses", async () => {

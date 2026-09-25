@@ -265,7 +265,10 @@ export class SdkSessionLifecycle {
 		}
 
 		const autoApprovalSettings = StateManager.get().getGlobalSettingsKey("autoApprovalSettings")
-		const toolPolicies = autoApprovalSettings ? buildToolPolicies(autoApprovalSettings, this.options.mcpHub) : undefined
+		const yoloMode = StateManager.get().getGlobalSettingsKey("yoloModeToggled") === true
+		const toolPolicies = autoApprovalSettings
+			? buildToolPolicies(autoApprovalSettings, this.options.mcpHub, yoloMode)
+			: undefined
 
 		const sdkHost = await this.getOrCreateSharedHost()
 

@@ -5765,6 +5765,85 @@ describe("LocalRuntimeHost", () => {
 		expect(run).toHaveBeenCalledTimes(1);
 	});
 
+	it("refreshes the provider config that compaction summaries are built from", async () => {
+		const sessionId = "sess-oauth-provider-config";
+		const manifest = createManifest(sessionId);
+		const sessionService = {
+			ensureSessionsDir: vi.fn().mockReturnValue("/tmp/sessions"),
+			createRootSessionWithArtifacts: vi.fn().mockResolvedValue({
+				manifestPath: "/tmp/manifest-oauth-pc.json",
+				messagesPath: "/tmp/messages-oauth-pc.json",
+				manifest,
+			}),
+			persistSessionMessages: vi.fn(),
+			updateSessionStatus: vi.fn().mockResolvedValue({ updated: true }),
+			writeSessionManifest: vi.fn(),
+			listSessions: vi.fn().mockResolvedValue([]),
+			deleteSession: vi.fn().mockResolvedValue({ deleted: true }),
+		};
+		const runtimeBuilder = {
+			build: vi.fn().mockReturnValue({
+				tools: [],
+				delegatedAgentConfigProvider: {
+					getRuntimeConfig: vi.fn(),
+					getConnectionConfig: vi.fn(),
+					updateConnectionDefaults: vi.fn(),
+				},
+				shutdown: vi.fn(),
+			}),
+		};
+		const manager = new RuntimeHostUnderTest({
+			distinctId,
+			sessionService: sessionService as never,
+			runtimeBuilder,
+			oauthTokenManager: {
+				resolveProviderApiKey: vi.fn().mockResolvedValue({
+					apiKey: "oauth-access-new",
+					refreshed: true,
+				}),
+			} as never,
+			createAgent: () =>
+				({
+					run: vi.fn().mockResolvedValue(createResult({ text: "ok" })),
+					continue: vi.fn(),
+					abort: vi.fn(),
+					subscribeEvents: vi.fn().mockReturnValue(() => {}),
+					canStartRun: vi.fn().mockReturnValue(true),
+					getAgentId: vi.fn().mockReturnValue("agent-root-1"),
+					getConversationId: vi.fn().mockReturnValue("conv-root-1"),
+					restore: vi.fn(),
+					updateConnection: vi.fn(),
+					shutdown: vi.fn().mockResolvedValue(undefined),
+					getMessages: vi.fn().mockReturnValue([]),
+					messages: [],
+				}) as never,
+		});
+
+		await manager.startSession(
+			normalizeStartInput({
+				config: createConfig({
+					sessionId,
+					providerId: "openai-codex",
+					apiKey: "oauth-access-old",
+					// The auto-compaction summarizer builds its own LLM handler from
+					// `config.providerConfig`, captured when the session is created — a
+					// refreshed token must reach this object too, not only the agent
+					// connection, or every summarizer call 401s until the session ends.
+					providerConfig: {
+						providerId: "openai-codex",
+						modelId: "mock-model",
+						apiKey: "oauth-access-old",
+					} as CoreSessionConfig["providerConfig"],
+				}),
+				interactive: true,
+			}),
+		);
+		await manager.runTurn({ sessionId, prompt: "hello" });
+
+		const builtConfig = runtimeBuilder.build.mock.calls[0]?.[0]?.config as CoreSessionConfig;
+		expect(builtConfig.providerConfig?.apiKey).toBe("oauth-access-new");
+	})
+
 	it("hydrates provider-specific config from provider settings", async () => {
 		const sessionId = "sess-provider-config";
 		const manifest = createManifest(sessionId);

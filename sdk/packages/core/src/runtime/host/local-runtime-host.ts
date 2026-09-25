@@ -680,7 +680,10 @@ export class LocalRuntimeHost implements RuntimeHost {
 		let activeSessionRef: ActiveSession | undefined;
 		const rawInitialCompactionState =
 			explicitInitialCompactionState ?? resumedCompactionState;
-		const autoCompact = createContextCompactionPrepareTurn(configWithProvider);
+		// The summarizer runs outside `runWithAuthRetry`, so it needs the same refresh
+		// hook: a rotated OAuth token used to 401 and downgrade every compaction to a
+		// basic fold for the rest of the session.
+		const autoCompact = createContextCompactionPrepareTurn(configWithProvider, { onAuthError });
 		// Resuming an imported session summarizes the foreign transcript before
 		// the model sees it. The summary persists to the compaction sidecar and
 		// the policy stands down once that sidecar projects, so it applies once
@@ -2534,7 +2537,19 @@ export class LocalRuntimeHost implements RuntimeHost {
 			}
 			throw error;
 		}
-		if (!resolved?.apiKey || session.config.apiKey === resolved.apiKey) return;
+		if (!resolved?.apiKey) return;
+		// Secondary LLM calls build their own connection from
+		// `config.providerConfig` (the context-compaction summarizer captures it
+		// when the session is created, before any turn runs), and the agent
+		// connection below never touches that object. A rotated OAuth token that
+		// only reached `config.apiKey` therefore left the summarizer sending the
+		// stale one: the summarizer 401s with "re-authenticate" for the rest of the
+		// session while normal turns keep working. Sync it before the equality
+		// short-circuit, which only guards the agent connection updates.
+		if (session.config.providerConfig) {
+			session.config.providerConfig.apiKey = resolved.apiKey;
+		}
+		if (session.config.apiKey === resolved.apiKey) return;
 		session.config.apiKey = resolved.apiKey;
 		session.agent.updateConnection({ apiKey: resolved.apiKey });
 		session.runtime.delegatedAgentConfigProvider?.updateConnectionDefaults({

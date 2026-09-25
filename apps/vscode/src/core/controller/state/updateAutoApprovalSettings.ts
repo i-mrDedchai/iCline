@@ -13,7 +13,8 @@ export async function updateAutoApprovalSettings(controller: Controller, request
 	const incomingVersion = request.version
 	const currentVersion = currentSettings?.version ?? 1
 
-	// Only update if incoming version is higher
+	// Only write when the incoming version is higher, so an out-of-order message
+	// cannot overwrite a newer choice.
 	if (incomingVersion > currentVersion) {
 		// Merge with current settings to preserve unspecified fields
 		const settings = {
@@ -32,9 +33,14 @@ export async function updateAutoApprovalSettings(controller: Controller, request
 		if (controller.task?.taskId) {
 			controller.stateManager.setTaskSettings(controller.task.taskId, "autoApprovalSettings", settings)
 		}
-
-		await controller.postStateToWebview()
 	}
+
+	// Always post the authoritative state, including for a refused write. The
+	// webview derives its next version from the last state it received, so a
+	// silently dropped update would leave it sending a version that can never
+	// exceed the stored one — every later toggle (e.g. Execute commands) would be
+	// discarded until a reload, and auto-approved commands would keep prompting.
+	await controller.postStateToWebview()
 
 	return Empty.create()
 }

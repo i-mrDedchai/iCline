@@ -84,7 +84,7 @@ describe("updateAutoApprovalSettings", () => {
 		assert.equal(controller.postStateToWebview.mock.calls.length, 1)
 	})
 
-	it("ignores stale auto-approval settings versions", async () => {
+	it("ignores stale auto-approval settings versions but resyncs the client", async () => {
 		const controller = makeController(
 			{
 				...DEFAULT_AUTO_APPROVAL_SETTINGS,
@@ -105,6 +105,10 @@ describe("updateAutoApprovalSettings", () => {
 
 		assert.equal(controller.stateManager.setGlobalState.mock.calls.length, 0)
 		assert.equal(controller.stateManager.setTaskSettings.mock.calls.length, 0)
-		assert.equal(controller.postStateToWebview.mock.calls.length, 0)
+		// The write is refused, but the authoritative version must still be posted:
+		// the webview derives the next version from what it last received, so a
+		// silently dropped update leaves it sending a version that never wins and
+		// every later toggle (e.g. Execute commands) is discarded too.
+		assert.equal(controller.postStateToWebview.mock.calls.length, 1)
 	})
 })

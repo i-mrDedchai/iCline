@@ -13,12 +13,21 @@ import type { McpHub } from "@/services/mcp/McpHub"
 export function buildToolPolicies(
 	_settings: AutoApprovalSettings,
 	mcpHub?: McpHub,
+	/** YOLO mode: "no approval required", so approve up front. */
+	yoloMode = false,
 ): Record<string, { enabled?: boolean; autoApprove?: boolean }> {
 	const policies: Record<string, { enabled?: boolean; autoApprove?: boolean }> = {}
 
+	// YOLO mode means every governed tool is approved without asking. Core has the
+	// same contract in its own yolo policy preset (`createToolPoliciesWithPreset`),
+	// which the VSCode adapter does not go through — without this the policies keep
+	// forcing `autoApprove: false` and the live guard has nothing to fall back on,
+	// so commands keep prompting with YOLO switched on.
+	const policy = yoloMode ? { autoApprove: true } : { autoApprove: false }
+
 	const set = (tools: string[]) => {
 		for (const tool of tools) {
-			policies[tool] = { autoApprove: false }
+			policies[tool] = policy
 		}
 	}
 
@@ -31,7 +40,7 @@ export function buildToolPolicies(
 		for (const server of mcpHub.getServers()) {
 			for (const tool of server.tools ?? []) {
 				const sdkName = `${server.name}__${tool.name}`
-				policies[sdkName] = { autoApprove: false }
+				policies[sdkName] = policy
 			}
 		}
 	}
@@ -45,7 +54,16 @@ export function buildToolPolicies(
  * approval callback, so changes from the AutoApproveBar are respected even if
  * an SDK session was created before the toggle changed.
  */
-export function isToolAutoApproved(toolName: string, settings: AutoApprovalSettings, mcpHub?: McpHub): boolean {
+export function isToolAutoApproved(
+	toolName: string,
+	settings: AutoApprovalSettings,
+	mcpHub?: McpHub,
+	/** YOLO mode bypasses every per-action toggle. */
+	yoloMode = false,
+): boolean {
+	if (yoloMode) {
+		return true
+	}
 	if (isReadTool(toolName)) {
 		return !!settings.actions.readFiles
 	}

@@ -171,6 +171,16 @@ export class SdkInteractionCoordinator {
 			return { approved: true }
 		}
 
+		// The ask path is the only place a turn stops for the user, and nothing else
+		// records why it got there. Without this, a tool that still prompts with
+		// auto-approve (or YOLO) switched on leaves no trace in the output channel,
+		// so the cause has to be guessed at instead of read off the log.
+		// `autoApprove` is already known not to be true here, so report what it was
+		// (false, or unset when the SDK defines no policy for the tool).
+		Logger.log(
+			`[SdkController] Tool approval required (not auto-approved): tool=${request.toolName} policyAutoApprove=${request.policy.autoApprove ?? "unset"}`,
+		)
+
 		const toolAskMessage: ClineMessage = buildToolApprovalAskMessage(request.toolName, request.input, this.nextMessageTs())
 		const isBackground = this.options.shouldDeferInteraction?.(request.conversationId) === true
 
