@@ -11,7 +11,11 @@ import {
 } from "./definitions";
 import { CommandExitError } from "./executors/bash";
 import { RUN_COMMAND_QUERY_PREVIEW_LIMIT, TimeoutError } from "./helpers";
-import { EDITOR_INPUT_CHAR_LIMIT, type EditFileInput } from "./schemas";
+import {
+	EDITOR_CHUNK_CHAR_LIMIT,
+	EDITOR_INPUT_CHAR_LIMIT,
+	type EditFileInput,
+} from "./schemas";
 import type { SkillsExecutorWithMetadata } from "./types";
 
 function hasSchemaKey(value: unknown, key: string): boolean {
@@ -2061,7 +2065,55 @@ describe("default editor tool", () => {
 		);
 	});
 
-	it("returns a recoverable tool error when text exceeds the soft character limit", async () => {
+	it("writes a payload above the old 32k wall straight through to the executor", async () => {
+		const execute = vi.fn(async () => "patched");
+		const tools = createDefaultTools({
+			executors: {
+				editor: execute,
+			},
+			enableReadFiles: false,
+			enableSearch: false,
+			enableBash: false,
+			enableWebFetch: false,
+			enableSkills: false,
+			enableAskQuestion: false,
+			enableApplyPatch: false,
+			enableEditor: true,
+		});
+		const editorTool = tools.find((tool) => tool.name === "editor");
+		expect(editorTool).toBeDefined();
+		if (!editorTool) {
+			throw new Error("Expected editor tool to be defined.");
+		}
+
+		// 40,243 characters is the exact new_text the dev.6-fix.29 smoke chat was
+		// refused at — a file of that size must reach the executor in one call.
+		const realisticText = "x".repeat(40_243);
+		const result = await editorTool.execute(
+			{
+				path: "/tmp/example.ts",
+				new_text: realisticText,
+			},
+			{
+				agentId: "agent-1",
+				conversationId: "conv-1",
+				iteration: 1,
+			},
+		);
+
+		expect(result).toEqual({
+			query: "edit:/tmp/example.ts",
+			result: "patched",
+			success: true,
+		});
+		expect(execute).toHaveBeenCalledWith(
+			expect.objectContaining({ new_text: realisticText }),
+			process.cwd(),
+			expect.anything(),
+		);
+	});
+
+	it("returns a recoverable tool error only above the hard per-call ceiling", async () => {
 		const execute = vi.fn(async () => "patched");
 		const tools = createDefaultTools({
 			executors: {
@@ -2107,6 +2159,69 @@ describe("default editor tool", () => {
 		expect(result.error).toContain(
 			`above the ${EDITOR_INPUT_CHAR_LIMIT}-character per-call limit`,
 		);
+		// The recovery recipe is sized by the chunk guidance, not by the ceiling.
+		expect(result.error).toContain(
+			`first chunk of at most ${EDITOR_CHUNK_CHAR_LIMIT} characters`,
+		);
+		expect(execute).not.toHaveBeenCalled();
+	});
+
+	it("returns the same single recovery message for an oversized old_text", async () => {
+		const execute = vi.fn(async () => "patched");
+		const tools = createDefaultTools({
+			executors: {
+				editor: execute,
+			},
+			enableReadFiles: false,
+			enableSearch: false,
+			enableBash: false,
+			enableWebFetch: false,
+			enableSkills: false,
+			enableAskQuestion: false,
+			enableApplyPatch: false,
+			enableEditor: true,
+		});
+		const editorTool = tools.find((tool) => tool.name === "editor");
+		expect(editorTool).toBeDefined();
+		if (!editorTool) {
+			throw new Error("Expected editor tool to be defined.");
+		}
+
+		// The core guard checks old_text first (helpers.ts getEditorSizeError); that
+		// branch had no test, so a regression there would silently drop the refusal.
+		const oversizedOldText = "x".repeat(EDITOR_INPUT_CHAR_LIMIT + 1);
+		const result = await editorTool.execute(
+			{
+				path: "/tmp/example.ts",
+				old_text: oversizedOldText,
+				new_text: "y",
+			},
+			{
+				agentId: "agent-1",
+				conversationId: "conv-1",
+				iteration: 1,
+			},
+		);
+
+		expect(result).toEqual({
+			query: "edit:/tmp/example.ts",
+			result: "",
+			error: expect.stringContaining("old_text was"),
+			success: false,
+		});
+		if (typeof result !== "object" || result == null || !("error" in result)) {
+			throw new Error("Expected editor tool result to include an error.");
+		}
+		const message = String(result.error);
+		expect(message).toContain(
+			`above the ${EDITOR_INPUT_CHAR_LIMIT}-character per-call limit`,
+		);
+		expect(message).toContain(
+			`first chunk of at most ${EDITOR_CHUNK_CHAR_LIMIT} characters`,
+		);
+		// ui-guidelines rule 8: the refusal is ONE message — the iCline guardrail
+		// keys off this very phrase to decide it must not append a second one.
+		expect(message.match(/per-call limit/g)).toHaveLength(1);
 		expect(execute).not.toHaveBeenCalled();
 	});
 });

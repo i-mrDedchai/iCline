@@ -20,7 +20,8 @@ vi.mock("@/registry", () => ({
 
 vi.mock("@/icline/harness/guardrails", () => ({
 	verifyWrittenFile: mocks.verifyWrittenFile,
-	EDITOR_INPUT_CHAR_LIMIT: 32000,
+	EDITOR_INPUT_CHAR_LIMIT: 2_000_000,
+	EDITOR_CHUNK_CHAR_LIMIT: 32_000,
 	getLargeWriteGuidance: () => "Write it in chunks: create the file with a first chunk, then append with `insert_line`.",
 }))
 
@@ -138,36 +139,63 @@ describe("hooks-adapter iCline post-write verification", () => {
 		})
 	})
 
-	it("adds the oversize explanation when the rejected call was above the per-call limit", async () => {
+	// ui-guidelines rule 8: when the tool's own rejection already carries the size,
+	// "nothing was written" and the chunk recipe, the guardrail passes it through
+	// unchanged — the fix.29 chat showed that same notice twice (two paragraphs).
+	it("returns the tool's size rejection once — never as two paragraphs", async () => {
 		const hooks = buildAgentHooks(makeStateManager())
-		const chars = 33_020
+		const chars = 2_000_001
+		const message = `Editor input too large: new_text was ${chars} characters, above the 2000000-character per-call limit; nothing was written. Create the file with a first chunk of at most 32000 characters, then append the remaining chunks with \`insert_line\` (line_count + 1 appends at EOF). Do not re-send the oversized call unchanged.`
 		const result = await hooks.afterTool?.(
 			makeAfterToolCtx({
 				input: { path: "/workspace/file.ts", new_text: "x".repeat(chars) },
 				output: {
 					query: "edit:/workspace/file.ts",
 					result: "",
-					error: `Editor input too large: new_text was ${chars} characters`,
+					error: message,
+					success: false,
+				},
+			}),
+		)
+		expect(mocks.verifyWrittenFile).not.toHaveBeenCalled()
+		expect(result).toEqual({ result: { output: message, isError: true } })
+		const output = (result?.result as { output: string }).output
+		expect(output.match(/per-call limit/g)).toHaveLength(1)
+	})
+
+	// Defensive: a failure from elsewhere on an oversized input still gets the sizes
+	// and the shared chunk recipe appended, because that message lacks both.
+	it("adds the oversize explanation only when the failure message lacks it", async () => {
+		const hooks = buildAgentHooks(makeStateManager())
+		const chars = 2_000_001
+		const result = await hooks.afterTool?.(
+			makeAfterToolCtx({
+				input: { path: "/workspace/file.ts", new_text: "x".repeat(chars) },
+				output: {
+					query: "edit:/workspace/file.ts",
+					result: "",
+					error: "Editor operation failed: ENOSPC (no space left on device)",
 					success: false,
 				},
 			}),
 		)
 		expect(mocks.verifyWrittenFile).not.toHaveBeenCalled()
 		const output = (result?.result as { output: string; isError: boolean }).output
-		expect(output).toContain("Editor input too large")
-		expect(output).toContain(`${chars} characters of new_text`)
-		expect(output).toContain("above the runtime's 32000-character per-call limit")
+		expect(output).toContain("Editor operation failed: ENOSPC")
+		expect(output).toContain(`The call carried ${chars} characters of new_text`)
+		// From the mocked getLargeWriteGuidance — the recipe the overlay no longer prints.
+		expect(output).toContain("Write it in chunks")
 		expect((result?.result as { isError: boolean }).isError).toBe(true)
 	})
 
 	it("leaves a realistic whole-file write alone", async () => {
-		// 7020 characters is the size that fix.23 unblocked: it used to be rejected
-		// (the 6000 wall) and re-sent as chunks. A failure envelope at this size can
-		// no longer come from the size guard, so no oversize explanation is appended.
+		// 40243 characters is the size the fix.29 smoke chat was refused at under the
+		// old 32k wall; it is an ordinary write now, so a failure envelope at this size
+		// cannot come from the size guard and gets no oversize explanation.
 		const hooks = buildAgentHooks(makeStateManager())
 		const result = await hooks.afterTool?.(
 			makeAfterToolCtx({
-				input: { path: "/workspace/file.ts", new_text: "x".repeat(7020) },
+				input: { path: "/workspace/file.ts", new_text: "x".repeat(40_243) },
 				output: {
 					query: "edit:/workspace/file.ts",
 					result: "",

@@ -15,20 +15,29 @@ import * as path from "node:path"
  * packaged VSIX executes.
  *
  * What it proves, against the real tool:
- *   - a create at the per-call input limit (32000 chars since dev.6-fix.23, was 6000)
- *     writes the file;
- *   - one character over is REJECTED before touching disk, as a returned envelope
- *     (`success: false` + `error`) — NOT a thrown error, so `isError` is never set;
- *     that envelope is what the iCline post-write guardrail must detect
- *     (`apps/vscode/src/sdk/hooks-adapter.ts`);
- *   - a four-call parallel batch behaves the same per call (the smoke-transcript
- *     shape: the sizes that used to be rejected now land in one call each);
- *   - the same limit applies to edits, and a rejected edit leaves the file untouched.
+ *   - ordinary writes land whole, in one call: the old 32k guidance size, the exact
+ *     40,243 characters the dev.6-fix.29 smoke chat was refused at, and the hard
+ *     ceiling itself (2,000,000 chars since this build) all write successfully;
+ *   - one character over the ceiling is REJECTED before touching disk, as a returned
+ *     envelope (`success: false` + `error`) — NOT a thrown error, so `isError` is
+ *     never set; that envelope is what the iCline post-write guardrail must detect
+ *     (`apps/vscode/src/sdk/hooks-adapter.ts`), and its message names the real size,
+ *     the hard limit, "nothing was written", and the chunk recipe;
+ *   - a multi-call parallel batch behaves the same per call (only the over-ceiling
+ *     payload is refused);
+ *   - the same limit applies to edits, and a rejected edit leaves the file untouched;
+ *   - the atomic write (temp file + rename) leaves no `.icline-tmp` litter behind.
  */
 import { type AgentToolContext, createDefaultTools, createEditorExecutor, type EditFileInput } from "@cline/core"
 
-/** Mirrors EDITOR_INPUT_CHAR_LIMIT in src/icline/harness/guardrails.ts. */
-const EXPECTED_LIMIT = 32000
+/** Mirrors EDITOR_INPUT_CHAR_LIMIT in src/icline/harness/guardrails.ts (hard ceiling). */
+const EXPECTED_HARD_LIMIT = 2_000_000
+
+/** Mirrors EDITOR_CHUNK_CHAR_LIMIT — the chunk size the recovery recipe recommends. */
+const EXPECTED_CHUNK_LIMIT = 32_000
+
+/** The new_text size the dev.6-fix.29 smoke chat was refused at under the old 32k wall. */
+const SMOKE_TRANSCRIPT_SIZE = 40_243
 
 interface ToolOperationResultLike {
 	query?: string
@@ -96,24 +105,46 @@ async function main(): Promise<void> {
 	try {
 		const editor = makeEditorTool(cwd)
 
-		// 1) Boundary: the limit itself must write.
-		const atLimitPath = path.join(cwd, "at-limit.css")
-		const atLimit = await editor.execute({ path: atLimitPath, new_text: "a".repeat(EXPECTED_LIMIT) }, toolContext())
+		// 1) The old guidance size still writes (it always did since fix.23).
+		const atChunkPath = path.join(cwd, "at-chunk.css")
+		const atChunk = await editor.execute({ path: atChunkPath, new_text: "a".repeat(EXPECTED_CHUNK_LIMIT) }, toolContext())
 		check(
-			`create at ${EXPECTED_LIMIT} chars succeeds and lands`,
-			atLimit.success === true && (await readIfExists(atLimitPath))?.length === EXPECTED_LIMIT,
-			`success=${String(atLimit.success)} error=${String(atLimit.error)} fileChars=${String((await readIfExists(atLimitPath))?.length)}`,
+			`create at ${EXPECTED_CHUNK_LIMIT} chars (guidance size) succeeds`,
+			atChunk.success === true && (await readIfExists(atChunkPath))?.length === EXPECTED_CHUNK_LIMIT,
+			`success=${String(atChunk.success)} error=${String(atChunk.error)}`,
 		)
 
-		// 2) One character over: rejected, nothing on disk, envelope (not a throw).
-		const overPath = path.join(cwd, "over-limit.css")
-		const over = await editor.execute({ path: overPath, new_text: "a".repeat(EXPECTED_LIMIT + 1) }, toolContext())
+		// 2) The exact size the fix.29 smoke chat was refused at lands in ONE call.
+		const smokePath = path.join(cwd, "smoke-transcript.css")
+		const smoke = await editor.execute({ path: smokePath, new_text: "b".repeat(SMOKE_TRANSCRIPT_SIZE) }, toolContext())
 		check(
-			`create at ${EXPECTED_LIMIT + 1} chars is rejected without writing`,
+			`create at ${SMOKE_TRANSCRIPT_SIZE} chars (the refused transcript size) succeeds in one call`,
+			smoke.success === true && (await readIfExists(smokePath))?.length === SMOKE_TRANSCRIPT_SIZE,
+			`success=${String(smoke.success)} error=${String(smoke.error)}`,
+		)
+
+		// 3) Boundary: the hard ceiling itself must write.
+		const atHardPath = path.join(cwd, "at-hard.txt")
+		const atHard = await editor.execute({ path: atHardPath, new_text: "c".repeat(EXPECTED_HARD_LIMIT) }, toolContext())
+		check(
+			`create at the hard ceiling (${EXPECTED_HARD_LIMIT} chars) succeeds`,
+			atHard.success === true && (await readIfExists(atHardPath))?.length === EXPECTED_HARD_LIMIT,
+			`success=${String(atHard.success)} error=${String(atHard.error)} fileChars=${String((await readIfExists(atHardPath))?.length)}`,
+		)
+
+		// 4) One character over the ceiling: rejected, nothing on disk, envelope (not a throw).
+		const overPath = path.join(cwd, "over-limit.txt")
+		const over = await editor.execute({ path: overPath, new_text: "d".repeat(EXPECTED_HARD_LIMIT + 1) }, toolContext())
+		const recipeNamesChunkSize = (over.error ?? "").includes(`first chunk of at most ${EXPECTED_CHUNK_LIMIT} characters`)
+		check(
+			`create at ${EXPECTED_HARD_LIMIT + 1} chars is rejected without writing`,
 			over.success === false &&
 				/Editor input too large/.test(over.error ?? "") &&
+				(over.error ?? "").includes(`${EXPECTED_HARD_LIMIT + 1} characters`) &&
+				(over.error ?? "").includes(`${EXPECTED_HARD_LIMIT}-character per-call limit`) &&
+				recipeNamesChunkSize &&
 				(await readIfExists(overPath)) === undefined,
-			`success=${String(over.success)} file=${String(await readIfExists(overPath))}\n        error="${String(over.error).slice(0, 120)}…"`,
+			`success=${String(over.success)} file=${String(await readIfExists(overPath))}\n        error="${String(over.error).slice(0, 220)}…"`,
 		)
 		check(
 			"the rejection is a returned envelope, so isError never gets set for the guardrail",
@@ -121,28 +152,28 @@ async function main(): Promise<void> {
 			`result=${JSON.stringify(over.result)} errorType=${typeof over.error}`,
 		)
 
-		// 3) Oversized edit of an existing file: rejected, file untouched.
-		const editPath = path.join(cwd, "existing.css")
+		// 5) Oversized edit of an existing file: rejected, file untouched.
+		const editPath = path.join(cwd, "existing.txt")
 		await fs.writeFile(editPath, "anchor", "utf8")
 		const edit = await editor.execute(
-			{ path: editPath, old_text: "anchor", new_text: "b".repeat(EXPECTED_LIMIT + 1) },
+			{ path: editPath, old_text: "anchor", new_text: "e".repeat(EXPECTED_HARD_LIMIT + 1) },
 			toolContext(),
 		)
 		check(
 			"oversized edit is rejected and leaves the file untouched",
 			edit.success === false && (await readIfExists(editPath)) === "anchor",
-			`success=${String(edit.success)} fileContent=${JSON.stringify(await readIfExists(editPath))}`,
+			`success=${String(edit.success)} fileContent=${JSON.stringify((await readIfExists(editPath))?.slice(0, 40))}`,
 		)
 
-		// 4) Parallel batch — the shape that produced the smoke failures, with the
-		// sizes that actually appeared in that transcript (5000/7020/6741/4963) plus
-		// one payload that is genuinely above the limit. Before fix.23 the three
-		// mid-size files were rejected and re-sent as chunks; now only the last one is.
+		// 6) Parallel batch — the shape that produced the smoke failures: every
+		// realistic size lands in one call each; only the over-ceiling payload is
+		// refused. 40243 is the transcript size, 5000/7020/6741 the older ones.
 		const batch = [
 			{ name: "01-shell.html", size: 5000 },
 			{ name: "02-base.css", size: 7020 },
 			{ name: "03-hero.html", size: 6741 },
-			{ name: "04-deck.css", size: EXPECTED_LIMIT + 500 },
+			{ name: "04-audit.js", size: SMOKE_TRANSCRIPT_SIZE },
+			{ name: "05-garbage.txt", size: EXPECTED_HARD_LIMIT + 500 },
 		]
 		const results = await Promise.all(
 			batch.map((entry) =>
@@ -156,9 +187,17 @@ async function main(): Promise<void> {
 			`\n      parallel batch: ${batch.map((entry, i) => `${entry.name}(${entry.size})=${String(results[i].success)}/${onDisk[i]}`).join("  ")}`,
 		)
 		check(
-			"parallel batch: every realistic file size lands in one call; only the oversized one is rejected",
-			results.map((r) => r.success).join(",") === "true,true,true,false" && onDisk.join(",") === "yes,yes,yes,no",
+			"parallel batch: every realistic file size lands in one call; only the over-ceiling one is rejected",
+			results.map((r) => r.success).join(",") === "true,true,true,true,false" && onDisk.join(",") === "yes,yes,yes,yes,no",
 			`success=[${results.map((r) => String(r.success)).join(",")}] onDisk=[${onDisk.join(",")}]`,
+		)
+
+		// 7) The atomic write's temp files are all renamed away — none may linger.
+		const leftovers = (await fs.readdir(cwd)).filter((name) => name.includes(".icline-tmp"))
+		check(
+			"no .icline-tmp files are left behind by any of the writes",
+			leftovers.length === 0,
+			`leftovers=[${leftovers.join(", ")}]`,
 		)
 	} finally {
 		await fs.rm(cwd, { recursive: true, force: true })
@@ -169,7 +208,9 @@ async function main(): Promise<void> {
 		console.error(`RESULT: FAIL (${failures.length} check(s)) — ${failures.join("; ")}`)
 		process.exit(1)
 	}
-	console.log("RESULT: PASS — the per-call limit rejects with a non-error envelope and never writes partial output.")
+	console.log(
+		"RESULT: PASS — ordinary writes land whole in one call; only payloads above the hard ceiling are rejected (envelope, no disk writes, no temp litter).",
+	)
 }
 
 await main()

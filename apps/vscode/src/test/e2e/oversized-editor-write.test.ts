@@ -8,19 +8,23 @@ import { E2E_WORKSPACE_TYPES, e2e } from "./utils/helpers"
  * E2E repro for the dev.6-fix.7 class of bug, on a REAL VS Code window.
  *
  * The mock server streams a structured `editor` tool call whose new_text is
- * 33020 characters — above the runtime's 32000-char per-call input limit. The
- * real tool rejects it BEFORE touching disk by RETURNING a failure envelope
+ * E2E_MOCK_OVERSIZED_EDITOR_NEW_TEXT_CHARS — the hard per-call ceiling + 1020
+ * (2,000,000 chars since this build; ordinary files, including the 40,243-char
+ * transcript one, now land whole in a single call). The real tool rejects it
+ * BEFORE touching disk by RETURNING a failure envelope
  * (`{ success: false, error: "Editor input too large …" }`) instead of
  * throwing, so the agent runtime never sets `isError` on its own.
  *
  * The iCline post-write guardrail (hooks-adapter.ts) must turn that envelope
- * into a real error carrying the executor's own message. This test pins the
+ * into a real error carrying the executor's own message — and exactly once:
+ * the tool's message already states the size, "nothing was written" and the
+ * chunk recipe, so no second paragraph may be appended. This test pins the
  * full pipeline the maintainer smokes by hand:
  *
  *   1. the oversized call is REJECTED — nothing lands on disk;
- *   2. the transcript shows the executor's real message
+ *   2. the transcript shows the executor's real message ONCE
  *      ("Editor input too large …") — NOT a phantom ENOENT / "Verification
- *      failed" that hides the cause;
+ *      failed" that hides the cause, and not the same notice twice;
  *   3. the follow-up request the runtime sends back to the (mock) model
  *      carries that message as a role:"tool" result, i.e. the model actually
  *      learns about the rejection;
@@ -39,7 +43,8 @@ e2e.describe("Oversized editor write — real failure reaches the transcript", (
 			// The mock oversized tool call targets "oversized-repro.txt" relative
 			// to the session cwd (the first workspace folder). If the guardrail
 			// regresses, the executor would claim success and this file would
-			// appear on disk with 33020 chars — the exact bug being pinned.
+			// appear on disk with the full oversized payload — the exact bug
+			// being pinned.
 			const targetPath = path.join(workspaceDir, "oversized-repro.txt")
 
 			try {
@@ -79,6 +84,10 @@ e2e.describe("Oversized editor write — real failure reaches the transcript", (
 				expect(rendered).toContain(String(E2E_MOCK_OVERSIZED_EDITOR_NEW_TEXT_CHARS))
 				// The rejection must carry the recovery recipe (chunk + insert_line).
 				expect(rendered).toContain("insert_line")
+				// ui-guidelines rule 8: ONE message — the guardrail must not append a
+				// second paragraph carrying the same per-call-limit notice.
+				expect(rendered.match(/per-call limit/g) ?? []).toHaveLength(1)
+				expect(rendered).not.toContain("The call carried")
 				const bodyText = await sidebar.locator("body").innerText()
 				expect(bodyText).not.toContain("Verification failed: could not read")
 				expect(bodyText).not.toContain("ENOENT")

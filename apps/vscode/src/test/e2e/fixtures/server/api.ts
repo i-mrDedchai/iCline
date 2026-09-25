@@ -90,18 +90,19 @@ export const E2E_MOCK_EDITOR_TOOL_CALL = {
 }
 
 /**
- * Structured `editor` tool call whose new_text exceeds the runtime's per-call
- * input limit (`EDITOR_INPUT_CHAR_LIMIT`, 32000 chars since dev.6-fix.23 — it was
- * 6000, which this fixture used to trip with a 7020-character file). The real tool
- * rejects it BEFORE touching disk by RETURNING a failure envelope
- * (`{ success: false, error: "Editor input too large …" }`) instead of
- * throwing, and the iCline post-write guardrail must surface that message to
- * the model with `isError: true` — never as a phantom ENOENT.
+ * Structured `editor` tool call whose new_text exceeds the runtime's hard per-call
+ * ceiling (`EDITOR_INPUT_CHAR_LIMIT` — 2,000,000 chars since this build; it was
+ * 32000 before, and 6000 before that, each of which this fixture used to trip with
+ * an ordinary file). The real tool rejects it BEFORE touching disk by RETURNING a
+ * failure envelope (`{ success: false, error: "Editor input too large …" }`)
+ * instead of throwing, and the iCline post-write guardrail must surface that
+ * message to the model with `isError: true` — once, as a single message, never as
+ * a phantom ENOENT or a doubled notice.
  *
  * The size is derived from the extension's own mirror of the limit so the fixture
  * cannot drift below a boundary the real tool would accept. That realistic writes
- * now land in a single call instead of being chunked is pinned by the real-core
- * half, `bun run repro:editor-write`.
+ * (including the 40,243-char file the fix.29 smoke chat was refused at) land in a
+ * single call is pinned by the real-core half, `bun run repro:editor-write`.
  */
 export const E2E_MOCK_OVERSIZED_EDITOR_NEW_TEXT_CHARS = EDITOR_INPUT_CHAR_LIMIT + 1020
 

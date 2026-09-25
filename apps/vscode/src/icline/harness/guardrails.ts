@@ -44,7 +44,7 @@ export function normalizeCompactionThreshold(raw?: number): number {
 }
 
 /**
- * Per-call input limit of the runtime's `editor` tool. Mirrors `EDITOR_INPUT_CHAR_LIMIT`
+ * Hard per-call ceiling of the runtime's `editor` tool. Mirrors `EDITOR_INPUT_CHAR_LIMIT`
  * (@cline/core `extensions/tools/schemas.ts`), which the fork layer cannot import as a
  * value: vitest aliases `@cline/core` to a stub (`src/test/cline-core-vitest-stub.ts`).
  * The upstream tool rejects a larger `new_text` before anything reaches disk, so this
@@ -52,18 +52,29 @@ export function normalizeCompactionThreshold(raw?: number): number {
  * pins the number and `scripts/repro-editor-write.ts` verifies the real boundary against
  * the real tool.
  *
- * Raised 6000 → 32000 in dev.6-fix.23: 6000 is below one ordinary source file, so
- * whole-file writes were rejected and re-sent in chunks (extra round trips each time).
+ * Raised 32000 → 2000000: 32k still refused files real chats produce (the fix.29 smoke
+ * refused a 40,243-character write), so the refusal now only catches payloads one
+ * response could not have produced. Ordinary writes land whole in one call, and the
+ * executor writes them atomically (temp file + rename) so a failure at any point leaves
+ * the target untouched.
  */
-export const EDITOR_INPUT_CHAR_LIMIT = 32000
+export const EDITOR_INPUT_CHAR_LIMIT = 2000000
 
 /**
- * The recipe for writing a file that does not fit in a single tool call. Shared by
- * the harness overlay (prevention) and the post-write guardrail (recovery) so both
- * surfaces tell the model the same thing.
+ * Chunk size the recovery recipe recommends when a write really is above the ceiling.
+ * Mirrors `EDITOR_CHUNK_CHAR_LIMIT` — guidance only, never enforced, and deliberately
+ * kept out of the harness overlay (a number in the prompt is a number models shrink to).
+ */
+export const EDITOR_CHUNK_CHAR_LIMIT = 32000
+
+/**
+ * The recipe for writing a file that does not fit in a single tool call. Used by the
+ * post-write guardrail's recovery text; the harness overlay deliberately teaches no
+ * size number (models latch onto a number in the prompt and start shrinking or
+ * splitting files to fit it), only that a rejection carries this recipe.
  */
 export function getLargeWriteGuidance(): string {
-	return `Write it in chunks: create the file with a first chunk of at most ${EDITOR_INPUT_CHAR_LIMIT} characters of new_text, then append the remaining chunks with \`insert_line\` (line_count + 1 appends at EOF). Do not re-send the oversized call unchanged.`
+	return `Write it in chunks: create the file with a first chunk of at most ${EDITOR_CHUNK_CHAR_LIMIT} characters of new_text, then append the remaining chunks with \`insert_line\` (line_count + 1 appends at EOF). Do not re-send the oversized call unchanged.`
 }
 
 export interface PostWriteVerificationResult {
@@ -109,7 +120,7 @@ export function getIclineHarnessOverlay(): string {
 - On ambiguous requests: ask one focused clarifying question OR proceed with the safest minimal assumption and state it.
 - On partial progress: summarize what changed, what remains, and the next concrete step.
 - Prefer small, verifiable edits over large speculative rewrites.
-- Writing files: a whole file fits in one \`editor\` call (up to ~${EDITOR_INPUT_CHAR_LIMIT} characters of new_text) — do not split a normal file across calls. Only above that size is the call rejected, and then: ${getLargeWriteGuidance()}
+- Writing files: a whole file of any realistic size fits in one \`editor\` call — do not split a normal file across calls, and do not shrink a file to fit a per-call budget. Only an implausibly large payload (millions of characters, which one response could not have produced) is rejected; that rejection then says exactly how to land the write in chunks.
 - When context is tight: preserve task goal, recent decisions, and file paths touched.`
 }
 

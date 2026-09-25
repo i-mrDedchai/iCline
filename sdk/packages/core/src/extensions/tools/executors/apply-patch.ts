@@ -20,6 +20,7 @@ import {
 	PatchParser,
 	type PatchWarning,
 } from "./apply-patch-parser";
+import { writeFileToDisk } from "./file-writes";
 import {
 	detectLineEnding,
 	type LineEnding,
@@ -333,7 +334,9 @@ async function applyChanges(
 					throw new DiffError(`Cannot create ${filePath} with no content`);
 				}
 				await fs.mkdir(path.dirname(sourceAbsPath), { recursive: true });
-				await fs.writeFile(sourceAbsPath, change.newContent, { encoding });
+				// Atomic (temp + rename): a failed write never leaves a partial file,
+				// the same invariant the executor's parse-then-write order promises.
+				await writeFileToDisk(sourceAbsPath, change.newContent, encoding);
 				touched.push(filePath);
 				break;
 			case PatchActionType.UPDATE: {
@@ -350,11 +353,13 @@ async function applyChanges(
 						restrictToCwd,
 					);
 					await fs.mkdir(path.dirname(moveAbsPath), { recursive: true });
-					await fs.writeFile(moveAbsPath, change.newContent, { encoding });
+					await writeFileToDisk(moveAbsPath, change.newContent, encoding);
 					await fs.rm(sourceAbsPath, { force: true });
 					touched.push(`${filePath} -> ${change.movePath}`);
 				} else {
-					await fs.writeFile(sourceAbsPath, change.newContent, { encoding });
+					// Atomic (temp + rename): the UPDATE's target keeps its old bytes
+					// whole if anything in this write fails, same as ADD above.
+					await writeFileToDisk(sourceAbsPath, change.newContent, encoding);
 					touched.push(filePath);
 				}
 				break;

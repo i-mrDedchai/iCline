@@ -26,7 +26,7 @@ import { HookFactory } from "@/core/hooks/hook-factory"
 import { getHooksEnabledSafe } from "@/core/hooks/hooks-utils"
 import type { StateManager } from "@/core/storage/StateManager"
 import { HostProvider } from "@/hosts/host-provider"
-import { EDITOR_INPUT_CHAR_LIMIT, verifyWrittenFile } from "@/icline/harness/guardrails"
+import { EDITOR_INPUT_CHAR_LIMIT, getLargeWriteGuidance, verifyWrittenFile } from "@/icline/harness/guardrails"
 import { recordToolTrace } from "@/icline/harness/tool-trace"
 import { isIclineBuild } from "@/registry"
 
@@ -436,16 +436,19 @@ function describeToolOutput(output: unknown): string {
  * Actionable guidance when the rejected call exceeded the runtime's per-call input
  * limit — by far the most common cause of "the write reported success but nothing
  * is on disk". Without this the model can only guess (dev.6 smoke: it guessed
- * "race" and re-sent the identical oversized call). The tool's own rejection message
- * (which this text is appended to) already carries the chunking recipe, so this adds
- * only the sizes and the "nothing reached disk" fact.
+ * "race" and re-sent the identical oversized call).
+ *
+ * The caller appends this ONLY when the failure message does not already carry the
+ * size rejection: the common case (the core guard's own message) states the size,
+ * "nothing was written" and the chunk recipe, and repeating any of it made the chat
+ * show the same notice twice (ui-guidelines rule 8: one message).
  */
 function describeOversizeInput(input: unknown): string | undefined {
 	const newText = (input as { new_text?: unknown } | undefined)?.new_text
 	if (typeof newText !== "string" || newText.length <= EDITOR_INPUT_CHAR_LIMIT) {
 		return undefined
 	}
-	return `The call carried ${newText.length} characters of new_text, above the runtime's ${EDITOR_INPUT_CHAR_LIMIT}-character per-call limit, so it was rejected before touching disk. Split the write as that error describes — do not re-send the oversized call unchanged.`
+	return `The call carried ${newText.length} characters of new_text, above the runtime's ${EDITOR_INPUT_CHAR_LIMIT}-character per-call limit, so it was rejected before touching disk. ${getLargeWriteGuidance()}`
 }
 
 /** Trace-safe summary of a write input — never the payload itself. */
@@ -473,7 +476,11 @@ async function runIclinePostWriteVerification(ctx: AgentAfterToolContext): Promi
 
 		const envelopeFailure = readToolEnvelopeFailure(ctx.result.output)
 		if (envelopeFailure) {
-			const guidance = describeOversizeInput(ctx.input)
+			// When the failure IS the size rejection, the tool's own message already
+			// carries the size, "nothing was written" and the chunk recipe — appending
+			// our explanation would show the model (and the chat) the same notice twice.
+			// The extra line is only for a failure from elsewhere on an oversized input.
+			const guidance = envelopeFailure.includes("per-call limit") ? undefined : describeOversizeInput(ctx.input)
 			Logger.log(
 				`[HooksAdapter] iCline guardrail: ${toolName} returned a failure envelope without the error flag; surfacing it to the model: ${envelopeFailure.slice(0, 200)}`,
 			)

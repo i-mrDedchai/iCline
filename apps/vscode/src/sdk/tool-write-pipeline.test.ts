@@ -10,14 +10,15 @@
 // the model kept re-sending the same oversized call (see the smoke transcripts).
 //
 // This file pins the guardrail's contract. The real-upstream half — that the tool
-// still emits exactly that envelope at the 6000-character boundary — is
-// `bun run repro:editor-write` (apps/vscode/scripts/repro-editor-write.ts), because
-// the vitest config aliases `@cline/core` to a stub.
+// still emits exactly that envelope at the current hard ceiling (2,000,000 chars)
+// and writes everything below it whole — is `bun run repro:editor-write`
+// (apps/vscode/scripts/repro-editor-write.ts), because the vitest config aliases
+// `@cline/core` to a stub.
 import { promises as fs } from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { EDITOR_INPUT_CHAR_LIMIT } from "@/icline/harness/guardrails"
+import { EDITOR_CHUNK_CHAR_LIMIT, EDITOR_INPUT_CHAR_LIMIT } from "@/icline/harness/guardrails"
 import { buildAgentHooks } from "./hooks-adapter"
 
 const mocks = vi.hoisted(() => ({
@@ -44,7 +45,7 @@ function sizeRejectionEnvelope(chars: number) {
 	return {
 		query: "edit:/tmp/oversized.css",
 		result: "",
-		error: `Editor input too large: new_text was ${chars} characters, above the ${EDITOR_INPUT_CHAR_LIMIT}-character per-call limit; nothing was written. Create the file with a first chunk of at most ${EDITOR_INPUT_CHAR_LIMIT} characters, then append the remaining chunks with \`insert_line\` (line_count + 1 appends at EOF). Do not re-send the oversized call unchanged.`,
+		error: `Editor input too large: new_text was ${chars} characters, above the ${EDITOR_INPUT_CHAR_LIMIT}-character per-call limit; nothing was written. Create the file with a first chunk of at most ${EDITOR_CHUNK_CHAR_LIMIT} characters, then append the remaining chunks with \`insert_line\` (line_count + 1 appends at EOF). Do not re-send the oversized call unchanged.`,
 		success: false,
 	}
 }
@@ -90,12 +91,15 @@ describe("write-pipeline guardrail (iCline layer)", () => {
 		return (result as { result?: { isError?: boolean } } | undefined)?.result?.isError
 	}
 
-	it("keeps the mirrored limit in step with the upstream boundary", () => {
-		// The repro script asserts this against the real tool's behavior; if upstream
-		// moves the boundary, both this number and that harness must move together.
-		// 32000 (dev.6-fix.23) sits above any hand-written file so a whole-file write
-		// lands in one call; lower it and the chunked-retry storm comes back.
-		expect(EDITOR_INPUT_CHAR_LIMIT).toBe(32000)
+	it("keeps the mirrored limits in step with the upstream boundary", () => {
+		// The repro script asserts both numbers against the real tool's behavior; if
+		// upstream moves a boundary, these and that harness must move together.
+		// 2000000 is the hard safety ceiling: ordinary writes — including the 40,243-char
+		// file the fix.29 smoke chat was refused at — must land in one call, so lowering
+		// it back brings the chunked-retry storm back. 32000 is guidance only (the chunk
+		// size the recovery recipe names).
+		expect(EDITOR_INPUT_CHAR_LIMIT).toBe(2000000)
+		expect(EDITOR_CHUNK_CHAR_LIMIT).toBe(32000)
 	})
 
 	it("turns an oversized rejection into an actionable error instead of a phantom ENOENT", async () => {
@@ -109,13 +113,39 @@ describe("write-pipeline guardrail (iCline layer)", () => {
 		expect(isErrorOf(result)).toBe(true)
 		const output = outputOf(result)
 		expect(output).toContain("Editor input too large")
-		expect(output).toContain(`${chars} characters of new_text`)
-		expect(output).toContain(`above the runtime's ${EDITOR_INPUT_CHAR_LIMIT}-character per-call limit`)
+		expect(output).toContain(`new_text was ${chars} characters`)
+		expect(output).toContain(`above the ${EDITOR_INPUT_CHAR_LIMIT}-character per-call limit`)
+		expect(output).toContain(`first chunk of at most ${EDITOR_CHUNK_CHAR_LIMIT} characters`)
 		expect(output).toContain("insert_line")
+		// ui-guidelines rule 8: the refusal reaches the model as ONE message — the
+		// guardrail must not append a second paragraph carrying the same notice.
+		expect(output.match(/per-call limit/g)).toHaveLength(1)
+		expect(output).not.toContain("The call carried")
 		// The old failure mode: a filesystem error that hid the real cause.
 		expect(output).not.toContain("Verification failed")
 		// And nothing was invented on disk by the verifier.
 		await expect(fs.access(target)).rejects.toThrow()
+	})
+
+	it("appends sizes and the chunk recipe when the failure message lacks them", async () => {
+		const target = path.join(tmpDir, "mystery.txt")
+		const chars = EDITOR_INPUT_CHAR_LIMIT + 1
+		const result = await runGuardrail(
+			{ path: target, new_text: "y".repeat(chars) },
+			{
+				query: `edit:${target}`,
+				result: "",
+				error: "Editor operation failed: ENOSPC (no space left on device)",
+				success: false,
+			},
+		)
+
+		expect(isErrorOf(result)).toBe(true)
+		const output = outputOf(result)
+		expect(output).toContain("Editor operation failed: ENOSPC")
+		expect(output).toContain(`The call carried ${chars} characters of new_text`)
+		expect(output).toContain(`first chunk of at most ${EDITOR_CHUNK_CHAR_LIMIT} characters of new_text`)
+		expect(output).not.toContain("Verification failed")
 	})
 
 	it("surfaces an executor-level rejection (same envelope, no size detail)", async () => {
@@ -166,5 +196,45 @@ describe("write-pipeline guardrail (iCline layer)", () => {
 			true,
 		)
 		expect(result).toBeUndefined()
+	})
+
+	// The core guard rejects an oversized old_text with its own single message
+	// (helpers.ts getEditorSizeError); that refusal must reach the model exactly
+	// once too — passed through whole, with no new_text-flavored explanation
+	// bolted on beside it. Only the new_text branch had a dedupe test before.
+	it("returns an old_text size rejection once, without new_text guidance", async () => {
+		const target = path.join(tmpDir, "old-text.txt")
+		const chars = EDITOR_INPUT_CHAR_LIMIT + 1
+		const message = `Editor input too large: old_text was ${chars} characters, above the ${EDITOR_INPUT_CHAR_LIMIT}-character per-call limit; nothing was written. Create the file with a first chunk of at most ${EDITOR_CHUNK_CHAR_LIMIT} characters, then append the remaining chunks with \`insert_line\` (line_count + 1 appends at EOF). Do not re-send the oversized call unchanged.`
+		const result = await runGuardrail(
+			{ path: target, old_text: "x".repeat(chars), new_text: "replacement" },
+			{ query: `edit:${target}`, result: "", error: message, success: false },
+		)
+
+		expect(isErrorOf(result)).toBe(true)
+		const output = outputOf(result)
+		expect(output).toBe(message)
+		expect(output.match(/per-call limit/g)).toHaveLength(1)
+		expect(output).not.toContain("The call carried")
+	})
+
+	// fix.7's other half: the tool claims success but the file is not on disk AND
+	// the input was oversized — the appended explanation must appear exactly once
+	// beside the verification failure (the fix.29 chat's two-paragraph notice was
+	// an append running on top of a message that already carried the notice).
+	it("appends the oversize explanation once when verification fails on an oversized input", async () => {
+		const target = path.join(tmpDir, "vanished.css")
+		const chars = EDITOR_INPUT_CHAR_LIMIT + 1
+		const result = await runGuardrail(
+			{ path: target, new_text: "y".repeat(chars) },
+			{ query: `edit:${target}`, result: `File created successfully at: ${target}`, success: true },
+		)
+
+		expect(isErrorOf(result)).toBe(true)
+		const output = outputOf(result)
+		expect(output).toContain("Verification failed")
+		expect(output).toContain("File created successfully at:")
+		expect(output).toContain(`The call carried ${chars} characters of new_text`)
+		expect(output.match(/per-call limit/g)).toHaveLength(1)
 	})
 })

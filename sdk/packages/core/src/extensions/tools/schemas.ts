@@ -14,19 +14,31 @@ import { z } from "zod";
 export const INPUT_ARG_CHAR_LIMIT = 6000;
 
 /**
- * Hard cap on the text payload of a single `editor` call (`old_text` /
- * `new_text`). A larger payload is rejected before anything reaches disk.
+ * Hard ceiling on the text payload of a single `editor` call (`old_text` /
+ * `new_text`). A larger payload is rejected before anything reaches disk; at or
+ * below it the write lands whole, in one call — this is a safety net against
+ * payloads no single response could have produced, not a size policy for
+ * ordinary writes.
  *
- * Was 6000 until dev.6-fix.23, which is smaller than an ordinary source file:
- * six of the nine orange tool failures in the dev.6-fix.21 smoke chat were this
- * guard alone (6079 / 6113 / 6729 / 7144 / 8181 characters). Every whole-file
- * write was therefore rejected, the model re-sent it as 2-4 chunked calls, and
- * each retry cost a full provider round trip — ballooning both the request count
- * and the wall-clock time. The cap now sits far above any hand-written file
- * while still refusing a payload no single response could have produced intact
- * (32k chars is roughly 8k tokens, inside every catalog model's output budget).
+ * Was 6000 until dev.6-fix.23 (smaller than an ordinary source file: six of the
+ * nine orange tool failures in the dev.6-fix.21 smoke chat were this guard
+ * alone), then 32_000 — which still refused files real chats produce: the
+ * dev.6-fix.29 smoke hit `Editor input too large: new_text was 40243
+ * characters`. The ceiling now sits where the guard can only catch garbage:
+ * 2M chars is ~500k tokens, above any model's single-response output budget,
+ * while ordinary writes are executed as-is. Writes are atomic (temp file +
+ * rename in `executors/editor.ts`), so even a payload at this size either lands
+ * completely or leaves the target exactly as it was.
  */
-export const EDITOR_INPUT_CHAR_LIMIT = 32_000;
+export const EDITOR_INPUT_CHAR_LIMIT = 2_000_000;
+
+/**
+ * Chunk size the recovery recipe recommends when a write really is above
+ * `EDITOR_INPUT_CHAR_LIMIT`: it fits comfortably in every catalog model's
+ * context, so the model can append the remainder without blowing its window.
+ * Guidance only — nothing rejects input at this size.
+ */
+export const EDITOR_CHUNK_CHAR_LIMIT = 32_000;
 
 /**
  * Schema for read tool input
@@ -221,12 +233,12 @@ export const EditFileInputSchema = z
 			.nullable()
 			.optional()
 			.describe(
-				`Exact text to replace (must match exactly once). Omit this when creating a missing file or inserting via insert_line. Up to ${EDITOR_INPUT_CHAR_LIMIT} characters per call; a larger replacement should be split across multiple calls.`,
+				`Exact text to replace (must match exactly once). Omit this when creating a missing file or inserting via insert_line. A replacement of any realistic size is accepted in one call; only above ${EDITOR_INPUT_CHAR_LIMIT} characters is it rejected before anything is written — split such a replacement across multiple calls.`,
 			),
 		new_text: z
 			.string()
 			.describe(
-				`The new content to write when creating a missing file, the replacement text for edits, or the inserted text when insert_line is provided. A whole file fits in one call (up to ${EDITOR_INPUT_CHAR_LIMIT} characters); larger payloads must be split — create the file with a first chunk, then append the rest with insert_line.`,
+				`The new content to write when creating a missing file, the replacement text for edits, or the inserted text when insert_line is provided. A whole file fits in one call, however long — do not split normal files across calls. Only above ${EDITOR_INPUT_CHAR_LIMIT} characters is the call rejected; then split it: create the file with a first chunk, then append the rest with insert_line.`,
 			),
 		// See start_line above: coerced so a stringified line number still applies.
 		insert_line: z.coerce
@@ -239,7 +251,7 @@ export const EditFileInputSchema = z
 			),
 	})
 	.describe(
-		`Edit a text file by replacing old_text with new_text, create the file with new_text if it does not exist, or insert new_text at insert_line when insert_line is provided. Prefer using this tool for file edits over shell commands. Write a file in one call whenever it fits (up to ${EDITOR_INPUT_CHAR_LIMIT} characters); above that, create it with a first chunk and append the rest with insert_line.`,
+		`Edit a text file by replacing old_text with new_text, create the file with new_text if it does not exist, or insert new_text at insert_line when insert_line is provided. Prefer using this tool for file edits over shell commands. Write a whole file in one call, however long — only above ${EDITOR_INPUT_CHAR_LIMIT} characters is the call rejected, and then create it with a first chunk and append the rest with insert_line.`,
 	);
 
 /**

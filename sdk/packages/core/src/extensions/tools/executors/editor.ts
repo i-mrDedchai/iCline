@@ -9,6 +9,7 @@ import * as path from "node:path";
 import type { AgentToolContext } from "@cline/shared";
 import type { EditFileInput } from "../schemas";
 import type { EditorExecutor } from "../types";
+import { writeFileToDisk } from "./file-writes";
 import {
 	detectLineEnding,
 	normalizeLineEndings,
@@ -144,9 +145,11 @@ async function createFile(
 	encoding: BufferEncoding,
 ): Promise<string> {
 	await fs.mkdir(path.dirname(filePath), { recursive: true });
-	await fs.writeFile(filePath, normalizeNewFileLineEndings(fileText), {
+	await writeFileToDisk(
+		filePath,
+		normalizeNewFileLineEndings(fileText),
 		encoding,
-	});
+	);
 	return `File created successfully at: ${filePath}`;
 }
 
@@ -185,7 +188,7 @@ async function replaceInFile(
 	// Replacer function so "$"-sequences in new_text ($&, $', $`, $$, $n)
 	// are inserted literally instead of being expanded by String.replace.
 	const updated = content.replace(normalizedOldStr, () => normalizedNewStr);
-	await fs.writeFile(filePath, updated, { encoding });
+	await writeFileToDisk(filePath, updated, encoding);
 
 	const diff = createLineDiff(content, updated, maxDiffLines);
 	return `Edited ${filePath}\n${diff}`;
@@ -210,7 +213,7 @@ async function insertInFile(
 
 	const insertLine = insertLineOneBased - 1;
 	lines.splice(insertLine, 0, ...newStr.split(/\r\n|\n/));
-	await fs.writeFile(filePath, lines.join(eol), { encoding });
+	await writeFileToDisk(filePath, lines.join(eol), encoding);
 
 	return `Inserted content at line ${insertLineOneBased} in ${filePath}.`;
 }

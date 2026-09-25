@@ -1,5 +1,6 @@
 import { validateWithZod } from "@cline/shared";
 import {
+	EDITOR_CHUNK_CHAR_LIMIT,
 	EDITOR_INPUT_CHAR_LIMIT,
 	type EditFileInput,
 	type ReadFileRequest,
@@ -18,14 +19,16 @@ export function formatError(error: unknown): string {
 }
 
 /**
- * Reject a single `editor` payload that is too large to have arrived intact.
+ * Reject a single `editor` payload above the hard per-call ceiling.
  *
  * The message is the model's only recovery recipe in this path, so it states the
  * limit, that nothing was written, and exactly how to land the same write — see
- * `EDITOR_INPUT_CHAR_LIMIT` for why the limit sits at 32k rather than 6k.
+ * `EDITOR_INPUT_CHAR_LIMIT` for why the ceiling sits in the millions (it only
+ * catches payloads one response could not have produced; ordinary writes are
+ * never refused). The recipe sizes its chunks with `EDITOR_CHUNK_CHAR_LIMIT`.
  */
 export function getEditorSizeError(input: EditFileInput): string | null {
-	const recipe = `Create the file with a first chunk of at most ${EDITOR_INPUT_CHAR_LIMIT} characters, then append the remaining chunks with \`insert_line\` (line_count + 1 appends at EOF). Do not re-send the oversized call unchanged.`;
+	const recipe = `Create the file with a first chunk of at most ${EDITOR_CHUNK_CHAR_LIMIT} characters, then append the remaining chunks with \`insert_line\` (line_count + 1 appends at EOF). Do not re-send the oversized call unchanged.`;
 
 	if (
 		typeof input.old_text === "string" &&
