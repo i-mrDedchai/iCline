@@ -155,9 +155,17 @@ helpers rather than re-deriving them:
    its quick input the moment that input loses focus. A palette opened in that window closes on
    its own with the query sitting in a hidden box (measured: focus was on the webview `<iframe>`
    and the widget hidden within 500ms). Hence `typeInPalette()` re-opens the palette until it
-   stays, and queries are written with `fill` — a `pressSequentially` query got cut to `>Move V`
-   when the widget vanished mid-word. The palette's `>` prefix is its mode: never fill an empty
-   string into it.
+   stays.
+   The same focus grab is why a query must NOT be written with `fill`. `fill` does not type into
+   the element you named: for an `<input type="text">` Playwright only selects it and then
+   inserts through `keyboard.insertText` (CDP `Input.insertText`), which goes to whichever element
+   HOLDS FOCUS. A `fill` that loses the race above types the query into the CHAT'S MESSAGE BOX —
+   silently, because the placeholder still matched and the palette still opened. That is what made
+   `secondary-side-bar.test.ts` fail about half of its runs with `"…survive the move>Move View"`
+   in the draft. Use `common.typeIntoWorkbenchInput`, which writes the value through the DOM
+   (native setter + a bubbling `InputEvent("input")`) and then asserts it landed. A
+   `pressSequentially` query is worse still — it got cut to `>Move V` when the widget vanished
+   mid-word. The palette's `>` prefix is its mode: never write an empty string into it.
 2. **A quick pick row is two elements.** VS Code renders a `.quick-input-list-row` label wrapper
    (content-sized, and duplicated by a zero-height sibling) inside a `.monaco-list-row[role="option"]`
    that carries the hit area and the accessible name — click the `option`. `clickRow()` matches

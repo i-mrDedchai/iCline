@@ -24,6 +24,7 @@
  * the frame stack to the webview's element and ask the workbench about it.
  */
 import { type ElectronApplication, type ElementHandle, expect, type Frame, type Locator, type Page } from "@playwright/test"
+import { typeIntoWorkbenchInput } from "./common"
 
 /** A window this size can hold a 900px pane plus a usable editor. */
 export const PANE_WIDE_WINDOW = { width: 1800, height: 1000 } as const
@@ -209,17 +210,13 @@ export function createPaneController({
 	/**
 	 * Writes `text` into the open quick input.
 	 *
-	 * `fill`, not keystrokes: VS Code hides its quick input when that input loses focus, and the
-	 * chat webview reaches for focus on its own — on a run where a turn had just completed, a
-	 * `pressSequentially("Move View")` query came out as `>Move V` with the palette already closed,
-	 * so the step timed out looking for a row that was never filtered in. A real user never sees
-	 * this (their keystrokes follow the OS focus; ours are addressed to an element). `fill` writes
-	 * the whole value in one event, so the query cannot be cut short.
-	 *
-	 * The value has to carry what the user would have typed: the palette's own `>` prefix is its
-	 * mode, so the caller passes it and nothing ever fills an empty string.
+	 * `common.typeIntoWorkbenchInput` carries the why: `fill` inserts into the FOCUSED element, and
+	 * the chat webview takes focus back on its own, which is how this fixture used to put the
+	 * palette's query into the chat's message box. The value has to carry what the user would have
+	 * typed: the palette's own `>` prefix is its mode, so the caller passes it and nothing ever
+	 * writes an empty string.
 	 */
-	const type = (input: Locator, text: string) => input.fill(text)
+	const type = (input: Locator, text: string) => typeIntoWorkbenchInput(input, text)
 
 	/** True while the quick input is actually on screen — VS Code hides it but keeps the DOM. */
 	const quickInputIsShown = () =>

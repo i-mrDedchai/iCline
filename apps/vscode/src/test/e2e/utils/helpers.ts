@@ -6,6 +6,7 @@ import { type ElectronApplication, expect, type Frame, type Page, test } from "@
 import { downloadAndUnzipVSCode, SilentReporter } from "@vscode/test-electron"
 import { _electron } from "playwright"
 import { ClineApiServerMock, getMockApiServerUrl } from "../fixtures/server"
+import { typeIntoWorkbenchInput } from "./common"
 import { createPaneController, PANE_WIDE_WIDTH_PX, type PaneController } from "./pane"
 
 interface E2ETestDirectories {
@@ -322,7 +323,7 @@ export class E2ETestHelper {
 			name: "Search files by name (append",
 		})
 		await editorSearchBar.click({ delay: 100 }) // Ensure focus
-		await editorSearchBar.fill(`>${command}`)
+		await typeIntoWorkbenchInput(editorSearchBar, `>${command}`)
 		await page.keyboard.press("Enter")
 	}
 
