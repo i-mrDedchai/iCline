@@ -103,6 +103,38 @@ describe("auto-approve matrix — every menu switch maps to the tools it governs
 	})
 })
 
+// spawn_agent runs a whole sub-agent and the team_* tools manage teammates,
+// tasks, mailboxes and outcomes. The SDK auto-approves tools the policy map
+// does not list, so leaving them out would let a spawn or a teammate message
+// happen without a single prompt the moment the feature settings enable them.
+// They carry no menu switch on purpose: the policy map governs them (ask unless
+// YOLO is on), matching the live guard, which already answers no for them.
+describe("sub-agent and team tools are governed, never silently auto-approved", () => {
+	const SUB_AGENT_AND_TEAM_TOOLS = [
+		"spawn_agent",
+		"team_spawn_teammate",
+		"team_shutdown_teammate",
+		"team_run_task",
+		"team_send_message",
+		"team_read_mailbox",
+		"team_create_outcome",
+	]
+
+	it("forces the SDK to ask for every sub-agent and team tool", () => {
+		const policies = buildToolPolicies(DEFAULT_AUTO_APPROVAL_SETTINGS, undefined, false)
+		for (const tool of SUB_AGENT_AND_TEAM_TOOLS) {
+			expect([tool, policies[tool]]).toEqual([tool, { autoApprove: false }])
+		}
+	})
+
+	it("auto-approves sub-agent and team tools only under YOLO", () => {
+		const policies = buildToolPolicies(DEFAULT_AUTO_APPROVAL_SETTINGS, undefined, true)
+		for (const tool of SUB_AGENT_AND_TEAM_TOOLS) {
+			expect([tool, policies[tool]]).toEqual([tool, { autoApprove: true }])
+		}
+	})
+})
+
 describe("isToolAutoApproved", () => {
 	it("leaves the MCP decision to the per-tool toggle", () => {
 		const mcpHub = {

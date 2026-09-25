@@ -13,6 +13,7 @@ const mockExtensionState = vi.hoisted(() => ({
 		useAutoCondense: false,
 		compactionStrategy: "basic",
 		subagentsEnabled: false,
+		agentTeamsEnabled: false,
 		worktreesEnabled: { user: true, featureFlag: true },
 		focusChainSettings: { enabled: false, remindClineInterval: 6 },
 		remoteConfigSettings: {},
@@ -87,6 +88,31 @@ describe("FeatureSettingsSection", () => {
 		fireEvent.click(hooksSwitch as Element)
 
 		expect(mockUpdateSetting).toHaveBeenCalledWith("hooksEnabled", true)
+	})
+
+	it("renders the Sub-agents and Agent Teams toggles in the Agent section", () => {
+		const { container } = render(<FeatureSettingsSection renderSectionHeader={() => null} />)
+
+		expect(screen.getByText("Sub-agents")).toBeTruthy()
+		expect(screen.getByText("Agent Teams")).toBeTruthy()
+
+		const agentSection = container.querySelector("#agent-features")
+		expect(agentSection?.querySelector('[id="Sub-agents"]')).toBeTruthy()
+		expect(agentSection?.querySelector('[id="Agent Teams"]')).toBeTruthy()
+	})
+
+	it("calls updateSetting with subagentsEnabled and agentTeamsEnabled when toggled", () => {
+		const { container } = render(<FeatureSettingsSection renderSectionHeader={() => null} />)
+
+		const subAgentsSwitch = container.querySelector('[id="Sub-agents"]')
+		expect(subAgentsSwitch).toBeTruthy()
+		fireEvent.click(subAgentsSwitch as Element)
+		expect(mockUpdateSetting).toHaveBeenCalledWith("subagentsEnabled", true)
+
+		const agentTeamsSwitch = container.querySelector('[id="Agent Teams"]')
+		expect(agentTeamsSwitch).toBeTruthy()
+		fireEvent.click(agentTeamsSwitch as Element)
+		expect(mockUpdateSetting).toHaveBeenCalledWith("agentTeamsEnabled", true)
 	})
 
 	it("calls updateSetting with showFeatureTips when toggled", () => {

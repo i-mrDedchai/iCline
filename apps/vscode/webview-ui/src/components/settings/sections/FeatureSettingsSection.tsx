@@ -37,6 +37,22 @@ const agentFeatures: FeatureToggle[] = [
 		stateKey: "useAutoCondense",
 		settingKey: "useAutoCondense",
 	},
+	{
+		id: "sub-agents",
+		label: "Sub-agents",
+		description:
+			"Let the agent delegate tasks to focused sub-agents that run their own tool loop and report back. Each spawn asks for approval.",
+		stateKey: "subagentsEnabled",
+		settingKey: "subagentsEnabled",
+	},
+	{
+		id: "agent-teams",
+		label: "Agent Teams",
+		description:
+			"Let the agent build and coordinate teams of teammates: shared tasks, mailbox messaging, mission logs and team outcomes. Team actions ask for approval.",
+		stateKey: "agentTeamsEnabled",
+		settingKey: "agentTeamsEnabled",
+	},
 ]
 
 const editorFeatures: FeatureToggle[] = [
@@ -156,6 +172,7 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 		useAutoCondense,
 		compactionStrategy,
 		subagentsEnabled,
+		agentTeamsEnabled,
 		worktreesEnabled,
 		remoteConfigSettings,
 		backgroundEditEnabled,
@@ -171,6 +188,7 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 		hooksEnabled,
 		useAutoCondense,
 		subagentsEnabled,
+		agentTeamsEnabled,
 		worktreesEnabled: worktreesEnabled?.user,
 		backgroundEditEnabled,
 		yoloModeToggled: isYoloRemoteLocked ? remoteConfigSettings?.yoloModeToggled : yoloModeToggled,

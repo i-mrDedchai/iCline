@@ -729,6 +729,17 @@ export class Controller {
 		this.terminalExecutionMode.handleTerminalExecutionModeChanged(previous, next)
 	}
 
+	/**
+	 * A sub-agents / agent-teams feature toggle changed. The tool set is built at
+	 * session start, so the active session must be rebuilt before the change is
+	 * visible in the running chat. The terminal-mode restart routine is the shared
+	 * "rebuild the active session from current settings, preserving its id and
+	 * transcript" path, so the agent-tools rebuild rides the same machinery.
+	 */
+	handleAgentToolsSettingChanged(): void {
+		this.sessionRebuilds.request("agentTools", () => this.terminalExecutionMode.restartSessionForTerminalExecutionMode())
+	}
+
 	private handleSessionBecameIdle(): void {
 		if (this.mode?.hasPendingModeChange()) {
 			// The mode rebuild reads the latest provider and tool configuration, so

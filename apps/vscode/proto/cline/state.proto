@@ -110,15 +110,17 @@ message Secrets {
   optional string cline_api_key = 44;
   optional string openai_codex_oauth_credentials = 48;
   optional string wandb_api_key = 50;
+  optional string zenmux_api_key = 51;
+  optional string zenmux_management_api_key = 52;
+  optional string sakana_api_key = 53;
+  optional string jan_api_key = 54;
+  optional string xai_oauth_credentials = 55;
 }
 
 // NOTE: Add new fields under API_HANDLER_SETTINGS_FIELDS or USER_SETTINGS_FIELDS
 // in src/shared/storage/state-keys.ts and use the scripts/generate-state-proto.mjs
 // script to regenerate this list.
 message Settings {
-  reserved 144, 154, 176;
-  reserved "cline_web_tools_enabled", "enable_parallel_tool_calling", "double_check_completion_enabled";
-
   optional string lite_llm_base_url = 1;
   optional bool lite_llm_use_prompt_cache = 2;
   optional string anthropic_base_url = 4;
@@ -292,6 +294,22 @@ message Settings {
   optional OpenRouterModelInfo plan_mode_cline_pass_model_info = 184;
   optional string act_mode_cline_pass_model_id = 185;
   optional OpenRouterModelInfo act_mode_cline_pass_model_info = 186;
+  optional bool agent_teams_enabled = 187;
+  optional string zenmux_api_protocol = 188;
+  optional string zenmux_provider_routing = 189;
+  optional string sakana_billing_mode = 190;
+  optional string sakana_api_protocol = 191;
+  optional string jan_base_url = 192;
+  optional string plan_mode_jan_model_id = 193;
+  optional string plan_mode_zenmux_model_id = 194;
+  optional OpenRouterModelInfo plan_mode_zenmux_model_info = 195;
+  optional string plan_mode_sakana_model_id = 196;
+  optional OpenRouterModelInfo plan_mode_sakana_model_info = 197;
+  optional string act_mode_jan_model_id = 198;
+  optional string act_mode_zenmux_model_id = 199;
+  optional OpenRouterModelInfo act_mode_zenmux_model_info = 200;
+  optional string act_mode_sakana_model_id = 201;
+  optional OpenRouterModelInfo act_mode_sakana_model_info = 202;
 }
 
 message State {
@@ -434,6 +452,7 @@ message UpdateSettingsRequest {
   optional bool worktrees_enabled = 40;
   optional bool show_feature_tips = 42;
   optional string compaction_strategy = 44;
+  optional bool agent_teams_enabled = 45;
 }
 
 message UpdateTerminalConnectionTimeoutRequest {

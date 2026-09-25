@@ -1,8 +1,8 @@
 import { setCompactionStrategyGlobally } from "@cline/core"
+import type { SakanaApiProtocol, SakanaBillingMode, ZenmuxApiProtocol } from "@shared/api"
 import { Empty } from "@shared/proto/cline/common"
 import { PlanActMode, McpDisplayMode as ProtoMcpDisplayMode, UpdateSettingsRequest } from "@shared/proto/cline/state"
 import { convertProtoToApiProvider } from "@shared/proto-conversions/models/api-configuration-conversion"
-import type { SakanaApiProtocol, SakanaBillingMode, ZenmuxApiProtocol } from "@shared/api"
 import { OpenaiReasoningEffort } from "@shared/storage/types"
 import { TelemetrySetting } from "@shared/TelemetrySetting"
 import { ClineEnv } from "@/config"
@@ -169,6 +169,20 @@ export async function updateSettings(controller: Controller, request: UpdateSett
 			// Capture telemetry when setting changes
 			if (wasEnabled !== isEnabled) {
 				telemetryService.captureSubagentToggle(isEnabled)
+				// The tool set is built at session start: rebuild so the toggle
+				// reaches the running chat instead of only the next one.
+				controller.handleAgentToolsSettingChanged()
+			}
+		}
+
+		// Update agent teams setting
+		if (request.agentTeamsEnabled !== undefined) {
+			const wasEnabled = controller.stateManager.getGlobalSettingsKey("agentTeamsEnabled") ?? false
+			const isEnabled = !!request.agentTeamsEnabled
+			controller.stateManager.setGlobalState("agentTeamsEnabled", isEnabled)
+
+			if (wasEnabled !== isEnabled) {
+				controller.handleAgentToolsSettingChanged()
 			}
 		}
 

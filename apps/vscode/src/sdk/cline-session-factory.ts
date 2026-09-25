@@ -893,6 +893,11 @@ export async function buildSessionConfig(input: SessionConfigInput): Promise<Cor
 	const globalUseAutoCondense = stateManager.getGlobalSettingsKey("useAutoCondense") ?? false
 	const compactionStrategy = readCompactionStrategyGlobally()
 	const enableCheckpoints = stateManager.getGlobalSettingsKey("enableCheckpointsSetting") ?? true
+	// Sub-agents and agent teams are opt-in feature settings (default off): the
+	// tool set is built at session start, so these decide whether the running
+	// chat can spawn sub-agents or manage a team at all.
+	const subagentsEnabled = stateManager.getGlobalSettingsKey("subagentsEnabled") ?? false
+	const agentTeamsEnabled = stateManager.getGlobalSettingsKey("agentTeamsEnabled") ?? false
 	const useAutoCondense = input.taskSettings?.useAutoCondense ?? globalUseAutoCondense
 
 	// Core resolves providers against the SDK registry, which uses the SDK's
@@ -972,8 +977,8 @@ export async function buildSessionConfig(input: SessionConfigInput): Promise<Cor
 		checkpoint: {
 			enabled: enableCheckpoints,
 		},
-		enableSpawnAgent: false,
-		enableAgentTeams: false,
+		enableSpawnAgent: subagentsEnabled,
+		enableAgentTeams: agentTeamsEnabled,
 		...(useAutoCondense
 			? {
 					compaction: {

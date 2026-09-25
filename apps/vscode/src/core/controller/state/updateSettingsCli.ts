@@ -46,6 +46,7 @@ export async function updateSettingsCli(controller: Controller, request: UpdateS
 			useAutoCondense,
 			worktreesEnabled,
 			subagentsEnabled,
+			agentTeamsEnabled,
 			browserSettings,
 			defaultTerminalProfile,
 			...simpleSettings
@@ -154,6 +155,20 @@ export async function updateSettingsCli(controller: Controller, request: UpdateS
 
 			if (wasEnabled !== isEnabled) {
 				telemetryService.captureSubagentToggle(isEnabled)
+				// The tool set is built at session start: rebuild so the toggle
+				// reaches the running chat instead of only the next one.
+				controller.handleAgentToolsSettingChanged()
+			}
+		}
+
+		// Update agent teams setting
+		if (agentTeamsEnabled !== undefined) {
+			const wasEnabled = controller.stateManager.getGlobalSettingsKey("agentTeamsEnabled") ?? false
+			const isEnabled = !!agentTeamsEnabled
+			controller.stateManager.setGlobalState("agentTeamsEnabled", isEnabled)
+
+			if (wasEnabled !== isEnabled) {
+				controller.handleAgentToolsSettingChanged()
 			}
 		}
 

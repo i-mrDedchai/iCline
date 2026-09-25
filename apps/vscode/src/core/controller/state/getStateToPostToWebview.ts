@@ -44,6 +44,7 @@ export async function getStateToPostToWebview(controller: {
 	const useAutoCondense = stateManager.getGlobalSettingsKey("useAutoCondense")
 	const compactionStrategy = readCompactionStrategyGlobally()
 	const subagentsEnabled = stateManager.getGlobalSettingsKey("subagentsEnabled")
+	const agentTeamsEnabled = stateManager.getGlobalSettingsKey("agentTeamsEnabled")
 	const userInfo = stateManager.getGlobalStateKey("userInfo")
 	const mcpMarketplaceEnabled = stateManager.getGlobalStateKey("mcpMarketplaceEnabled")
 	const mcpDisplayMode = stateManager.getGlobalStateKey("mcpDisplayMode")
@@ -139,6 +140,7 @@ export async function getStateToPostToWebview(controller: {
 		useAutoCondense,
 		compactionStrategy,
 		subagentsEnabled,
+		agentTeamsEnabled,
 		userInfo,
 		mcpMarketplaceEnabled,
 		mcpDisplayMode,

@@ -10,6 +10,39 @@ import type { McpHub } from "@/services/mcp/McpHub"
  * settings and either silently approves or shows the approval UI. This keeps
  * active sessions in sync when the user toggles auto-approval mid-task.
  */
+/**
+ * Sub-agent and team tools: `spawn_agent` runs a whole sub-agent and the
+ * `team_*` tools manage teammates, tasks, mailboxes and outcomes. The SDK
+ * auto-approves tools this map does not list, so they must be listed the moment
+ * the feature settings can enable them — otherwise a spawn or a teammate
+ * message would happen without a single prompt. They carry no auto-approve
+ * switch on purpose: without YOLO the live guard (`isToolAutoApproved`) answers
+ * no for them, so every call asks. Mirrors `TEAM_TOOL_NAMES` in
+ * @cline/core `extensions/tools/team/team-tools.ts`, kept literal because this
+ * layer cannot import core as a value in tests.
+ */
+const SUB_AGENT_AND_TEAM_TOOLS = [
+	"spawn_agent",
+	"team_spawn_teammate",
+	"team_shutdown_teammate",
+	"team_status",
+	"team_task",
+	"team_run_task",
+	"team_cancel_run",
+	"team_list_runs",
+	"team_await_runs",
+	"team_send_message",
+	"team_broadcast",
+	"team_read_mailbox",
+	"team_mission_log",
+	"team_cleanup",
+	"team_create_outcome",
+	"team_attach_outcome_fragment",
+	"team_review_outcome_fragment",
+	"team_finalize_outcome",
+	"team_list_outcomes",
+]
+
 export function buildToolPolicies(
 	_settings: AutoApprovalSettings,
 	mcpHub?: McpHub,
@@ -35,6 +68,7 @@ export function buildToolPolicies(
 	set(["editor", "replace_in_file", "write_to_file", "apply_patch", "delete_file"])
 	set(["run_commands", "execute_command"])
 	set(["fetch_web_content", "web_fetch", "web_search"])
+	set(SUB_AGENT_AND_TEAM_TOOLS)
 
 	if (mcpHub) {
 		for (const server of mcpHub.getServers()) {

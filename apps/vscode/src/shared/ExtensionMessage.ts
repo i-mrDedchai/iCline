@@ -155,6 +155,7 @@ export interface ExtensionState {
 	useAutoCondense?: boolean
 	compactionStrategy?: string
 	subagentsEnabled?: boolean
+	agentTeamsEnabled?: boolean
 	worktreesEnabled?: ClineFeatureSetting
 	customPrompt?: string
 	favoritedModelIds: string[]
