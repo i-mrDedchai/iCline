@@ -183,6 +183,34 @@ function createControllableTerminalProcess() {
 	}
 }
 
+/**
+ * A fake terminal manager that hands each caller its own terminal and its own
+ * controllable process, mirroring VscodeTerminalManager's reservation contract:
+ * parallel commands get distinct terminals and therefore distinct output
+ * streams. The handed-out terminal ids and the per-terminal processes are
+ * recorded for assertions about mixing.
+ */
+function createSharedFakeTerminalManager() {
+	const terminals: { id: number; command: string; control: ReturnType<typeof createControllableTerminalProcess> }[] = []
+	const manager = {
+		getOrCreateTerminal: async () => {
+			const id = terminals.length + 1
+			const control = createControllableTerminalProcess()
+			terminals.push({ id, command: "", control })
+			return { id, terminal: { show: () => {} } } as never
+		},
+		runCommand: (terminalInfo: { id: number }, command: string) => {
+			const entry = terminals.find((t) => t.id === terminalInfo.id)
+			if (!entry) {
+				throw new Error(`runCommand for unknown terminal ${terminalInfo.id}`)
+			}
+			entry.command = command
+			return entry.control.process
+		},
+	} as unknown as VscodeTerminalManager
+	return { manager, terminals }
+}
+
 /** Poll until the predicate holds, for asserting on async log-file writes. */
 async function waitFor(predicate: () => boolean, timeoutMs = 2000): Promise<void> {
 	const start = Date.now()
@@ -539,5 +567,83 @@ describe("executeForeground — Proceed While Running", () => {
 		expect(log).toContain("before detach")
 		expect(log).toContain("after detach")
 		fs.rmSync(logFilePath!, { force: true })
+	})
+})
+
+describe("executeForeground — parallel commands", () => {
+	it("runs parallel commands on distinct terminals with unmixed output", async () => {
+		const coordinator = new SdkForegroundCommandCoordinator()
+		const { manager, terminals } = createSharedFakeTerminalManager()
+
+		const firstPromise = executeForeground("first-cmd", "/workspace", manager, 100_000, undefined, coordinator)
+		const secondPromise = executeForeground("second-cmd", "/workspace", manager, 100_000, undefined, coordinator)
+		await waitFor(() => terminals.length === 2)
+
+		// Two tool calls from one model response: each got its own terminal, and
+		// interleaving their output must not leak lines across the two results.
+		expect(terminals[0].id).not.toBe(terminals[1].id)
+		terminals[0].control.emitLine("first: alpha")
+		terminals[1].control.emitLine("second: alpha")
+		terminals[0].control.emitLine("first: beta")
+		terminals[1].control.emitLine("second: beta")
+		terminals[0].control.complete({ exitCode: 0 })
+		terminals[1].control.complete({ exitCode: 0 })
+
+		const [firstResult, secondResult] = await Promise.all([firstPromise, secondPromise])
+		expect(firstResult).toBe("first: alpha\nfirst: beta")
+		expect(secondResult).toBe("second: alpha\nsecond: beta")
+		expect(firstResult).not.toContain("second:")
+		expect(secondResult).not.toContain("first:")
+		expect(terminals.map((t) => t.command)).toEqual(["first-cmd", "second-cmd"])
+	})
+
+	it("detaching one parallel command mid-run leaves the other's result untouched", async () => {
+		const coordinator = new SdkForegroundCommandCoordinator()
+		const registerSpy = vi.spyOn(coordinator, "register")
+		const { manager, terminals } = createSharedFakeTerminalManager()
+
+		// Start the two commands one after the other (while both are still
+		// running) so each register() call maps unambiguously to its command.
+		const firstPromise = executeForeground("first-cmd", "/workspace", manager, 100_000, undefined, coordinator)
+		await waitFor(() => registerSpy.mock.calls.length === 1)
+		const secondPromise = executeForeground("second-cmd", "/workspace", manager, 100_000, undefined, coordinator)
+		await waitFor(() => registerSpy.mock.calls.length === 2)
+
+		terminals[0].control.emitLine("first: before detach")
+		terminals[1].control.emitLine("second: before detach")
+
+		// The user detaches only the first command ("Proceed While Running" on
+		// one handle) while the second keeps being awaited.
+		registerSpy.mock.calls[0][0].detach()
+		const firstResult = await firstPromise
+		expect(firstResult).toContain("still running")
+		expect(firstResult).toContain("first: before detach")
+
+		// The detached command's later output goes to its log only — the second
+		// command's result must stay clean of it.
+		terminals[0].control.emitLine("first: after detach")
+		terminals[1].control.emitLine("second: after detach")
+		terminals[1].control.complete({ exitCode: 0 })
+		const secondResult = await secondPromise
+
+		expect(secondResult).toBe("second: before detach\nsecond: after detach")
+		expect(secondResult).not.toContain("first:")
+		expect(secondResult).not.toContain("still running")
+
+		const firstLog = /redirected to this file[^:]*: (.+)$/m.exec(firstResult)?.[1]?.trim()
+		expect(firstLog).toBeTruthy()
+		terminals[0].control.complete({ exitCode: 0 })
+		await waitFor(() => {
+			try {
+				return fs.readFileSync(firstLog!, "utf8").includes("[Command completed with exit code 0]")
+			} catch {
+				return false
+			}
+		})
+		const log = fs.readFileSync(firstLog!, "utf8")
+		expect(log).toContain("first: before detach")
+		expect(log).toContain("first: after detach")
+		expect(log).not.toContain("second:")
+		fs.rmSync(firstLog!, { force: true })
 	})
 })

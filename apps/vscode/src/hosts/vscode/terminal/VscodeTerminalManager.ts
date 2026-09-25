@@ -10,7 +10,7 @@ import { Logger } from "@/shared/services/Logger"
 import { mergePromise, VscodeTerminalProcess } from "./VscodeTerminalProcess"
 import { TerminalInfo, TerminalRegistry } from "./VscodeTerminalRegistry"
 
-const CWD_COMMAND_TIMEOUT_MS = 5000
+export const CWD_COMMAND_TIMEOUT_MS = 5000
 const CWD_STATE_TIMEOUT_MS = 1000
 
 /*

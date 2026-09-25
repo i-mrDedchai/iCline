@@ -1,5 +1,5 @@
-import { after, describe, it } from "mocha"
 import { readFile } from "fs/promises"
+import { after, describe, it } from "mocha"
 import path from "path"
 import "should"
 import * as vscode from "vscode"
@@ -21,7 +21,19 @@ describe("Cline Extension", () => {
 
 	it("should successfully execute the plus button command", async () => {
 		await new Promise((resolve) => setTimeout(resolve, 400))
-		await vscode.commands.executeCommand("cline.plusButtonClicked")
+		// The command id is publisher/name-dependent (e.g. "iCline.plusButtonClicked" for
+		// the iCline fork), so derive it from package.json instead of hardcoding a prefix.
+		const packageJSON = JSON.parse(await readFile(packagePath, "utf8"))
+		const plusButtonCommand = (packageJSON.contributes.commands as { command: string }[]).find((c) =>
+			c.command.endsWith(".plusButtonClicked"),
+		)?.command
+		should.exist(plusButtonCommand)
+
+		// The command must actually be registered by the extension before we execute it.
+		const registeredCommands = await vscode.commands.getCommands(true)
+		registeredCommands.should.containEql(plusButtonCommand)
+
+		await vscode.commands.executeCommand(plusButtonCommand!)
 	})
 
 	// New test to verify xvfb and webview functionality
