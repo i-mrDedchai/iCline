@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest"
-import { sanitizeInitialMessagesForSessionStart } from "./initial-message-sanitizer"
+import {
+	appendInterruptedTurnNotice,
+	INTERRUPTED_TURN_NOTICE,
+	sanitizeInitialMessagesForSessionStart,
+} from "./initial-message-sanitizer"
 
 describe("sanitizeInitialMessagesForSessionStart", () => {
 	it("returns original array when no tool_use blocks exist", () => {
@@ -245,5 +249,39 @@ describe("sanitizeInitialMessagesForSessionStart", () => {
 			name: "read_file",
 			content: "file contents",
 		})
+	})
+})
+
+describe("appendInterruptedTurnNotice", () => {
+	const interruptedHistory = () => {
+		const messages = sanitizeInitialMessagesForSessionStart([
+			{ role: "user", content: [{ type: "text", text: "do the task" }] },
+			{
+				role: "assistant",
+				content: [{ type: "tool_use", id: "toolu_1", name: "run_commands", input: { commands: ["ls"] } }],
+			},
+		])
+		return messages
+	}
+
+	it("appends a visible notice when the history contains placeholder tool results", () => {
+		const result = appendInterruptedTurnNotice(interruptedHistory())
+		const last = result[result.length - 1] as { role: string; content: Array<{ text?: string }> }
+		expect(last.role).toBe("user")
+		expect(last.content[0]?.text).toContain(INTERRUPTED_TURN_NOTICE)
+	})
+
+	it("is idempotent", () => {
+		const once = appendInterruptedTurnNotice(interruptedHistory())
+		const twice = appendInterruptedTurnNotice(once)
+		expect(twice).toBe(once)
+	})
+
+	it("does not append a notice to healthy history", () => {
+		const healthy = [
+			{ role: "user", content: [{ type: "text", text: "hi" }] },
+			{ role: "assistant", content: [{ type: "text", text: "hello" }] },
+		]
+		expect(appendInterruptedTurnNotice(healthy)).toBe(healthy)
 	})
 })

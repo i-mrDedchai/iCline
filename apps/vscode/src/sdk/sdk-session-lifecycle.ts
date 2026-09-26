@@ -14,6 +14,7 @@ import { Logger } from "@/shared/services/Logger"
 import type { ActiveSession } from "./cline-session-factory"
 import type { SdkForegroundCommandCoordinator } from "./sdk-foreground-command-coordinator"
 import { buildToolPolicies } from "./sdk-tool-policies"
+import { buildTurnStallNotice, EMPTY_TURN_NOTICE, isEmptyTurnResult, TurnStallWatchdog } from "./sdk-turn-notices"
 import type { SdkSessionHost } from "./session-host"
 import { VscodeSessionHost } from "./vscode-session-host"
 
@@ -43,6 +44,12 @@ export interface SdkSessionLifecycleOptions {
 	onSendComplete: (sessionId: string) => Promise<void> | void
 	onSendError: (error: unknown, sessionId: string) => Promise<void> | void
 	/**
+	 * Surfaces a visible notice in the chat (empty-turn recovery hint, stall
+	 * warning). The fix.31-33 smoke run's "silent stall" complaint: turns that
+	 * ended or wedged quietly, with the user only learning about it after asking.
+	 */
+	onSendNotice?: (sessionId: string, text: string) => void
+	/**
 	 * Returns (and clears) a pending user-initiated plan/act switch recorded by
 	 * SdkModeCoordinator for this session, so fireAndForgetSend — the single
 	 * funnel for outbound turn sends — can stamp a <mode_notice> onto the next
@@ -57,6 +64,10 @@ export interface SdkSessionLifecycleOptions {
 	 */
 	onParkedSessionIdle?: () => void
 }
+
+/** Quiet period before the stall notice fires. Long enough to skip slow builds. */
+const TURN_STALL_THRESHOLD_MINUTES = 10
+const TURN_STALL_THRESHOLD_MS = TURN_STALL_THRESHOLD_MINUTES * 60_000
 
 export class SdkSessionLifecycle {
 	private activeSession: ActiveSession | undefined
@@ -73,6 +84,8 @@ export class SdkSessionLifecycle {
 	private parkedSession: ActiveSession | undefined
 	private sharedHost: SdkSessionHost | undefined
 	private sharedHostPromise: Promise<SdkSessionHost> | undefined
+	/** Watchdog for the turn currently being sent; fires a stall notice once. */
+	private stallWatchdog: TurnStallWatchdog | undefined
 	private sharedHostUnsubscribe: (() => void) | undefined
 	/**
 	 * Stops still in flight, keyed by sessionId. Mode/MCP rebuilds and
@@ -397,7 +410,15 @@ export class SdkSessionLifecycle {
 		if (this.sharedHostUnsubscribe) {
 			return
 		}
-		this.sharedHostUnsubscribe = this.createSafeUnsubscribe(sdkHost.subscribe(this.options.onSessionEvent), "shared-host")
+		this.sharedHostUnsubscribe = this.createSafeUnsubscribe(
+			sdkHost.subscribe((event) => {
+				// Any session event proves the turn is alive; the watchdog only fires
+				// across a quiet stretch with no tool/command/model progress.
+				this.stallWatchdog?.touch()
+				this.options.onSessionEvent(event)
+			}),
+			"shared-host",
+		)
 	}
 
 	/**
@@ -502,6 +523,28 @@ export class SdkSessionLifecycle {
 		const notice = this.options.consumeModeSwitchNotice?.(sessionId)
 		const noticedPrompt = notice ? `${formatModeSwitchNotice(notice.from, notice.to)}\n${prompt}` : prompt
 		this.options.onSendStart?.(sessionId)
+		// Stall watchdog only for the turn this send actually starts; queued and
+		// steered messages return before a turn runs (drained later by core).
+		const startsTurn = delivery !== "queue" && delivery !== "steer"
+		let stallWatchdog: TurnStallWatchdog | undefined
+		if (startsTurn) {
+			stallWatchdog = new TurnStallWatchdog({
+				thresholdMs: TURN_STALL_THRESHOLD_MS,
+				onStall: () => {
+					if (this.activeSession === sessionAtSend) {
+						this.options.onSendNotice?.(sessionId, buildTurnStallNotice(TURN_STALL_THRESHOLD_MINUTES))
+					}
+				},
+			})
+			this.stallWatchdog = stallWatchdog
+			stallWatchdog.start()
+		}
+		const clearStallWatchdog = (): void => {
+			if (stallWatchdog && this.stallWatchdog === stallWatchdog) {
+				this.stallWatchdog = undefined
+				stallWatchdog.stop()
+			}
+		}
 		sdkHost
 			.send({
 				sessionId,
@@ -510,7 +553,7 @@ export class SdkSessionLifecycle {
 				userFiles: files,
 				delivery,
 			})
-			.then(async () => {
+			.then(async (result) => {
 				if (delivery === "queue" || delivery === "steer") {
 					Logger.log(`[SdkController] Message queued for session: ${sessionId}`)
 					return
@@ -518,18 +561,27 @@ export class SdkSessionLifecycle {
 				if (isSuperseded("completion")) {
 					return
 				}
+				clearStallWatchdog()
+				if (isEmptyTurnResult(result)) {
+					// The turn finished with no output at all — the "silent end" the
+					// smoke run kept hitting. Say so instead of leaving the chat quiet.
+					Logger.warn(`[SdkController] Turn produced no output for session: ${sessionId}`)
+					this.options.onSendNotice?.(sessionId, EMPTY_TURN_NOTICE)
+				}
 				Logger.log(`[SdkController] Agent turn completed for session: ${sessionId}`)
 				this.setRunning(false)
 				await this.options.onSendComplete(sessionId)
 			})
 			.catch(async (error: unknown) => {
 				if (isAbortError(error)) {
+					clearStallWatchdog()
 					Logger.debug(`[SdkController] Agent turn aborted (expected): ${sessionId}`)
 					return
 				}
 				if (isSuperseded("failure")) {
 					return
 				}
+				clearStallWatchdog()
 				Logger.error("[SdkController] Agent turn failed:", error)
 				this.setRunning(false)
 				await this.options.onSendError(error, sessionId)

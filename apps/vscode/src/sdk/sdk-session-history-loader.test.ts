@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
+import { INTERRUPTED_TURN_NOTICE } from "./initial-message-sanitizer"
 import { SdkSessionHistoryLoader } from "./sdk-session-history-loader"
 import type { SdkSessionHost } from "./session-host"
 
@@ -41,6 +42,13 @@ describe("SdkSessionHistoryLoader", () => {
 			expect.objectContaining({
 				role: "user",
 				content: [expect.objectContaining({ type: "tool_result", tool_use_id: "toolu_1" })],
+			}),
+			// The history ended mid-tool (the tool result was missing entirely),
+			// so the loader surfaces a visible interrupted-turn notice instead of
+			// resuming silently.
+			expect.objectContaining({
+				role: "user",
+				content: [expect.objectContaining({ type: "text", text: expect.stringContaining(INTERRUPTED_TURN_NOTICE) })],
 			}),
 		])
 	})

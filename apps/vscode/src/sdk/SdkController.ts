@@ -429,6 +429,17 @@ export class Controller {
 			onSendStart: () => {
 				this.beginProviderFailureTelemetryTurn()
 			},
+			onSendNotice: (_sessionId, text) => {
+				// Visible chat row for abnormal quiet spots (empty turn, stalled
+				// turn) — the fix.31-33 smoke run's "silent stall" complaint.
+				this.messages.emitHookMessage({
+					ts: Date.now(),
+					type: "say",
+					say: "info",
+					text,
+					partial: false,
+				})
+			},
 			// this.mode is assigned later in this constructor; the closure only
 			// runs at send time, long after construction completes.
 			consumeModeSwitchNotice: (sessionId) => this.mode.consumeModeSwitchNotice(sessionId),

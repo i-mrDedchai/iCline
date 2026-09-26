@@ -47,6 +47,56 @@ function isToolResultForId(block: GenericContentBlock, toolUseId: string): boole
 
 const MIGRATION_MISSING_TOOL_RESULT_TEXT = "[migration] Tool result missing in legacy conversation history."
 
+/**
+ * Visible resume notice for turns that died mid-tool: the tool results were
+ * missing from history and were replaced with placeholders. Without this the
+ * resumed conversation looks like nothing happened — the exact "silent stall"
+ * the user reported — so surface what happened and what to do next.
+ */
+export const INTERRUPTED_TURN_NOTICE =
+	"System notice: the previous turn ended unexpectedly while waiting for tool results. The missing results were replaced with placeholders — review the last tool calls (the files may or may not have been changed), then continue the task from where it stopped."
+
+function containsMigrationPlaceholder(messages: unknown[]): boolean {
+	return messages.some((message) => {
+		if (!isRecord(message) || !Array.isArray(message.content)) {
+			return false
+		}
+		return message.content.some(
+			(block) => isRecord(block) && block.type === "tool_result" && block.content === MIGRATION_MISSING_TOOL_RESULT_TEXT,
+		)
+	})
+}
+
+function containsInterruptedTurnNotice(messages: unknown[]): boolean {
+	return messages.some((message) => {
+		if (!isRecord(message)) {
+			return false
+		}
+		if (typeof message.content === "string") {
+			return message.content.includes(INTERRUPTED_TURN_NOTICE)
+		}
+		if (Array.isArray(message.content)) {
+			return message.content.some(
+				(block) => isRecord(block) && typeof block.text === "string" && block.text.includes(INTERRUPTED_TURN_NOTICE),
+			)
+		}
+		return false
+	})
+}
+
+/**
+ * Appends a user-visible notice when the sanitized history contains
+ * placeholder tool results (a turn was interrupted mid-tool). Idempotent.
+ */
+export function appendInterruptedTurnNotice(messages: SdkInitialMessages): SdkInitialMessages
+export function appendInterruptedTurnNotice(messages: unknown[]): unknown[]
+export function appendInterruptedTurnNotice(messages: unknown[]): unknown[] {
+	if (!containsMigrationPlaceholder(messages) || containsInterruptedTurnNotice(messages)) {
+		return messages
+	}
+	return [...messages, { role: "user", content: [{ type: "text", text: INTERRUPTED_TURN_NOTICE }] }]
+}
+
 function createMissingToolResult(toolUseId: string, toolName?: string): GenericContentBlock {
 	return {
 		type: "tool_result",

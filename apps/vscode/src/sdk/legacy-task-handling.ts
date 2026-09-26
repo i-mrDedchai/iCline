@@ -1,7 +1,7 @@
 import { type ContentBlock, formatDisplayUserInput, type MessageWithMetadata } from "@cline/shared"
 import type { ClineMessage } from "@shared/ExtensionMessage"
 import type { HistoryItem } from "@shared/HistoryItem"
-import { sanitizeInitialMessagesForSessionStart } from "./initial-message-sanitizer"
+import { appendInterruptedTurnNotice, sanitizeInitialMessagesForSessionStart } from "./initial-message-sanitizer"
 
 export const LEGACY_RESUME_MODEL_WARNING =
 	"Warning: this is a legacy conversation, which means tool names may have changed. Please use the most up-to-date tools you are aware of."
@@ -125,7 +125,9 @@ export function legacyApiHistoryToSdkMessages(apiHistory: unknown[], historyItem
 		lastAssistant.modelInfo = historyItem.modelId ? { id: historyItem.modelId, provider: "unknown" } : lastAssistant.modelInfo
 	}
 
-	return sanitizeInitialMessagesForSessionStart(appendLegacyResumeWarning(messages)) as MessageWithMetadata[]
+	return appendInterruptedTurnNotice(
+		sanitizeInitialMessagesForSessionStart(appendLegacyResumeWarning(messages)),
+	) as MessageWithMetadata[]
 }
 
 export function mergeLegacyUiMessagesWithResumedSdkMessages(
