@@ -891,21 +891,78 @@ interface RepairableToolCall {
 }
 
 /**
+ * Weak-model tool-name variants mapped to canonical tool names. Models that
+ * were trained on other agent stacks keep calling `edit`, `bash`, `read`, …
+ * by habit; when the target name is actually registered we rename the call
+ * instead of rejecting it with AI_NoSuchToolError.
+ */
+const TOOL_NAME_ALIASES: Record<string, string> = {
+	edit: "editor",
+	write: "editor",
+	write_file: "editor",
+	create_file: "editor",
+	str_replace: "editor",
+	insert: "editor",
+	read: "read_files",
+	read_file: "read_files",
+	view: "read_files",
+	bash: "run_commands",
+	shell: "run_commands",
+	execute_command: "run_commands",
+	terminal: "run_commands",
+	grep: "search_codebase",
+	search: "search_codebase",
+	codebase_search: "search_codebase",
+	web_fetch: "fetch_web_content",
+	fetch: "fetch_web_content",
+	question: "ask_question",
+	finish: "attempt_completion",
+	complete: "attempt_completion",
+};
+
+/**
+ * Resolves an unavailable tool name to a registered tool name: first an
+ * exact case-insensitive match against the registered tools, then the
+ * conservative alias table (only when the alias target is registered).
+ * Returns undefined when nothing safe matches.
+ */
+export function resolveToolNameAlias(
+	toolName: string,
+	availableToolNames: Iterable<string>,
+): string | undefined {
+	const available = [...availableToolNames];
+	const lower = toolName.toLowerCase();
+	const caseMatch = available.find((name) => name.toLowerCase() === lower);
+	if (caseMatch) return caseMatch;
+	const alias = TOOL_NAME_ALIASES[lower];
+	if (alias && available.includes(alias)) return alias;
+	return undefined;
+}
+
+/**
  * Last-chance repair for tool calls whose arguments are not valid JSON
  * (truncated payloads, single quotes, unescaped newlines — common with
- * weaker models). Runs the raw argument text through the shared jsonrepair
- * strategies; unknown tool names and already-valid JSON are not repairable
- * here, and returning null preserves the AI SDK's original error behavior.
+ * weaker models) or whose tool name is a known alias of a registered tool.
+ * Runs the raw argument text through the shared jsonrepair strategies;
+ * unknown tool names and already-valid JSON are not repairable here, and
+ * returning null preserves the AI SDK's original error behavior. When the
+ * caller supplies `availableToolNames`, unknown-tool errors are repaired by
+ * renaming the call to a registered tool (alias / case-insensitive match).
  */
 export async function repairMalformedToolCall<T extends RepairableToolCall>({
 	toolCall,
 	error,
+	availableToolNames,
 }: {
 	toolCall: T;
 	error: unknown;
+	availableToolNames?: Iterable<string>;
 }): Promise<T | null> {
 	if (NoSuchToolError.isInstance(error)) {
-		return null;
+		if (!availableToolNames) return null;
+		const resolved = resolveToolNameAlias(toolCall.toolName, availableToolNames);
+		if (!resolved) return null;
+		return { ...toolCall, toolName: resolved };
 	}
 	if (typeof toolCall.input !== "string" || toolCall.input.trim() === "") {
 		return null;
@@ -2331,7 +2388,16 @@ function createAiSdkProvider(
 							// AND the idle deadline, so both reach the vendor as the same cancel.
 							abortSignal: idleWatchdog.signal,
 							maxRetries: MODEL_REQUEST_MAX_RETRIES,
-							experimental_repairToolCall: repairMalformedToolCall as never,
+							experimental_repairToolCall: ((args: {
+								toolCall: RepairableToolCall;
+								error: unknown;
+							}) =>
+								repairMalformedToolCall({
+									...args,
+									availableToolNames: tools
+										? Object.keys(tools)
+										: undefined,
+								})) as never,
 							telemetry: {
 								...aiSdkTelemetry,
 								functionId: "cline-agent-turn",

@@ -36,6 +36,20 @@ const RUN_COMMANDS_TOOL: AgentToolDefinition = {
 	},
 };
 
+const EDITOR_TOOL: AgentToolDefinition = {
+	name: "editor",
+	description: "Edit a text file",
+	inputSchema: {
+		type: "object",
+		properties: {
+			path: { type: "string" },
+			old_text: { type: "string" },
+			new_text: { type: "string" },
+		},
+		required: ["path"],
+	},
+};
+
 const READ_FILES_TOOL: AgentToolDefinition = {
 	name: "read_files",
 	description: "Read files",
@@ -153,6 +167,15 @@ function findToolInput(events: AgentModelEvent[]): unknown {
 	return undefined;
 }
 
+function findToolName(events: AgentModelEvent[]): string | undefined {
+	for (const event of events) {
+		if (event.type === "tool-call-delta" && typeof event.toolName === "string") {
+			return event.toolName;
+		}
+	}
+	return undefined;
+}
+
 describe("ai-sdk adapter malformed tool calls", () => {
 	it("passes schema-mismatched input through to the tool instead of rejecting", async () => {
 		// The executor's lenient union schema accepts a bare string for a
@@ -223,6 +246,27 @@ describe("ai-sdk adapter malformed tool calls", () => {
 
 		expect(findParseError(events)).toContain("unavailable tool 'editor'");
 	});
+
+	it("repairs a known alias tool name to the registered tool", async () => {
+		// Weaker models call the editor tool "edit" (the Cline/Claude tool-name
+		// habit); the call must execute as "editor" instead of being rejected
+		// with AI_NoSuchToolError.
+		const events = await streamToolCallEvents(
+			sseToolCall(
+				"edit",
+				'{"path": "/tmp/a.txt", "old_text": "x", "new_text": "y"}',
+			),
+			[EDITOR_TOOL],
+		);
+
+		expect(findParseError(events)).toBeUndefined();
+		expect(findToolName(events)).toBe("editor");
+		expect(findToolInput(events)).toEqual({
+			path: "/tmp/a.txt",
+			old_text: "x",
+			new_text: "y",
+		});
+	});
 });
 
 describe("repairMalformedToolCall", () => {
@@ -269,6 +313,46 @@ describe("repairMalformedToolCall", () => {
 		const repaired = await repairMalformedToolCall({
 			toolCall: toolCall('{"commands": ["ls"]}'),
 			error: new NoSuchToolError({ toolName: "run_commands" }),
+		});
+		expect(repaired).toBeNull();
+	});
+
+	it("renames a known alias to a registered tool on unknown-tool errors", async () => {
+		const repaired = await repairMalformedToolCall({
+			toolCall: {
+				toolCallId: "call_1",
+				toolName: "edit",
+				input: '{"path": "/tmp/a.txt", "new_text": "x"}',
+			},
+			error: new NoSuchToolError({ toolName: "edit" }),
+			availableToolNames: ["editor", "read_files"],
+		});
+		expect(repaired?.toolName).toBe("editor");
+		expect(repaired?.input).toBe('{"path": "/tmp/a.txt", "new_text": "x"}');
+	});
+
+	it("renames case-mismatched tool names to the registered spelling", async () => {
+		const repaired = await repairMalformedToolCall({
+			toolCall: {
+				toolCallId: "call_1",
+				toolName: "Run_Commands",
+				input: '{"commands": ["ls"]}',
+			},
+			error: new NoSuchToolError({ toolName: "Run_Commands" }),
+			availableToolNames: ["editor", "run_commands"],
+		});
+		expect(repaired?.toolName).toBe("run_commands");
+	});
+
+	it("does not rename an alias whose target tool is not registered", async () => {
+		const repaired = await repairMalformedToolCall({
+			toolCall: {
+				toolCallId: "call_1",
+				toolName: "edit",
+				input: '{"path": "/tmp/a.txt"}',
+			},
+			error: new NoSuchToolError({ toolName: "edit" }),
+			availableToolNames: ["run_commands", "read_files"],
 		});
 		expect(repaired).toBeNull();
 	});
