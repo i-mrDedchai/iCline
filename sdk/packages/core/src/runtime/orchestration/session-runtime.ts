@@ -89,8 +89,21 @@ export interface RuntimeBuilderInput {
 	) => Promise<ToolApprovalResult> | ToolApprovalResult;
 }
 
+/**
+ * UI-facing control surface over a session's agent team (team panel):
+ * topology/state snapshot, mouse-driven spawn/shutdown, and per-agent model
+ * selection carried on the spawn spec.
+ */
+export interface TeamControl {
+	getState(): import("@cline/shared").TeamRuntimeState;
+	spawnTeammate(spec: import("@cline/shared").TeamTeammateSpec): void;
+	shutdownTeammate(agentId: string, reason?: string): void;
+}
+
 export interface RuntimeBuilder {
 	build(input: RuntimeBuilderInput): Promise<BuiltRuntime> | BuiltRuntime;
+	/** Present when the session has agent teams active. */
+	getTeamControl?(sessionId: string): TeamControl | undefined;
 }
 
 export interface SessionRuntime {

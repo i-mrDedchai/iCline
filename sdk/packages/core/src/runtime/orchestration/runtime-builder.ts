@@ -42,8 +42,10 @@ import {
 	AgentTeamsRuntime,
 	bootstrapAgentTeams,
 	createDelegatedAgentConfigProvider,
+	spawnTeamTeammate,
 	type TeamEvent,
 } from "../../extensions/tools/team";
+import type { TeamControl } from "./session-runtime";
 import type { ConfiguredAgentConfig } from "../../extensions/tools/team/configured-agent-config";
 import { loadConfiguredAgentConfigs } from "../../extensions/tools/team/configured-agent-config";
 import { createConfiguredAgentTools } from "../../extensions/tools/team/configured-agent-tool";
@@ -394,11 +396,20 @@ export class DefaultRuntimeBuilder implements RuntimeBuilder {
 		string,
 		{
 			runtime?: AgentTeamsRuntime;
+			teamControl?: TeamControl;
 			delegatedAgentConfigProvider: ReturnType<
 				typeof createDelegatedAgentConfigProvider
 			>;
 		}
 	>();
+
+	/**
+	 * UI-facing team control for a session (team panel: topology/mailbox
+	 * snapshot, spawn/shutdown from the mouse, per-agent model on spawn).
+	 */
+	getTeamControl(sessionId: string): TeamControl | undefined {
+		return this.teamRuntimeEntries.get(sessionId)?.teamControl;
+	}
 
 	async build(input: RuntimeBuilderInput): Promise<RuntimeEnvironment> {
 		const {
@@ -745,6 +756,41 @@ export class DefaultRuntimeBuilder implements RuntimeBuilder {
 				}
 				teamToolsRegistered = true;
 
+				const createBaseToolsForTeam = normalized.enableTools
+					? () =>
+							createBuiltinToolsList(
+								config.cwd,
+								config.providerId,
+								normalized.mode,
+								config.modelId,
+								config.toolRoutingRules,
+								effectiveToolPolicies,
+								undefined,
+								toolExecutors,
+								telemetry ?? config.telemetry,
+								input.runCommandExecutionController,
+							)
+					: undefined;
+
+				// Team panel control surface: state snapshot plus mouse-driven
+				// spawn/shutdown with a per-agent model on the spawn spec.
+				const activeTeamRuntime = teamRuntime;
+				registryEntry.teamControl = {
+					getState: () => activeTeamRuntime.exportState(),
+					spawnTeammate: (spec) => {
+						spawnTeamTeammate({
+							runtime: activeTeamRuntime,
+							requesterId: config.sessionId || "lead",
+							teammateConfigProvider: delegatedAgentConfigProvider,
+							createBaseTools: createBaseToolsForTeam,
+							spec,
+						});
+					},
+					shutdownTeammate: (agentId, reason) => {
+						activeTeamRuntime.shutdownTeammate(agentId, reason);
+					},
+				};
+
 				const teamBootstrap = bootstrapAgentTeams({
 					runtime: teamRuntime,
 					leadAgentId: config.sessionId || "lead",
@@ -756,21 +802,7 @@ export class DefaultRuntimeBuilder implements RuntimeBuilder {
 						pendingLeadTeamTools = teamTools;
 						leadAgentInstance?.addTools(teamTools);
 					},
-					createBaseTools: normalized.enableTools
-						? () =>
-								createBuiltinToolsList(
-									config.cwd,
-									config.providerId,
-									normalized.mode,
-									config.modelId,
-									config.toolRoutingRules,
-									effectiveToolPolicies,
-									undefined,
-									toolExecutors,
-									telemetry ?? config.telemetry,
-									input.runCommandExecutionController,
-								)
-						: undefined,
+					createBaseTools: createBaseToolsForTeam,
 					teammateConfigProvider: delegatedAgentConfigProvider,
 				});
 

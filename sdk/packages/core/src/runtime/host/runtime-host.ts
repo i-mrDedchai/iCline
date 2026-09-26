@@ -319,6 +319,22 @@ export interface SessionUsageRuntimeService {
 	): Promise<SessionUsageSummary | undefined>;
 }
 
+/** Team panel surface: topology/state, spawn/shutdown, per-agent model specs. */
+export interface SessionTeamRuntimeService {
+	getTeamState(
+		sessionId: string,
+	): Promise<import("@cline/shared").TeamRuntimeState | undefined>;
+	spawnTeamMember(
+		sessionId: string,
+		spec: import("@cline/shared").TeamTeammateSpec,
+	): Promise<void>;
+	shutdownTeamMember(
+		sessionId: string,
+		agentId: string,
+		reason?: string,
+	): Promise<void>;
+}
+
 export type SessionConnectionUpdate = ConnectionUpdate;
 
 export interface SessionModelRuntimeService {

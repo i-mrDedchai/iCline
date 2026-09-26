@@ -18,6 +18,7 @@ export {
 	toTeamProgressLifecycleEvent,
 } from "./projections";
 export * from "./runtime";
+export { spawnTeamTeammate } from "./team-tools";
 export type {
 	SubAgentEndContext,
 	SubAgentStartContext,

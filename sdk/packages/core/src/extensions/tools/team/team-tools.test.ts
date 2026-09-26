@@ -3,7 +3,7 @@ import { resolveTeamDataDir } from "@cline/shared/storage";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createDelegatedAgentConfigProvider } from "./delegated-agent";
 import { AgentTeamsRuntime } from "./multi-agent";
-import { createAgentTeamsTools } from "./team-tools";
+import { createAgentTeamsTools, spawnTeamTeammate } from "./team-tools";
 
 type EnvSnapshot = {
 	CLINE_DATA_DIR: string | undefined;
@@ -987,5 +987,37 @@ describe("createAgentTeamsTools runtime behavior", () => {
 				}),
 			],
 		});
+	});
+});
+
+describe("spawnTeamTeammate", () => {
+	it("spawns with the spec's per-agent model over the parent connection", () => {
+		const runtime = new AgentTeamsRuntime({ teamName: "panel-team" });
+		const captured: Array<{ config: { modelId?: string; providerId?: string } }> = [];
+		const originalSpawn = runtime.spawnTeammate.bind(runtime);
+		runtime.spawnTeammate = (options) => {
+			captured.push(options as { config: { modelId?: string; providerId?: string } });
+			return originalSpawn(options);
+		};
+
+		spawnTeamTeammate({
+			runtime,
+			requesterId: "lead",
+			teammateConfigProvider: createDelegatedAgentConfigProvider({
+				providerId: "anthropic",
+				modelId: "claude-sonnet-4-5",
+			}),
+			createBaseTools: () => [],
+			spec: {
+				agentId: "bench",
+				rolePrompt: "benchmark owner",
+				modelId: "gpt-5.6",
+				providerId: "openai",
+			},
+		});
+
+		expect(captured).toHaveLength(1);
+		expect(captured[0].config.modelId).toBe("gpt-5.6");
+		expect(captured[0].config.providerId).toBe("openai");
 	});
 });

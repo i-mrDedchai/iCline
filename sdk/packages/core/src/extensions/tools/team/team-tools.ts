@@ -213,7 +213,7 @@ export const TEAM_TOOL_NAMES = [
 	"team_list_outcomes",
 ] as const;
 
-function spawnTeamTeammate(
+export function spawnTeamTeammate(
 	options: Omit<CreateAgentTeamsToolsOptions, "requesterId" | "allowSpawn"> & {
 		requesterId: string;
 		spec: TeamTeammateSpec;
@@ -245,6 +245,8 @@ function spawnTeamTeammate(
 			configProvider: options.teammateConfigProvider,
 			tools: teammateTools,
 			maxIterations: options.spec.maxIterations,
+			modelId: options.spec.modelId,
+			providerId: options.spec.providerId,
 			cwd: options.teammateConfigProvider.getRuntimeConfig().cwd,
 		}),
 	});

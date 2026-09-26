@@ -84,6 +84,10 @@ export interface BuildDelegatedAgentConfigOptions {
 	) => Promise<ToolApprovalResult> | ToolApprovalResult;
 	role?: string;
 	cwd?: string;
+	/** Per-agent model override (team panel: each teammate can pick its own model). */
+	modelId?: string;
+	/** Per-agent provider override paired with `modelId`. */
+	providerId?: string;
 }
 
 export function createDelegatedAgentConfigProvider(
@@ -128,6 +132,8 @@ export function buildDelegatedAgentConfig(
 
 	return {
 		...options.configProvider.getConnectionConfig(),
+		...(options.modelId !== undefined ? { modelId: options.modelId } : {}),
+		...(options.providerId !== undefined ? { providerId: options.providerId } : {}),
 		distinctId: runtimeConfig.distinctId,
 		sessionId: runtimeConfig.sessionId,
 		systemPrompt,

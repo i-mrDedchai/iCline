@@ -41,6 +41,7 @@ import type {
 	RuntimeHostSubscribeOptions,
 	SessionConnectionRuntimeService,
 	SessionModelRuntimeService,
+	SessionTeamRuntimeService,
 	SessionUsageRuntimeService,
 	StartSessionInput,
 	StartSessionResult,
@@ -360,6 +361,34 @@ export class ClineCore {
 	) => {
 		const service = this.host as RuntimeHostServiceExtensions;
 		return service.getAccumulatedUsage?.(...args) ?? Promise.resolve(undefined);
+	};
+	/**
+	 * Team panel: full team state (topology, mailbox, tasks, runs) for a session
+	 * with agent teams active, or undefined when the session has no team runtime.
+	 */
+	getTeamState: SessionTeamRuntimeService["getTeamState"] = (...args) => {
+		const service = this.host as RuntimeHostServiceExtensions;
+		return service.getTeamState?.(...args) ?? Promise.resolve(undefined);
+	};
+	/** Team panel: spawn a teammate; per-agent model/provider ride on the spec. */
+	spawnTeamMember: SessionTeamRuntimeService["spawnTeamMember"] = async (
+		...args
+	) => {
+		const service = this.host as RuntimeHostServiceExtensions;
+		if (!service.spawnTeamMember) {
+			throw new Error("Agent teams are not active for this session");
+		}
+		await service.spawnTeamMember(...args);
+	};
+	/** Team panel: shut a teammate down from the mouse. */
+	shutdownTeamMember: SessionTeamRuntimeService[
+		"shutdownTeamMember"
+	] = async (...args) => {
+		const service = this.host as RuntimeHostServiceExtensions;
+		if (!service.shutdownTeamMember) {
+			throw new Error("Agent teams are not active for this session");
+		}
+		await service.shutdownTeamMember(...args);
 	};
 	/**
 	 * Aborts an in-flight tool execution without stopping the session.

@@ -49,6 +49,7 @@ export const TeamTeammateSpecSchema = z.object({
 	agentId: z.string(),
 	rolePrompt: z.string(),
 	modelId: z.string().optional(),
+	providerId: z.string().optional(),
 	maxIterations: z.number().optional(),
 });
 

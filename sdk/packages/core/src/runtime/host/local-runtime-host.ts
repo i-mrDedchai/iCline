@@ -1157,6 +1157,38 @@ export class LocalRuntimeHost implements RuntimeHost {
 		}
 	}
 
+	/** Team panel: full team state (members/mailbox/tasks/runs) when teams are active. */
+	async getTeamState(
+		sessionId: string,
+	): Promise<import("@cline/shared").TeamRuntimeState | undefined> {
+		return this.runtimeBuilder.getTeamControl?.(sessionId)?.getState();
+	}
+
+	/** Team panel: spawn a teammate (per-agent model rides on the spec). */
+	async spawnTeamMember(
+		sessionId: string,
+		spec: import("@cline/shared").TeamTeammateSpec,
+	): Promise<void> {
+		const control = this.runtimeBuilder.getTeamControl?.(sessionId);
+		if (!control) {
+			throw new Error("Agent teams are not active for this session");
+		}
+		control.spawnTeammate(spec);
+	}
+
+	/** Team panel: shut a teammate down from the mouse. */
+	async shutdownTeamMember(
+		sessionId: string,
+		agentId: string,
+		reason?: string,
+	): Promise<void> {
+		const control = this.runtimeBuilder.getTeamControl?.(sessionId);
+		if (!control) {
+			throw new Error("Agent teams are not active for this session");
+		}
+		control.shutdownTeammate(agentId, reason);
+	}
+
 	async getAccumulatedUsage(
 		sessionId: string,
 	): Promise<SessionUsageSummary | undefined> {
