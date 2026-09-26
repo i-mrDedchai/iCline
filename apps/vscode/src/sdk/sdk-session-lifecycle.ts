@@ -256,6 +256,33 @@ export class SdkSessionLifecycle {
 		return true
 	}
 
+	/** Team panel: state snapshot of the active session's team (undefined when none). */
+	async getTeamState(): Promise<import("@cline/shared").TeamRuntimeState | undefined> {
+		const activeSession = this.activeSession
+		if (!activeSession?.sdkHost.getTeamState) {
+			return undefined
+		}
+		return activeSession.sdkHost.getTeamState(activeSession.sessionId)
+	}
+
+	/** Team panel: spawn a teammate on the active session's team. */
+	async spawnTeamMember(spec: import("@cline/shared").TeamTeammateSpec): Promise<void> {
+		const activeSession = this.activeSession
+		if (!activeSession?.sdkHost.spawnTeamMember) {
+			throw new Error("Agent teams are not active for this session")
+		}
+		await activeSession.sdkHost.spawnTeamMember(activeSession.sessionId, spec)
+	}
+
+	/** Team panel: shut a teammate down from the mouse. */
+	async shutdownTeamMember(agentId: string, reason?: string): Promise<void> {
+		const activeSession = this.activeSession
+		if (!activeSession?.sdkHost.shutdownTeamMember) {
+			throw new Error("Agent teams are not active for this session")
+		}
+		await activeSession.sdkHost.shutdownTeamMember(activeSession.sessionId, agentId, reason)
+	}
+
 	async startNewSession(
 		startInput: Parameters<VscodeSessionHost["start"]>[0],
 	): Promise<{ startResult: StartSessionResult; sdkHost: SdkSessionHost }> {

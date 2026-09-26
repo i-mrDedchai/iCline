@@ -1029,6 +1029,23 @@ export class Controller {
 		return this.messages.onSessionEvent(listener)
 	}
 
+	// ---- Team panel (topology/mailbox/spawn/shutdown/per-agent model) ----
+
+	/** Team state of the active session; undefined when no team runtime is active. */
+	async getTeamState(): Promise<import("@cline/shared").TeamRuntimeState | undefined> {
+		return this.sessions.getTeamState()
+	}
+
+	/** Spawn a teammate on the active session's team (per-agent model on the spec). */
+	async spawnTeamMember(spec: import("@cline/shared").TeamTeammateSpec): Promise<void> {
+		return this.sessions.spawnTeamMember(spec)
+	}
+
+	/** Shut a teammate down from the team panel. */
+	async shutdownTeamMember(agentId: string, reason?: string): Promise<void> {
+		return this.sessions.shutdownTeamMember(agentId, reason)
+	}
+
 	/**
 	 * Get the active API provider for the current mode.
 	 */

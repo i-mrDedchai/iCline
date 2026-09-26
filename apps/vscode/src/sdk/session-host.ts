@@ -51,6 +51,12 @@ export interface SdkSessionHost {
 	pendingPrompts(action: "delete", input: PendingPromptsDeleteInput): Promise<PendingPromptMutationResult>
 	subscribe(listener: (event: CoreSessionEvent) => void): () => void
 	updateSessionModel?(sessionId: string, modelId: string): Promise<void>
+	/** Team panel: full team state when the session has agent teams active. */
+	getTeamState?(sessionId: string): Promise<import("@cline/shared").TeamRuntimeState | undefined>
+	/** Team panel: spawn a teammate; per-agent model rides on the spec. */
+	spawnTeamMember?(sessionId: string, spec: import("@cline/shared").TeamTeammateSpec): Promise<void>
+	/** Team panel: shut a teammate down from the mouse. */
+	shutdownTeamMember?(sessionId: string, agentId: string, reason?: string): Promise<void>
 }
 
 export type SdkInitialMessages = NonNullable<StartSessionInput["initialMessages"]>

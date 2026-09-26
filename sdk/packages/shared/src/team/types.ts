@@ -67,6 +67,10 @@ export interface TeamMemberSnapshot {
 	role: "lead" | "teammate";
 	description?: string;
 	status: "idle" | "running" | "stopped";
+	/** Per-agent model override set at spawn time (empty/absent = parent's model). */
+	modelId?: string;
+	/** Per-agent provider override paired with `modelId`. */
+	providerId?: string;
 }
 
 export interface TeammateLifecycleSpec {

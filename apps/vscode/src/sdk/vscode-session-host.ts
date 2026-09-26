@@ -91,6 +91,15 @@ export class VscodeSessionHost implements SdkSessionHost {
 	updateSessionModel?(sessionId: string, modelId: string): Promise<void> {
 		return this.inner.updateSessionModel(sessionId, modelId)
 	}
+	getTeamState(sessionId: string): Promise<import("@cline/shared").TeamRuntimeState | undefined> {
+		return this.inner.getTeamState(sessionId)
+	}
+	spawnTeamMember(sessionId: string, spec: import("@cline/shared").TeamTeammateSpec): Promise<void> {
+		return this.inner.spawnTeamMember(sessionId, spec)
+	}
+	shutdownTeamMember(sessionId: string, agentId: string, reason?: string): Promise<void> {
+		return this.inner.shutdownTeamMember(sessionId, agentId, reason)
+	}
 
 	static async create(options: VscodeSessionHostOptions): Promise<VscodeSessionHost> {
 		// Build tool executor capabilities from options — only include keys that are provided.

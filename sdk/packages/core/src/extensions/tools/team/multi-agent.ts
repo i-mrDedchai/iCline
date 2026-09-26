@@ -722,6 +722,8 @@ export class AgentTeamsRuntime {
 				role: member.role,
 				description: member.description,
 				status: member.status,
+				modelId: member.modelId,
+				providerId: member.providerId,
 			})),
 			tasks: Array.from(this.tasks.values()).map((task) => ({ ...task })),
 			mailbox: this.mailbox.map((message) => ({ ...message })),
@@ -891,6 +893,8 @@ export class AgentTeamsRuntime {
 			role: "teammate",
 			description: config.role,
 			status: "idle",
+			modelId: config.modelId,
+			providerId: config.providerId,
 			agent,
 			runningCount: 0,
 			lastMissionStep: 0,
@@ -915,6 +919,8 @@ export class AgentTeamsRuntime {
 			role: teammate.role,
 			description: teammate.description,
 			status: teammate.status,
+			modelId: teammate.modelId,
+			providerId: teammate.providerId,
 		};
 	}
 

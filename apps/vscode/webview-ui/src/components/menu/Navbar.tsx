@@ -1,5 +1,5 @@
 import { IntentEvent } from "@shared/proto/cline/ui"
-import { HistoryIcon, PlusIcon, PuzzleIcon, SettingsIcon, UserCircleIcon } from "lucide-react"
+import { HistoryIcon, PlusIcon, PuzzleIcon, SettingsIcon, UserCircleIcon, UsersIcon } from "lucide-react"
 import { useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -7,8 +7,14 @@ import { TaskServiceClient, UiServiceClient } from "@/services/grpc-client"
 import { useExtensionState } from "../../context/ExtensionStateContext"
 
 export const Navbar = () => {
-	const { navigateToHistory, navigateToSettings, navigateToAccount, navigateToMarketplace, navigateToChat } =
-		useExtensionState()
+	const {
+		navigateToHistory,
+		navigateToSettings,
+		navigateToAccount,
+		navigateToMarketplace,
+		navigateToTeamPanel,
+		navigateToChat,
+	} = useExtensionState()
 
 	const SETTINGS_TABS = useMemo(
 		() => [
@@ -54,6 +60,13 @@ export const Navbar = () => {
 				navigate: navigateToAccount,
 			},
 			{
+				id: "team",
+				name: "Team",
+				tooltip: "Agent Teams",
+				icon: UsersIcon,
+				navigate: navigateToTeamPanel,
+			},
+			{
 				id: "settings",
 				name: "Settings",
 				tooltip: "Settings",
@@ -61,7 +74,7 @@ export const Navbar = () => {
 				navigate: navigateToSettings,
 			},
 		],
-		[navigateToAccount, navigateToChat, navigateToHistory, navigateToMarketplace, navigateToSettings],
+		[navigateToAccount, navigateToChat, navigateToHistory, navigateToMarketplace, navigateToSettings, navigateToTeamPanel],
 	)
 
 	return (

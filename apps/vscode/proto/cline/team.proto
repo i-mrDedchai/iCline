@@ -1,0 +1,72 @@
+syntax = "proto3";
+
+package cline;
+
+import "cline/common.proto";
+
+option go_package = "github.com/cline/grpc-go/cline";
+option java_multiple_files = true;
+option java_package = "bot.cline.proto";
+
+// Service for the team management panel (topology, mailbox viewer,
+// mouse-driven spawn/shutdown, per-agent model selection).
+service TeamService {
+  // Returns the current team state for the active session (active=false when
+  // the session has no team runtime).
+  rpc getTeamState(TeamStateRequest) returns (TeamState);
+
+  // Spawns a teammate; model_id/provider_id pick a per-agent model.
+  rpc spawnTeamMember(SpawnTeamMemberRequest) returns (TeamActionResult);
+
+  // Shuts a teammate down.
+  rpc shutdownTeamMember(ShutdownTeamMemberRequest) returns (TeamActionResult);
+}
+
+message TeamStateRequest {}
+
+message TeamMember {
+  string agent_id = 1;
+  string role = 2; // "lead" | "teammate"
+  string description = 3;
+  string status = 4; // "idle" | "running" | "stopped"
+  string model_id = 5; // per-agent model override when set
+  string provider_id = 6;
+}
+
+message TeamMailboxEntry {
+  string id = 1;
+  string from_agent_id = 2;
+  string to_agent_id = 3;
+  string subject = 4;
+  string body = 5;
+  string sent_at = 6;
+  bool read = 7;
+}
+
+message TeamState {
+  bool active = 1; // false when the session has no team runtime
+  string team_id = 2;
+  string team_name = 3;
+  repeated TeamMember members = 4;
+  repeated TeamMailboxEntry mailbox = 5; // most recent first, capped
+  int32 unread_messages = 6;
+  int32 open_tasks = 7;
+  int32 active_runs = 8;
+}
+
+message SpawnTeamMemberRequest {
+  string agent_id = 1;
+  string role_prompt = 2;
+  string model_id = 3; // optional per-agent model
+  string provider_id = 4; // optional per-agent provider
+}
+
+message ShutdownTeamMemberRequest {
+  string agent_id = 1;
+  string reason = 2;
+}
+
+message TeamActionResult {
+  bool ok = 1;
+  string error = 2;
+}
