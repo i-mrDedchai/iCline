@@ -353,12 +353,76 @@ export function computeNewEditorContent(
 	const newText = (input.new_text ?? "").split(/\r\n|\n/).join(lineEnding)
 	const occurrences = oldText.length === 0 ? 0 : originalContent.split(oldText).length - 1
 	if (occurrences === 0) {
+		// Mirror of the executor's whitespace-insensitive fallback (core
+		// `findNormalizedLineMatch`): rewrites whose old_text drifted only in
+		// trailing whitespace or EOF newlines must preview the write the
+		// executor will actually perform.
+		const fallback = findNormalizedLineMatch(originalContent, input.old_text)
+		if (fallback.count > 1) {
+			throw new Error(`No replacement performed: multiple occurrences of text found in ${filePath}.`)
+		}
+		if (fallback.count === 1) {
+			return originalContent.slice(0, fallback.start) + newText + originalContent.slice(fallback.end)
+		}
 		throw new Error(`No replacement performed: text not found in ${filePath}.`)
 	}
 	if (occurrences > 1) {
 		throw new Error(`No replacement performed: multiple occurrences of text found in ${filePath}.`)
 	}
 	return originalContent.replace(oldText, () => newText)
+}
+
+interface NormalizedMatch {
+	count: number
+	start: number
+	end: number
+}
+
+/** Mirror of core editor.ts `findNormalizedLineMatch`. */
+function findNormalizedLineMatch(content: string, oldStr: string): NormalizedMatch {
+	const oldLinesRaw = oldStr.split(/\r\n|\n/)
+	const oldEndsWithNewline = oldLinesRaw.length > 1 && oldLinesRaw[oldLinesRaw.length - 1] === ""
+	if (oldEndsWithNewline) oldLinesRaw.pop()
+	const oldLines = oldLinesRaw.map((line) => line.replace(/[\t ]+$/u, ""))
+	if (oldLines.length === 0) return { count: 0, start: 0, end: 0 }
+
+	const lines: Array<{ start: number; contentEnd: number; end: number; normalized: string }> = []
+	let lineStart = 0
+	while (lineStart <= content.length) {
+		let eol = content.indexOf("\n", lineStart)
+		const hasEol = eol !== -1
+		if (!hasEol) eol = content.length
+		const contentEnd = hasEol && eol > lineStart && content[eol - 1] === "\r" ? eol - 1 : eol
+		lines.push({
+			start: lineStart,
+			contentEnd,
+			end: hasEol ? eol + 1 : eol,
+			normalized: content.slice(lineStart, contentEnd).replace(/[\t ]+$/u, ""),
+		})
+		if (!hasEol) break
+		lineStart = eol + 1
+	}
+
+	let count = 0
+	let start = 0
+	let end = 0
+	for (let i = 0; i + oldLines.length <= lines.length; i++) {
+		let matches = true
+		for (let k = 0; k < oldLines.length; k++) {
+			if (lines[i + k].normalized !== oldLines[k]) {
+				matches = false
+				break
+			}
+		}
+		if (!matches) continue
+		count++
+		if (count === 1) {
+			const last = lines[i + oldLines.length - 1]
+			start = lines[i].start
+			end = oldEndsWithNewline ? last.end : last.contentEnd
+		}
+	}
+	return { count, start, end }
 }
 
 /** Mirrors the SDK executor's resolveFilePath (restrictToCwd=true): absolute paths pass through. */

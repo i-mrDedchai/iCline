@@ -285,6 +285,78 @@ describe("createEditorExecutor", () => {
 		});
 	});
 
+	it("falls back to whitespace-insensitive matching when the exact text is missing", async () => {
+		// Smoke fix.31–33: "text not found" still reached the model on whole-file
+		// rewrites whose old_text drifted only in trailing whitespace (the tool
+		// trace shows oldTextChars 571 vs newTextChars 571 for the same file).
+		await withTempFile("alpha  \nbeta\ngamma", async (filePath, dir) => {
+			const editor = createEditorExecutor();
+			await editor(
+				{ path: filePath, old_text: "alpha\nbeta", new_text: "ALPHA\nBETA" },
+				dir,
+				context,
+			);
+
+			await expect(fs.readFile(filePath, "utf-8")).resolves.toBe(
+				"ALPHA\nBETA\ngamma",
+			);
+		});
+	});
+
+	it("keeps the file's trailing newline when the normalized match omits it", async () => {
+		await withTempFile("a  \nb\n", async (filePath, dir) => {
+			const editor = createEditorExecutor();
+			await editor(
+				{ path: filePath, old_text: "a\nb", new_text: "X" },
+				dir,
+				context,
+			);
+
+			await expect(fs.readFile(filePath, "utf-8")).resolves.toBe("X\n");
+		});
+	});
+
+	it("falls back to normalized matching in CRLF files with trailing-space drift", async () => {
+		await withTempFile("alpha \r\nbeta\r\ngamma", async (filePath, dir) => {
+			const editor = createEditorExecutor();
+			await editor(
+				{ path: filePath, old_text: "alpha\nbeta", new_text: "A\nB" },
+				dir,
+				context,
+			);
+
+			await expect(fs.readFile(filePath, "utf-8")).resolves.toBe(
+				"A\r\nB\r\ngamma",
+			);
+		});
+	});
+
+	it("still reports multiple occurrences when the normalized text is ambiguous", async () => {
+		await withTempFile("x  \nQ  \nx \nQ ", async (filePath, dir) => {
+			const editor = createEditorExecutor();
+			await expect(
+				editor(
+					{ path: filePath, old_text: "x\nQ", new_text: "R" },
+					dir,
+					context,
+				),
+			).rejects.toThrow(/multiple occurrences of text found/);
+		});
+	});
+
+	it("still reports text not found when no line window matches at all", async () => {
+		await withTempFile("a\nb\nc", async (filePath, dir) => {
+			const editor = createEditorExecutor();
+			await expect(
+				editor(
+					{ path: filePath, old_text: "x\ny", new_text: "R" },
+					dir,
+					context,
+				),
+			).rejects.toThrow(/text not found/);
+		});
+	});
+
 	it("inserts $-sequences in new_text literally", async () => {
 		await withTempFile("a\nb\nc", async (filePath, dir) => {
 			const editor = createEditorExecutor();

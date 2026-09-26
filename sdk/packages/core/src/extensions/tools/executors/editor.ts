@@ -70,6 +70,87 @@ function countOccurrences(content: string, needle: string): number {
 	return content.split(needle).length - 1;
 }
 
+interface ContentLine {
+	/** Offset of the first character of the line. */
+	start: number;
+	/** Offset just past the line's text, excluding its EOL. */
+	contentEnd: number;
+	/** Offset just past the line's EOL (equals contentEnd on the last line). */
+	end: number;
+	/** Line text with its EOL stripped and trailing whitespace trimmed. */
+	normalized: string;
+}
+
+function splitLinesWithSpans(content: string): ContentLine[] {
+	const lines: ContentLine[] = [];
+	let start = 0;
+	while (start <= content.length) {
+		let eol = content.indexOf("\n", start);
+		const hasEol = eol !== -1;
+		if (!hasEol) eol = content.length;
+		const contentEnd =
+			hasEol && eol > start && content[eol - 1] === "\r" ? eol - 1 : eol;
+		const raw = content.slice(start, contentEnd);
+		lines.push({
+			start,
+			contentEnd,
+			end: hasEol ? eol + 1 : eol,
+			normalized: raw.replace(/[\t ]+$/u, ""),
+		});
+		if (!hasEol) break;
+		start = eol + 1;
+	}
+	return lines;
+}
+
+interface NormalizedMatch {
+	count: number;
+	start: number;
+	end: number;
+}
+
+/**
+ * Fallback matcher for old_text that drifted only in trailing whitespace or
+ * EOF newlines (the tool trace shows whole-file rewrites failing with
+ * oldTextChars/newTextChars within one character). Matches old_text as a
+ * window of right-trimmed lines; the span covers the file's original bytes so
+ * untouched text keeps its exact whitespace. Conservative: no match, or more
+ * than one window, leaves the caller's error behavior unchanged.
+ */
+function findNormalizedLineMatch(
+	content: string,
+	oldStr: string,
+): NormalizedMatch {
+	const oldLinesRaw = oldStr.split(/\r\n|\n/);
+	const oldEndsWithNewline =
+		oldLinesRaw.length > 1 && oldLinesRaw[oldLinesRaw.length - 1] === "";
+	if (oldEndsWithNewline) oldLinesRaw.pop();
+	const oldLines = oldLinesRaw.map((line) => line.replace(/[\t ]+$/u, ""));
+	if (oldLines.length === 0) return { count: 0, start: 0, end: 0 };
+
+	const contentLines = splitLinesWithSpans(content);
+	let count = 0;
+	let start = 0;
+	let end = 0;
+	for (let i = 0; i + oldLines.length <= contentLines.length; i++) {
+		let matches = true;
+		for (let k = 0; k < oldLines.length; k++) {
+			if (contentLines[i + k].normalized !== oldLines[k]) {
+				matches = false;
+				break;
+			}
+		}
+		if (!matches) continue;
+		count++;
+		if (count === 1) {
+			const last = contentLines[i + oldLines.length - 1];
+			start = contentLines[i].start;
+			end = oldEndsWithNewline ? last.end : last.contentEnd;
+		}
+	}
+	return { count, start, end };
+}
+
 // Reads produced via readline strip "\r", so models emit LF-only text even
 // for CRLF files; edits must be normalized to the file's own EOL (see
 // ./line-endings) or they create mixed line endings and break subsequent
@@ -176,6 +257,24 @@ async function replaceInFile(
 	const occurrences = countOccurrences(content, normalizedOldStr);
 
 	if (occurrences === 0) {
+		// Exact match failed — retry with the whitespace-insensitive line
+		// matcher before giving up, so rewrites whose old_text drifted only in
+		// trailing whitespace or EOF newlines still apply.
+		const fallback = findNormalizedLineMatch(content, oldStr);
+		if (fallback.count > 1) {
+			throw new Error(
+				`No replacement performed: multiple occurrences of text found in ${filePath}.`,
+			);
+		}
+		if (fallback.count === 1) {
+			const updated =
+				content.slice(0, fallback.start) +
+				normalizedNewStr +
+				content.slice(fallback.end);
+			await writeFileToDisk(filePath, updated, encoding);
+			const diff = createLineDiff(content, updated, maxDiffLines);
+			return `Edited ${filePath}\n${diff}`;
+		}
 		throw new Error(`No replacement performed: text not found in ${filePath}.`);
 	}
 

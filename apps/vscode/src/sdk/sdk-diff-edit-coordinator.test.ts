@@ -77,6 +77,28 @@ describe("computeNewEditorContent", () => {
 		)
 	})
 
+	it("falls back to whitespace-insensitive matching when the exact text is missing", () => {
+		const input: EditFileInput = { path: filePath, old_text: "alpha\nbeta", new_text: "ALPHA\nBETA" }
+		expect(computeNewEditorContent("alpha  \nbeta\ngamma", input, filePath, "modify")).toBe("ALPHA\nBETA\ngamma")
+	})
+
+	it("keeps the file's trailing newline when the normalized match omits it", () => {
+		const input: EditFileInput = { path: filePath, old_text: "a\nb", new_text: "X" }
+		expect(computeNewEditorContent("a  \nb\n", input, filePath, "modify")).toBe("X\n")
+	})
+
+	it("falls back to normalized matching in CRLF content with trailing-space drift", () => {
+		const input: EditFileInput = { path: filePath, old_text: "alpha\nbeta", new_text: "A\nB" }
+		expect(computeNewEditorContent("alpha \r\nbeta\r\ngamma", input, filePath, "modify")).toBe("A\r\nB\r\ngamma")
+	})
+
+	it("throws for ambiguous text under the normalized fallback too", () => {
+		const input: EditFileInput = { path: filePath, old_text: "x\nQ", new_text: "R" }
+		expect(() => computeNewEditorContent("x  \nQ  \nx \nQ ", input, filePath, "modify")).toThrow(
+			`No replacement performed: multiple occurrences of text found in ${filePath}.`,
+		)
+	})
+
 	it("throws for missing old_text on an existing file", () => {
 		const input: EditFileInput = { path: filePath, new_text: "x" }
 		expect(() => computeNewEditorContent("a", input, filePath, "modify")).toThrow(
