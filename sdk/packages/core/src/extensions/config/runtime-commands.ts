@@ -94,7 +94,28 @@ function listCommandsForKind(
 			description: resolveCommandDescription(record.item, kind),
 			kind,
 		}))
-		.sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+		.sort(compareRuntimeCommandKeys);
+}
+
+/**
+ * Locale-independent (name, id) ordering. This order decides which command
+ * OWNS a normalized-name token (the first entry wins), so it must not depend on
+ * the host's collation: `localeCompare` orders case and punctuation by ICU
+ * locale rules, and the winner of `Publish UI` vs `publish-ui` flipped across
+ * machines (the determinism test failed on a Thai-locale Windows host). Code-
+ * unit comparison is stable everywhere.
+ */
+function compareRuntimeCommandKeys(
+	a: { name: string; id: string },
+	b: { name: string; id: string },
+): number {
+	if (a.name !== b.name) {
+		return a.name < b.name ? -1 : 1;
+	}
+	if (a.id !== b.id) {
+		return a.id < b.id ? -1 : 1;
+	}
+	return 0;
 }
 
 export function listAvailableRuntimeCommandsFromWatcher(
@@ -115,7 +136,7 @@ export function listAvailableRuntimeCommandsFromWatcher(
 			byName.set(command.name, command);
 		}
 	}
-	return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
+	return [...byName.values()].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
 }
 
 export type ResolveRuntimeSlashCommandOptions = {

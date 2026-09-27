@@ -153,7 +153,11 @@ function toSortedProviderModels(
 	modelMap: Record<string, ModelInfo>,
 ): ProviderModel[] {
 	return Object.entries(modelMap)
-		.sort(([a], [b]) => a.localeCompare(b))
+		// Code-unit order, not `localeCompare`: the model list users see must not
+		// depend on the host's collation (ICU locales order `gemini-3-flash` after
+		// `gemini-3.8-flash`, `gpt-5-codex` after `gpt-5.6-terra`), and the
+		// offline-bundled fallback pins the order against `Object.keys().sort()`.
+		.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
 		.map(([modelId, info]) => toProviderModel(modelId, info));
 }
 
