@@ -404,9 +404,54 @@ e2e("Quick Picker — the Thinking switch never moves the panel off its own row"
 	expect(after.levels.length).toBeGreaterThan(0)
 	// 4) It is still BESIDE the row it belongs to: the two overlap vertically, so the
 	//    panel reads as that row's own Options surface rather than a neighbour's.
-	const overlapsRow = box.y < rowBox.y + rowBox.height && box.y + box.height > rowBox.y
+	//
+	//    The row's box is a SCAN-time snapshot (taken before the mouse moved), and the
+	//    popover TRANSLATES under async layout (measured ~68px mid-test while chat and
+	//    model lists settle) — a stale row box then reads as a misplaced panel even
+	//    though the panel and its row moved together. So the assertion finds the row
+	//    of the model the panel describes (by `data-icline-model-id`, never by index:
+	//    reflow renumbers rows) and compares against its box NOW, while the failure
+	//    message carries both boxes plus the ones that decide placement (the picker
+	//    the panel clamps inside, the list that clips the row, the list's scroll and
+	//    the panel's computed top) — enough to tell "the panel was placed wrong" apart
+	//    from "the row moved after it was placed".
+	const geometry = await sidebar.evaluate(
+		(query) => {
+			const rows = [...document.querySelectorAll("[data-icline-model-row]")] as HTMLElement[]
+			const byId = rows.filter((el) => el.getAttribute("data-icline-model-id") === query.modelId)
+			const nearest = byId.reduce<HTMLElement | null>((best, el) => {
+				const d = Math.abs(el.getBoundingClientRect().top - query.scanTop)
+				const bd = best ? Math.abs(best.getBoundingClientRect().top - query.scanTop) : Number.POSITIVE_INFINITY
+				return d < bd ? el : best
+			}, null)
+			const listEl = document.querySelector("[data-icline-picker-list]") as HTMLElement | null
+			const pickerEl = document.querySelector("[data-icline-quick-picker]") as HTMLElement | null
+			const panelEl = document.querySelector("[data-icline-picker-options]") as HTMLElement | null
+			const span = (el: HTMLElement | undefined | null) => {
+				const r = el?.getBoundingClientRect()
+				return r ? `${Math.round(r.top)}..${Math.round(r.bottom)}` : "none"
+			}
+			return {
+				rowNow: span(nearest),
+				rowIdMatched: nearest ? nearest.getAttribute("data-icline-model-id") : null,
+				rowsForId: byId.length,
+				pickerNow: span(pickerEl),
+				listNow: span(listEl),
+				scrollTop: listEl?.scrollTop ?? null,
+				panelTopStyle: panelEl ? window.getComputedStyle(panelEl).top : null,
+			}
+		},
+		{ modelId: before.modelId ?? "", scanTop: rowBox.y },
+	)
+	const rowNow = geometry.rowNow.split("..").map(Number)
+	const overlapsRow = box.y < rowNow[1] && box.y + box.height > rowNow[0]
 	expect(
 		overlapsRow,
-		`panel ${Math.round(box.y)}..${Math.round(box.y + box.height)} does not overlap its row ${Math.round(rowBox.y)}..${Math.round(rowBox.y + rowBox.height)}`,
+		`panel ${Math.round(box.y)}..${Math.round(box.y + box.height)} does not overlap its row ${Math.round(rowNow[0])}..${Math.round(rowNow[1])}` +
+			` | model=${before.modelId} levels=${JSON.stringify(before.levels)} immediately=${JSON.stringify(immediately.levels)}` +
+			` | panel@before ${Math.round(wasBox.y)}..${Math.round(wasBox.y + wasBox.height)} h=${Math.round(box.height)}` +
+			` | switch=${before.switchState}->${after.switchState} selected=${before.selected}->${after.selected}` +
+			` | rowScan ${Math.round(rowBox.y)}..${Math.round(rowBox.y + rowBox.height)} rowNow=${geometry.rowNow}` +
+			` | pickerNow=${geometry.pickerNow} listNow=${geometry.listNow} scrollTop=${geometry.scrollTop} panelTopStyle=${geometry.panelTopStyle}`,
 	).toBe(true)
 })

@@ -354,46 +354,8 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 		[cancelOptionsClose],
 	)
 
-	/**
-	 * Place the panel beside its own row (`computeOptionsPanelTop`) — as a layout effect
-	 * so it lands on the first paint.
-	 *
-	 * The panel is lifted when the row is too low for its height, so it always fits above
-	 * the picker's bottom margin and its `max-height` can stay the mock's flat 320px —
-	 * nothing to scroll.
-	 *
-	 * The dep array is the anchor ALONE, and that is load-bearing twice over:
-	 *
-	 *  - it re-measures per hovered row, so a row near the bottom still gets its own lift; and
-	 *  - it does NOT re-measure when the panel's content changes. It used to re-run on a
-	 *    counter bumped by every thinking/effort write, and since the lift reads the
-	 *    panel's own height, clicking Thinking (which adds or drops the clamp notice, and
-	 *    used to swap the level list) slid the panel off its row under the cursor —
-	 *    dev.6-fix.27. A content change after the click only grows or shrinks the panel
-	 *    from the top it was given.
-	 */
-	useLayoutEffect(() => {
-		if (!hoveredModel) {
-			return
-		}
-		const panel = optionsRef.current
-		const row = hoveredRowRef.current
-		const content = contentRef.current
-		if (!panel || !row || !content) {
-			return
-		}
-		const pickerEl = content.closest<HTMLElement>("[data-icline-quick-picker]") ?? content
-		const pickerRect = pickerEl.getBoundingClientRect()
-		const rowRect = row.getBoundingClientRect()
-		setOptionsTop(
-			computeOptionsPanelTop({
-				rowTop: rowRect.top,
-				pickerTop: pickerRect.top,
-				pickerHeight: pickerRect.height,
-				panelHeight: panel.getBoundingClientRect().height,
-			}),
-		)
-	}, [hoveredModel])
+	// The panel's placement effect lives below ("Place the panel beside its own row"),
+	// where it can key on the host's settled level list as well as the hover anchor.
 
 	/**
 	 * Delegated hover: ONE move handler on the list re-anchors the panel to
@@ -789,6 +751,55 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 		effort: hoveredStatus?.effort,
 		thinkingBudgetTokens: hoveredStatus?.thinkingBudgetTokens,
 	})
+
+	/**
+	 * Place the panel beside its own row (`computeOptionsPanelTop`) — as a layout effect
+	 * so it lands on the first paint.
+	 *
+	 * The panel is lifted when the row is too low for its height, so it always fits above
+	 * the picker's bottom margin and its `max-height` can stay the mock's flat 320px —
+	 * nothing to scroll.
+	 *
+	 * The dep array is the hover anchor plus the SETTLED level list, and every edge is
+	 * load-bearing:
+	 *
+	 *  - the anchor re-measures per hovered row, so a row near the bottom still gets its
+	 *    own lift;
+	 *  - the level list re-measures once when the host's answer lands: the answer narrows
+	 *    the first paint's provider vocabulary to the model's own (`aion-labs/aion-3.5-mini`
+	 *    takes three of the six), and a lift computed for the taller first paint leaves the
+	 *    shrunk panel hanging above its row instead of beside it. The key is a STRING so
+	 *    the same answer arriving again — every Thinking toggle re-asks the question —
+	 *    cannot re-run this; and
+	 *  - it does NOT re-measure on thinking/effort writes. It used to re-run on a counter
+	 *    bumped by every write, and since the lift reads the panel's own height, clicking
+	 *    Thinking (which adds or drops the clamp notice, and used to swap the level list)
+	 *    slid the panel off its row under the cursor — dev.6-fix.27. A content change
+	 *    after the click only grows or shrinks the panel from the top it was given.
+	 */
+	const hoveredLevelsKey = hoveredEffortOutcome?.supportedEfforts.join("|") ?? ""
+	useLayoutEffect(() => {
+		if (!hoveredModel) {
+			return
+		}
+		const panel = optionsRef.current
+		const row = hoveredRowRef.current
+		const content = contentRef.current
+		if (!panel || !row || !content) {
+			return
+		}
+		const pickerEl = content.closest<HTMLElement>("[data-icline-quick-picker]") ?? content
+		const pickerRect = pickerEl.getBoundingClientRect()
+		const rowRect = row.getBoundingClientRect()
+		setOptionsTop(
+			computeOptionsPanelTop({
+				rowTop: rowRect.top,
+				pickerTop: pickerRect.top,
+				pickerHeight: pickerRect.height,
+				panelHeight: panel.getBoundingClientRect().height,
+			}),
+		)
+	}, [hoveredLevelsKey, hoveredModel])
 
 	/**
 	 * The active model's own readout.
