@@ -456,6 +456,42 @@ describe("SdkModeCoordinator", () => {
 		expect(state.mode).toBe("plan")
 	})
 
+	it("cancels a turn executing at the replace step instead of replacing mid-tool", async () => {
+		// `isRunning` is false while a tool executes, so a turn that is mid-tool
+		// when the rebuild reaches its replace step would be silently killed by a
+		// plain replace — it must get the explicit cancel-and-finalize path.
+		const activeSession = makeActiveSession()
+		const task = makeTask("old-session")
+		const { coordinator, options } = makeCoordinator({
+			activeSession,
+			task,
+			turnPhase: "streaming",
+		})
+
+		await coordinator.rebuildSessionForMode("act")
+
+		expect(activeSession.sdkHost.abort).toHaveBeenCalledWith("old-session")
+		expect(options.sessions.replaceActiveSession).toHaveBeenCalledOnce()
+	})
+
+	it("leaves an awaiting follow-up untouched at the replace step", async () => {
+		// Awaiting follow-up is not a running turn: the rebuild deliberately
+		// consumes the follow-up through its auto-continue, so it must not be
+		// cancelled as if it were mid-tool.
+		const activeSession = makeActiveSession()
+		const task = makeTask("old-session")
+		const { coordinator, options } = makeCoordinator({
+			activeSession,
+			task,
+			turnPhase: "awaiting_followup",
+		})
+
+		await coordinator.rebuildSessionForMode("act")
+
+		expect(activeSession.sdkHost.abort).not.toHaveBeenCalled()
+		expect(options.sessions.replaceActiveSession).toHaveBeenCalledOnce()
+	})
+
 	it("cancels and finalizes a running turn before rebuilding for mode change", async () => {
 		const activeSession = makeActiveSession({ isRunning: true })
 		const task = makeTask("old-session", [{ ts: 1, type: "say", say: "text", text: "partial", partial: true }])
@@ -590,7 +626,13 @@ function makeCoordinator(input: Partial<MakeCoordinatorInput> = {}) {
 				sdkHost: { send: vi.fn() },
 			}),
 			fireAndForgetSend: vi.fn(),
-			setRunning: vi.fn(),
+			setRunning: vi.fn((isRunning: boolean) => {
+				// Mirror the real SdkSessionLifecycle.setRunning, which flips the
+				// live session's flag — guards downstream read it after a cancel.
+				if (activeSession && activeSession.isRunning !== isRunning) {
+					activeSession.isRunning = isRunning
+				}
+			}),
 		},
 		interactions: {
 			clearPending: vi.fn(),

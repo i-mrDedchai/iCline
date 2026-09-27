@@ -76,6 +76,48 @@ describe("SdkMcpCoordinator", () => {
 		expect(options.postStateToWebview).toHaveBeenCalledOnce()
 	})
 
+	it("defers the restart when a turn starts during the await window", async () => {
+		// The session looks idle at schedule time but a turn is mid-tool when the
+		// restart reaches its replace step — `isRunning` is false mid-tool, so the
+		// guard must read the turn phase and defer instead of killing the task.
+		const activeSession = makeActiveSession()
+		const { coordinator, options } = makeCoordinator({
+			activeSession,
+			isTurnInFlight: () => true,
+		})
+
+		await coordinator.restartSessionForMcpTools()
+
+		expect(options.sessions.replaceActiveSession).not.toHaveBeenCalled()
+		expect(options.rebuilds.request).toHaveBeenCalledWith("mcpTools", expect.any(Function))
+	})
+
+	it("defers the restart when the active session changed during the await window", async () => {
+		const activeSession = makeActiveSession()
+		let current: unknown = activeSession
+		const { coordinator, options } = makeCoordinator({
+			activeSession,
+			sessionsOverride: {
+				getActiveSession: vi.fn(() => current),
+				replaceActiveSession: vi.fn().mockResolvedValue({
+					startResult: { sessionId: "new-session" },
+					sdkHost: { send: vi.fn() },
+				}),
+			},
+		})
+		options.loadInitialMessages.mockImplementation(async () => {
+			current = makeActiveSession()
+			return []
+		})
+
+		await coordinator.restartSessionForMcpTools()
+
+		// The old session is never replaced; the restart is re-queued to target
+		// whichever session is active when it next drains.
+		expect(options.sessions.replaceActiveSession).not.toHaveBeenCalled()
+		expect(options.rebuilds.request).toHaveBeenCalledWith("mcpTools", expect.any(Function))
+	})
+
 	it("emits an error message when restart fails", async () => {
 		const activeSession = makeActiveSession()
 		const { coordinator, options } = makeCoordinator({ activeSession })
@@ -99,6 +141,14 @@ describe("SdkMcpCoordinator", () => {
 
 function makeCoordinator(input: Partial<MakeCoordinatorInput> = {}) {
 	const activeSession = input.activeSession
+	let autoRunDepth = 0
+	const sessions = input.sessionsOverride ?? {
+		getActiveSession: vi.fn(() => activeSession),
+		replaceActiveSession: vi.fn().mockResolvedValue({
+			startResult: { sessionId: "new-session" },
+			sdkHost: { send: vi.fn() },
+		}),
+	}
 	const config = {
 		providerId: "anthropic",
 		modelId: "claude",
@@ -108,13 +158,7 @@ function makeCoordinator(input: Partial<MakeCoordinatorInput> = {}) {
 		stateManager: {
 			getGlobalSettingsKey: vi.fn(() => input.mode ?? "act"),
 		} as unknown as StateManager,
-		sessions: {
-			getActiveSession: vi.fn(() => activeSession),
-			replaceActiveSession: vi.fn().mockResolvedValue({
-				startResult: { sessionId: "new-session" },
-				sdkHost: { send: vi.fn() },
-			}),
-		},
+		sessions,
 		messages: {
 			appendAndEmit: vi.fn(),
 			emitSessionEvents: vi.fn(),
@@ -128,11 +172,17 @@ function makeCoordinator(input: Partial<MakeCoordinatorInput> = {}) {
 		postStateToWebview: vi.fn().mockResolvedValue(undefined),
 		rebuilds: {
 			request: vi.fn((_reason: string, rebuild: () => Promise<void>) => {
-				if (!activeSession?.isRunning) {
-					void rebuild()
+				// Auto-run like a drained scheduler, but only one level deep: a
+				// rebuild that defers itself must not recurse forever.
+				if (!activeSession?.isRunning && autoRunDepth === 0) {
+					autoRunDepth += 1
+					void rebuild().finally(() => {
+						autoRunDepth -= 1
+					})
 				}
 			}),
 		},
+		isTurnInFlight: input.isTurnInFlight ?? (() => false),
 	} as unknown as SdkMcpCoordinatorOptions & {
 		stateManager: StateManager & { getGlobalSettingsKey: ReturnType<typeof vi.fn> }
 		sessions: SdkMcpCoordinatorOptions["sessions"] & {
@@ -159,6 +209,11 @@ function makeCoordinator(input: Partial<MakeCoordinatorInput> = {}) {
 interface MakeCoordinatorInput {
 	activeSession: ReturnType<typeof makeActiveSession>
 	mode: "act" | "plan"
+	isTurnInFlight: () => boolean
+	sessionsOverride: {
+		getActiveSession: ReturnType<typeof vi.fn>
+		replaceActiveSession: ReturnType<typeof vi.fn>
+	}
 }
 
 function makeActiveSession(input: { isRunning?: boolean } = {}) {

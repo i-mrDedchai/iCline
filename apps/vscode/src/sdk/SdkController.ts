@@ -560,6 +560,7 @@ export class Controller {
 			buildStartSessionInput,
 			postStateToWebview: () => this.postStateToWebview(),
 			rebuilds: this.sessionRebuilds,
+			isTurnInFlight: () => isTurnInFlightPhase(this.turnStateTracker.currentPhase),
 		})
 		this.terminalExecutionMode = new SdkTerminalExecutionModeCoordinator({
 			stateManager: this.stateManager,
@@ -586,6 +587,7 @@ export class Controller {
 			buildStartSessionInput,
 			postStateToWebview: () => this.postStateToWebview(),
 			rebuilds: this.sessionRebuilds,
+			isTurnInFlight: () => isTurnInFlightPhase(this.turnStateTracker.currentPhase),
 		})
 		this.followups = new SdkFollowupCoordinator({
 			stateManager: this.stateManager,

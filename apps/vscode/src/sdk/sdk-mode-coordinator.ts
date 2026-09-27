@@ -12,6 +12,7 @@ import { isAbortError, type SdkSessionLifecycle } from "./sdk-session-lifecycle"
 import type { SdkSessionRebuildScheduler } from "./sdk-session-rebuild-scheduler"
 import type { SdkSessionHost } from "./session-host"
 import type { TaskProxy } from "./task-proxy"
+import { isTurnInFlightPhase } from "./turn-state-tracker"
 import type { VscodeSessionHost } from "./vscode-session-host"
 
 type StartInput = Parameters<VscodeSessionHost["start"]>[0]
@@ -277,6 +278,32 @@ export class SdkModeCoordinator {
 				cwd,
 				mode: newMode,
 			})
+
+			// Rebuilds may preserve the session ID, so identity is the only reliable
+			// way to detect that another path replaced this session while we awaited.
+			const currentSession = this.options.sessions.getActiveSession()
+			if (!currentSession || currentSession !== activeSession) {
+				Logger.log(`[SdkController] Active session changed during mode rebuild (was ${oldSessionId}); aborting`)
+				return false
+			}
+			// A turn can also be executing when the rebuild reaches its replace
+			// step — one that started during the awaits (queued prompt), or one
+			// that was mid-tool from the start (`isRunning` is false while a tool
+			// executes). Replacing the session there would kill the task silently,
+			// so give such a turn the same explicit cancel-and-finalize treatment
+			// the `wasRunning` branch gives the turn it knew about. Awaiting
+			// follow-up is not a running turn: the rebuild deliberately consumes
+			// the follow-up through its auto-continue, so it stays untouched.
+			const turnPhase = this.options.getTurnPhase()
+			const turnExecutingNow =
+				currentSession.isRunning || (isTurnInFlightPhase(turnPhase) && turnPhase !== "awaiting_followup")
+			if (turnExecutingNow) {
+				Logger.log(
+					`[SdkController] Turn executing at mode rebuild replace step (session ${oldSessionId}); cancelling it before rebuild`,
+				)
+				await this.cancelRunningTurnForModeChange(oldManager, oldSessionId)
+			}
+
 			const rebuildResult = await this.options.sessions.replaceActiveSession({
 				expectedSession: activeSession,
 				startInput,

@@ -134,6 +134,22 @@ describe("SdkProviderChangeCoordinator", () => {
 		expect(options.rebuilds.request).toHaveBeenCalledWith("provider", expect.any(Function))
 	})
 
+	it("defers the restart when a turn starts during the await window", async () => {
+		// The session looks idle at schedule time but a turn is mid-tool when the
+		// restart reaches its replace step — `isRunning` is false mid-tool, so the
+		// guard must read the turn phase and defer instead of killing the task.
+		const activeSession = makeActiveSession()
+		const { coordinator, options } = makeCoordinator({
+			activeSession,
+			isTurnInFlight: () => true,
+		})
+
+		await coordinator.restartActiveSessionForProviderChange()
+
+		expect(options.sessions.replaceActiveSession).not.toHaveBeenCalled()
+		expect(options.rebuilds.request).toHaveBeenCalledWith("provider", expect.any(Function))
+	})
+
 	it("updates the task id when the replacement session id changes", async () => {
 		const activeSession = makeActiveSession()
 		const task = { taskId: "old-session" }
@@ -194,6 +210,7 @@ describe("SdkProviderChangeCoordinator", () => {
 
 function makeCoordinator(input: Partial<MakeCoordinatorInput> = {}) {
 	const activeSession = input.activeSession
+	let autoRunDepth = 0
 	const config = {
 		providerId: "deepseek",
 		modelId: "deepseek-v4-flash",
@@ -224,11 +241,17 @@ function makeCoordinator(input: Partial<MakeCoordinatorInput> = {}) {
 		rebuilds: {
 			cancel: vi.fn(),
 			request: vi.fn((_reason: string, rebuild: () => Promise<void>) => {
-				if (!activeSession?.isRunning) {
-					void rebuild()
+				// Auto-run like a drained scheduler, but only one level deep: a
+				// rebuild that defers itself must not recurse forever.
+				if (!activeSession?.isRunning && autoRunDepth === 0) {
+					autoRunDepth += 1
+					void rebuild().finally(() => {
+						autoRunDepth -= 1
+					})
 				}
 			}),
 		},
+		isTurnInFlight: input.isTurnInFlight ?? (() => false),
 	} as unknown as SdkProviderChangeCoordinatorOptions & {
 		stateManager: StateManager & { getGlobalSettingsKey: ReturnType<typeof vi.fn> }
 		sessions: SdkProviderChangeCoordinatorOptions["sessions"] & {
@@ -256,6 +279,7 @@ interface MakeCoordinatorInput {
 	activeSession: ReturnType<typeof makeActiveSession>
 	mode: "act" | "plan"
 	task: { taskId: string }
+	isTurnInFlight: () => boolean
 }
 
 function makeActiveSession(input: { isRunning?: boolean } = {}) {

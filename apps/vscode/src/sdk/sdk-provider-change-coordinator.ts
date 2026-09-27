@@ -26,6 +26,13 @@ export interface SdkProviderChangeCoordinatorOptions {
 	buildStartSessionInput: (config: SessionConfig, input: { cwd: string; mode: Mode }) => StartInput
 	postStateToWebview: () => Promise<void>
 	rebuilds: Pick<SdkSessionRebuildScheduler, "request">
+	/**
+	 * Whether the session is mid-turn. `isRunning` alone is NOT an idle signal:
+	 * it is false while a tool executes, and replacing the session in that gap
+	 * kills the task mid-tool. The turn's own lifecycle answers "is it safe to
+	 * restart".
+	 */
+	isTurnInFlight?: () => boolean
 }
 
 function providerForMode(config: ApiConfiguration, mode: Mode): string | undefined {
@@ -91,6 +98,22 @@ export class SdkProviderChangeCoordinator {
 
 			const initialMessages = await this.options.loadInitialMessages(oldManager, oldSessionId)
 			const startInput = this.options.buildStartSessionInput(config, { cwd, mode })
+
+			// Rebuilds may preserve the session ID, so identity is the only reliable
+			// way to detect that another path replaced this session while we awaited.
+			const currentSession = this.options.sessions.getActiveSession()
+			if (!currentSession) {
+				Logger.log(`[SdkController] Active session changed during provider restart (was ${oldSessionId}); aborting`)
+				return
+			}
+			if (currentSession !== activeSession || currentSession.isRunning || this.options.isTurnInFlight?.()) {
+				Logger.log(
+					`[SdkController] Active session changed or started running during provider restart (was ${oldSessionId}); deferring`,
+				)
+				this.options.rebuilds.request("provider", () => this.restartActiveSessionForProviderChange())
+				return
+			}
+
 			const restartResult = await this.options.sessions.replaceActiveSession({
 				expectedSession: activeSession,
 				startInput,
