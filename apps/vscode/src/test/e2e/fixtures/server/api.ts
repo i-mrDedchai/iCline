@@ -196,3 +196,121 @@ export const E2E_MOCK_CLINE_MODELS = [
 		supported_parameters: ["include_reasoning"],
 	},
 ]
+
+// ---------------------------------------------------------------------------
+// Team flow fixtures: a lead spawns two teammates that write files in parallel
+// and leave mailbox messages, then the lead records an outcome.
+// ---------------------------------------------------------------------------
+
+/** Lead turn 1: spawn both teammates in one (parallel) tool batch. */
+export const E2E_MOCK_TEAM_SPAWN_CALLS = [
+	{
+		id: "call_e2e_spawn_alpha",
+		name: "team_spawn_teammate",
+		arguments: { agentId: "alpha", rolePrompt: "writer-alpha" },
+	},
+	{
+		id: "call_e2e_spawn_beta",
+		name: "team_spawn_teammate",
+		arguments: { agentId: "beta", rolePrompt: "writer-beta" },
+	},
+]
+
+/** Lead turn 2: dispatch both writers as parallel async runs. */
+export const E2E_MOCK_TEAM_RUN_CALLS = [
+	{
+		id: "call_e2e_run_alpha",
+		name: "team_run_task",
+		arguments: { agentId: "alpha", task: "write-alpha", runMode: "async" },
+	},
+	{
+		id: "call_e2e_run_beta",
+		name: "team_run_task",
+		arguments: { agentId: "beta", task: "write-beta", runMode: "async" },
+	},
+]
+
+/** Lead turn 3: collect both runs. */
+export const E2E_MOCK_TEAM_AWAIT_CALL = [
+	{
+		id: "call_e2e_await",
+		name: "team_await_runs",
+		arguments: {},
+	},
+]
+
+/** Lead turn 4: record the shared outcome. */
+export const E2E_MOCK_TEAM_CREATE_OUTCOME_CALL = [
+	{
+		id: "call_e2e_outcome",
+		name: "team_create_outcome",
+		arguments: { title: "E2E Outcome" },
+	},
+]
+
+/**
+ * Lead turn 5: attach the outcome fragment. The outcome id is runtime-generated,
+ * so the mock server substitutes the id parsed out of the create result before
+ * streaming this call.
+ */
+export function buildTeamAttachOutcomeCall(outcomeId: string) {
+	return [
+		{
+			id: "call_e2e_attach",
+			name: "team_attach_outcome_fragment",
+			arguments: {
+				outcomeId,
+				section: "current_state",
+				content: "alpha and beta wrote their files in parallel",
+			},
+		},
+	]
+}
+
+/** Teammate turn 1 (each): report to the sibling teammate AND write a file — one parallel batch. */
+export const E2E_MOCK_ALPHA_TEAM_CALLS = [
+	{
+		id: "call_e2e_alpha_msg",
+		name: "team_send_message",
+		arguments: {
+			toAgentId: "beta",
+			subject: "ALPHA_REPORT",
+			body: "alpha.txt written in parallel",
+		},
+	},
+	{
+		id: "call_e2e_alpha_edit",
+		name: "editor",
+		arguments: { path: "alpha.txt", new_text: "alpha was here" },
+	},
+]
+
+export const E2E_MOCK_BETA_TEAM_CALLS = [
+	{
+		id: "call_e2e_beta_msg",
+		name: "team_send_message",
+		arguments: {
+			toAgentId: "alpha",
+			subject: "BETA_REPORT",
+			body: "beta.txt written in parallel",
+		},
+	},
+	{
+		id: "call_e2e_beta_edit",
+		name: "editor",
+		arguments: { path: "beta.txt", new_text: "beta was here" },
+	},
+]
+
+export const E2E_MOCK_TEAM_RESPONSES = {
+	TEAM_SPAWN_LEAD_IN: "I'll spawn two writers.",
+	TEAM_RUN_LEAD_IN: "Dispatching both writers in parallel.",
+	TEAM_AWAIT_LEAD_IN: "Waiting for both runs to finish.",
+	TEAM_OUTCOME_LEAD_IN: "Recording the shared outcome.",
+	TEAM_ATTACH_LEAD_IN: "Attaching the outcome fragment.",
+	TEAM_COMPLETE: "TEAM_E2E_DONE",
+	ALPHA_LEAD_IN: "ALPHA writing alpha.txt.",
+	ALPHA_DONE: "ALPHA_DONE",
+	BETA_LEAD_IN: "BETA writing beta.txt.",
+	BETA_DONE: "BETA_DONE",
+}

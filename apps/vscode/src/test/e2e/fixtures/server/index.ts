@@ -3,16 +3,70 @@ import type { Socket } from "node:net"
 import { v4 as uuidv4 } from "uuid"
 import type { BalanceResponse, OrganizationBalanceResponse, UserResponse } from "../../../../shared/ClineAccount"
 import {
+	buildTeamAttachOutcomeCall,
+	E2E_MOCK_ALPHA_TEAM_CALLS,
 	E2E_MOCK_API_RESPONSES,
+	E2E_MOCK_BETA_TEAM_CALLS,
 	E2E_MOCK_CLINE_MODELS,
 	E2E_MOCK_CLINE_RECOMMENDED_MODELS,
 	E2E_MOCK_EDITOR_TOOL_CALL,
 	E2E_MOCK_OVERSIZED_EDITOR_TOOL_CALL,
+	E2E_MOCK_TEAM_AWAIT_CALL,
+	E2E_MOCK_TEAM_CREATE_OUTCOME_CALL,
+	E2E_MOCK_TEAM_RESPONSES,
+	E2E_MOCK_TEAM_RUN_CALLS,
+	E2E_MOCK_TEAM_SPAWN_CALLS,
 	E2E_REGISTERED_MOCK_ENDPOINTS,
 	E2E_REMOTE_CONFIG_ORG_ID,
 	type E2ERemoteConfig,
 } from "./api"
 import { ClineDataMock } from "./data"
+
+/** Flatten a chat message's content (string or part array) into matchable text. */
+function extractMessageText(message: { content?: unknown } | undefined): string {
+	if (!message) {
+		return ""
+	}
+	const { content } = message
+	if (typeof content === "string") {
+		return content
+	}
+	if (Array.isArray(content)) {
+		return content.map((part) => (typeof part === "string" ? part : JSON.stringify(part))).join("\n")
+	}
+	return JSON.stringify(content ?? "")
+}
+
+/** Pull the runtime-generated outcome id out of the team_create_outcome tool result. */
+function extractOutcomeId(messages: Array<{ role?: string; content?: unknown }>): string {
+	for (const message of [...messages].reverse()) {
+		if (message.role !== "tool") {
+			continue
+		}
+		const match = /"outcomeId":\s*"([^"]+)"/.exec(extractMessageText(message))
+		if (match) {
+			return match[1]
+		}
+	}
+	return "unknown-outcome"
+}
+
+/** OpenAI tool_calls delta batches for a parallel tool batch (2 arg fragments per call). */
+function buildTeamToolCallDeltas(
+	calls: Array<{ id: string; name: string; arguments: Record<string, unknown> }>,
+): Array<Array<Record<string, unknown>>> {
+	const args = calls.map((call) => JSON.stringify(call.arguments))
+	return [
+		calls.map((call, index) => ({
+			index,
+			id: call.id,
+			type: "function",
+			function: { name: call.name, arguments: "" },
+		})),
+		...args.map((json, index) => [{ index, function: { arguments: json.slice(0, Math.floor(json.length / 2)) } }]),
+		...args.map((json, index) => [{ index, function: { arguments: json.slice(Math.floor(json.length / 2)) } }]),
+	]
+}
 
 /**
  * The port the mock API binds when the caller does not ask for a specific one.
@@ -572,12 +626,60 @@ export class ClineApiServerMock {
 						let responseText = E2E_MOCK_API_RESPONSES.DEFAULT
 						let includeEditorToolCall = false
 						let includeOversizedEditorToolCall = false
+						let teamToolCalls: Array<{ id: string; name: string; arguments: Record<string, unknown> }> = []
+
+						// Team flow routing. The lead conversation is keyed on the
+						// "team_request" prompt; each teammate's conversation is keyed on its
+						// run task text ("write-alpha"/"write-beta") IN ITS FIRST USER MESSAGE —
+						// the lead's history also carries those strings inside tool calls and
+						// results, so matching the first user message is what keeps the routes
+						// apart. Turn sequencing counts tool-result messages: 0 → spawn×2,
+						// 2 → run_task×2, 4 → await_runs, 5 → create_outcome, 6 → attach
+						// fragment, else the turn-ending completion text.
+						const messageList = Array.isArray(messages) ? messages : []
+						const firstUserText = extractMessageText(messageList.find((m: { role?: string }) => m?.role === "user"))
+						const toolResultCount = messageList.filter((m: { role?: string }) => m?.role === "tool").length
+						const isLeadTeamRequest = firstUserText.includes("team_request")
+						const isAlphaTeammate = firstUserText.includes("write-alpha")
+						const isBetaTeammate = firstUserText.includes("write-beta")
 						log("Chat completion mock selection:", {
 							isEditRequest: body.includes("edit_request"),
 							isOversizedRequest,
 							hasToolResult,
 						})
-						if (hasToolResult && isOversizedRequest) {
+						log("REQUEST", {
+							firstUser: firstUserText.slice(0, 40),
+							toolResultCount,
+							messageCount: messageList.length,
+						})
+						if (isLeadTeamRequest) {
+							if (toolResultCount === 0) {
+								responseText = E2E_MOCK_TEAM_RESPONSES.TEAM_SPAWN_LEAD_IN
+								teamToolCalls = E2E_MOCK_TEAM_SPAWN_CALLS
+							} else if (toolResultCount === 2) {
+								responseText = E2E_MOCK_TEAM_RESPONSES.TEAM_RUN_LEAD_IN
+								teamToolCalls = E2E_MOCK_TEAM_RUN_CALLS
+							} else if (toolResultCount === 4) {
+								responseText = E2E_MOCK_TEAM_RESPONSES.TEAM_AWAIT_LEAD_IN
+								teamToolCalls = E2E_MOCK_TEAM_AWAIT_CALL
+							} else if (toolResultCount === 5) {
+								responseText = E2E_MOCK_TEAM_RESPONSES.TEAM_OUTCOME_LEAD_IN
+								teamToolCalls = E2E_MOCK_TEAM_CREATE_OUTCOME_CALL
+							} else if (toolResultCount === 6) {
+								responseText = E2E_MOCK_TEAM_RESPONSES.TEAM_ATTACH_LEAD_IN
+								teamToolCalls = buildTeamAttachOutcomeCall(extractOutcomeId(messageList))
+							} else {
+								responseText = E2E_MOCK_TEAM_RESPONSES.TEAM_COMPLETE
+							}
+						} else if (isAlphaTeammate) {
+							responseText =
+								toolResultCount === 0 ? E2E_MOCK_TEAM_RESPONSES.ALPHA_LEAD_IN : E2E_MOCK_TEAM_RESPONSES.ALPHA_DONE
+							teamToolCalls = toolResultCount === 0 ? E2E_MOCK_ALPHA_TEAM_CALLS : []
+						} else if (isBetaTeammate) {
+							responseText =
+								toolResultCount === 0 ? E2E_MOCK_TEAM_RESPONSES.BETA_LEAD_IN : E2E_MOCK_TEAM_RESPONSES.BETA_DONE
+							teamToolCalls = toolResultCount === 0 ? E2E_MOCK_BETA_TEAM_CALLS : []
+						} else if (hasToolResult && isOversizedRequest) {
 							responseText = E2E_MOCK_API_RESPONSES.OVERSIZED_REQUEST_COMPLETE
 						} else if (hasToolResult) {
 							responseText = E2E_MOCK_API_RESPONSES.EDIT_REQUEST_COMPLETE
@@ -620,8 +722,9 @@ export class ClineApiServerMock {
 								: E2E_MOCK_EDITOR_TOOL_CALL
 							const argumentsJson = JSON.stringify(toolCallSource.arguments)
 							const argsSplitAt = Math.floor(argumentsJson.length / 2)
-							const toolCallDeltas =
-								includeEditorToolCall || includeOversizedEditorToolCall
+							const toolCallDeltas = teamToolCalls.length
+								? buildTeamToolCallDeltas(teamToolCalls)
+								: includeEditorToolCall || includeOversizedEditorToolCall
 									? [
 											[
 												{
@@ -696,7 +799,8 @@ export class ClineApiServerMock {
 											{
 												index: 0,
 												delta: {},
-												finish_reason: includeEditorToolCall ? "tool_calls" : "stop",
+												finish_reason:
+													includeEditorToolCall || teamToolCalls.length > 0 ? "tool_calls" : "stop",
 											},
 										],
 										usage: {
@@ -709,9 +813,28 @@ export class ClineApiServerMock {
 									res.write(`data: ${JSON.stringify(finalChunk)}\n\n`)
 									res.write("data: [DONE]\n\n")
 									res.end()
+									log("STREAM DONE", {
+										firstUser: firstUserText.slice(0, 40),
+										toolResultCount,
+										tools: teamToolCalls.map((c) => c.name),
+									})
 								}
 							}
 
+							let streamFinished = false
+							res.on("close", () => {
+								if (!streamFinished) {
+									log("STREAM ABORTED BY CLIENT", {
+										firstUser: firstUserText.slice(0, 40),
+										toolResultCount,
+										chunkIndex,
+									})
+								}
+							})
+							const markFinished = () => {
+								streamFinished = true
+							}
+							res.once("finish", markFinished)
 							sendChunk()
 							return
 						}
