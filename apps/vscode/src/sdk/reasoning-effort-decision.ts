@@ -77,12 +77,14 @@ async function findModelControls(sdkProviderId: string, modelId: string): Promis
 
 /**
  * The merged map, asked of the host once per provider and remembered briefly:
- * the webview asks on every hover and the merge is not free. The TTL keeps a
- * long-lived panel from pinning a stale catalog after the host refreshes one.
+ * the webview asks on every hover and the merge is not free (a cold live-catalog
+ * fetch can take seconds). The minute keeps a hover storm — or a re-ask across a
+ * Thinking toggle — from re-resolving mid-interaction while still letting a
+ * long-lived panel pick up a refreshed catalog.
  */
 const modelsCache = new Map<string, { expiresAt: number; models: Awaited<ReturnType<typeof resolveSessionKnownModels>> }>()
 const modelsInFlight = new Map<string, Promise<Awaited<ReturnType<typeof resolveSessionKnownModels>>>>()
-const MODELS_CACHE_TTL_MS = 15_000
+const MODELS_CACHE_TTL_MS = 60_000
 
 /** Test seam: forget every merged map (so cases can choose their catalog world). */
 export function clearReasoningEffortModelCache(): void {
