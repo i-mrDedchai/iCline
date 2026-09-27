@@ -29,6 +29,7 @@ import {
 import {
 	createBuiltinTools,
 	DEFAULT_MODEL_TOOL_ROUTING_RULES,
+	mergeExtraTools,
 	type RunCommandExecutionController,
 	resolveToolPresetName,
 	resolveToolRoutingConfig,
@@ -658,22 +659,29 @@ export class DefaultRuntimeBuilder implements RuntimeBuilder {
 							createSubAgentTools: (agent) =>
 								normalized.enableTools
 									? filterToolsForConfiguredAgent(
-											createBuiltinToolsList(
-												config.cwd,
-												agent.providerId ?? config.providerId,
-												normalized.mode,
-												agent.modelId ?? config.modelId,
-												config.toolRoutingRules,
-												effectiveToolPolicies,
-												agent.skills !== undefined &&
-													userInstructionService?.createSkillsExecutor
-													? userInstructionService.createSkillsExecutor(
-															agent.skills,
-														)
-													: undefined,
-												toolExecutors,
-												telemetry ?? config.telemetry,
-												input.runCommandExecutionController,
+											// Host extra tools (terminal-backed `run_commands`,
+											// MCP tools, `attempt_completion`) belong to the
+											// session's tool surface — delegated agents need
+											// them too or they work without a terminal.
+											mergeExtraTools(
+												createBuiltinToolsList(
+													config.cwd,
+													agent.providerId ?? config.providerId,
+													normalized.mode,
+													agent.modelId ?? config.modelId,
+													config.toolRoutingRules,
+													effectiveToolPolicies,
+													agent.skills !== undefined &&
+														userInstructionService?.createSkillsExecutor
+														? userInstructionService.createSkillsExecutor(
+																agent.skills,
+															)
+														: undefined,
+													toolExecutors,
+													telemetry ?? config.telemetry,
+													input.runCommandExecutionController,
+												),
+												config.extraTools,
 											),
 											agent,
 										)
@@ -758,17 +766,23 @@ export class DefaultRuntimeBuilder implements RuntimeBuilder {
 
 				const createBaseToolsForTeam = normalized.enableTools
 					? () =>
-							createBuiltinToolsList(
-								config.cwd,
-								config.providerId,
-								normalized.mode,
-								config.modelId,
-								config.toolRoutingRules,
-								effectiveToolPolicies,
-								undefined,
-								toolExecutors,
-								telemetry ?? config.telemetry,
-								input.runCommandExecutionController,
+							// Same terminal/MCP gap as sub-agents: the host's
+							// extraTools are the session's tool surface and must
+							// reach teammates as well.
+							mergeExtraTools(
+								createBuiltinToolsList(
+									config.cwd,
+									config.providerId,
+									normalized.mode,
+									config.modelId,
+									config.toolRoutingRules,
+									effectiveToolPolicies,
+									undefined,
+									toolExecutors,
+									telemetry ?? config.telemetry,
+									input.runCommandExecutionController,
+								),
+								config.extraTools,
 							)
 					: undefined;
 

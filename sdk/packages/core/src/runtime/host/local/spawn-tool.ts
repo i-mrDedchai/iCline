@@ -1,6 +1,13 @@
-import type { AgentEvent, AgentTool } from "@cline/shared";
+import type {
+	AgentConfig,
+	AgentEvent,
+	AgentTool,
+	ToolApprovalRequest,
+	ToolApprovalResult,
+} from "@cline/shared";
 import {
 	createBuiltinTools,
+	mergeExtraTools,
 	resolveToolPresetName,
 	type ToolExecutors,
 	ToolPresets,
@@ -23,6 +30,16 @@ export type SubAgentStartTracker = Map<
 	string,
 	{ startedAt: number; rootSessionId: string }
 >;
+
+/** Approval wiring forwarded to spawned sub-agents so they honor the same
+ * per-tool auto-approval settings as the main agent instead of running every
+ * tool unapproved. */
+export interface SubAgentApprovalOptions {
+	toolPolicies?: AgentConfig["toolPolicies"];
+	requestToolApproval?: (
+		request: ToolApprovalRequest,
+	) => Promise<ToolApprovalResult> | ToolApprovalResult;
+}
 
 export interface SpawnToolDeps {
 	getSession(sessionId: string): ActiveSession | undefined;
@@ -123,6 +140,7 @@ export function createSessionSpawnTool(
 	config: CoreSessionConfig,
 	rootSessionId: string,
 	toolExecutors?: Partial<ToolExecutors>,
+	approval?: SubAgentApprovalOptions,
 ): AgentTool {
 	const lifecycle = createSessionSubAgentLifecycleCallbacks(
 		deps,
@@ -140,10 +158,23 @@ export function createSessionSpawnTool(
 			: [];
 		if (config.enableSpawnAgent) {
 			tools.push(
-				createSessionSpawnTool(deps, config, rootSessionId, toolExecutors),
+				createSessionSpawnTool(
+					deps,
+					config,
+					rootSessionId,
+					toolExecutors,
+					approval,
+				),
 			);
 		}
-		return filterDisabledTools(tools);
+		// Host extra tools (VS Code's terminal-backed `run_commands`,
+		// `attempt_completion`, MCP tools) are part of the session's tool surface:
+		// without them a sub-agent has no terminal at all — the built-in shell tool
+		// is suppressed on hosts that replace it via extraTools, and the
+		// replacement never reached delegated agents.
+		return filterDisabledTools(
+			mergeExtraTools(tools, config.extraTools),
+		);
 	};
 
 	return createSpawnAgentTool({
@@ -183,6 +214,12 @@ export function createSessionSpawnTool(
 			updateConnectionDefaults: () => {},
 		},
 		createSubAgentTools,
+		// Sub-agent tool calls follow the session's approval policy — otherwise
+		// delegated tools silently bypass the user's auto-approval settings.
+		...(approval?.toolPolicies ? { toolPolicies: approval.toolPolicies } : {}),
+		...(approval?.requestToolApproval
+			? { requestToolApproval: approval.requestToolApproval }
+			: {}),
 		// Team budget's per-turn token cap reaches sub-agents too: they are the
 		// other way a session multiplies its spend.
 		...(config.teamBudget && config.teamBudget.maxTokensPerTurn > 0

@@ -223,3 +223,24 @@ export function createBuiltinTools(
 		executors,
 	});
 }
+
+/**
+ * Merge a host's `extraTools` into a tool list. Extra tools are the session's
+ * host-supplied tool surface (terminal-backed `run_commands`, `attempt_completion`,
+ * MCP tools): delegated agents need them too, or they run without a terminal on
+ * hosts that replace the built-in shell tool. Same-named built-ins step aside —
+ * an extra tool with that name is the host's deliberate replacement.
+ */
+export function mergeExtraTools(
+	tools: readonly AgentTool[],
+	extraTools: readonly AgentTool[] | undefined,
+): AgentTool[] {
+	if (!extraTools || extraTools.length === 0) {
+		return [...tools];
+	}
+	const extraNames = new Set(extraTools.map((tool) => tool.name));
+	return [
+		...tools.filter((tool) => !extraNames.has(tool.name)),
+		...extraTools,
+	];
+}

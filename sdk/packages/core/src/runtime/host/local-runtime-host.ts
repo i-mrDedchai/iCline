@@ -612,6 +612,13 @@ export class LocalRuntimeHost implements RuntimeHost {
 					bootstrap.config,
 					sessionId,
 					sessionToolExecutors,
+					// Sub-agent tool calls honor the session's approval policy
+					// (the same raw callback team mates and configured agents
+					// receive) instead of bypassing auto-approval settings.
+					{
+						toolPolicies: bootstrap.toolPolicies,
+						requestToolApproval: bootstrap.requestToolApproval,
+					},
 				),
 			createSubAgentLifecycleCallbacks: (config) =>
 				createSessionSubAgentLifecycleCallbacks(
