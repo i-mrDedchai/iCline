@@ -146,7 +146,16 @@ export function buildDelegatedAgentConfig(
 		extensions: runtimeConfig.extensions,
 		hookErrorMode: options.hookErrorMode,
 		toolPolicies: options.toolPolicies,
-		requestToolApproval: options.requestToolApproval,
+		// Stamp delegated approval requests with their caller kind so the host's
+		// auto-approval rules can treat teammate/sub-agent work differently from
+		// the session's own tool calls (e.g. team reads vs team writes).
+		requestToolApproval: options.requestToolApproval
+			? (request) =>
+					options.requestToolApproval!({
+						...request,
+						callerKind: options.kind,
+					})
+			: undefined,
 		logger: runtimeConfig.logger,
 		role: options.role,
 	};

@@ -1020,4 +1020,43 @@ describe("spawnTeamTeammate", () => {
 		expect(captured[0].config.modelId).toBe("gpt-5.6");
 		expect(captured[0].config.providerId).toBe("openai");
 	});
+
+	it("threads the session's tool policies and approval callback into the teammate config", () => {
+		const runtime = new AgentTeamsRuntime({ teamName: "panel-team" });
+		const captured: Array<{
+			config: {
+				toolPolicies?: Record<string, { enabled?: boolean; autoApprove?: boolean }>;
+				requestToolApproval?: unknown;
+			};
+		}> = [];
+		const originalSpawn = runtime.spawnTeammate.bind(runtime);
+		runtime.spawnTeammate = (options) => {
+			captured.push(options as never);
+			return originalSpawn(options);
+		};
+		const toolPolicies = { editor: { enabled: true, autoApprove: false } };
+		const requestToolApproval = vi.fn(async () => ({ approved: true }));
+
+		spawnTeamTeammate({
+			runtime,
+			requesterId: "lead",
+			teammateConfigProvider: createDelegatedAgentConfigProvider({
+				providerId: "anthropic",
+				modelId: "claude-sonnet-4-5",
+			}),
+			createBaseTools: () => [],
+			toolPolicies,
+			requestToolApproval,
+			spec: {
+				agentId: "bench",
+				rolePrompt: "benchmark owner",
+			},
+		});
+
+		expect(captured).toHaveLength(1);
+		// Without these the teammate runs with every tool auto-approved: the
+		// session's policy map and approval callback must reach the teammate.
+		expect(captured[0].config.toolPolicies).toEqual(toolPolicies);
+		expect(captured[0].config.requestToolApproval).toBeTypeOf("function");
+	});
 });

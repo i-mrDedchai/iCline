@@ -385,6 +385,7 @@ export class Controller {
 					autoApprovalSettings,
 					this.mcpHub,
 					this.stateManager.getGlobalSettingsKey("yoloModeToggled") === true,
+					request.callerKind,
 				)
 			},
 		})

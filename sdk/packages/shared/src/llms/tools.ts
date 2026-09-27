@@ -79,6 +79,13 @@ export interface ToolApprovalRequest {
 	toolName: string;
 	input: unknown;
 	policy: ToolPolicy;
+	/**
+	 * Who is making the call: the session's own agent (default when absent), or
+	 * an agent a host delegated work to. Hosts use it to apply different
+	 * auto-approval rules to delegated work (e.g. allow a teammate's reads but
+	 * keep its writes behind approval).
+	 */
+	callerKind?: "session" | "teammate" | "subagent";
 }
 
 export interface ToolApprovalResult {

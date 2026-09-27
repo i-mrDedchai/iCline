@@ -15,6 +15,8 @@ export interface ToolApprovalRequest {
 	toolName: string
 	input: unknown
 	policy: { enabled?: boolean; autoApprove?: boolean }
+	/** The session's own agent (default when absent) or a delegated agent. */
+	callerKind?: "session" | "teammate" | "subagent"
 }
 
 export interface SdkInteractionCoordinatorOptions {

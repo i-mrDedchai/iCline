@@ -52,6 +52,8 @@ message AutoApprovalActions {
   optional bool execute_all_commands = 6;
   optional bool use_browser = 7;
   optional bool use_mcp = 8;
+  optional bool team_reads = 9;
+  optional bool team_writes = 10;
 }
 
 // Auto approval settings for task execution

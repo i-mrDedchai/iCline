@@ -79,3 +79,69 @@ describe("buildDelegatedAgentConfig", () => {
 		expect(config.sessionId).toBeUndefined();
 	});
 });
+
+describe("delegated approval requests", () => {
+	it("stamps approval requests from delegated agents with their caller kind", async () => {
+		const configProvider = createDelegatedAgentConfigProvider({
+			providerId: "anthropic",
+			modelId: "claude-sonnet-4-5",
+		});
+		const seen: Array<{ toolName: string; callerKind?: string }> = [];
+
+		const config = buildDelegatedAgentConfig({
+			kind: "teammate",
+			prompt: "own the benchmarks",
+			tools: [],
+			configProvider,
+			requestToolApproval: async (request) => {
+				seen.push({ toolName: request.toolName, callerKind: request.callerKind });
+				return { approved: true };
+			},
+		});
+
+		await config.requestToolApproval!({
+			sessionId: "sess-1",
+			agentId: "agent-1",
+			conversationId: "conv-1",
+			iteration: 1,
+			toolCallId: "call-1",
+			toolName: "editor",
+			input: {},
+			policy: { autoApprove: false },
+		});
+
+		expect(seen).toEqual([{ toolName: "editor", callerKind: "teammate" }]);
+	});
+
+	it("stamps sub-agent approval requests as subagent", async () => {
+		const configProvider = createDelegatedAgentConfigProvider({
+			providerId: "anthropic",
+			modelId: "claude-sonnet-4-5",
+		});
+		const seen: Array<{ callerKind?: string }> = [];
+
+		const config = buildDelegatedAgentConfig({
+			kind: "subagent",
+			prompt: "review the diff",
+			tools: [],
+			configProvider,
+			requestToolApproval: async (request) => {
+				seen.push({ callerKind: request.callerKind });
+				return { approved: true };
+			},
+		});
+
+		await config.requestToolApproval!({
+			sessionId: "sess-1",
+			agentId: "agent-2",
+			conversationId: "conv-2",
+			iteration: 1,
+			toolCallId: "call-2",
+			toolName: "read_files",
+			input: {},
+			policy: { autoApprove: false },
+		});
+
+		expect(seen).toEqual([{ callerKind: "subagent" }]);
+	});
+});

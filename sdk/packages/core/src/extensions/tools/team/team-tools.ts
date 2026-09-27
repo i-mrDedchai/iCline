@@ -73,6 +73,7 @@ import {
 } from "@cline/shared";
 import {
 	buildDelegatedAgentConfig,
+	type BuildDelegatedAgentConfigOptions,
 	type DelegatedAgentConfigProvider,
 	type DelegatedAgentRuntimeConfig,
 } from "./delegated-agent";
@@ -172,6 +173,13 @@ export interface CreateAgentTeamsToolsOptions {
 	includeSpawnTool?: boolean;
 	includeManagementTools?: boolean;
 	onLeadToolsUnlocked?: (tools: AgentTool[]) => void;
+	/**
+	 * The session's tool policies and approval callback, threaded into every
+	 * teammate config. Without them a teammate runs with all tools
+	 * auto-approved, outside the session's auto-approval rules entirely.
+	 */
+	toolPolicies?: BuildDelegatedAgentConfigOptions["toolPolicies"];
+	requestToolApproval?: BuildDelegatedAgentConfigOptions["requestToolApproval"];
 }
 
 export interface BootstrapAgentTeamsOptions {
@@ -184,6 +192,8 @@ export interface BootstrapAgentTeamsOptions {
 	includeLeadSpawnTool?: boolean;
 	includeLeadManagementTools?: boolean;
 	onLeadToolsUnlocked?: (tools: AgentTool[]) => void;
+	toolPolicies?: BuildDelegatedAgentConfigOptions["toolPolicies"];
+	requestToolApproval?: BuildDelegatedAgentConfigOptions["requestToolApproval"];
 }
 
 export interface BootstrapAgentTeamsResult {
@@ -247,6 +257,8 @@ export function spawnTeamTeammate(
 			maxIterations: options.spec.maxIterations,
 			modelId: options.spec.modelId,
 			providerId: options.spec.providerId,
+			toolPolicies: options.toolPolicies,
+			requestToolApproval: options.requestToolApproval,
 			cwd: options.teammateConfigProvider.getRuntimeConfig().cwd,
 		}),
 	});
@@ -267,6 +279,8 @@ export function bootstrapAgentTeams(
 		includeSpawnTool: options.includeLeadSpawnTool,
 		includeManagementTools: options.includeLeadManagementTools,
 		onLeadToolsUnlocked: options.onLeadToolsUnlocked,
+		toolPolicies: options.toolPolicies,
+		requestToolApproval: options.requestToolApproval,
 	});
 
 	const restoredTeammates: string[] = [];
@@ -279,6 +293,8 @@ export function bootstrapAgentTeams(
 			requesterId: leadAgentId,
 			teammateConfigProvider: options.teammateConfigProvider,
 			createBaseTools: options.createBaseTools,
+			toolPolicies: options.toolPolicies,
+			requestToolApproval: options.requestToolApproval,
 			spec,
 		});
 		restoredTeammates.push(spec.agentId);
@@ -325,6 +341,8 @@ export function createAgentTeamsTools(
 						requesterId: options.requesterId,
 						teammateConfigProvider: options.teammateConfigProvider,
 						createBaseTools: options.createBaseTools,
+						toolPolicies: options.toolPolicies,
+						requestToolApproval: options.requestToolApproval,
 						spec,
 					});
 					if (!includeManagementTools) {

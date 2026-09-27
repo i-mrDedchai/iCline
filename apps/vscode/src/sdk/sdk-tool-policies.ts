@@ -11,37 +11,47 @@ import type { McpHub } from "@/services/mcp/McpHub"
  * active sessions in sync when the user toggles auto-approval mid-task.
  */
 /**
- * Sub-agent and team tools: `spawn_agent` runs a whole sub-agent and the
- * `team_*` tools manage teammates, tasks, mailboxes and outcomes. The SDK
- * auto-approves tools this map does not list, so they must be listed the moment
- * the feature settings can enable them — otherwise a spawn or a teammate
- * message would happen without a single prompt. They carry no auto-approve
- * switch on purpose: without YOLO the live guard (`isToolAutoApproved`) answers
- * no for them, so every call asks. Mirrors `TEAM_TOOL_NAMES` in
- * @cline/core `extensions/tools/team/team-tools.ts`, kept literal because this
- * layer cannot import core as a value in tests.
+ * Sub-agent and team tools split by mutability: `spawn_agent` runs a whole
+ * sub-agent and the `team_*` tools manage teammates, tasks, mailboxes and
+ * outcomes. The SDK auto-approves tools the policy map does not list, so they
+ * must be listed the moment the feature settings can enable them — otherwise a
+ * spawn or a teammate message would happen without a single prompt. The live
+ * guard (`isToolAutoApproved`) decides via the team reads / team writes
+ * switches (or YOLO). Mirrors `TEAM_TOOL_NAMES` in @cline/core
+ * `extensions/tools/team/team-tools.ts`, kept literal because this layer cannot
+ * import core as a value in tests.
  */
-const SUB_AGENT_AND_TEAM_TOOLS = [
+/** Read-only team tools: inspect state, never change it. Governed by team reads. */
+const TEAM_READ_TOOLS = [
+	"team_status",
+	"team_list_runs",
+	"team_await_runs",
+	"team_read_mailbox",
+	"team_mission_log",
+	"team_list_outcomes",
+]
+
+/**
+ * Mutating team tools: spawn/shutdown agents, run and cancel work, send mail,
+ * write tasks and outcomes. Governed by team writes.
+ */
+const TEAM_WRITE_TOOLS = [
 	"spawn_agent",
 	"team_spawn_teammate",
 	"team_shutdown_teammate",
-	"team_status",
 	"team_task",
 	"team_run_task",
 	"team_cancel_run",
-	"team_list_runs",
-	"team_await_runs",
 	"team_send_message",
 	"team_broadcast",
-	"team_read_mailbox",
-	"team_mission_log",
 	"team_cleanup",
 	"team_create_outcome",
 	"team_attach_outcome_fragment",
 	"team_review_outcome_fragment",
 	"team_finalize_outcome",
-	"team_list_outcomes",
 ]
+
+const SUB_AGENT_AND_TEAM_TOOLS = [...TEAM_READ_TOOLS, ...TEAM_WRITE_TOOLS]
 
 export function buildToolPolicies(
 	_settings: AutoApprovalSettings,
@@ -88,15 +98,40 @@ export function buildToolPolicies(
  * approval callback, so changes from the AutoApproveBar are respected even if
  * an SDK session was created before the toggle changed.
  */
+export type ToolCallerKind = "session" | "teammate" | "subagent"
+
 export function isToolAutoApproved(
 	toolName: string,
 	settings: AutoApprovalSettings,
 	mcpHub?: McpHub,
 	/** YOLO mode bypasses every per-action toggle. */
 	yoloMode = false,
+	/**
+	 * Who is calling: the session's own agent (default) or an agent the session
+	 * delegated work to. Delegated calls follow the team reads/writes switches
+	 * instead of the session's own read/edit switches.
+	 */
+	callerKind: ToolCallerKind = "session",
 ): boolean {
 	if (yoloMode) {
 		return true
+	}
+	// The team tools and spawn_agent are split by mutability for every caller:
+	// managing a team is not the same risk as reading its status.
+	if (TEAM_READ_TOOLS.includes(toolName)) {
+		return !!settings.actions.teamReads
+	}
+	if (TEAM_WRITE_TOOLS.includes(toolName)) {
+		return !!settings.actions.teamWrites
+	}
+	if (callerKind === "teammate" || callerKind === "subagent") {
+		// Delegated work: reads (files, search, web) pass with team reads;
+		// writes and anything whose mutability is unknown (MCP tools) stay behind
+		// team writes, so a team of agents cannot flood the workspace unnoticed.
+		if (isReadTool(toolName) || isBrowserTool(toolName)) {
+			return !!settings.actions.teamReads
+		}
+		return !!settings.actions.teamWrites
 	}
 	if (isReadTool(toolName)) {
 		return !!settings.actions.readFiles

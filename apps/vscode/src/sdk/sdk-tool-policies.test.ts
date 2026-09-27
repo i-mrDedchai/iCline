@@ -95,11 +95,93 @@ describe("auto-approve matrix — every menu switch maps to the tools it governs
 	})
 
 	it("leaves a tool the menu does not govern to the SDK's own default", () => {
-		// ask_question and spawn_agent have no switch, so the settings must not
-		// claim to decide them: the SDK decides, and the guard answers no.
+		// ask_question has no switch, so the settings must not claim to decide it:
+		// the SDK decides, and the guard answers no. spawn_agent has a switch now
+		// (team writes) and this settings object leaves it off, so it also answers no.
 		const everythingOn = settingsWithOnly("readFiles")
 		expect(isToolAutoApproved("ask_question", everythingOn)).toBe(false)
 		expect(isToolAutoApproved("spawn_agent", everythingOn)).toBe(false)
+	})
+})
+
+// Multi-agent work is where approval fatigue and runaway writes both live: a
+// team of agents multiplies every prompt and every write. The team switches
+// split that surface by mutability — reads pass freely, writes stay behind the
+// switch — and they govern delegated agents' plain tools too, not just the
+// team_* management tools.
+describe("granular team auto-approve — reads vs writes", () => {
+	function teamSettings(overrides: Partial<AutoApprovalSettings["actions"]>): AutoApprovalSettings {
+		return {
+			...DEFAULT_AUTO_APPROVAL_SETTINGS,
+			actions: {
+				...DEFAULT_AUTO_APPROVAL_SETTINGS.actions,
+				readFiles: false,
+				editFiles: false,
+				executeSafeCommands: false,
+				useBrowser: false,
+				useMcp: false,
+				...overrides,
+			},
+		}
+	}
+
+	it("lets a teammate's reads through with team reads on but keeps its writes asking", () => {
+		const settings = teamSettings({ teamReads: true, teamWrites: false })
+
+		expect(isToolAutoApproved("read_files", settings, undefined, false, "teammate")).toBe(true)
+		expect(isToolAutoApproved("search_codebase", settings, undefined, false, "teammate")).toBe(true)
+		expect(isToolAutoApproved("editor", settings, undefined, false, "teammate")).toBe(false)
+		expect(isToolAutoApproved("run_commands", settings, undefined, false, "teammate")).toBe(false)
+	})
+
+	it("approves delegated writes only when team writes is on", () => {
+		const settings = teamSettings({ teamReads: true, teamWrites: true })
+
+		expect(isToolAutoApproved("editor", settings, undefined, false, "teammate")).toBe(true)
+		expect(isToolAutoApproved("run_commands", settings, undefined, false, "subagent")).toBe(true)
+		expect(isToolAutoApproved("editor", settings, undefined, false, "subagent")).toBe(true)
+	})
+
+	it("treats a delegated web fetch as a read", () => {
+		const readsOn = teamSettings({ teamReads: true, teamWrites: false })
+		const readsOff = teamSettings({ teamReads: false, teamWrites: true })
+
+		expect(isToolAutoApproved("fetch_web_content", readsOn, undefined, false, "teammate")).toBe(true)
+		expect(isToolAutoApproved("web_search", readsOn, undefined, false, "subagent")).toBe(true)
+		expect(isToolAutoApproved("fetch_web_content", readsOff, undefined, false, "teammate")).toBe(false)
+	})
+
+	it("splits the lead's team tools into reads and writes", () => {
+		const readsOnly = teamSettings({ teamReads: true, teamWrites: false })
+		const writesOnly = teamSettings({ teamReads: false, teamWrites: true })
+
+		expect(isToolAutoApproved("team_status", readsOnly, undefined, false)).toBe(true)
+		expect(isToolAutoApproved("team_read_mailbox", readsOnly, undefined, false)).toBe(true)
+		expect(isToolAutoApproved("team_list_runs", readsOnly, undefined, false)).toBe(true)
+		expect(isToolAutoApproved("team_send_message", readsOnly, undefined, false)).toBe(false)
+		expect(isToolAutoApproved("spawn_agent", readsOnly, undefined, false)).toBe(false)
+
+		expect(isToolAutoApproved("team_send_message", writesOnly, undefined, false)).toBe(true)
+		expect(isToolAutoApproved("team_spawn_teammate", writesOnly, undefined, false)).toBe(true)
+		expect(isToolAutoApproved("spawn_agent", writesOnly, undefined, false)).toBe(true)
+		expect(isToolAutoApproved("team_status", writesOnly, undefined, false)).toBe(false)
+	})
+
+	it("keeps the session's own tools on their per-action switches", () => {
+		const settings = teamSettings({ teamReads: true, teamWrites: false, editFiles: true })
+
+		// No callerKind means the session's own agent: the team switches must not
+		// widen what the read/edit switches govern.
+		expect(isToolAutoApproved("editor", settings, undefined, false)).toBe(true)
+		expect(isToolAutoApproved("read_files", settings, undefined, false)).toBe(false)
+		expect(isToolAutoApproved("run_commands", settings, undefined, false, "session")).toBe(false)
+	})
+
+	it("lets YOLO override the team switches like every other switch", () => {
+		const settings = teamSettings({ teamReads: false, teamWrites: false })
+
+		expect(isToolAutoApproved("editor", settings, undefined, true, "teammate")).toBe(true)
+		expect(isToolAutoApproved("team_send_message", settings, undefined, true)).toBe(true)
 	})
 })
 
@@ -107,8 +189,8 @@ describe("auto-approve matrix — every menu switch maps to the tools it governs
 // tasks, mailboxes and outcomes. The SDK auto-approves tools the policy map
 // does not list, so leaving them out would let a spawn or a teammate message
 // happen without a single prompt the moment the feature settings enable them.
-// They carry no menu switch on purpose: the policy map governs them (ask unless
-// YOLO is on), matching the live guard, which already answers no for them.
+// The policy map defers every one of them to the live guard, which decides via
+// the team reads/writes switches (or YOLO).
 describe("sub-agent and team tools are governed, never silently auto-approved", () => {
 	const SUB_AGENT_AND_TEAM_TOOLS = [
 		"spawn_agent",

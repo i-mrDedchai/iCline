@@ -20,6 +20,8 @@ export interface AutoApprovalSettings {
 		executeAllCommands?: boolean // Legacy field - kept for backward compatibility with older extension versions
 		useBrowser: boolean // Use browser
 		useMcp: boolean // Use MCP servers
+		teamReads?: boolean // Auto-approve read-only calls from teammates/sub-agents and the read-only team tools
+		teamWrites?: boolean // Auto-approve write-type calls from teammates/sub-agents (edits, commands) and the mutating team tools
 	}
 	// Global settings
 	enableNotifications: boolean // Show notifications for approval and task completion
@@ -39,6 +41,11 @@ export const DEFAULT_AUTO_APPROVAL_SETTINGS: AutoApprovalSettings = {
 		executeAllCommands: true,
 		useBrowser: true,
 		useMcp: true,
+		// Reads pass freely inside a team (as readFiles does for the session's own
+		// agent); writes stay behind the switch so a team of agents cannot flood the
+		// workspace with changes nobody agreed to.
+		teamReads: true,
+		teamWrites: false,
 	},
 	enableNotifications: false,
 }
