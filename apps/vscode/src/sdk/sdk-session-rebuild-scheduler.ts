@@ -5,6 +5,14 @@ export type SessionRebuildReason = "provider" | "mcpTools" | "terminalExecutionM
 
 export interface SdkSessionRebuildSchedulerOptions {
 	sessions: Pick<SdkSessionLifecycle, "getActiveSession">
+	/**
+	 * Whether the session is mid-turn. `isRunning` alone is NOT an idle signal: it
+	 * is false while a tool executes (the gap between model streams), and a
+	 * rebuild drained at exactly that moment stops and replaces a session with a
+	 * turn in flight — killing the task mid-tool (the team e2e caught exactly
+	 * this). The turn's own lifecycle answers "is it safe to rebuild".
+	 */
+	isTurnInFlight: () => boolean
 }
 
 /** Serializes passive session rebuilds and drains them only while the session is idle. */
@@ -55,7 +63,13 @@ export class SdkSessionRebuildScheduler {
 
 	private drainIfIdle(): void {
 		const activeSession = this.options.sessions.getActiveSession()
-		if (this.drainInFlight || this.pending.size === 0 || !activeSession || activeSession.isRunning) {
+		if (
+			this.drainInFlight ||
+			this.pending.size === 0 ||
+			!activeSession ||
+			activeSession.isRunning ||
+			this.options.isTurnInFlight()
+		) {
 			return
 		}
 
@@ -66,7 +80,7 @@ export class SdkSessionRebuildScheduler {
 					this.pending.clear()
 					return
 				}
-				if (activeSession.isRunning) {
+				if (activeSession.isRunning || this.options.isTurnInFlight()) {
 					return
 				}
 

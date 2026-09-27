@@ -34,13 +34,65 @@ describe("SdkSessionRebuildScheduler", () => {
 	})
 
 	it("leaves pending work dormant when there is no active session", async () => {
-		const scheduler = new SdkSessionRebuildScheduler({ sessions: { getActiveSession: () => undefined } })
+		const scheduler = new SdkSessionRebuildScheduler({
+			sessions: { getActiveSession: () => undefined },
+			isTurnInFlight: () => false,
+		})
 		const rebuild = vi.fn().mockResolvedValue(undefined)
 
 		scheduler.request("provider", rebuild)
 		await Promise.resolve()
 
 		expect(rebuild).not.toHaveBeenCalled()
+	})
+
+	it("defers the drain while a turn is in flight even though isRunning is false", async () => {
+		// `isRunning` is false while a tool executes — the gap between model
+		// streams — so a queued rebuild drained at exactly that moment stopped and
+		// replaced a session mid-turn (the team e2e caught it killing the lead's
+		// task). The turn's own lifecycle is the idle signal, not `isRunning`.
+		const activeSession = { isRunning: false }
+		let turnInFlight = true
+		const scheduler = makeScheduler(activeSession, () => turnInFlight)
+		const rebuild = vi.fn().mockResolvedValue(undefined)
+
+		scheduler.request("provider", rebuild)
+		await Promise.resolve()
+		expect(rebuild).not.toHaveBeenCalled()
+
+		turnInFlight = false
+		scheduler.sessionBecameIdle()
+		await scheduler.waitUntilSettled()
+		expect(rebuild).toHaveBeenCalledOnce()
+	})
+
+	it("re-checks the turn between queued rebuilds", async () => {
+		// A turn can start while an earlier rebuild in the queue is running; the
+		// rest of the queue must wait for that turn instead of riding through it.
+		const activeSession = { isRunning: false }
+		let turnInFlight = false
+		const scheduler = makeScheduler(activeSession, () => turnInFlight)
+		let resolveFirst: () => void = () => {}
+		const first = vi.fn(
+			() =>
+				new Promise<void>((resolve) => {
+					resolveFirst = resolve
+				}),
+		)
+		const second = vi.fn().mockResolvedValue(undefined)
+
+		scheduler.request("mcpTools", first)
+		scheduler.request("terminalExecutionMode", second)
+		await vi.waitFor(() => expect(first).toHaveBeenCalledOnce())
+		turnInFlight = true
+		resolveFirst()
+		await scheduler.waitUntilSettled()
+		expect(second).not.toHaveBeenCalled()
+
+		turnInFlight = false
+		scheduler.sessionBecameIdle()
+		await scheduler.waitUntilSettled()
+		expect(second).toHaveBeenCalledOnce()
 	})
 
 	it("serializes rebuilds for different reasons", async () => {
@@ -88,12 +140,13 @@ describe("SdkSessionRebuildScheduler", () => {
 	})
 })
 
-function makeScheduler(activeSession: { isRunning: boolean }) {
+function makeScheduler(activeSession: { isRunning: boolean }, isTurnInFlight: () => boolean = () => false) {
 	return new SdkSessionRebuildScheduler({
 		sessions: {
 			getActiveSession: () =>
 				activeSession as ReturnType<SdkSessionRebuildSchedulerOptions["sessions"]["getActiveSession"]>,
 		},
+		isTurnInFlight,
 	})
 }
 

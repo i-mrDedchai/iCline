@@ -87,6 +87,32 @@ describe("SdkTerminalExecutionModeCoordinator", () => {
 		expect(options.rebuilds.request).toHaveBeenCalledWith("terminalExecutionMode", expect.any(Function))
 	})
 
+	it("re-defers when a turn starts during restart preparation", async () => {
+		// `isRunning` is false mid-tool — the gap between model streams — so a
+		// guard on it alone let a restart stop a session with a turn in flight
+		// (the team e2e caught it killing the lead's task). The turn's lifecycle
+		// is the signal.
+		const activeSession = makeActiveSession()
+		let turnInFlight = false
+		const { coordinator, options } = makeCoordinator({ activeSession, isTurnInFlight: () => turnInFlight })
+		let resolveBuild: (() => void) | undefined
+		options.sessionConfigBuilder.build.mockImplementationOnce(
+			() =>
+				new Promise((resolve) => {
+					resolveBuild = () => resolve({ providerId: "anthropic", modelId: "claude", apiKey: "key" })
+				}),
+		)
+
+		const restart = coordinator.restartSessionForTerminalExecutionMode()
+		await waitFor(() => resolveBuild !== undefined)
+		turnInFlight = true
+		resolveBuild?.()
+		await restart
+		expect(options.sessions.replaceActiveSession).not.toHaveBeenCalled()
+
+		expect(options.rebuilds.request).toHaveBeenCalledWith("terminalExecutionMode", expect.any(Function))
+	})
+
 	it("does not queue an agent-tools rebuild without an active session", () => {
 		// Regression guard (team e2e): toggling Sub-agents / Agent Teams before a
 		// task used to queue a session rebuild that drained mid-task and stopped
@@ -166,6 +192,7 @@ function makeCoordinator(input: Partial<MakeCoordinatorInput> = {}) {
 		loadInitialMessages: vi.fn().mockResolvedValue([{ role: "user", content: "hello" }]),
 		buildStartSessionInput: vi.fn(() => ({ prompt: "start" })),
 		postStateToWebview: vi.fn().mockResolvedValue(undefined),
+		isTurnInFlight: () => input.isTurnInFlight?.() ?? false,
 		rebuilds: {
 			request: vi.fn((_reason: string, rebuild: () => Promise<void>) => {
 				if (!initialRebuildScheduled && !activeSession?.isRunning) {
@@ -218,6 +245,7 @@ interface MakeCoordinatorInput {
 	activeSession?: ReturnType<typeof makeActiveSession>
 	mode?: "plan" | "act"
 	terminalMode?: "vscodeTerminal" | "backgroundExec"
+	isTurnInFlight?: () => boolean
 }
 
 async function waitFor(predicate: () => boolean): Promise<void> {

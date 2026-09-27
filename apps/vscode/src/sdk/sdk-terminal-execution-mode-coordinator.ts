@@ -24,6 +24,12 @@ export interface SdkTerminalExecutionModeCoordinatorOptions {
 	buildStartSessionInput: (config: SessionConfig, input: { cwd: string; mode: Mode }) => StartInput
 	postStateToWebview: () => Promise<void>
 	rebuilds: Pick<SdkSessionRebuildScheduler, "request">
+	/**
+	 * Whether the session is mid-turn. `isRunning` alone is false while a tool
+	 * executes (the gap between model streams), so the restart's re-check must
+	 * also read the turn's lifecycle before stopping and replacing the session.
+	 */
+	isTurnInFlight?: () => boolean
 }
 
 export class SdkTerminalExecutionModeCoordinator {
@@ -98,7 +104,7 @@ export class SdkTerminalExecutionModeCoordinator {
 				Logger.log(`[SdkController] Active session changed during terminal mode restart (was ${oldSessionId}); aborting`)
 				return
 			}
-			if (currentSession !== activeSession || currentSession.isRunning) {
+			if (currentSession !== activeSession || currentSession.isRunning || this.options.isTurnInFlight?.()) {
 				Logger.log(
 					`[SdkController] Active session changed or started running during terminal mode restart (was ${oldSessionId}); deferring`,
 				)

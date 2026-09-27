@@ -96,7 +96,7 @@ import {
 import { StatePostDebouncer } from "./state-post-debouncer"
 import { createTaskProxy, type TaskProxy } from "./task-proxy"
 import { syncTelemetrySettingFromSharedGlobalSettings } from "./telemetry-settings-sync"
-import { TurnStateTracker } from "./turn-state-tracker"
+import { isTurnInFlightPhase, TurnStateTracker } from "./turn-state-tracker"
 import { VscodeSessionHost } from "./vscode-session-host"
 import type { VscodeTerminalExecutionMode } from "./vscode-terminal-execution-mode"
 import { WebviewGrpcBridge } from "./webview-grpc-bridge"
@@ -321,7 +321,12 @@ export class Controller {
 		// Initialize message translator state
 		this.messageTranslatorState = new MessageTranslatorState(undefined, () => this.getActiveProviderId())
 		// Authoritative UI-mode tracker, sharing the one id/seq/epoch authority.
-		this.turnStateTracker = new TurnStateTracker(this.messageTranslatorState.getMinter())
+		// Every phase change re-evaluates deferred passive rebuilds: a phase that
+		// cleared the turn is exactly when one becomes safe, and the scheduler's
+		// gate decides — no need to reason about transitions here.
+		this.turnStateTracker = new TurnStateTracker(this.messageTranslatorState.getMinter(), () =>
+			this.sessionRebuilds?.sessionBecameIdle(),
+		)
 		this.messages = new SdkMessageCoordinator({
 			getTask: () => this.task,
 			// Stamp seq/epoch on every message flowing to the webview from the shared authority.
@@ -506,7 +511,10 @@ export class Controller {
 				this.postStateToWebview().catch(() => {})
 			},
 		})
-		this.sessionRebuilds = new SdkSessionRebuildScheduler({ sessions: this.sessions })
+		this.sessionRebuilds = new SdkSessionRebuildScheduler({
+			sessions: this.sessions,
+			isTurnInFlight: () => isTurnInFlightPhase(this.turnStateTracker.currentPhase),
+		})
 		this.taskHistory = new SdkTaskHistory({
 			mcpHub: this.mcpHub,
 			sessions: this.sessions,
@@ -564,6 +572,7 @@ export class Controller {
 			buildStartSessionInput,
 			postStateToWebview: () => this.postStateToWebview(),
 			rebuilds: this.sessionRebuilds,
+			isTurnInFlight: () => isTurnInFlightPhase(this.turnStateTracker.currentPhase),
 		})
 		this.providerChanges = new SdkProviderChangeCoordinator({
 			stateManager: this.stateManager,

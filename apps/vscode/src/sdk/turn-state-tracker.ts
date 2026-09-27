@@ -12,12 +12,31 @@ import type { MessageIdMinter } from "./message-id-minter"
 // newest TurnState and ignores stale/out-of-order ones (a late "streaming" can never overwrite
 // a newer "completed").
 
+/**
+ * Whether a turn is in flight at this phase — "a task is happening, do not
+ * disturb the session". `streaming` covers tool execution as much as model
+ * output (the gap between model streams is exactly where `isRunning` is false
+ * mid-turn), and the two awaiting phases hold open prompts whose answer
+ * channels die with the session.
+ */
+export function isTurnInFlightPhase(phase: TurnPhase): boolean {
+	return phase === "streaming" || phase === "awaiting_approval" || phase === "awaiting_followup"
+}
+
 export class TurnStateTracker {
 	private phase: TurnPhase = "idle"
 	private anchorTs: number | undefined
 	private seq: number
 
-	constructor(private readonly minter: MessageIdMinter) {
+	constructor(
+		private readonly minter: MessageIdMinter,
+		/**
+		 * Called after every phase change (even a same-phase re-set): phase clears
+		 * are the moments a deferred passive session rebuild becomes safe, so
+		 * listeners re-evaluate instead of waiting for the next idle event.
+		 */
+		private readonly onChange?: (phase: TurnPhase) => void,
+	) {
 		this.seq = minter.nextSeq()
 	}
 
@@ -26,6 +45,7 @@ export class TurnStateTracker {
 		this.phase = phase
 		this.anchorTs = anchorTs
 		this.seq = this.minter.nextSeq()
+		this.onChange?.(phase)
 	}
 
 	/** Current immutable snapshot for inclusion in the state payload. */
