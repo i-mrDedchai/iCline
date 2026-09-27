@@ -36,7 +36,7 @@ interface SubagentRowData {
 interface SubagentPromptTextProps {
 	prompt: string
 	isExpanded: boolean
-	onShowMore: () => void
+	onToggle: () => void
 }
 
 const statusIcon = (status: DisplayStatus) => {
@@ -120,7 +120,7 @@ function parseSubagentRowData(message: ClineMessage): SubagentRowData | null {
 	}
 }
 
-function SubagentPromptText({ prompt, isExpanded, onShowMore }: SubagentPromptTextProps) {
+function SubagentPromptText({ prompt, isExpanded, onToggle }: SubagentPromptTextProps) {
 	const promptRef = useRef<HTMLDivElement | null>(null)
 	const [showMoreVisible, setShowMoreVisible] = useState(false)
 
@@ -163,7 +163,7 @@ function SubagentPromptText({ prompt, isExpanded, onShowMore }: SubagentPromptTe
 				<button
 					aria-label="Show full subagent prompt"
 					className="absolute right-0 bottom-0 z-10 text-[11px] text-link border-0 px-1 py-[1px] cursor-pointer leading-none rounded-[2px]"
-					onClick={onShowMore}
+					onClick={onToggle}
 					style={{ backgroundColor: "var(--vscode-editor-background)" }}
 					type="button">
 					<span
@@ -172,6 +172,15 @@ function SubagentPromptText({ prompt, isExpanded, onShowMore }: SubagentPromptTe
 						style={{ background: "linear-gradient(to left, var(--vscode-editor-background), transparent)" }}
 					/>
 					Show more
+				</button>
+			)}
+			{isExpanded && (
+				<button
+					aria-label="Hide full subagent prompt"
+					className="mt-1 text-[11px] text-link border-0 px-1 py-[1px] cursor-pointer leading-none rounded-[2px] bg-transparent"
+					onClick={onToggle}
+					type="button">
+					Show less
 				</button>
 			)}
 		</div>
@@ -198,9 +207,7 @@ export default function SubagentStatusRow({ message, isLast, lastModifiedMessage
 			resumedBeforeNextVisibleMessage)
 
 	const singular = data.items.length === 1
-	const title = singular
-		? `${AGENT_DISPLAY_NAME} wants to use a subagent:`
-		: `${AGENT_DISPLAY_NAME} wants to use subagents:`
+	const title = singular ? `${AGENT_DISPLAY_NAME} wants to use a subagent:` : `${AGENT_DISPLAY_NAME} wants to use subagents:`
 	const isPromptConstructionRow = message.ask === "use_subagents" || message.say === "use_subagents"
 	const toggleItem = (index: number) => {
 		setExpandedItems((prev) => ({
@@ -208,10 +215,10 @@ export default function SubagentStatusRow({ message, isLast, lastModifiedMessage
 			[index]: !prev[index],
 		}))
 	}
-	const expandPrompt = (index: number) => {
+	const togglePrompt = (index: number) => {
 		setExpandedPrompts((prev) => ({
 			...prev,
-			[index]: true,
+			[index]: prev[index] !== true,
 		}))
 	}
 
@@ -244,7 +251,7 @@ export default function SubagentStatusRow({ message, isLast, lastModifiedMessage
 								<div className="min-w-0 flex-1">
 									<SubagentPromptText
 										isExpanded={expandedPrompts[entry.index] === true}
-										onShowMore={() => expandPrompt(entry.index)}
+										onToggle={() => togglePrompt(entry.index)}
 										prompt={entry.prompt}
 									/>
 								</div>
