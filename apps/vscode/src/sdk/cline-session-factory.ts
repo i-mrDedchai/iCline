@@ -15,10 +15,9 @@ import {
 	type ProviderSettings,
 	readCompactionStrategyGlobally,
 	resolveProviderApiKeyFromSettings,
-	resolveProviderConfig,
 	type StartSessionResult,
 } from "@cline/core"
-import type { ProviderConfig, ModelInfo as SdkModelInfo } from "@cline/llms"
+import type { ModelInfo as SdkModelInfo } from "@cline/llms"
 import { getGeneratedModelsForProvider, MODEL_COLLECTIONS_BY_PROVIDER_ID, OLLAMA_DEFAULT_CONTEXT_WINDOW } from "@cline/llms"
 import { buildClineSystemPrompt } from "@cline/shared"
 import type { ApiConfiguration } from "@shared/api"
@@ -47,6 +46,7 @@ import { nonNegativeFiniteNumber, positiveFiniteNumber, toSdkApiFormat } from ".
 import { parseProviderId } from "./model-catalog/provider-id"
 import { toSdkProviderId } from "./model-catalog/sdk-provider-id"
 import { createProviderConfigStore, resolveRuntimeModelSelection } from "./model-catalog/store"
+import { resolveSessionKnownModels } from "./model-known-models"
 import { getProviderSettingsManager } from "./provider-migration"
 import { buildSapProviderConfig, type SapProviderConfig } from "./sap-config"
 import type { SdkSessionHost } from "./session-host"
@@ -912,33 +912,37 @@ export async function buildSessionConfig(input: SessionConfigInput): Promise<Cor
 	const isMultiRoot = await resolveIsMultiRootWorkspace()
 	let knownModels: Record<string, SdkModelInfo> | undefined
 	try {
-		// Constructing the settings manager loads providers.json and models.json into
-		// the @cline/llms registry, keeping user custom-model overrides in the picture.
-		getProviderSettingsManager(resolveDataDir())
 		// Resolve through the same pipeline as the webview picker and the CLI
 		// (generated ∪ bundled ∪ live catalog ∪ private ∪ public ∪ user overrides).
-		// The bare registry lookup misses providers whose models come only from the
-		// live catalog (e.g. cline-free), which left the runtime compaction budget
-		// at the 128k default while the display bar showed the real 1M window.
-		const resolved = await resolveProviderConfig(
+		// `resolveSessionKnownModels` is the shared extraction `reasoning-effort-decision`
+		// also reads, so Effort notices describe the same entries this config hands
+		// the gateway. The bare registry lookup misses providers whose models come
+		// only from the live catalog (e.g. cline-free), which left the runtime
+		// compaction budget at the 128k default while the display bar showed the
+		// real 1M window.
+		knownModels = await resolveSessionKnownModels({
 			sdkProviderId,
-			{ loadLatestOnInit: true, loadPrivateOnAuth: true, failOnError: false },
-			{
-				providerId: sdkProviderId,
-				modelId: modelId ?? "",
-				...(apiKey ? { apiKey } : {}),
-				...(baseUrl !== undefined ? { baseUrl } : {}),
-			} as ProviderConfig,
-		)
-		knownModels = resolved?.knownModels
+			modelId: modelId ?? "",
+			...(apiKey ? { apiKey } : {}),
+			...(baseUrl !== undefined ? { baseUrl } : {}),
+		})
 		// Only inject host-resolved metadata that carries real information
 		// (catalog/state base or user overrides). Pure fallback fabrications
 		// must not reach the runtime; the SDK's own resolution handles those.
 		const isPureFallbackModel = committedRuntimeModel?.modelInfoSource === "fallback" && !committedRuntimeModel.overrides
 		if (committedRuntimeModel && !isPureFallbackModel && !knownModels?.[modelId]) {
+			// The store's model-info shape carries no reasoning controls, and the gateway
+			// lets this entry override the builtin catalog's by id (`mergeModels`), so
+			// injecting it bare would silently DROP the model's Effort controls and make
+			// the wire clamp levels the model takes (smoke 2026-09-26). Carry the
+			// catalog's controls over.
+			const catalogModel = MODEL_COLLECTIONS_BY_PROVIDER_ID[sdkProviderId]?.models?.[modelId]
 			knownModels = {
 				...(knownModels ?? {}),
-				[modelId]: toSdkModelInfo(committedRuntimeModel),
+				[modelId]: {
+					...toSdkModelInfo(committedRuntimeModel),
+					...(catalogModel?.reasoningOptions ? { reasoningOptions: catalogModel.reasoningOptions } : {}),
+				},
 			}
 		}
 	} catch (error) {

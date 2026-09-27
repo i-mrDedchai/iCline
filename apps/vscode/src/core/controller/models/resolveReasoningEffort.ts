@@ -8,8 +8,10 @@ import { type ProviderCatalogController, parseProviderIdRequest } from "./provid
  * Effort is stored per mode, so a level can be in force for a model that does not
  * accept it; the SDK gateway then clamps it on the way to the provider. The answer
  * comes from `@/sdk/reasoning-effort-decision`, which calls the SDK's own decision
- * function — this handler only marshals it. Nothing here reaches the network, so
- * the webview can ask on every hover without a loading state.
+ * function — this handler only marshals it. The model lookup consults the same
+ * merged catalog the session factory hands the gateway; that merge is cached
+ * (host-side live-catalog cache, plus this module's brief memo), so the webview
+ * can ask on every hover without a loading state.
  *
  * A model with NO effort stored is answered too, with `supportedEfforts` filled in
  * and nothing to report about a downgrade: that is the question a control asks
@@ -25,7 +27,7 @@ export async function resolveReasoningEffort(
 	const effort = request.effort?.trim() ?? ""
 	const provider = providerId.toString()
 
-	const outcome = resolveReasoningEffortOutcome({
+	const outcome = await resolveReasoningEffortOutcome({
 		providerId: provider,
 		modelId,
 		effort,
@@ -36,7 +38,7 @@ export async function resolveReasoningEffort(
 		// `none`/empty/unknown value: the app forwards no effort for it, so there is
 		// no downgrade to report (`clamped` stays false and callers render nothing).
 		// The model's own levels are still the answer to the list question.
-		const levels = resolveReasoningModelLevels({ providerId: provider, modelId })
+		const levels = await resolveReasoningModelLevels({ providerId: provider, modelId })
 		// "no-effort-control" only when the registry KNOWS the model and it advertises
 		// no levels — a toggle-only model. A model the registry does not carry gets
 		// "catalog-unknown": the app must keep offering its provider's levels rather

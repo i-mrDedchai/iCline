@@ -646,6 +646,35 @@ describe("buildSessionConfig", () => {
 		expect(knownModel).toMatchObject({ id: "committed-reasoner", contextWindow: 32_000 })
 	})
 
+	it("keeps the catalog's reasoning controls when injecting committed runtime models", async () => {
+		// The gateway lets the injected entry override the builtin catalog's by id
+		// (`mergeModels`), and the store's model-info shape carries no reasoning
+		// controls — injecting bare silently dropped the model's Effort controls and
+		// made the wire clamp levels the model really takes (smoke 2026-09-26).
+		const registryModel = LlmsModels.MODEL_COLLECTIONS_BY_PROVIDER_ID["cline"]?.models?.["z-ai/glm-5.3-flash"]
+		expect(registryModel?.reasoningOptions?.length ?? 0).toBeGreaterThan(0)
+		mocks.resolveProviderConfig.mockResolvedValue({ modelId: "z-ai/glm-5.3-flash", knownModels: {} } as any)
+		mocks.stateManager.getApiConfiguration.mockReturnValue({
+			actModeApiProvider: "cline",
+			actModeClineModelId: "z-ai/glm-5.3-flash",
+			clineApiKey: "test-cline-token",
+		} as any)
+		createProviderConfigStore().commitSelection(parseProviderId("cline"), "act", {
+			providerId: parseProviderId("cline"),
+			modelId: "z-ai/glm-5.3-flash",
+			overrides: {
+				name: "GLM 5.3 Flash",
+				contextWindow: 200_000,
+			},
+		})
+
+		const config = await buildSessionConfig({ cwd: "/tmp/workspace" })
+
+		const knownModel = (config.providerConfig as any).knownModels["z-ai/glm-5.3-flash"]
+		expect(knownModel).toMatchObject({ id: "z-ai/glm-5.3-flash", contextWindow: 200_000 })
+		expect(knownModel.reasoningOptions).toEqual(registryModel?.reasoningOptions)
+	})
+
 	it("passes OpenAI Compatible max output tokens as an explicit request limit", async () => {
 		mocks.stateManager.getApiConfiguration.mockReturnValue({
 			actModeApiProvider: "openai",
