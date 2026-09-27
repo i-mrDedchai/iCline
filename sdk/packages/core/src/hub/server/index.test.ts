@@ -7,7 +7,7 @@ import {
 } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WebSocketServer } from "ws";
 import { createLocalHubScheduleRuntimeHandlers } from "../daemon/runtime-handlers";
 import {
@@ -68,6 +68,24 @@ async function sendRawHttpRequest(
 	});
 }
 
+/**
+ * Best-effort temp sweep. Hub stores (session db, instance locks) keep SQLite
+ * handles open past `server.close()` — process-lifetime by design — and Windows
+ * refuses to unlink a file with an open handle (`EBUSY`), so a synchronous rm
+ * turns cleanup into a failing test. Retry briefly, then leave any residue for
+ * the OS temp cleaner.
+ */
+async function sweepDir(dir: string): Promise<void> {
+	for (let attempt = 0; attempt < 4; attempt++) {
+		try {
+			await rm(dir, { recursive: true, force: true });
+			return;
+		} catch {
+			await new Promise((resolve) => setTimeout(resolve, 50));
+		}
+	}
+}
+
 function requireServer(
 	server: HubWebSocketServer | undefined,
 ): HubWebSocketServer {
@@ -80,12 +98,28 @@ function requireServer(
 
 describe("hub server startup", () => {
 	const servers = new Set<HubWebSocketServer>();
+	let isolatedDataDir: string | undefined;
+
+	beforeEach(async () => {
+		// Hub discovery and instance locks resolve under the Cline data dir; left
+		// un-isolated they land in the real `~/.cline/data`, where a live Hub and
+		// lock files leaked by earlier runs turn unrelated tests into "lock is
+		// held" failures. Point the product at a per-test data dir instead —
+		// owner hashes still keep owners separate within a test.
+		isolatedDataDir = await mkdtemp(join(tmpdir(), "cline-hub-test-data-"));
+		vi.stubEnv("CLINE_DATA_DIR", isolatedDataDir);
+	});
 
 	afterEach(async () => {
 		for (const server of servers) {
 			await server.close();
 		}
 		servers.clear();
+		vi.unstubAllEnvs();
+		if (isolatedDataDir) {
+			await sweepDir(isolatedDataDir);
+			isolatedDataDir = undefined;
+		}
 	});
 
 	it("starts on the requested port instead of drifting to a random port", async () => {
@@ -225,6 +259,10 @@ describe("hub server startup", () => {
 			sessionHost: {
 				subscribe: () => () => undefined,
 				dispose,
+				// The session search reconciler reads through these; a mock that
+				// omits them only fails as logged indexing noise.
+				listSessions: async () => [],
+				readSessionMessages: async () => [],
 			} as never,
 		});
 		const firstServer = requireServer(first.server);
@@ -256,6 +294,8 @@ describe("hub server startup", () => {
 			sessionHost: {
 				subscribe: secondSubscribe,
 				dispose: async () => undefined,
+				listSessions: async () => [],
+				readSessionMessages: async () => [],
 			} as never,
 		});
 		await Promise.resolve();
@@ -375,7 +415,11 @@ describe("hub server startup", () => {
 				});
 			});
 		} finally {
-			await rm(root, { recursive: true, force: true });
+			// Startup rollback releases the instance lock LAST (a successor may
+			// take over only once endpoint, transport and discovery are retired)
+			// behind a bounded wait, so its SQLite handle can still hold
+			// `discovery.json.instance.lock` here — the sweep tolerates that.
+			await sweepDir(root);
 		}
 	});
 

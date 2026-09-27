@@ -2,7 +2,7 @@ import { execFile as execFileCallback } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import type { AgentMessage } from "@cline/shared";
 import { describe, expect, it, vi } from "vitest";
@@ -346,6 +346,14 @@ describe("createCheckpointHooks", () => {
 
 	it("starts checkpointing after the user runs git init mid-session", async () => {
 		const cwd = await mkdtemp(join(tmpdir(), "core-checkpoint-nogit-"));
+		// "No repo yet" must not depend on the machine's layout: on hosts whose
+		// temp root sits inside a repository (a home-directory dotfiles repo, say)
+		// git walks up, finds it, and checkpointing starts before the user's
+		// `git init` — a product behavior this test does not describe. Ceiling the
+		// upward repo search at the temp root so the workspace is genuinely
+		// repo-less everywhere.
+		const previousCeiling = process.env.GIT_CEILING_DIRECTORIES;
+		process.env.GIT_CEILING_DIRECTORIES = dirname(cwd);
 		let metadata: Record<string, unknown> | undefined;
 		try {
 			const hooks = createCheckpointHooks({
@@ -381,6 +389,11 @@ describe("createCheckpointHooks", () => {
 			expect(checkpoint.latest.runCount).toBe(2);
 			expect(checkpoint.latest.kind).toBe("stash");
 		} finally {
+			if (previousCeiling === undefined) {
+				delete process.env.GIT_CEILING_DIRECTORIES;
+			} else {
+				process.env.GIT_CEILING_DIRECTORIES = previousCeiling;
+			}
 			await rm(cwd, { recursive: true, force: true });
 		}
 	});
