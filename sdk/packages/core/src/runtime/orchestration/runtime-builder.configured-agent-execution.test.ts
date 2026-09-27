@@ -226,10 +226,26 @@ Write a concise commit message.`,
 				modelId: "gpt-4.1",
 				maxIterations: 3,
 				parentAgentId: "parent-agent",
-				requestToolApproval,
 				toolPolicies: effectiveToolPolicies,
 			}),
 		);
+		// The approval callback is wrapped so delegated requests reach the host
+		// callback stamped with their caller kind (configured agents run as
+		// "subagent" work — the team auto-approve split keys off this).
+		expect(delegatedConfig?.requestToolApproval).toEqual(expect.any(Function));
+		expect(delegatedConfig?.requestToolApproval).not.toBe(requestToolApproval);
+		const approvalRequest = {
+			toolName: "editor",
+			requestId: "req-1",
+		} as unknown as Parameters<
+			NonNullable<AgentConfig["requestToolApproval"]>
+		>[0];
+		await delegatedConfig?.requestToolApproval?.(approvalRequest);
+		expect(requestToolApproval).toHaveBeenCalledWith({
+			toolName: "editor",
+			requestId: "req-1",
+			callerKind: "subagent",
+		});
 		expect(delegatedConfig?.tools.map((tool) => tool.name).sort()).toEqual([
 			"run_commands",
 			"skills",
