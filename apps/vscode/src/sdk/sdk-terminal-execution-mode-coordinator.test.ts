@@ -87,6 +87,28 @@ describe("SdkTerminalExecutionModeCoordinator", () => {
 		expect(options.rebuilds.request).toHaveBeenCalledWith("terminalExecutionMode", expect.any(Function))
 	})
 
+	it("does not queue an agent-tools rebuild without an active session", () => {
+		// Regression guard (team e2e): toggling Sub-agents / Agent Teams before a
+		// task used to queue a session rebuild that drained mid-task and stopped
+		// the live session — aborting an in-flight multi-agent turn. With no
+		// session to rebuild, the next initTask picks the change up for free.
+		const { coordinator, options } = makeCoordinator()
+
+		coordinator.handleAgentToolsSettingChanged()
+
+		expect(options.rebuilds.request).not.toHaveBeenCalled()
+		expect(options.sessions.replaceActiveSession).not.toHaveBeenCalled()
+	})
+
+	it("queues an agent-tools rebuild while a session is active", () => {
+		const activeSession = makeActiveSession({ isRunning: true })
+		const { coordinator, options } = makeCoordinator({ activeSession })
+
+		coordinator.handleAgentToolsSettingChanged()
+
+		expect(options.rebuilds.request).toHaveBeenCalledWith("agentTools", expect.any(Function))
+	})
+
 	it("rebuilds the active session with preserved messages", async () => {
 		const activeSession = makeActiveSession()
 		const { coordinator, options } = makeCoordinator({ activeSession, mode: "plan", terminalMode: "vscodeTerminal" })

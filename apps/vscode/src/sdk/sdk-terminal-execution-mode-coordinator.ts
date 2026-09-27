@@ -5,7 +5,7 @@ import { Logger } from "@/shared/services/Logger"
 import type { SdkMessageCoordinator } from "./sdk-message-coordinator"
 import type { SdkSessionConfigBuilder } from "./sdk-session-config-builder"
 import type { SdkSessionLifecycle } from "./sdk-session-lifecycle"
-import type { SdkSessionRebuildScheduler } from "./sdk-session-rebuild-scheduler"
+import type { SdkSessionRebuildScheduler, SessionRebuildReason } from "./sdk-session-rebuild-scheduler"
 import type { SdkSessionHost } from "./session-host"
 import type { VscodeSessionHost } from "./vscode-session-host"
 import { getEffectiveTerminalExecutionMode, type VscodeTerminalExecutionMode } from "./vscode-terminal-execution-mode"
@@ -36,16 +36,28 @@ export class SdkTerminalExecutionModeCoordinator {
 		this.requestRebuild(`Terminal execution mode changed: ${previous} -> ${next}`)
 	}
 
-	private requestRebuild(reason: string): void {
+	handleAgentToolsSettingChanged(): void {
+		// The tool set is built at session start, so an EXISTING session must be
+		// rebuilt before a sub-agents / agent-teams toggle is visible in the
+		// running chat. Without an active session there is nothing to rebuild:
+		// the next initTask reads the new settings anyway. Queueing a rebuild here
+		// is actively harmful — it rides the terminal-mode restart path, which
+		// stops and replaces the live session, and the scheduler can drain it
+		// mid-task (observed aborting an in-flight multi-agent turn in the team
+		// e2e) whenever the session momentarily looks idle.
+		this.requestRebuild("Agent tools setting changed (sub-agents / agent teams)", "agentTools")
+	}
+
+	private requestRebuild(reason: string, key: SessionRebuildReason = "terminalExecutionMode"): void {
 		Logger.log(`[SdkController] ${reason}`)
 
 		const activeSession = this.options.sessions.getActiveSession()
 		if (!activeSession) {
-			Logger.log("[SdkController] No active session - terminal mode tools will be picked up on next initTask")
+			Logger.log("[SdkController] No active session - tools will be picked up on next initTask")
 			return
 		}
 
-		this.options.rebuilds.request("terminalExecutionMode", () => this.restartSessionForTerminalExecutionMode())
+		this.options.rebuilds.request(key, () => this.restartSessionForTerminalExecutionMode())
 	}
 
 	async restartSessionForTerminalExecutionMode(): Promise<void> {
