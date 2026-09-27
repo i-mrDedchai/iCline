@@ -898,6 +898,10 @@ export async function buildSessionConfig(input: SessionConfigInput): Promise<Cor
 	// chat can spawn sub-agents or manage a team at all.
 	const subagentsEnabled = stateManager.getGlobalSettingsKey("subagentsEnabled") ?? false
 	const agentTeamsEnabled = stateManager.getGlobalSettingsKey("agentTeamsEnabled") ?? false
+	// Multi-agent spend guard (agent count + per-turn token cap) for teammates
+	// and sub-agents. Read at session start; budget changes apply to new
+	// sessions/spawns, and the panel spawn path re-checks against live settings.
+	const teamBudget = stateManager.getGlobalSettingsKey("autoApprovalSettings")?.teamBudget
 	const useAutoCondense = input.taskSettings?.useAutoCondense ?? globalUseAutoCondense
 
 	// Core resolves providers against the SDK registry, which uses the SDK's
@@ -979,6 +983,7 @@ export async function buildSessionConfig(input: SessionConfigInput): Promise<Cor
 		},
 		enableSpawnAgent: subagentsEnabled,
 		enableAgentTeams: agentTeamsEnabled,
+		...(teamBudget ? { teamBudget } : {}),
 		...(useAutoCondense
 			? {
 					compaction: {

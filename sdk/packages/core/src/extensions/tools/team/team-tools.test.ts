@@ -3,7 +3,7 @@ import { resolveTeamDataDir } from "@cline/shared/storage";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createDelegatedAgentConfigProvider } from "./delegated-agent";
 import { AgentTeamsRuntime } from "./multi-agent";
-import { createAgentTeamsTools, spawnTeamTeammate } from "./team-tools";
+import { bootstrapAgentTeams, createAgentTeamsTools, spawnTeamTeammate } from "./team-tools";
 
 type EnvSnapshot = {
 	CLINE_DATA_DIR: string | undefined;
@@ -1058,5 +1058,96 @@ describe("spawnTeamTeammate", () => {
 		// session's policy map and approval callback must reach the teammate.
 		expect(captured[0].config.toolPolicies).toEqual(toolPolicies);
 		expect(captured[0].config.requestToolApproval).toBeTypeOf("function");
+	});
+
+	it("refuses to spawn past the team budget's agent limit", () => {
+		const runtime = new AgentTeamsRuntime({ teamName: "panel-team" });
+		const shared = {
+			runtime,
+			requesterId: "lead",
+			teammateConfigProvider: createDelegatedAgentConfigProvider({
+				providerId: "anthropic",
+				modelId: "claude-sonnet-4-5",
+			}),
+			createBaseTools: () => [],
+			teamBudget: { maxAgents: 1, maxTokensPerTurn: 0 },
+		};
+
+		spawnTeamTeammate({ ...shared, spec: { agentId: "bench", rolePrompt: "owner" } });
+
+		expect(() =>
+			spawnTeamTeammate({ ...shared, spec: { agentId: "bench-2", rolePrompt: "owner" } }),
+		).toThrow(/agent limit/);
+	});
+
+	it("threads the team budget's per-turn token cap into the teammate config", () => {
+		const runtime = new AgentTeamsRuntime({ teamName: "panel-team" });
+		const captured: Array<{ config: { maxTokensPerTurn?: number } }> = [];
+		const originalSpawn = runtime.spawnTeammate.bind(runtime);
+		runtime.spawnTeammate = (options) => {
+			captured.push(options as never);
+			return originalSpawn(options);
+		};
+
+		spawnTeamTeammate({
+			runtime,
+			requesterId: "lead",
+			teammateConfigProvider: createDelegatedAgentConfigProvider({
+				providerId: "anthropic",
+				modelId: "claude-sonnet-4-5",
+				maxTokensPerTurn: 5000,
+			}),
+			createBaseTools: () => [],
+			teamBudget: { maxAgents: 4, maxTokensPerTurn: 12000 },
+			spec: { agentId: "bench", rolePrompt: "owner" },
+		});
+
+		expect(captured[0].config.maxTokensPerTurn).toBe(12000);
+	});
+
+	it("lets a zero token budget inherit the parent cap", () => {
+		const runtime = new AgentTeamsRuntime({ teamName: "panel-team" });
+		const captured: Array<{ config: { maxTokensPerTurn?: number } }> = [];
+		const originalSpawn = runtime.spawnTeammate.bind(runtime);
+		runtime.spawnTeammate = (options) => {
+			captured.push(options as never);
+			return originalSpawn(options);
+		};
+
+		spawnTeamTeammate({
+			runtime,
+			requesterId: "lead",
+			teammateConfigProvider: createDelegatedAgentConfigProvider({
+				providerId: "anthropic",
+				modelId: "claude-sonnet-4-5",
+				maxTokensPerTurn: 5000,
+			}),
+			createBaseTools: () => [],
+			teamBudget: { maxAgents: 4, maxTokensPerTurn: 0 },
+			spec: { agentId: "bench", rolePrompt: "owner" },
+		});
+
+		expect(captured[0].config.maxTokensPerTurn).toBe(5000);
+	});
+
+	it("restores persisted teammates past the agent limit instead of refusing", () => {
+		const runtime = new AgentTeamsRuntime({ teamName: "panel-team" });
+
+		const result = bootstrapAgentTeams({
+			runtime,
+			teammateConfigProvider: createDelegatedAgentConfigProvider({
+				providerId: "anthropic",
+				modelId: "claude-sonnet-4-5",
+			}),
+			createBaseTools: () => [],
+			teamBudget: { maxAgents: 1, maxTokensPerTurn: 0 },
+			restoredFromPersistence: true,
+			restoredTeammates: [
+				{ agentId: "bench-a", rolePrompt: "owner a" },
+				{ agentId: "bench-b", rolePrompt: "owner b" },
+			],
+		});
+
+		expect(result.restoredTeammates).toEqual(["bench-a", "bench-b"]);
 	});
 });

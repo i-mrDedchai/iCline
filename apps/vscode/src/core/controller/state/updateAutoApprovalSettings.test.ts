@@ -112,3 +112,47 @@ describe("updateAutoApprovalSettings", () => {
 		assert.equal(controller.postStateToWebview.mock.calls.length, 1)
 	})
 })
+
+describe("updateAutoApprovalSettings — team budget", () => {
+	it("stores the team budget with the rest of the settings", async () => {
+		const controller = makeController(DEFAULT_AUTO_APPROVAL_SETTINGS)
+
+		await updateAutoApprovalSettings(
+			controller,
+			AutoApprovalSettingsRequest.create({
+				version: DEFAULT_AUTO_APPROVAL_SETTINGS.version + 1,
+				actions: {
+					teamWrites: true,
+				},
+				teamBudget: { maxAgents: 3, maxTokensPerTurn: 12000 },
+			}),
+		)
+
+		assert.equal(controller.stateManager.setGlobalState.mock.calls.length, 1)
+		const stored = controller.stateManager.setGlobalState.mock.calls[0][1]
+		assert.deepEqual(stored.teamBudget, { maxAgents: 3, maxTokensPerTurn: 12000 })
+		assert.equal(stored.actions.teamWrites, true)
+	})
+
+	it("keeps the previous budget when the request carries none", async () => {
+		const currentSettings = {
+			...DEFAULT_AUTO_APPROVAL_SETTINGS,
+			teamBudget: { maxAgents: 4, maxTokensPerTurn: 0 },
+		}
+		const controller = makeController(currentSettings)
+
+		await updateAutoApprovalSettings(
+			controller,
+			AutoApprovalSettingsRequest.create({
+				version: currentSettings.version + 1,
+				actions: {
+					teamReads: false,
+				},
+			}),
+		)
+
+		assert.equal(controller.stateManager.setGlobalState.mock.calls.length, 1)
+		const stored = controller.stateManager.setGlobalState.mock.calls[0][1]
+		assert.deepEqual(stored.teamBudget, { maxAgents: 4, maxTokensPerTurn: 0 })
+	})
+})

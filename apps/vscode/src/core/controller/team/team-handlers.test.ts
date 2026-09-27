@@ -79,12 +79,18 @@ function stubController(
 	hooks?: {
 		spawn?: ReturnType<typeof vi.fn>
 		shutdown?: ReturnType<typeof vi.fn>
+		teamBudget?: { maxAgents: number; maxTokensPerTurn: number }
 	},
 ): Controller {
 	return {
 		getTeamState: vi.fn(async () => teamState),
 		spawnTeamMember: hooks?.spawn ?? vi.fn(async () => {}),
 		shutdownTeamMember: hooks?.shutdown ?? vi.fn(async () => {}),
+		stateManager: {
+			getGlobalSettingsKey: vi.fn((key: string) =>
+				key === "autoApprovalSettings" ? { teamBudget: hooks?.teamBudget } : undefined,
+			),
+		},
 	} as unknown as Controller
 }
 
@@ -142,6 +148,23 @@ describe("spawnTeamMember handler", () => {
 		})
 		expect(result.ok).toBe(false)
 		expect(result.error).toContain("boom")
+	})
+
+	it("refuses a panel spawn past the live agent limit", async () => {
+		const spawn = vi.fn(async () => {})
+		const result = await spawnTeamMember(
+			stubController(fixtureState(), { spawn, teamBudget: { maxAgents: 1, maxTokensPerTurn: 0 } }),
+			{
+				agentId: "new-agent",
+				rolePrompt: "help out",
+				modelId: "",
+				providerId: "",
+			},
+		)
+
+		expect(spawn).not.toHaveBeenCalled()
+		expect(result.ok).toBe(false)
+		expect(result.error).toContain("agent limit (1) reached")
 	})
 })
 

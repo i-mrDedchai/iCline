@@ -104,6 +104,8 @@ export interface SpawnAgentToolConfig {
 	requestToolApproval?: (
 		request: ToolApprovalRequest,
 	) => Promise<ToolApprovalResult> | ToolApprovalResult;
+	/** Optional per-turn output token cap for spawned sub-agents (team budget). */
+	maxTokensPerTurn?: number;
 	/**
 	 * Optional logger forwarded to spawned sub-agent runs.
 	 */
@@ -138,6 +140,7 @@ export function createSpawnAgentTool(
 				hookErrorMode: config.hookErrorMode,
 				toolPolicies: config.toolPolicies,
 				requestToolApproval: config.requestToolApproval,
+				maxTokensPerTurn: config.maxTokensPerTurn,
 			});
 			const subAgentId = subAgent.getAgentId();
 			const conversationId = subAgent.getConversationId();

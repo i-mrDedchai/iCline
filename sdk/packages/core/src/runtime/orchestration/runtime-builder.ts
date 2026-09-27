@@ -785,6 +785,7 @@ export class DefaultRuntimeBuilder implements RuntimeBuilder {
 							createBaseTools: createBaseToolsForTeam,
 							toolPolicies: effectiveToolPolicies,
 							requestToolApproval: input.requestToolApproval,
+							teamBudget: config.teamBudget,
 							spec,
 						});
 					},
@@ -798,10 +799,11 @@ export class DefaultRuntimeBuilder implements RuntimeBuilder {
 					leadAgentId: config.sessionId || "lead",
 					restoredFromPersistence: Boolean(restoredTeamState),
 					restoredTeammates: restoredTeammateSpecs,
-					includeLeadSpawnTool: true,
-					includeLeadManagementTools: true,
-					toolPolicies: effectiveToolPolicies,
-					requestToolApproval: input.requestToolApproval,
+				includeLeadSpawnTool: true,
+				includeLeadManagementTools: true,
+				toolPolicies: effectiveToolPolicies,
+				requestToolApproval: input.requestToolApproval,
+				teamBudget: config.teamBudget,
 					onLeadToolsUnlocked: (teamTools) => {
 						pendingLeadTeamTools = teamTools;
 						leadAgentInstance?.addTools(teamTools);

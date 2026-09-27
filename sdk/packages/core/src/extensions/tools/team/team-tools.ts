@@ -67,6 +67,7 @@ import {
 	TeamTaskInputSchema,
 	type TeamTaskToolResult,
 	TeamTaskToolResultSchema,
+	type TeamBudget,
 	type TeamTeammateSpec,
 	validateWithZod,
 	zodToJsonSchema,
@@ -180,6 +181,8 @@ export interface CreateAgentTeamsToolsOptions {
 	 */
 	toolPolicies?: BuildDelegatedAgentConfigOptions["toolPolicies"];
 	requestToolApproval?: BuildDelegatedAgentConfigOptions["requestToolApproval"];
+	/** Team spend guard: agent count cap at spawn, per-turn token cap per agent. */
+	teamBudget?: TeamBudget;
 }
 
 export interface BootstrapAgentTeamsOptions {
@@ -194,6 +197,7 @@ export interface BootstrapAgentTeamsOptions {
 	onLeadToolsUnlocked?: (tools: AgentTool[]) => void;
 	toolPolicies?: BuildDelegatedAgentConfigOptions["toolPolicies"];
 	requestToolApproval?: BuildDelegatedAgentConfigOptions["requestToolApproval"];
+	teamBudget?: TeamBudget;
 }
 
 export interface BootstrapAgentTeamsResult {
@@ -227,8 +231,27 @@ export function spawnTeamTeammate(
 	options: Omit<CreateAgentTeamsToolsOptions, "requesterId" | "allowSpawn"> & {
 		requesterId: string;
 		spec: TeamTeammateSpec;
+		/**
+		 * Set to false for bootstrap restores: the agent limit governs new spawns,
+		 * and a persisted teammate that predates a lower limit must still come back.
+		 */
+		enforceBudget?: boolean;
 	},
 ): void {
+	const budget = options.teamBudget;
+	if (options.enforceBudget !== false && budget && budget.maxAgents > 0) {
+		const activeTeammates = options.runtime
+			.exportState()
+			.members.filter(
+				(member) =>
+					member.role === "teammate" && member.status !== "stopped",
+			).length;
+		if (activeTeammates >= budget.maxAgents) {
+			throw new Error(
+				`Team budget: agent limit (${budget.maxAgents}) reached -- shut down a teammate or raise the team budget before spawning another`,
+			);
+		}
+	}
 	const teammateTools: AgentTool[] = [];
 	if (options.createBaseTools) {
 		teammateTools.push(...options.createBaseTools());
@@ -259,6 +282,9 @@ export function spawnTeamTeammate(
 			providerId: options.spec.providerId,
 			toolPolicies: options.toolPolicies,
 			requestToolApproval: options.requestToolApproval,
+			...(budget && budget.maxTokensPerTurn > 0
+				? { maxTokensPerTurn: budget.maxTokensPerTurn }
+				: {}),
 			cwd: options.teammateConfigProvider.getRuntimeConfig().cwd,
 		}),
 	});
@@ -281,6 +307,7 @@ export function bootstrapAgentTeams(
 		onLeadToolsUnlocked: options.onLeadToolsUnlocked,
 		toolPolicies: options.toolPolicies,
 		requestToolApproval: options.requestToolApproval,
+		teamBudget: options.teamBudget,
 	});
 
 	const restoredTeammates: string[] = [];
@@ -295,6 +322,8 @@ export function bootstrapAgentTeams(
 			createBaseTools: options.createBaseTools,
 			toolPolicies: options.toolPolicies,
 			requestToolApproval: options.requestToolApproval,
+			teamBudget: options.teamBudget,
+			enforceBudget: false,
 			spec,
 		});
 		restoredTeammates.push(spec.agentId);
@@ -343,6 +372,7 @@ export function createAgentTeamsTools(
 						createBaseTools: options.createBaseTools,
 						toolPolicies: options.toolPolicies,
 						requestToolApproval: options.requestToolApproval,
+						teamBudget: options.teamBudget,
 						spec,
 					});
 					if (!includeManagementTools) {

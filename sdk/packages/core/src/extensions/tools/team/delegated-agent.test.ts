@@ -145,3 +145,40 @@ describe("delegated approval requests", () => {
 		expect(seen).toEqual([{ callerKind: "subagent" }]);
 	});
 });
+
+describe("delegated per-turn token cap", () => {
+	it("applies a per-agent maxTokensPerTurn override over the parent connection", () => {
+		const configProvider = createDelegatedAgentConfigProvider({
+			providerId: "anthropic",
+			modelId: "claude-sonnet-4-5",
+			maxTokensPerTurn: 5000,
+		});
+
+		const config = buildDelegatedAgentConfig({
+			kind: "teammate",
+			prompt: "own the benchmarks",
+			tools: [],
+			configProvider,
+			maxTokensPerTurn: 1200,
+		});
+
+		expect(config.maxTokensPerTurn).toBe(1200);
+	});
+
+	it("keeps the parent cap when no override is given", () => {
+		const configProvider = createDelegatedAgentConfigProvider({
+			providerId: "anthropic",
+			modelId: "claude-sonnet-4-5",
+			maxTokensPerTurn: 5000,
+		});
+
+		const config = buildDelegatedAgentConfig({
+			kind: "teammate",
+			prompt: "own the benchmarks",
+			tools: [],
+			configProvider,
+		});
+
+		expect(config.maxTokensPerTurn).toBe(5000);
+	});
+});

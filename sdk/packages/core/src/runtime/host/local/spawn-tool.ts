@@ -183,6 +183,11 @@ export function createSessionSpawnTool(
 			updateConnectionDefaults: () => {},
 		},
 		createSubAgentTools,
+		// Team budget's per-turn token cap reaches sub-agents too: they are the
+		// other way a session multiplies its spend.
+		...(config.teamBudget && config.teamBudget.maxTokensPerTurn > 0
+			? { maxTokensPerTurn: config.teamBudget.maxTokensPerTurn }
+			: {}),
 		...lifecycle,
 	}) as AgentTool;
 }

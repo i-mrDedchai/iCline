@@ -73,6 +73,16 @@ export interface TeamMemberSnapshot {
 	providerId?: string;
 }
 
+/**
+ * Spend guard for multi-agent work: how many teammates may be active at once
+ * and how many output tokens a single delegated model turn may produce.
+ * `maxAgents: 0` or `maxTokensPerTurn: 0` means "no limit".
+ */
+export interface TeamBudget {
+	maxAgents: number;
+	maxTokensPerTurn: number;
+}
+
 export interface TeammateLifecycleSpec {
 	rolePrompt: string;
 	modelId?: string;

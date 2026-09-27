@@ -21,6 +21,12 @@ export async function updateAutoApprovalSettings(controller: Controller, request
 			...currentSettings,
 			...(request.version !== undefined && { version: request.version }),
 			...(request.enableNotifications !== undefined && { enableNotifications: request.enableNotifications }),
+			...(request.teamBudget !== undefined && {
+				teamBudget: {
+					maxAgents: request.teamBudget.maxAgents ?? 0,
+					maxTokensPerTurn: request.teamBudget.maxTokensPerTurn ?? 0,
+				},
+			}),
 			actions: {
 				...currentSettings.actions,
 				...(request.actions

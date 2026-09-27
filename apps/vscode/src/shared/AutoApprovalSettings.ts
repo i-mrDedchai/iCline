@@ -23,6 +23,13 @@ export interface AutoApprovalSettings {
 		teamReads?: boolean // Auto-approve read-only calls from teammates/sub-agents and the read-only team tools
 		teamWrites?: boolean // Auto-approve write-type calls from teammates/sub-agents (edits, commands) and the mutating team tools
 	}
+	// Multi-agent spend guard: caps active teammates at spawn and each delegated
+	// agent's per-turn output tokens. 0 = unlimited. Applied to new spawns and
+	// sessions, so changes take full effect from the next task/rebuild.
+	teamBudget?: {
+		maxAgents: number // Max active teammates at once (0 = unlimited)
+		maxTokensPerTurn: number // Max output tokens per delegated agent turn (0 = inherit)
+	}
 	// Global settings
 	enableNotifications: boolean // Show notifications for approval and task completion
 }
@@ -47,5 +54,8 @@ export const DEFAULT_AUTO_APPROVAL_SETTINGS: AutoApprovalSettings = {
 		teamReads: true,
 		teamWrites: false,
 	},
+	// Defaults guard against runaway multi-agent spend without forbidding it:
+	// four teammates at once, no extra per-turn token cap.
+	teamBudget: { maxAgents: 4, maxTokensPerTurn: 0 },
 	enableNotifications: false,
 }

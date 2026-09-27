@@ -1,4 +1,4 @@
-import { AutoApprovalSettings } from "@shared/AutoApprovalSettings"
+import { AutoApprovalSettings, DEFAULT_AUTO_APPROVAL_SETTINGS } from "@shared/AutoApprovalSettings"
 import { useCallback } from "react"
 import { updateAutoApproveSettings } from "@/components/chat/auto-approve-menu/AutoApproveSettingsAPI"
 import { ActionMetadata } from "@/components/chat/auto-approve-menu/types"
@@ -53,6 +53,20 @@ export function useAutoApproveActions() {
 		[autoApprovalSettings],
 	)
 
+	// Team spend guard (agent count + per-turn token cap), always read with its defaults
+	const teamBudget = autoApprovalSettings.teamBudget ?? DEFAULT_AUTO_APPROVAL_SETTINGS.teamBudget!
+
+	const updateTeamBudget = useCallback(
+		async (budget: { maxAgents: number; maxTokensPerTurn: number }) => {
+			await updateAutoApproveSettings({
+				...autoApprovalSettings,
+				version: (autoApprovalSettings.version ?? 1) + 1,
+				teamBudget: budget,
+			})
+		},
+		[autoApprovalSettings],
+	)
+
 	// Update notifications setting
 	const updateNotifications = useCallback(
 		async (action: ActionMetadata, checked: boolean) => {
@@ -71,5 +85,7 @@ export function useAutoApproveActions() {
 		isChecked,
 		updateAction,
 		updateNotifications,
+		teamBudget,
+		updateTeamBudget,
 	}
 }

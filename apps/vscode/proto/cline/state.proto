@@ -56,11 +56,19 @@ message AutoApprovalActions {
   optional bool team_writes = 10;
 }
 
+// Team spend guard: caps active teammates at spawn and each delegated agent's
+// per-turn output tokens. 0 = unlimited.
+message TeamBudget {
+  int32 max_agents = 1;
+  int32 max_tokens_per_turn = 2;
+}
+
 // Auto approval settings for task execution
 message AutoApprovalSettings {
   int32 version = 1;
   AutoApprovalActions actions = 2;
   optional bool enable_notifications = 3;
+  optional TeamBudget team_budget = 4;
 }
 
 // NOTE: Add the new secret fields under SECRETS_KEYS in src/shared/storage/state-keys.ts
@@ -375,6 +383,7 @@ message AutoApprovalSettingsRequest {
   int32 version = 2;
   AutoApprovalActions actions = 3;
   bool enable_notifications = 4;
+  optional TeamBudget team_budget = 5;
 }
 
 enum TelemetrySettingEnum {

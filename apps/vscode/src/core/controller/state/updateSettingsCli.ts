@@ -71,6 +71,12 @@ export async function updateSettingsCli(controller: Controller, request: UpdateS
 				...(autoApprovalSettings.enableNotifications !== undefined && {
 					enableNotifications: autoApprovalSettings.enableNotifications,
 				}),
+				...(autoApprovalSettings.teamBudget !== undefined && {
+					teamBudget: {
+						maxAgents: autoApprovalSettings.teamBudget.maxAgents ?? 0,
+						maxTokensPerTurn: autoApprovalSettings.teamBudget.maxTokensPerTurn ?? 0,
+					},
+				}),
 				actions: {
 					...currentAutoApprovalSettings.actions,
 					...(autoApprovalSettings.actions

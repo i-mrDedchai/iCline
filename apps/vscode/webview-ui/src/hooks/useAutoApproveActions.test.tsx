@@ -61,6 +61,23 @@ describe("team auto-approve switches", () => {
 		expect(result.current.isChecked(teamWrites)).toBe(false)
 	})
 
+	it("persists the team budget with a bumped version", async () => {
+		vi.mocked(useExtensionState).mockReturnValue({
+			autoApprovalSettings: makeSettings({}),
+		} as any)
+
+		const { result } = renderHook(() => useAutoApproveActions())
+
+		await result.current.updateTeamBudget({ maxAgents: 2, maxTokensPerTurn: 50000 })
+
+		expect(StateServiceClient.updateAutoApprovalSettings).toHaveBeenCalledWith(
+			expect.objectContaining({
+				version: 4,
+				teamBudget: { maxAgents: 2, maxTokensPerTurn: 50000 },
+			}),
+		)
+	})
+
 	it("persists a team switch toggle with a bumped version", async () => {
 		vi.mocked(useExtensionState).mockReturnValue({
 			autoApprovalSettings: makeSettings({ teamReads: true, teamWrites: false }),

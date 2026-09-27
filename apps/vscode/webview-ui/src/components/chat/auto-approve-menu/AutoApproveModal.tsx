@@ -15,7 +15,7 @@ interface AutoApproveModalProps {
 }
 
 const AutoApproveModal: React.FC<AutoApproveModalProps> = ({ isVisible, setIsVisible, buttonRef, ACTION_METADATA }) => {
-	const { isChecked, updateAction } = useAutoApproveActions()
+	const { isChecked, updateAction, teamBudget, updateTeamBudget } = useAutoApproveActions()
 	const modalRef = useRef<HTMLDivElement>(null)
 	const itemsContainerRef = useRef<HTMLDivElement>(null)
 	const [containerWidth, setContainerWidth] = useState(0)
@@ -101,6 +101,46 @@ const AutoApproveModal: React.FC<AutoApproveModalProps> = ({ isVisible, setIsVis
 					{ACTION_METADATA.map((action) => (
 						<AutoApproveMenuItem action={action} isChecked={isChecked} key={action.id} onToggle={updateAction} />
 					))}
+				</div>
+
+				<div className="mt-2 pt-2.5 border-t border-[var(--vscode-panel-border)]">
+					<div className="mb-1.5 text-muted-foreground text-xs">Team budget</div>
+					<div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+						<label htmlFor="team-budget-agents">Max agents</label>
+						<input
+							className="w-20 px-1.5 py-0.5 rounded border border-[var(--vscode-input-border,transparent)] bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)]"
+							id="team-budget-agents"
+							min={0}
+							onBlur={() => updateTeamBudget(teamBudget)}
+							onChange={(event) =>
+								updateTeamBudget({
+									...teamBudget,
+									maxAgents: Math.max(0, Number(event.target.value) || 0),
+								})
+							}
+							type="number"
+							value={teamBudget.maxAgents}
+						/>
+						<label htmlFor="team-budget-tokens">Tokens per turn</label>
+						<input
+							className="w-24 px-1.5 py-0.5 rounded border border-[var(--vscode-input-border,transparent)] bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)]"
+							id="team-budget-tokens"
+							min={0}
+							onBlur={() => updateTeamBudget(teamBudget)}
+							onChange={(event) =>
+								updateTeamBudget({
+									...teamBudget,
+									maxTokensPerTurn: Math.max(0, Number(event.target.value) || 0),
+								})
+							}
+							type="number"
+							value={teamBudget.maxTokensPerTurn}
+						/>
+					</div>
+					<div className="mt-1 text-muted-foreground text-xs">
+						0 = unlimited. Caps how many teammates can run at once and how many output tokens each delegated agent
+						turn may produce.
+					</div>
 				</div>
 			</div>
 		</div>

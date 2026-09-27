@@ -14,6 +14,7 @@ import type {
 	SessionExecutionConfig,
 	SessionPromptConfig,
 	SessionWorkspaceConfig,
+	TeamBudget,
 } from "@cline/shared";
 import type { ToolRoutingRule } from "../extensions/tools/model-tool-routing";
 import type { TeamEvent } from "../extensions/tools/team";
@@ -268,6 +269,11 @@ export interface CoreSessionConfig
 	workspaceRoot?: string;
 	systemPrompt: string;
 	teamName?: string;
+	/**
+	 * Multi-agent spend guard: caps active teammates at spawn and each delegated
+	 * agent's per-turn output tokens. Absent or zero values mean no limit.
+	 */
+	teamBudget?: TeamBudget;
 	missionLogIntervalSteps?: number;
 	missionLogIntervalMs?: number;
 	hooks?: AgentHooks;

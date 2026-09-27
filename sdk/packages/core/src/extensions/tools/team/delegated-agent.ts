@@ -88,6 +88,11 @@ export interface BuildDelegatedAgentConfigOptions {
 	modelId?: string;
 	/** Per-agent provider override paired with `modelId`. */
 	providerId?: string;
+	/**
+	 * Per-turn output token cap for the delegated agent (team budget). Applied
+	 * over the inherited connection cap when set.
+	 */
+	maxTokensPerTurn?: number;
 }
 
 export function createDelegatedAgentConfigProvider(
@@ -134,6 +139,9 @@ export function buildDelegatedAgentConfig(
 		...options.configProvider.getConnectionConfig(),
 		...(options.modelId !== undefined ? { modelId: options.modelId } : {}),
 		...(options.providerId !== undefined ? { providerId: options.providerId } : {}),
+		...(options.maxTokensPerTurn !== undefined
+			? { maxTokensPerTurn: options.maxTokensPerTurn }
+			: {}),
 		distinctId: runtimeConfig.distinctId,
 		sessionId: runtimeConfig.sessionId,
 		systemPrompt,
