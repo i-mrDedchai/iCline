@@ -415,7 +415,39 @@ describe("AgentRuntime", () => {
 		expect(JSON.stringify(assistant).split(data)).toHaveLength(2);
 	});
 
-	it("fails a turn that hits the model output token limit before completion", async () => {
+	it("continues a turn cut off by the model output token limit instead of failing the run", async () => {
+		const model = new ScriptedModel([
+			() => [
+				{ type: "reasoning-delta", text: "thinking..." },
+				{ type: "finish", reason: "max-tokens" },
+			],
+			() => [{ type: "text-delta", text: "done" }, { type: "finish", reason: "stop" }],
+		]);
+		const runtime = new AgentRuntime({ model });
+
+		const result = await runtime.run("Hi");
+
+		expect(result.status).toBe("completed");
+		expect(model.requests).toHaveLength(2);
+		// The continuation nudge is added as a user message so the model resumes
+		// from where the truncated turn stopped.
+		const continuation = result.messages.find(
+			(message) =>
+				message.role === "user" &&
+				message.content.some(
+					(part) =>
+						part.type === "text" &&
+						part.text.includes("maximum output token limit"),
+				),
+		);
+		expect(continuation).toBeDefined();
+		expect(result.messages.at(-1)).toMatchObject({
+			role: "assistant",
+			content: [{ type: "text", text: "done" }],
+		});
+	});
+
+	it("fails after repeated output-limit truncations with no tool call in between", async () => {
 		const logger = {
 			debug: vi.fn(),
 			log: vi.fn(),
@@ -426,6 +458,14 @@ describe("AgentRuntime", () => {
 				{ type: "reasoning-delta", text: "thinking..." },
 				{ type: "finish", reason: "max-tokens" },
 			],
+			() => [
+				{ type: "reasoning-delta", text: "still thinking..." },
+				{ type: "finish", reason: "max-tokens" },
+			],
+			() => [
+				{ type: "reasoning-delta", text: "never stops..." },
+				{ type: "finish", reason: "max-tokens" },
+			],
 		]);
 		const runtime = new AgentRuntime({ model, logger });
 
@@ -433,22 +473,8 @@ describe("AgentRuntime", () => {
 
 		expect(result.status).toBe("failed");
 		expect(result.error?.message).toContain("maximum output token limit");
-		expect(model.requests).toHaveLength(1);
-		expect(result.messages).toHaveLength(2);
-		expect(result.messages.at(-1)).toMatchObject({
-			role: "assistant",
-			content: [{ type: "reasoning", text: "thinking..." }],
-		});
-		expect(logger.log).toHaveBeenCalledWith(
-			"Agent loop caught error",
-			expect.objectContaining({
-				severity: "error",
-				status: "failed",
-				errorMessage: expect.stringContaining("maximum output token limit"),
-				iteration: 1,
-				assistantContentPartCount: 1,
-			}),
-		);
+		// Initial attempt plus two bounded continuations.
+		expect(model.requests).toHaveLength(3);
 		expect(logger.error).toHaveBeenCalledWith(
 			"Agent run failed",
 			expect.objectContaining({
@@ -457,6 +483,36 @@ describe("AgentRuntime", () => {
 				}),
 			}),
 		);
+	});
+
+	it("resets the output-limit continuation budget when a turn makes progress", async () => {
+		const model = new ScriptedModel([
+			() => [
+				{ type: "reasoning-delta", text: "thinking..." },
+				{ type: "finish", reason: "max-tokens" },
+			],
+			() => [
+				{
+					type: "tool-call-delta",
+					toolCallId: "call_1",
+					toolName: "echo",
+					input: { text: "hi" },
+				},
+				{ type: "finish", reason: "tool-calls" },
+			],
+			() => [
+				{ type: "reasoning-delta", text: "thinking again..." },
+				{ type: "finish", reason: "max-tokens" },
+			],
+			() => [{ type: "text-delta", text: "done" }, { type: "finish", reason: "stop" }],
+		]);
+		const runtime = new AgentRuntime({ model, tools: [createEchoTool()] });
+
+		const result = await runtime.run("Hi");
+
+		// Truncation -> tool call (progress, budget reset) -> truncation -> done.
+		expect(result.status).toBe("completed");
+		expect(model.requests).toHaveLength(4);
 	});
 
 	it("does not persist an empty assistant message when the model stream fails", async () => {

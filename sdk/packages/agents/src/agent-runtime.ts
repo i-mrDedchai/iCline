@@ -60,6 +60,20 @@ import {
 const MAX_TOKENS_INCOMPLETE_TURN_MESSAGE =
 	"Model reached the maximum output token limit before completing the turn";
 
+/**
+ * How many times a run may resume after a turn was cut off by the model's
+ * output token limit without producing a single tool call. The initial
+ * truncated turn is not counted. Bounded so a model that can never finish a
+ * turn still fails instead of burning requests forever.
+ */
+const MAX_TOKENS_TURN_CONTINUATIONS = 2;
+
+const MAX_TOKENS_CONTINUATION_PROMPT =
+	"System notice: the previous response was cut off by the model's maximum output token limit before completing a turn. " +
+	"Continue the task from exactly where it stopped — do not redo or re-explain work that is already done. " +
+	"If you were about to write a file, write it now with the editor tool, splitting large content into several smaller tool calls. " +
+	"Prefer acting with tool calls over further analysis.";
+
 /** Cap on tool names listed in the "unknown tool" result, so the message stays readable. */
 const MAX_TOOL_NAMES_IN_ERROR = 40;
 
@@ -888,6 +902,9 @@ export class AgentRuntime {
 			}
 
 			let finalAssistantMessage: AgentMessage | undefined;
+			// Consecutive output-limit truncations with no tool call in between.
+			// Reset whenever a turn makes progress (issues tool calls).
+			let maxTokensContinuations = 0;
 
 			while (
 				this.config.maxIterations === undefined ||
@@ -970,6 +987,12 @@ export class AgentRuntime {
 					}
 				}
 
+				// A turn that issues tool calls is making progress — the output-limit
+				// continuation budget applies to consecutive tool-less truncations.
+				if (toolCalls.length > 0) {
+					maxTokensContinuations = 0;
+				}
+
 				finalAssistantMessage = message;
 				this.state.messages.push(message);
 				await this.emit({
@@ -996,6 +1019,23 @@ export class AgentRuntime {
 				}
 
 				if (finishReason === "max-tokens" && toolCalls.length === 0) {
+					// A turn cut off by the output limit is recoverable — failing the
+					// whole run here killed sub-agents mid-reasoning before they wrote
+					// any file. Nudge the model to pick up where it stopped instead;
+					// only give up after repeated tool-less truncations.
+					if (maxTokensContinuations < MAX_TOKENS_TURN_CONTINUATIONS) {
+						maxTokensContinuations += 1;
+						await this.emit({
+							type: "turn-finished",
+							snapshot: this.snapshot(),
+							iteration: this.state.iteration,
+							toolCallCount: 0,
+						});
+						await this.addUserReminderMessage(
+							MAX_TOKENS_CONTINUATION_PROMPT,
+						);
+						continue;
+					}
 					throw new Error(MAX_TOKENS_INCOMPLETE_TURN_MESSAGE);
 				}
 				if (finishReason === "error" && toolCalls.length === 0) {

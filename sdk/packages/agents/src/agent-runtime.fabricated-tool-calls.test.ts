@@ -357,20 +357,25 @@ describe("AgentRuntime fabricated tool-call recovery", () => {
 
 	it("does not recover a truncated turn", async () => {
 		// A block cut off by the output limit may be missing arguments: running it
-		// would execute a guess. The turn keeps its existing max-tokens failure.
+		// would execute a guess. The truncated call is never recovered — the run
+		// continues with a nudge instead, and the guessed call still does not run.
 		const model = new ScriptedModel([
 			() => [
 				{ type: "text-delta", text: TEXT_CALL_MARKUP },
 				{ type: "finish", reason: "max-tokens" },
+			],
+			() => [
+				{ type: "text-delta", text: "continued" },
+				{ type: "finish", reason: "stop" },
 			],
 		]);
 		const runtime = new AgentRuntime({ model, tools: [createEchoTool()] });
 
 		const result = await runtime.run("hi");
 
-		expect(result.status).toBe("failed");
+		expect(result.status).toBe("completed");
 		expect(toolResults(result.messages)).toEqual([]);
-		expect(model.requests).toHaveLength(1);
+		expect(model.requests).toHaveLength(2);
 	});
 
 	it("never recovers more calls than the cap allows", async () => {
