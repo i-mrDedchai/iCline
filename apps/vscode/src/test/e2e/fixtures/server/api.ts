@@ -135,6 +135,38 @@ export const E2E_MOCK_API_RESPONSES = {
 	OVERSIZED_REQUEST_COMPLETE: `The editor call was rejected because the content exceeded the per-call input limit, so nothing was written to oversized-repro.txt.`,
 }
 
+// ---------------------------------------------------------------------------
+// Output-limit stub flow: a scripted "model" that hits its output token limit
+// mid-turn and is then continued by the runtime (fix.37/38 + the "turn
+// truncated, continuing" chat notice). The mock server keys on the trigger
+// prompt below and finishes the FIRST completion with `finish_reason: "length"`
+// after streaming partial text — the exact wire shape of a model cut off by
+// max_tokens — then answers the runtime's continuation nudge with the completion
+// text and `finish_reason: "stop"`.
+// ---------------------------------------------------------------------------
+
+/** First-user-message key that selects the output-limit stub flow. */
+export const E2E_OUTPUT_LIMIT_TRIGGER = "output_limit_request"
+
+/**
+ * Substring of the runtime's continuation nudge
+ * (`MAX_TOKENS_CONTINUATION_PROMPT` in the agents package). Present as a user
+ * message in the follow-up request, so it separates "truncated" from
+ * "continued" requests without keeping server-side state.
+ */
+export const E2E_OUTPUT_LIMIT_CONTINUATION_FRAGMENT = "cut off by the model's maximum output token limit"
+
+export const E2E_MOCK_OUTPUT_LIMIT_RESPONSES = {
+	/**
+	 * Streamed before the `length` finish. Ends mid-sentence on purpose: the
+	 * user should SEE a turn that was cut, not a tidy sentence.
+	 */
+	TRUNCATED:
+		"OUTPUT_LIMIT_CUT_HERE — the answer was still being written when the output budget ran out, right in the middle of a",
+	/** Turn-ending text streamed after the runtime continues the turn. */
+	COMPLETE: "OUTPUT_LIMIT_CONTINUED_OK",
+}
+
 export const E2E_MOCK_CLINE_RECOMMENDED_MODELS = {
 	free: [
 		{

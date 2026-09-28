@@ -10,12 +10,15 @@ import {
 	E2E_MOCK_CLINE_MODELS,
 	E2E_MOCK_CLINE_RECOMMENDED_MODELS,
 	E2E_MOCK_EDITOR_TOOL_CALL,
+	E2E_MOCK_OUTPUT_LIMIT_RESPONSES,
 	E2E_MOCK_OVERSIZED_EDITOR_TOOL_CALL,
 	E2E_MOCK_TEAM_AWAIT_CALL,
 	E2E_MOCK_TEAM_CREATE_OUTCOME_CALL,
 	E2E_MOCK_TEAM_RESPONSES,
 	E2E_MOCK_TEAM_RUN_CALLS,
 	E2E_MOCK_TEAM_SPAWN_CALLS,
+	E2E_OUTPUT_LIMIT_CONTINUATION_FRAGMENT,
+	E2E_OUTPUT_LIMIT_TRIGGER,
 	E2E_REGISTERED_MOCK_ENDPOINTS,
 	E2E_REMOTE_CONFIG_ORG_ID,
 	type E2ERemoteConfig,
@@ -618,6 +621,7 @@ export class ClineApiServerMock {
 						// Scoped to edit_request conversations so tool results from other
 						// (future) scenarios don't mis-route to EDIT_REQUEST_COMPLETE.
 						const isOversizedRequest = body.includes("oversized_request")
+						const isOutputLimitRequest = body.includes(E2E_OUTPUT_LIMIT_TRIGGER)
 						const hasToolResult =
 							(body.includes("edit_request") || isOversizedRequest) &&
 							Array.isArray(messages) &&
@@ -639,6 +643,16 @@ export class ClineApiServerMock {
 						const messageList = Array.isArray(messages) ? messages : []
 						const firstUserText = extractMessageText(messageList.find((m: { role?: string }) => m?.role === "user"))
 						const toolResultCount = messageList.filter((m: { role?: string }) => m?.role === "tool").length
+						// The output-limit stub flow: the runtime's continuation nudge
+						// arrives as a user message, which is what separates the
+						// truncated first request from the continued follow-up.
+						const isOutputLimitContinuation =
+							isOutputLimitRequest &&
+							messageList.some(
+								(m: { role?: string }) =>
+									m?.role === "user" && extractMessageText(m).includes(E2E_OUTPUT_LIMIT_CONTINUATION_FRAGMENT),
+							)
+						let truncatedByOutputLimit = false
 						const isLeadTeamRequest = firstUserText.includes("team_request")
 						const isAlphaTeammate = firstUserText.includes("write-alpha")
 						const isBetaTeammate = firstUserText.includes("write-beta")
@@ -679,6 +693,13 @@ export class ClineApiServerMock {
 							responseText =
 								toolResultCount === 0 ? E2E_MOCK_TEAM_RESPONSES.BETA_LEAD_IN : E2E_MOCK_TEAM_RESPONSES.BETA_DONE
 							teamToolCalls = toolResultCount === 0 ? E2E_MOCK_BETA_TEAM_CALLS : []
+						} else if (isOutputLimitRequest && isOutputLimitContinuation) {
+							responseText = E2E_MOCK_OUTPUT_LIMIT_RESPONSES.COMPLETE
+						} else if (isOutputLimitRequest) {
+							// Cut the turn mid-text with finish_reason "length" — the
+							// stub model hitting its output token limit.
+							responseText = E2E_MOCK_OUTPUT_LIMIT_RESPONSES.TRUNCATED
+							truncatedByOutputLimit = true
 						} else if (hasToolResult && isOversizedRequest) {
 							responseText = E2E_MOCK_API_RESPONSES.OVERSIZED_REQUEST_COMPLETE
 						} else if (hasToolResult) {
@@ -799,8 +820,11 @@ export class ClineApiServerMock {
 											{
 												index: 0,
 												delta: {},
-												finish_reason:
-													includeEditorToolCall || teamToolCalls.length > 0 ? "tool_calls" : "stop",
+												finish_reason: truncatedByOutputLimit
+													? "length"
+													: includeEditorToolCall || teamToolCalls.length > 0
+														? "tool_calls"
+														: "stop",
 											},
 										],
 										usage: {
