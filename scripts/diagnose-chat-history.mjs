@@ -28,6 +28,8 @@
  *   --output-limit <n>  token count that counts as "hit the output limit"
  *                       (default: 30000)
  *   --verbose           list every finding (default caps each category)
+ *   --summary           print only the Thai executive summary (severity-ranked
+ *                       top issues and top sessions) — alias: --fix
  *   --strict            exit 1 when any finding is reported
  */
 
@@ -51,6 +53,27 @@ const REFUSAL_PATTERNS = [
 	/จึงต้องหยุด/,
 ]
 
+/**
+ * Severity model: every finding kind maps to a Thai-labelled severity level and
+ * a numeric score used to rank top issues / top sessions in the executive
+ * summary.
+ */
+const SEVERITY_BY_KIND = {
+	"parse-error": { level: "critical", th: "วิกฤต", icon: "🔴", score: 3 },
+	"turn-cut-mid-run": { level: "high", th: "สูง", icon: "🟠", score: 2 },
+	"missing-tool-result": { level: "high", th: "สูง", icon: "🟠", score: 2 },
+	refusal: { level: "medium", th: "ปานกลาง", icon: "🟡", score: 1 },
+	"output-limit-truncated": { level: "medium", th: "ปานกลาง", icon: "🟡", score: 1 },
+}
+
+const KIND_ADVICE_TH = {
+	"turn-cut-mid-run": "เทิร์นตายกลางงาน — ตรวจว่ามีแถวแจ้ง \"turn truncated, continuing\" / interrupted-turn ขึ้นหรือไม่ และ resume แล้วงานเดินต่อได้จริง",
+	"missing-tool-result": "tool_use ไม่มีผลลัพธ์คืน — เทิร์นถูกตัดกลางเครื่องมือ ควรตรวจก่อนสั่งงานต่อ",
+	"output-limit-truncated": "โมเดลชนเพดาน output — ยืนยันว่า continuation + thinking cap ทำงาน และงานไม่ตายกลาง thinking",
+	refusal: "โมเดลปฏิเสธงาน — ตรวจ tool list ของ sub-agent และสวิตช์ auto-approve",
+	"parse-error": "ไฟล์เซสชันอ่านไม่ได้ — ข้อมูลประวัติอาจเสียหาย",
+}
+
 function parseArgs(argv) {
 	const options = {
 		dir: join(homedir(), ".cline", "data", "sessions"),
@@ -58,6 +81,7 @@ function parseArgs(argv) {
 		json: false,
 		outputLimit: 30_000,
 		verbose: false,
+		summary: false,
 		strict: false,
 	}
 	for (let i = 0; i < argv.length; i += 1) {
@@ -82,6 +106,10 @@ function parseArgs(argv) {
 			}
 			case "--verbose":
 				options.verbose = true
+				break
+			case "--summary":
+			case "--fix":
+				options.summary = true
 				break
 			case "--strict":
 				options.strict = true
@@ -259,16 +287,21 @@ function loadSessions(files, options) {
 				findings: [{ kind: "parse-error", detail: error instanceof Error ? error.message : String(error), messageIndex: -1 }],
 			})
 			continue
+		}			sessions.push({
+				file,
+				sessionId: doc?.sessionId ?? "?",
+				agent: doc?.agent ?? "?",
+				parentThreadId: doc?.origin?.parentThreadId,
+				messageCount: Array.isArray(doc?.messages) ? doc.messages.length : 0,
+				updatedAt: doc?.updated_at,
+				findings: analyzeSession(file, doc, options),
+			})
+	}
+	for (const session of sessions) {
+		for (const finding of session.findings) {
+			finding.severity =
+				SEVERITY_BY_KIND[finding.kind] ?? { level: "medium", th: "ปานกลาง", icon: "🟡", score: 1 }
 		}
-		sessions.push({
-			file,
-			sessionId: doc?.sessionId ?? "?",
-			agent: doc?.agent ?? "?",
-			parentThreadId: doc?.origin?.parentThreadId,
-			messageCount: Array.isArray(doc?.messages) ? doc.messages.length : 0,
-			updatedAt: doc?.updated_at,
-			findings: analyzeSession(file, doc, options),
-		})
 	}
 	return sessions
 }
@@ -283,10 +316,75 @@ function summarize(sessions) {
 	return counts
 }
 
-function renderText(sessions, counts, options) {
+function rankFindings(sessions) {
+	const severityCounts = { critical: 0, high: 0, medium: 0 }
+	const perKind = new Map()
+	const perSession = []
+	for (const session of sessions) {
+		let score = 0
+		const kinds = new Map()
+		for (const finding of session.findings) {
+			severityCounts[finding.severity.level] = (severityCounts[finding.severity.level] ?? 0) + 1
+			score += finding.severity.score
+			kinds.set(finding.kind, (kinds.get(finding.kind) ?? 0) + 1)
+			const bucket = perKind.get(finding.kind) ?? { kind: finding.kind, count: 0, score: 0 }
+			bucket.count += 1
+			bucket.score += finding.severity.score
+			perKind.set(finding.kind, bucket)
+		}
+		if (score > 0) {
+			perSession.push({
+				sessionId: session.sessionId,
+				agent: session.agent,
+				score,
+				count: session.findings.length,
+				kinds: [...kinds.entries()].map(([kind, count]) => ({ kind, count })),
+			})
+		}
+	}
+	const topIssues = [...perKind.values()].sort((a, b) => b.score - a.score || b.count - a.count)
+	const topSessions = perSession
+		.sort((a, b) => b.score - a.score || b.count - a.count)
+		.slice(0, 5)
+	return { severityCounts, topIssues, topSessions }
+}
+
+function renderExecutiveSummary(sessions, counts, rankings) {
+	const lines = []
+	const totalFindings = Object.values(counts).reduce((a, b) => a + b, 0)
+	const flagged = sessions.filter((session) => session.findings.length > 0).length
+	lines.push("📊 สรุปผู้บริหาร (Executive Summary)")
+	lines.push(`- สแกนเซสชัน ${sessions.length} ไฟล์ · พบความผิดปกติ ${totalFindings} รายการ ใน ${flagged} เซสชัน`)
+	if (totalFindings === 0) {
+		lines.push("- ✅ ไม่พบเทิร์นผิดปกติ — สุขภาพประวัติแชทอยู่ในเกณฑ์ดี")
+		return lines.join("\n")
+	}
+	const sc = rankings.severityCounts
+	lines.push(`- ระดับความร้ายแรง: วิกฤต ${sc.critical ?? 0} · สูง ${sc.high ?? 0} · ปานกลาง ${sc.medium ?? 0}`)
+	lines.push("")
+	lines.push("อันดับปัญหาสำคัญ (top issues)")
+	rankings.topIssues.forEach((issue, index) => {
+		const sev = SEVERITY_BY_KIND[issue.kind] ?? { th: "ปานกลาง", icon: "🟡" }
+		lines.push(`  ${index + 1}. ${sev.icon} [${sev.th}] ${issue.kind} ×${issue.count} (คะแนน ${issue.score})`)
+		if (KIND_ADVICE_TH[issue.kind]) {
+			lines.push(`     ${KIND_ADVICE_TH[issue.kind]}`)
+		}
+	})
+	lines.push("")
+	lines.push("เซสชันที่ควรตรวจก่อน (top sessions)")
+	rankings.topSessions.forEach((entry, index) => {
+		const kindText = entry.kinds.map((k) => `${k.kind} ×${k.count}`).join(", ")
+		lines.push(`  ${index + 1}. ${entry.sessionId} (${entry.agent}) — คะแนน ${entry.score} · ${kindText}`)
+	})
+	return lines.join("\n")
+}
+
+function renderText(sessions, counts, options, rankings) {
 	const lines = []
 	lines.push(`iCline chat-history diagnostics — ${options.dir}`)
 	lines.push(`sessions scanned: ${sessions.length}`)
+	lines.push("")
+	lines.push(renderExecutiveSummary(sessions, counts, rankings))
 	lines.push("")
 	lines.push("Summary")
 	if (Object.keys(counts).length === 0) {
@@ -319,13 +417,19 @@ function renderText(sessions, counts, options) {
 	return lines.join("\n").trimEnd() + "\n"
 }
 
-function renderMarkdown(sessions, counts, options) {
+function renderMarkdown(sessions, counts, options, rankings) {
 	const lines = []
 	lines.push("# iCline chat-history diagnostics")
 	lines.push("")
 	lines.push(`- sessions root: \`${options.dir}\``)
 	lines.push(`- sessions scanned: ${sessions.length}`)
 	lines.push(`- output-limit threshold: ${options.outputLimit} tokens`)
+	lines.push("")
+	lines.push("## สรุปผู้บริหาร (Executive Summary)")
+	lines.push("")
+	for (const line of renderExecutiveSummary(sessions, counts, rankings).split("\n").slice(1)) {
+		lines.push(line.startsWith("  ") ? line.replace(/^  (\d+)\. /, "$1. ") : line)
+	}
 	lines.push("")
 	lines.push("## Summary")
 	lines.push("")
@@ -376,16 +480,33 @@ function main() {
 	const files = listSessionFiles(options.dir)
 	const sessions = loadSessions(files, options)
 	const counts = summarize(sessions)
+	const rankings = rankFindings(sessions)
 
 	if (options.json) {
-		console.log(JSON.stringify({ dir: options.dir, outputLimit: options.outputLimit, counts, sessions }, null, 2))
+		console.log(
+			JSON.stringify(
+				{
+					dir: options.dir,
+					outputLimit: options.outputLimit,
+					counts,
+					severity: rankings.severityCounts,
+					topIssues: rankings.topIssues,
+					topSessions: rankings.topSessions,
+					sessions,
+				},
+				null,
+				2,
+			),
+		)
+	} else if (options.summary) {
+		process.stdout.write(renderExecutiveSummary(sessions, counts, rankings) + "\n")
 	} else {
-		process.stdout.write(renderText(sessions, counts, options))
+		process.stdout.write(renderText(sessions, counts, options, rankings))
 	}
 	if (options.out) {
 		mkdirSync(dirname(options.out), { recursive: true })
-		writeFileSync(options.out, renderMarkdown(sessions, counts, options), "utf8")
-		if (!options.json) {
+		writeFileSync(options.out, renderMarkdown(sessions, counts, options, rankings), "utf8")
+		if (!options.json && !options.summary) {
 			console.log(`\nreport written to ${options.out}`)
 		}
 	}
