@@ -215,12 +215,15 @@ function liveModelsCacheKeyForProvider(providerId: ProviderId): ModelsCacheKey |
 }
 
 function readLiveCachedModelInfo(providerId: ProviderId, modelId: string): ModelInfo | undefined {
-	const cacheKey = liveModelsCacheKeyForProvider(providerId)
-	if (!cacheKey) {
-		return undefined
-	}
 	try {
-		const cache = StateManager.get().getModelsCache(cacheKey)
+		const stateManager = StateManager.get()
+		// Built-in dynamic providers have fixed cache slots; a user-created
+		// custom gateway (arbitrary id, same Settings form) stores its
+		// /models-declared limits in the per-id bucket instead.
+		const cacheKey = liveModelsCacheKeyForProvider(providerId)
+		const cache = cacheKey
+			? stateManager.getModelsCache(cacheKey)
+			: stateManager.getCustomProviderModelsCache(providerSettingsProviderId(providerId))
 		const info = cache?.[modelId]
 		return isModelInfo(info) ? info : undefined
 	} catch {

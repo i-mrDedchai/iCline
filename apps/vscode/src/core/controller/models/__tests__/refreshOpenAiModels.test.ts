@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
 	axiosGet: vi.fn(),
 	readProviderConfig: vi.fn(),
 	setModelsCache: vi.fn(),
+	setCustomProviderModelsCache: vi.fn(),
 }))
 
 vi.mock("axios", () => ({
@@ -21,7 +22,10 @@ vi.mock("@/shared/net", () => ({
 
 vi.mock("@/core/storage/StateManager", () => ({
 	StateManager: {
-		get: () => ({ setModelsCache: mocks.setModelsCache }),
+		get: () => ({
+			setModelsCache: mocks.setModelsCache,
+			setCustomProviderModelsCache: mocks.setCustomProviderModelsCache,
+		}),
 	},
 }))
 
@@ -133,6 +137,7 @@ describe("refreshOpenAiModels", () => {
 				supportsPromptCache: false,
 			},
 		})
+		expect(mocks.setCustomProviderModelsCache).not.toHaveBeenCalled()
 		// Reading /models on a gated gateway needs the key too — both spellings
 		// go out, matching the SDK's model-source fetcher.
 		expect(mocks.axiosGet).toHaveBeenCalledWith(
@@ -155,13 +160,37 @@ describe("refreshOpenAiModels", () => {
 		expect(mocks.setModelsCache).toHaveBeenCalledWith("openAiCompatible", {})
 	})
 
-	it("does not touch the shared live cache for other provider families", async () => {
-		mocks.readProviderConfig.mockReturnValue({ baseUrl: "http://localhost:1234/v1" })
-		mocks.axiosGet.mockResolvedValue({ data: { data: [{ id: "model-alpha" }] } })
+	it("mirrors declared limits into the per-id bucket for a user-created custom provider", async () => {
+		// Custom gateways have arbitrary provider ids — no fixed cache slot can
+		// name them — so they get a per-id bucket with the same declared-limits
+		// contract as the openai-compatible family.
+		mocks.readProviderConfig.mockReturnValue({ baseUrl: "http://localhost:1234/v1", apiKey: "gw-key" })
+		mocks.axiosGet.mockResolvedValue({
+			data: {
+				data: [{ id: "gw-model-1", context_length: 555_555, max_output_tokens: 32_000 }],
+			},
+		})
 
 		const response = await refreshOpenAiModels(makeController(), OpenAiModelsRequest.create({ providerId: "my-gateway" }))
 
-		expect(response.values).toEqual(["model-alpha"])
+		expect(response.values).toEqual(["gw-model-1"])
+		expect(mocks.setCustomProviderModelsCache).toHaveBeenCalledWith("my-gateway", {
+			"gw-model-1": {
+				name: "gw-model-1",
+				contextWindow: 555_555,
+				maxTokens: 32_000,
+				supportsPromptCache: false,
+			},
+		})
 		expect(mocks.setModelsCache).not.toHaveBeenCalled()
+	})
+
+	it("clears the custom provider's bucket when the request fails", async () => {
+		mocks.readProviderConfig.mockReturnValue({ baseUrl: "http://localhost:1234/v1" })
+		mocks.axiosGet.mockRejectedValue(new Error("401 Unauthorized"))
+
+		await refreshOpenAiModels(makeController(), OpenAiModelsRequest.create({ providerId: "my-gateway" }))
+
+		expect(mocks.setCustomProviderModelsCache).toHaveBeenCalledWith("my-gateway", {})
 	})
 })

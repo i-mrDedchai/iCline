@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => {
 	type RegistryModel = { id: string } & Record<string, unknown>
 	let registryModelsByProvider: Record<string, Record<string, RegistryModel>> = {}
 	let modelsCacheByKey: Record<string, Record<string, ModelInfo>> = {}
+	let customModelsCacheById: Record<string, Record<string, ModelInfo>> = {}
 	let crossCatalogByModelId: Record<string, Record<string, unknown>> = {}
 	let modelsFile: { version: 1; providers: Record<string, { models?: Record<string, Record<string, unknown>> }> } = {
 		version: 1,
@@ -37,6 +38,7 @@ const mocks = vi.hoisted(() => {
 			registryModelsByProvider = {}
 			modelsFile = { version: 1, providers: {} }
 			modelsCacheByKey = {}
+			customModelsCacheById = {}
 			crossCatalogByModelId = {}
 			saveProviderSettings.mockClear()
 		},
@@ -76,6 +78,9 @@ const mocks = vi.hoisted(() => {
 		setModelsCache(key: string, models: Record<string, ModelInfo>): void {
 			modelsCacheByKey = { ...modelsCacheByKey, [key]: models }
 		},
+		setCustomModelsCache(providerId: string, models: Record<string, ModelInfo>): void {
+			customModelsCacheById = { ...customModelsCacheById, [providerId]: models }
+		},
 		setCrossCatalog(modelId: string, info: Record<string, unknown>): void {
 			crossCatalogByModelId = { ...crossCatalogByModelId, [modelId]: info }
 		},
@@ -89,6 +94,10 @@ const mocks = vi.hoisted(() => {
 				getModelsCache: (key: string) => modelsCacheByKey[key],
 				setModelsCache: (key: string, models: Record<string, ModelInfo>) => {
 					modelsCacheByKey = { ...modelsCacheByKey, [key]: models }
+				},
+				getCustomProviderModelsCache: (providerId: string) => customModelsCacheById[providerId],
+				setCustomProviderModelsCache: (providerId: string, models: Record<string, ModelInfo>) => {
+					customModelsCacheById = { ...customModelsCacheById, [providerId]: models }
 				},
 				setSecret: (key: keyof MockApiConfiguration, value: unknown) => {
 					apiConfiguration = { ...apiConfiguration, [key]: value }
@@ -1335,6 +1344,30 @@ describe("cross-provider catalog fill", () => {
 		expect(selection.modelInfoSource).toBe("catalog")
 		expect(selection.modelInfo.contextWindow).toBe(444_444)
 		expect(selection.modelInfo.maxTokens).toBe(64_000)
+	})
+
+	it("serves a user-created custom gateway's per-id bucket to any provider id, beating the cross-catalog majority", async () => {
+		const { resolveRuntimeModelSelection } = await import("./store")
+		// Custom gateways have arbitrary ids — no fixed live-cache slot names
+		// them — so the /models refresh writes a per-id bucket. Its declared
+		// limits must reach the Settings row exactly like the openai-compatible
+		// family's fixed slot: present for ids the catalog never heard of, and
+		// preferred over the cross-catalog majority.
+		mocks.setCustomModelsCache("my-gateway", {
+			"gw-model-1": {
+				name: "Gateway Model One",
+				contextWindow: 555_555,
+				maxTokens: 32_000,
+				supportsPromptCache: false,
+			},
+		})
+		mocks.setCrossCatalog("gw-model-1", { id: "gw-model-1", contextWindow: 999_999 })
+
+		const selection = resolveRuntimeModelSelection(parseProviderId("my-gateway"), "gw-model-1")
+
+		expect(selection.modelInfoSource).toBe("catalog")
+		expect(selection.modelInfo.contextWindow).toBe(555_555)
+		expect(selection.modelInfo.maxTokens).toBe(32_000)
 	})
 
 	it("keeps unknown models unknown — nothing is fabricated", async () => {

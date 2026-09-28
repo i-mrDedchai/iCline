@@ -13,21 +13,20 @@ import { Controller } from ".."
 
 /**
  * Mirror the endpoint's `/models` payload into the StateManager live models
- * cache for the openai-compatible provider family (the `openai-compatible`
- * and legacy `openai` spellings share one cache — they resolve to the same
- * stored provider).
+ * cache — the fixed `openAiCompatible` slot for the openai-compatible
+ * provider family (the `openai-compatible` and legacy `openai` spellings
+ * share one cache — they resolve to the same stored provider), and the
+ * per-id bucket for every other provider id (user-created custom gateways
+ * included: their ids are arbitrary, so no fixed slot can name them).
  *
  * Model-info resolution reads this cache as authoritative base metadata
- * (`readBaseModelInfoForProvider`), so a custom gateway's own declared limits
+ * (`readBaseModelInfoForProvider`), so a gateway's own declared limits
  * (context window etc.) reach the Settings "Context:" row instead of a blank
  * or a cross-catalog guess. Only what the endpoint declared is recorded —
  * unknown fields stay unknown. Fetch failures clear the cache so metadata
  * from a previous endpoint cannot linger after a baseUrl change.
  */
 function writeLiveModelsCache(providerId: ReturnType<typeof parseProviderId>, entries: ModelSourceEntry[]): void {
-	if (toSdkProviderId(providerId) !== "openai-compatible") {
-		return
-	}
 	const models: Record<string, ModelInfo> = {}
 	for (const entry of entries) {
 		models[entry.id] = {
@@ -38,7 +37,12 @@ function writeLiveModelsCache(providerId: ReturnType<typeof parseProviderId>, en
 			supportsPromptCache: false,
 		}
 	}
-	StateManager.get().setModelsCache("openAiCompatible", models)
+	const sdkProviderId = toSdkProviderId(providerId)
+	if (sdkProviderId === "openai-compatible") {
+		StateManager.get().setModelsCache("openAiCompatible", models)
+		return
+	}
+	StateManager.get().setCustomProviderModelsCache(sdkProviderId, models)
 }
 
 /**

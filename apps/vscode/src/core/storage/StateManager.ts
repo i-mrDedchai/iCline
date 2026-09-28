@@ -545,6 +545,35 @@ export class StateManager {
 	}
 
 	/**
+	 * Live models cache for user-created custom provider ids (keyed by the
+	 * normalized provider id). The fixed `modelInfoCache` above is a typed
+	 * union of built-in dynamic providers; a custom gateway has an arbitrary
+	 * id with no fixed slot, so its `/models`-declared limits land here.
+	 * Same TTL as {@link getModelsCache}.
+	 */
+	private customProviderModelsCache: Map<string, { data: Record<string, ModelInfo>; timestamp: number }> = new Map()
+
+	setCustomProviderModelsCache(providerId: string, models: Record<string, ModelInfo>): void {
+		this.customProviderModelsCache.set(providerId, { data: models, timestamp: Date.now() })
+	}
+
+	getCustomProviderModelsCache(providerId: string): Record<string, ModelInfo> | null {
+		const cached = this.customProviderModelsCache.get(providerId)
+
+		if (!cached) {
+			return null
+		}
+
+		// Check if cache has expired
+		if (Date.now() - cached.timestamp > this.MODEL_CACHE_TTL_MS) {
+			this.customProviderModelsCache.delete(providerId)
+			return null
+		}
+
+		return cached.data
+	}
+
+	/**
 	 * Get model info by provider and model ID (from in-memory cache)
 	 */
 	getModelInfo(
