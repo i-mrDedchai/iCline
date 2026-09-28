@@ -1052,6 +1052,22 @@ export class AgentRuntime {
 					// only give up after repeated tool-less truncations.
 					if (maxTokensContinuations < MAX_TOKENS_TURN_CONTINUATIONS) {
 						maxTokensContinuations += 1;
+						// Visible chat notice at the moment of truncation: the
+						// turn is being cut by the output limit and the runtime
+						// continues it automatically. Hosts render this as an
+						// info row ("turn truncated, continuing").
+						await this.emit({
+							type: "status-notice",
+							snapshot: this.snapshot(),
+							message: `turn truncated, continuing — the model hit the maximum output token limit (continuation ${maxTokensContinuations}/${MAX_TOKENS_TURN_CONTINUATIONS})`,
+							metadata: {
+								kind: "max_tokens_continuation",
+								reason: "max_tokens_continuation",
+								iteration: this.state.iteration,
+								attempt: maxTokensContinuations,
+								maxAttempts: MAX_TOKENS_TURN_CONTINUATIONS,
+							},
+						});
 						await this.emit({
 							type: "turn-finished",
 							snapshot: this.snapshot(),

@@ -447,6 +447,39 @@ describe("AgentRuntime", () => {
 		});
 	});
 
+	it("announces the output-limit continuation as a visible status notice", async () => {
+		const model = new ScriptedModel([
+			() => [
+				{ type: "reasoning-delta", text: "thinking..." },
+				{ type: "finish", reason: "max-tokens" },
+			],
+			() => [{ type: "text-delta", text: "done" }, { type: "finish", reason: "stop" }],
+		]);
+		const runtime = new AgentRuntime({ model });
+		const notices: Array<{
+			message: string;
+			metadata?: Record<string, unknown>;
+		}> = [];
+		runtime.subscribe((event) => {
+			if (event.type === "status-notice") {
+				notices.push({ message: event.message, metadata: event.metadata });
+			}
+		});
+
+		await runtime.run("Hi");
+
+		// The visible chat row for a cut turn: "turn truncated, continuing".
+		// Hosts render status notices as info rows, so the user sees the
+		// truncation the moment it happens instead of a mystery pause.
+		expect(notices).toHaveLength(1);
+		expect(notices[0]?.message).toContain("turn truncated, continuing");
+		expect(notices[0]?.metadata).toMatchObject({
+			kind: "max_tokens_continuation",
+			attempt: 1,
+			maxAttempts: 2,
+		});
+	});
+
 	it("fails after repeated output-limit truncations with no tool call in between", async () => {
 		const logger = {
 			debug: vi.fn(),
