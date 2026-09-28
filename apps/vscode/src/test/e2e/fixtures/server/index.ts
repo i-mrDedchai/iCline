@@ -332,13 +332,23 @@ export class ClineApiServerMock {
 
 				// Custom gateway stub: the model list is public knowledge only WITH
 				// the key — 401 without one, exactly like the real reseller
-				// endpoints this exercises (cleanapis.com/v1/models).
+				// endpoints this exercises (cleanapis.com/v1/models). It also
+				// behaves like a LiteLLM-style proxy: `x-api-key` is validated
+				// against a DIFFERENT credential table, so any request carrying
+				// that header is refused outright (403). This pins the fix.40
+				// regression contract end-to-end — if the fetcher ever forces
+				// `x-api-key` onto requests again, the model dropdown here goes
+				// empty and the test fails.
 				if (baseRoute === "/e2e-gateway/v1") {
 					if (endpoint === "/models" && method === "GET") {
+						const providedApiKeyHeader = Array.isArray(req.headers["x-api-key"])
+							? undefined
+							: req.headers["x-api-key"]
+						if (providedApiKeyHeader !== undefined) {
+							return sendApiError("Invalid x-api-key", 403)
+						}
 						const bearerToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : undefined
-						const providedKey =
-							bearerToken ?? (Array.isArray(req.headers["x-api-key"]) ? undefined : req.headers["x-api-key"])
-						if (providedKey !== E2E_GATEWAY_API_KEY) {
+						if (bearerToken !== E2E_GATEWAY_API_KEY) {
 							return sendApiError("Unauthorized", 401)
 						}
 						return sendJson(E2E_MOCK_GATEWAY_MODELS)

@@ -61,38 +61,85 @@ export async function refreshOpenAiModels(controller: Controller, request: OpenA
 		const baseUrl = providerConfig.baseUrl?.trim().replace(/\/+$/, "")
 		const apiKey = providerConfig.apiKey
 
-		if (!baseUrl) {
+		if (!baseUrl || !URL.canParse(baseUrl)) {
 			writeLiveModelsCache(providerId, [])
 			return StringArray.create({ values: [] })
 		}
 
-		if (!URL.canParse(baseUrl)) {
-			writeLiveModelsCache(providerId, [])
-			return StringArray.create({ values: [] })
+		// Attempt #1 is exactly the request this handler sent before fix.40:
+		// the user's custom headers plus `Authorization: Bearer` — nothing
+		// else. fix.40 forced an `x-api-key` header onto every request, which
+		// gateways that validate that header against a different credential
+		// table refuse outright — silently emptying the model list this call
+		// feeds. The alternative spelling now only rides along as a retry
+		// AFTER the key was refused the Bearer way (401/403), and a user's own
+		// `x-api-key` custom header is never overwritten.
+		const customHeaders = providerConfig.headers ?? {}
+		const attempts: Array<Record<string, string>> = [
+			{ ...customHeaders, ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}) },
+			...(apiKey ? [{ "x-api-key": apiKey, ...customHeaders, Authorization: `Bearer ${apiKey}` }] : []),
+		]
+
+		let payload: unknown
+		for (let index = 0; index < attempts.length; index += 1) {
+			const config: AxiosRequestConfig = {
+				headers: attempts[index],
+			}
+			try {
+				const response = await axios.get(`${baseUrl}/models`, { ...config, ...getAxiosSettings() })
+				payload = response.data
+				break
+			} catch (error) {
+				const status = axios.isAxiosError(error) ? error.response?.status : undefined
+				if (index + 1 < attempts.length && (status === 401 || status === 403)) {
+					continue
+				}
+				// Clear the cache (metadata must not linger past a dead endpoint)
+				// and let the error travel up: the form shows the message, so
+				// "the endpoint refused / is unreachable" stays distinguishable
+				// from "the extension lost my models" (the silent empty list of
+				// fix.40).
+				writeLiveModelsCache(providerId, [])
+				throw error
+			}
 		}
 
-		const config: AxiosRequestConfig = {
-			headers: {
-				...(providerConfig.headers ?? {}),
-				// Custom gateways (resellers, proxies like Cleanapis) commonly
-				// require the key to READ /models, not just to chat — send both
-				// spellings, matching the SDK's model-source fetcher.
-				...(apiKey ? { Authorization: `Bearer ${apiKey}`, "x-api-key": apiKey } : {}),
-			},
-		}
-
-		const response = await axios.get(`${baseUrl}/models`, { ...config, ...getAxiosSettings() })
 		// Full entries, not just ids: the ids feed the model dropdown, and the
-		// per-model limits the endpoint declares (context window etc.) are
-		// mirrored into the live models cache above.
-		const entries = extractModelsFromPayload(response.data, providerId.toString())
+		// per-model limits the endpoint declares are mirrored into the live
+		// models cache above. Ids the extractor does not recognize still keep
+		// the legacy scrape's behavior — this list must never hold fewer
+		// models than the pre-fix.40 scraper returned.
+		const entries = extractModelsFromPayload(payload, providerId.toString())
+		const ids = new Set(entries.map((entry) => entry.id))
+		const rawList = (payload as { data?: unknown } | null)?.data
+		if (Array.isArray(rawList)) {
+			for (const item of rawList) {
+				const candidate =
+					typeof item === "string"
+						? item
+						: item && typeof item === "object"
+							? String(
+									(item as { id?: unknown; name?: unknown; model?: unknown }).id ??
+										(item as { name?: unknown }).name ??
+										(item as { model?: unknown }).model ??
+										"",
+								)
+							: ""
+				const id = candidate.trim()
+				if (id && !ids.has(id)) {
+					ids.add(id)
+					entries.push({ id })
+				}
+			}
+		}
 		writeLiveModelsCache(providerId, entries)
-		const models = [...new Set<string>(entries.map((entry) => entry.id))]
 
-		return StringArray.create({ values: models })
+		return StringArray.create({ values: [...ids] })
 	} catch (error) {
 		Logger.error("Error fetching OpenAI models:", error)
-		writeLiveModelsCache(providerId, [])
-		return StringArray.create({ values: [] })
+		// Failures must be visible at the call site instead of masquerading as
+		// an empty model list — the webview renders this message next to the
+		// model dropdown.
+		throw error
 	}
 }

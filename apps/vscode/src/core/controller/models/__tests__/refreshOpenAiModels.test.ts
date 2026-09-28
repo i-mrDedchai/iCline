@@ -12,7 +12,9 @@ const mocks = vi.hoisted(() => ({
 vi.mock("axios", () => ({
 	default: {
 		get: mocks.axiosGet,
-		isAxiosError: vi.fn(() => false),
+		// Realistic enough for the auth ladder to read the status off a
+		// rejection (the real isAxiosError checks the same marker property).
+		isAxiosError: (error: unknown) => Boolean(error && typeof error === "object" && "isAxiosError" in error),
 	},
 }))
 
@@ -65,16 +67,45 @@ describe("refreshOpenAiModels", () => {
 		const response = await refreshOpenAiModels(makeController(), OpenAiModelsRequest.create({ providerId: "openai" }))
 
 		expect(response.values).toEqual(["model-alpha", "model-beta"])
+		// REGRESSION (fix.40): the first attempt must be exactly the
+		// pre-fix.40 request — custom headers + Bearer, nothing else. fix.40
+		// forced `x-api-key` onto every request, and gateways that validate
+		// that header against a different credential table refuse the request
+		// outright — silently emptying this list ("รายการโมเดลหายไปหมด").
+		expect(mocks.axiosGet).toHaveBeenCalledTimes(1)
 		expect(mocks.axiosGet).toHaveBeenCalledWith(
 			"http://localhost:1234/v1/models",
 			expect.objectContaining({
 				headers: {
 					"x-custom": "yes",
 					Authorization: "Bearer secret-key",
-					"x-api-key": "secret-key",
 				},
 			}),
 		)
+	})
+
+	it("adds x-api-key only after the Bearer way is refused", async () => {
+		mocks.readProviderConfig.mockReturnValue({ baseUrl: "http://localhost:1234/v1", apiKey: "secret-key" })
+		mocks.axiosGet.mockRejectedValueOnce({ isAxiosError: true, response: { status: 401 } })
+
+		const response = await refreshOpenAiModels(makeController(), OpenAiModelsRequest.create({ providerId: "openai" }))
+
+		expect(response.values).toEqual(["model-alpha", "model-beta"])
+		expect(mocks.axiosGet).toHaveBeenCalledTimes(2)
+		// Attempt #1: Bearer only…
+		expect((mocks.axiosGet.mock.calls[0][1] as { headers: Record<string, string> }).headers["x-api-key"]).toBeUndefined()
+		// …attempt #2: the alternative spelling is added as a retry.
+		expect((mocks.axiosGet.mock.calls[1][1] as { headers: Record<string, string> }).headers["x-api-key"]).toBe("secret-key")
+	})
+
+	it("does not escalate to x-api-key on non-auth failures", async () => {
+		mocks.readProviderConfig.mockReturnValue({ baseUrl: "http://localhost:1234/v1", apiKey: "secret-key" })
+		mocks.axiosGet.mockRejectedValueOnce({ isAxiosError: true, response: { status: 500 } })
+
+		await expect(
+			refreshOpenAiModels(makeController(), OpenAiModelsRequest.create({ providerId: "openai" })),
+		).rejects.toThrow()
+		expect(mocks.axiosGet).toHaveBeenCalledTimes(1)
 	})
 
 	it("strips trailing slashes from the base URL before appending /models", async () => {
@@ -94,13 +125,32 @@ describe("refreshOpenAiModels", () => {
 		expect(mocks.axiosGet).not.toHaveBeenCalled()
 	})
 
-	it("returns an empty list when the request fails", async () => {
+	it("surfaces the fetch failure instead of returning a silent empty list", async () => {
+		// The silent `values: []` of fix.40 made "the endpoint refused or is
+		// unreachable" indistinguishable from "the extension lost my models".
+		// The webview renders this rejection next to the model dropdown.
 		mocks.readProviderConfig.mockReturnValue({ baseUrl: "http://localhost:1234/v1" })
 		mocks.axiosGet.mockRejectedValue(new Error("boom"))
 
+		await expect(refreshOpenAiModels(makeController(), OpenAiModelsRequest.create({ providerId: "openai" }))).rejects.toThrow(
+			"boom",
+		)
+	})
+
+	it("keeps the legacy id scrape as a fallback for shapes the metadata extractor cannot describe", async () => {
+		// The model dropdown must never hold fewer models than the pre-fix.40
+		// scraper returned: an id like `7` (non-string) is no metadata to the
+		// extractor but is still a selectable model id to the form.
+		mocks.readProviderConfig.mockReturnValue({ baseUrl: "http://localhost:1234/v1" })
+		mocks.axiosGet.mockResolvedValue({
+			data: {
+				data: [{ id: 7 }, { id: "known-model" }],
+			},
+		})
+
 		const response = await refreshOpenAiModels(makeController(), OpenAiModelsRequest.create({ providerId: "openai" }))
 
-		expect(response.values).toEqual([])
+		expect(response.values).toEqual(["known-model", "7"])
 	})
 
 	// The live models cache is what makes the Settings "Context:" row show a
@@ -138,13 +188,10 @@ describe("refreshOpenAiModels", () => {
 			},
 		})
 		expect(mocks.setCustomProviderModelsCache).not.toHaveBeenCalled()
-		// Reading /models on a gated gateway needs the key too — both spellings
-		// go out, matching the SDK's model-source fetcher.
 		expect(mocks.axiosGet).toHaveBeenCalledWith(
 			"http://localhost:1234/v1/models",
 			expect.objectContaining({
-				headers: expect.objectContaining({
-					Authorization: "Bearer secret-key",
+				headers: expect.not.objectContaining({
 					"x-api-key": "secret-key",
 				}),
 			}),
@@ -155,7 +202,9 @@ describe("refreshOpenAiModels", () => {
 		mocks.readProviderConfig.mockReturnValue({ baseUrl: "http://localhost:1234/v1" })
 		mocks.axiosGet.mockRejectedValue(new Error("401 Unauthorized"))
 
-		await refreshOpenAiModels(makeController(), OpenAiModelsRequest.create({ providerId: "openai-compatible" }))
+		await expect(
+			refreshOpenAiModels(makeController(), OpenAiModelsRequest.create({ providerId: "openai-compatible" })),
+		).rejects.toThrow("401 Unauthorized")
 
 		expect(mocks.setModelsCache).toHaveBeenCalledWith("openAiCompatible", {})
 	})
@@ -189,7 +238,9 @@ describe("refreshOpenAiModels", () => {
 		mocks.readProviderConfig.mockReturnValue({ baseUrl: "http://localhost:1234/v1" })
 		mocks.axiosGet.mockRejectedValue(new Error("401 Unauthorized"))
 
-		await refreshOpenAiModels(makeController(), OpenAiModelsRequest.create({ providerId: "my-gateway" }))
+		await expect(
+			refreshOpenAiModels(makeController(), OpenAiModelsRequest.create({ providerId: "my-gateway" })),
+		).rejects.toThrow("401 Unauthorized")
 
 		expect(mocks.setCustomProviderModelsCache).toHaveBeenCalledWith("my-gateway", {})
 	})

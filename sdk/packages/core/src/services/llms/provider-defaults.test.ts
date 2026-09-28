@@ -616,7 +616,8 @@ describe("resolveProviderConfig", () => {
 
 		expect(fetchMock).toHaveBeenCalledWith(
 			"http://tailscale-host:11434/api/tags",
-			// headers carries auth when a key is configured (x-api-key + Bearer);
+			// headers carries auth when a key is configured (Bearer first,
+		// x-api-key only after a refusal);
 			// keyless local sources just send an empty set.
 			{ method: "GET", headers: {}, signal: expect.any(AbortSignal) },
 		);
@@ -1028,8 +1029,12 @@ describe("custom endpoint model metadata (/models of the provider)", () => {
 			string,
 			{ headers: Record<string, string> },
 		];
+		// Bearer only on the first attempt — `x-api-key` is added by the
+		// fetcher solely as a retry after the key is refused this way (fix.40
+		// sent both at once and lost model lists on gateways that reject an
+		// unknown `x-api-key` credential).
 		expect(init.headers.Authorization).toBe("Bearer sk-test");
-		expect(init.headers["x-api-key"]).toBe("sk-test");
+		expect(init.headers["x-api-key"]).toBeUndefined();
 		expect(resolved?.knownModels?.["gpt-5.6-sol"]).toMatchObject({
 			contextWindow: 444_000,
 			maxTokens: 64_000,

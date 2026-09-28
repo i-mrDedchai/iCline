@@ -80,7 +80,11 @@ describe("extractModelsFromPayload", () => {
 });
 
 describe("fetchModelsFromSource", () => {
-	it("sends the API key as both Authorization and x-api-key", async () => {
+	it("sends only a Bearer header first — the alternative spelling must never ride along unconditionally", async () => {
+		// REGRESSION (fix.40): every request used to carry BOTH spellings, and
+		// gateways that validate `x-api-key` against a different credential
+		// table refuse such requests outright — emptying model lists that used
+		// to work. The primary attempt is the OpenAI-compatible standard only.
 		const fetchMock = vi.fn(async () => ({
 			ok: true,
 			json: async () => ({ data: [{ id: "m", context_length: 1_000 }] }),
@@ -94,12 +98,59 @@ describe("fetchModelsFromSource", () => {
 		);
 
 		expect(entries).toEqual([{ id: "m", contextWindow: 1_000 }]);
+		expect(fetchMock).toHaveBeenCalledTimes(1);
 		const [, init] = fetchMock.mock.calls[0] as unknown as [
 			string,
 			{ headers: Record<string, string> },
 		];
 		expect(init.headers.Authorization).toBe("Bearer sk-test");
-		expect(init.headers["x-api-key"]).toBe("sk-test");
+		expect(init.headers["x-api-key"]).toBeUndefined();
+	});
+
+	it("adds x-api-key only after the key was refused the Bearer way", async () => {
+		// Gateways that read `x-api-key` instead of Bearer still work: the
+		// alternative spelling is retried after an auth refusal (401/403).
+		const fetchMock = vi.fn();
+		fetchMock.mockResolvedValueOnce({ ok: false, status: 401 });
+		fetchMock.mockResolvedValue({
+			ok: true,
+			json: async () => ({ data: [{ id: "m", context_length: 1_000 }] }),
+		});
+		vi.stubGlobal("fetch", fetchMock);
+
+		const entries = await fetchModelsFromSource(
+			"https://clean.example/v1/models",
+			"openai-compatible",
+			{ apiKey: "sk-test" },
+		);
+
+		expect(entries).toEqual([{ id: "m", contextWindow: 1_000 }]);
+		expect(fetchMock).toHaveBeenCalledTimes(2);
+		const [, firstInit] = fetchMock.mock.calls[0] as unknown as [
+			string,
+			{ headers: Record<string, string> },
+		];
+		const [, secondInit] = fetchMock.mock.calls[1] as unknown as [
+			string,
+			{ headers: Record<string, string> },
+		];
+		expect(firstInit.headers["x-api-key"]).toBeUndefined();
+		expect(secondInit.headers["x-api-key"]).toBe("sk-test");
+		expect(secondInit.headers.Authorization).toBe("Bearer sk-test");
+	});
+
+	it("does not escalate to x-api-key on non-auth failures", async () => {
+		const fetchMock = vi.fn(async () => ({ ok: false, status: 500 }));
+		vi.stubGlobal("fetch", fetchMock);
+
+		await expect(
+			fetchModelsFromSource(
+				"https://clean.example/v1/models",
+				"openai-compatible",
+				{ apiKey: "sk-test" },
+			),
+		).rejects.toThrow("HTTP 500");
+		expect(fetchMock).toHaveBeenCalledTimes(1);
 	});
 
 	it("omits auth headers when no key is configured", async () => {

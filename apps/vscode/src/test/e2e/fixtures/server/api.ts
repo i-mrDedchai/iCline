@@ -181,7 +181,11 @@ export const E2E_MOCK_OUTPUT_LIMIT_RESPONSES = {
 // and asserts the Settings "Context:" row shows the DECLARED window.
 // ---------------------------------------------------------------------------
 
-/** API key the gateway requires on /models (sent as Bearer and x-api-key). */
+/**
+ * API key the gateway requires on /models — accepted ONLY as a Bearer token.
+ * A request carrying an `x-api-key` header is refused with 403 (LiteLLM-style
+ * proxy behavior).
+ */
 export const E2E_GATEWAY_API_KEY = "e2e-gateway-key-444"
 
 /**

@@ -186,9 +186,10 @@ export function extractModelIdsFromPayload(
 
 export interface FetchModelSourceOptions {
 	/**
-	 * API key for endpoints that require authentication. Sent as both an
-	 * `Authorization: Bearer` header and an `x-api-key` header (the two
-	 * spellings OpenAI-compatible gateways ask for).
+	 * API key for endpoints that require authentication. Sent as an
+	 * `Authorization: Bearer` header first (the OpenAI-compatible standard);
+	 * the `x-api-key` spelling is added only as a retry after the key was
+	 * refused the Bearer way.
 	 */
 	apiKey?: string;
 }
@@ -198,26 +199,41 @@ export async function fetchModelsFromSource(
 	providerId: string,
 	options: FetchModelSourceOptions = {},
 ): Promise<ModelSourceEntry[]> {
-	const headers: Record<string, string> = {};
 	const token = options.apiKey?.trim();
-	if (token) {
-		headers.Authorization = `Bearer ${token}`;
-		headers["x-api-key"] = token;
+	// The primary attempt is exactly the OpenAI-compatible standard: a Bearer
+	// header alone. Some gateways (LiteLLM-style proxies) validate `x-api-key`
+	// against a DIFFERENT credential table and refuse the request outright
+	// when it carries an unknown one — so that spelling must never ride along
+	// unconditionally. It is added only as a retry after the key was refused
+	// the Bearer way (401/403), covering gateways that read `x-api-key`
+	// instead.
+	const attempts: Array<Record<string, string>> = token
+		? [
+				{ Authorization: `Bearer ${token}` },
+				{ Authorization: `Bearer ${token}`, "x-api-key": token },
+			]
+		: [{}];
+	let lastStatus = 0;
+	for (const headers of attempts) {
+		const response = await fetch(url, {
+			method: "GET",
+			headers,
+			signal: AbortSignal.timeout(5_000),
+		});
+		if (response.ok) {
+			return extractModelsFromPayload(
+				(await response.json()) as unknown,
+				providerId,
+			);
+		}
+		lastStatus = response.status;
+		// Only an auth refusal may escalate to the alternative spelling; any
+		// other failure is the endpoint's own answer and stands.
+		if (response.status !== 401 && response.status !== 403) {
+			break;
+		}
 	}
-	const response = await fetch(url, {
-		method: "GET",
-		headers,
-		signal: AbortSignal.timeout(5_000),
-	});
-	if (!response.ok) {
-		throw new Error(
-			`failed to fetch models from ${url}: HTTP ${response.status}`,
-		);
-	}
-	return extractModelsFromPayload(
-		(await response.json()) as unknown,
-		providerId,
-	);
+	throw new Error(`failed to fetch models from ${url}: HTTP ${lastStatus}`);
 }
 
 export async function fetchModelIdsFromSource(
