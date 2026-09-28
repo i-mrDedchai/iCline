@@ -1,5 +1,6 @@
 export { CLINE_DEFAULT_MODEL_ID } from "@cline/shared";
 export type {
+	CrossProviderModelMatch,
 	GetModelsForProviderOptions,
 	ModelCollection,
 	ModelIdAliasRule,
@@ -11,8 +12,10 @@ export type {
 } from "./models";
 export {
 	CODEX_EFFECTIVE_CONTEXT_WINDOW_PERCENT,
+	fillCrossProviderModelInfo,
 	filterImageOutputModels,
 	filterOpenAICodexModels,
+	findCrossProviderModelInfo,
 	GENERATED_CLINE_RECOMMENDED_MODELS,
 	getAllProviders,
 	getGeneratedModelsForProvider,

@@ -12,6 +12,8 @@ const gatewayMock = vi.hoisted(() => {
 		createHandlerAsync: vi.fn(),
 		// Merged registry model lookup (runtime-registered models included).
 		getModelsForProviderSync: vi.fn(() => ({})),
+		// Cross-provider catalog fill (default: no match, base unchanged).
+		fillCrossProviderModelInfo: vi.fn((base: unknown, _modelId: string) => base),
 	};
 });
 
@@ -19,6 +21,7 @@ vi.mock("@cline/llms", async (importOriginal) => ({
 	createGateway: gatewayMock.createGateway,
 	MODEL_COLLECTIONS_BY_PROVIDER_ID: {},
 	getModelsForProviderSync: gatewayMock.getModelsForProviderSync,
+	fillCrossProviderModelInfo: gatewayMock.fillCrossProviderModelInfo,
 	hasRegisteredHandler: gatewayMock.hasRegisteredHandler,
 	createHandlerAsync: gatewayMock.createHandlerAsync,
 	normalizeProviderId: (id: string) => id,
@@ -42,6 +45,8 @@ describe("createAgentModelFromConfig", () => {
 		gatewayMock.createHandlerAsync.mockReset();
 		gatewayMock.getModelsForProviderSync.mockReset();
 		gatewayMock.getModelsForProviderSync.mockReturnValue({});
+		gatewayMock.fillCrossProviderModelInfo.mockReset();
+		gatewayMock.fillCrossProviderModelInfo.mockImplementation((base: unknown, _modelId: string) => base);
 	});
 
 	it("forwards effective telemetry into the gateway", async () => {
@@ -216,6 +221,87 @@ describe("createAgentModelFromConfig", () => {
 				},
 				releaseDate: "2026-04-02",
 			},
+		});
+	});
+
+	it("surfaces cross-provider catalog metadata for a model the provider slot does not describe", async () => {
+		const { createAgentModelFromConfig } = await import("./handler-factory");
+		// The custom-gateway case: `gpt-5.6-sol` has no row under
+		// `openai-compatible`, but the bundled catalog describes it under other
+		// provider keys — the fill surfaces those limits to the gateway.
+		gatewayMock.fillCrossProviderModelInfo.mockImplementation(
+			(base: unknown, modelId: string) =>
+				modelId === "gpt-5.6-sol"
+					? {
+							...(base as Record<string, unknown> | undefined),
+							id: modelId,
+							name: "GPT-5.6 Sol",
+							contextWindow: 1_050_000,
+							maxInputTokens: 922_000,
+						}
+					: base,
+		);
+
+		createAgentModelFromConfig(
+			{
+				providerId: "openai-compatible",
+				modelId: "gpt-5.6-sol",
+				apiKey: "key",
+				systemPrompt: "",
+				tools: [],
+			},
+			undefined,
+		);
+
+		const gatewayConfig = (
+			gatewayMock.createGateway.mock.calls as unknown as Array<
+				[{ providerConfigs: Array<{ models: Array<Record<string, unknown>> }> }]
+			>
+		)[0][0];
+		const model = gatewayConfig.providerConfigs[0].models[0];
+		expect(model).toMatchObject({
+			id: "gpt-5.6-sol",
+			name: "GPT-5.6 Sol",
+			contextWindow: 1_050_000,
+			maxInputTokens: 922_000,
+		});
+	});
+
+	it("caller-configured limits still win over cross-provider catalog metadata", async () => {
+		const { createAgentModelFromConfig } = await import("./handler-factory");
+		gatewayMock.fillCrossProviderModelInfo.mockImplementation(
+			(base: unknown, modelId: string) =>
+				modelId === "gpt-5.6-sol"
+					? { ...(base as Record<string, unknown> | undefined), id: modelId, contextWindow: 1_050_000 }
+					: base,
+		);
+
+		createAgentModelFromConfig(
+			{
+				providerId: "openai-compatible",
+				modelId: "gpt-5.6-sol",
+				apiKey: "key",
+				systemPrompt: "",
+				tools: [],
+				providerConfig: {
+					providerId: "openai-compatible",
+					modelId: "gpt-5.6-sol",
+					maxInputTokens: 50_000,
+				},
+			},
+			undefined,
+		);
+
+		const gatewayConfig = (
+			gatewayMock.createGateway.mock.calls as unknown as Array<
+				[{ providerConfigs: Array<{ models: Array<Record<string, unknown>> }> }]
+			>
+		)[0][0];
+		const model = gatewayConfig.providerConfigs[0].models[0];
+		expect(model).toMatchObject({
+			id: "gpt-5.6-sol",
+			contextWindow: 50_000,
+			maxInputTokens: 50_000,
 		});
 	});
 

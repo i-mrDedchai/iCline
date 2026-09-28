@@ -5,7 +5,7 @@ import {
 	syncStoredProviderRegistration,
 	writeModelsFileSync,
 } from "@cline/core"
-import { getGeneratedModelsForProvider, getModelsForProviderSync } from "@cline/llms"
+import { fillCrossProviderModelInfo, getGeneratedModelsForProvider, getModelsForProviderSync } from "@cline/llms"
 import { ModelCapabilitySchema } from "@cline/shared"
 import { type ApiConfiguration, type ApiProvider, type ModelInfo, openAiModelInfoSafeDefaults } from "@shared/api"
 import { ApiFormat } from "@shared/proto/cline/models"
@@ -277,6 +277,61 @@ function legacyDiffBaseModelInfo(modelId: string): ModelInfo {
 	return sanitizeResolvedModelInfo({ ...openAiModelInfoSafeDefaults, name: modelId })
 }
 
+/**
+ * Cross-provider catalog metadata for a model id (adapted to extension
+ * ModelInfo). The catalog is keyed provider → model id, so a custom gateway
+ * selling `gpt-5.6-sol` has no row under its own provider slot even though the
+ * bundled catalog describes the model under 16 other keys — this reads that
+ * knowledge instead of showing no context at all.
+ */
+function crossCatalogModelInfo(modelId: string): ModelInfo | undefined {
+	try {
+		const sdkInfo = fillCrossProviderModelInfo(undefined, modelId)
+		return sdkInfo ? adaptSdkModelInfo(sdkInfo) : undefined
+	} catch {
+		return undefined
+	}
+}
+
+const CROSS_CATALOG_FILL_KEYS = [
+	"name",
+	"description",
+	"maxTokens",
+	"contextWindow",
+	"supportsImages",
+	"supportsReasoning",
+	"inputPrice",
+	"outputPrice",
+	"thinkingConfig",
+	"supportsGlobalEndpoint",
+	"cacheWritesPrice",
+	"cacheReadsPrice",
+	"tiers",
+	"temperature",
+	"apiFormat",
+] as const satisfies readonly (keyof ModelInfo)[]
+
+/**
+ * Fill MISSING fields of `base` from cross-provider catalog metadata.
+ * Declared values (user config, provider-scoped catalog, real state snapshots)
+ * always win — this cannot reintroduce fabricated metadata, it only fills what
+ * is genuinely absent.
+ */
+function fillMissingFrom(base: ModelInfo, fill: ModelInfo | undefined): ModelInfo {
+	if (!fill) {
+		return base
+	}
+	const next = { ...base }
+	let changed = false
+	for (const key of CROSS_CATALOG_FILL_KEYS) {
+		if (next[key] === undefined && fill[key] !== undefined) {
+			;(next as unknown as Record<string, unknown>)[key] = (fill as unknown as Record<string, unknown>)[key]
+			changed = true
+		}
+	}
+	return changed ? sanitizeResolvedModelInfo(next) : base
+}
+
 function toStoredCapabilities(capabilities: readonly string[] | undefined): StoredModelEntry["capabilities"] | undefined {
 	if (!capabilities) {
 		return undefined
@@ -520,10 +575,17 @@ function resolveSelection(selection: ModelSelection, stateModelInfoHint?: ModelI
 	)
 	// Base resolution order: SDK catalog, then the picker's persisted state
 	// snapshot (the only accurate data for dynamic-list models the static
-	// catalog does not know), then provider-safe fallback defaults.
+	// catalog does not know), then provider-safe fallback defaults. Whatever
+	// wins, cross-provider catalog metadata fills only the fields that are
+	// still missing — a custom gateway's model (no row under its provider
+	// slot) keeps showing its real context window instead of a blank.
 	const catalogModelInfo = readBaseModelInfoForProvider(selection.providerId, selection.modelId)
-	const baseModelInfo = catalogModelInfo ?? stateModelInfoHint ?? fallbackModelInfo(selection.modelId)
-	const modelInfoSource = catalogModelInfo ? "catalog" : stateModelInfoHint ? "state" : "fallback"
+	const crossInfo = crossCatalogModelInfo(selection.modelId)
+	const baseModelInfo = fillMissingFrom(
+		catalogModelInfo ?? stateModelInfoHint ?? fallbackModelInfo(selection.modelId),
+		crossInfo,
+	)
+	const modelInfoSource = catalogModelInfo ? "catalog" : stateModelInfoHint ? "state" : crossInfo ? "catalog" : "fallback"
 	return {
 		...selection,
 		overrides,

@@ -1,6 +1,7 @@
 import {
 	createGateway,
 	createHandlerAsync,
+	fillCrossProviderModelInfo,
 	getModelsForProviderSync,
 	hasRegisteredHandler,
 	normalizeProviderId,
@@ -113,6 +114,22 @@ export function resolveKnownModelsFromConfig(
 		? pc.knownModels
 		: (config.knownModels ??
 			(Object.keys(registryModels).length > 0 ? registryModels : undefined));
+	// The selected model may be unknown to this provider slot (a custom
+	// gateway selling a catalog model id) while the bundled catalog describes
+	// it under other provider keys. Surface that metadata — fill-only, never
+	// overriding declared values — so the gateway budgets against the real
+	// context window instead of fabricated defaults.
+	const selectedBase = fillCrossProviderModelInfo(
+		knownModels?.[config.modelId],
+		config.modelId,
+	);
+	const withSelected =
+		knownModels === undefined && selectedBase === undefined
+			? undefined
+			: {
+					...(knownModels ?? {}),
+					...(selectedBase ? { [config.modelId]: selectedBase } : {}),
+				};
 	// Caller-configured limits are authoritative for the selected model —
 	// surface them to the gateway so the resolved model definition carries
 	// the right limits (e.g. Ollama's num_ctx derives from the resolved
@@ -127,12 +144,12 @@ export function resolveKnownModelsFromConfig(
 			? pc.modelInfo
 			: undefined;
 	if (configuredContextWindow === undefined && !modelInfo) {
-		return knownModels;
+		return withSelected;
 	}
 	return {
-		...(knownModels ?? {}),
+		...(withSelected ?? {}),
 		[config.modelId]: {
-			...knownModels?.[config.modelId],
+			...withSelected?.[config.modelId],
 			...(configuredContextWindow !== undefined
 				? {
 						contextWindow: configuredContextWindow,

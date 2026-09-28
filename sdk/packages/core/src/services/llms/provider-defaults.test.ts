@@ -952,3 +952,36 @@ describe("runtime registry integration (models.json)", () => {
 		});
 	});
 });
+
+describe("cross-provider catalog fill", () => {
+	afterEach(() => {
+		resetRegistry();
+	});
+
+	it("fills missing limits for a model the provider slot does not describe", async () => {
+		// A custom gateway (models.json partial entry) selling a catalog id: the
+		// entry declares no context window, but the bundled catalog knows the
+		// model under other provider keys (gpt-5.6-sol: 1,050,000 majority).
+		registerModel("openai-compatible", "gpt-5.6-sol", {
+			id: "gpt-5.6-sol",
+			name: "GPT-5.6 Sol",
+		});
+
+		const resolved = await resolveProviderConfig("openai-compatible");
+		expect(resolved?.knownModels?.["gpt-5.6-sol"]).toMatchObject({
+			contextWindow: 1_050_000,
+		});
+	});
+
+	it("never overrides a context window the user declared", async () => {
+		registerModel("openai-compatible", "gpt-5.6-sol", {
+			id: "gpt-5.6-sol",
+			contextWindow: 123_456,
+		});
+
+		const resolved = await resolveProviderConfig("openai-compatible");
+		expect(resolved?.knownModels?.["gpt-5.6-sol"]).toMatchObject({
+			contextWindow: 123_456,
+		});
+	});
+});

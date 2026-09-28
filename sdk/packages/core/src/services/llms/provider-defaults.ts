@@ -164,6 +164,43 @@ async function loadGeneratedProviderModels(): Promise<
 	return Llms.getGeneratedProviderModels();
 }
 
+/**
+ * Fill missing model metadata from the cross-provider catalog lookup.
+ *
+ * A model id a provider slot does not describe (a custom gateway selling
+ * `gpt-5.6-sol`, say) is still known to the bundled catalog under other
+ * provider keys, with the real context window — so instead of showing no
+ * context at all (or, before, a fabricated 128K), the merged catalog fills
+ * what is missing. Entries that already carry both limits are left untouched
+ * (user config and the provider-scoped catalog always win), and ids the
+ * catalog does not know anywhere are never fabricated.
+ */
+function enrichKnownModelsFromCrossCatalog(
+	knownModels: Record<string, ModelInfo>,
+): Record<string, ModelInfo> {
+	let changed = false;
+	const next: Record<string, ModelInfo> = {};
+	for (const [modelId, info] of Object.entries(knownModels)) {
+		const limitsPresent =
+			typeof info.contextWindow === "number" &&
+			info.contextWindow > 0 &&
+			typeof info.maxInputTokens === "number" &&
+			info.maxInputTokens > 0;
+		if (limitsPresent) {
+			next[modelId] = info;
+			continue;
+		}
+		const filled = Llms.fillCrossProviderModelInfo(info, modelId);
+		if (filled && filled !== info) {
+			changed = true;
+			next[modelId] = filled;
+		} else {
+			next[modelId] = info;
+		}
+	}
+	return changed ? next : knownModels;
+}
+
 async function mergeKnownModels(
 	providerId: string,
 	defaultKnownModels: Record<string, ModelInfo> = {},
@@ -1036,7 +1073,7 @@ export async function resolveProviderConfig(
 
 		return {
 			...defaults,
-			knownModels,
+			knownModels: enrichKnownModelsFromCrossCatalog(knownModels),
 		};
 	} catch (error) {
 		if (modelCatalog?.failOnError) {

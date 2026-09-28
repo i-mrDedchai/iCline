@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => {
 	type RegistryModel = { id: string } & Record<string, unknown>
 	let registryModelsByProvider: Record<string, Record<string, RegistryModel>> = {}
 	let modelsCacheByKey: Record<string, Record<string, ModelInfo>> = {}
+	let crossCatalogByModelId: Record<string, Record<string, unknown>> = {}
 	let modelsFile: { version: 1; providers: Record<string, { models?: Record<string, Record<string, unknown>> }> } = {
 		version: 1,
 		providers: {},
@@ -36,6 +37,7 @@ const mocks = vi.hoisted(() => {
 			registryModelsByProvider = {}
 			modelsFile = { version: 1, providers: {} }
 			modelsCacheByKey = {}
+			crossCatalogByModelId = {}
 			saveProviderSettings.mockClear()
 		},
 		setApiConfiguration(value: MockApiConfiguration): void {
@@ -73,6 +75,12 @@ const mocks = vi.hoisted(() => {
 		},
 		setModelsCache(key: string, models: Record<string, ModelInfo>): void {
 			modelsCacheByKey = { ...modelsCacheByKey, [key]: models }
+		},
+		setCrossCatalog(modelId: string, info: Record<string, unknown>): void {
+			crossCatalogByModelId = { ...crossCatalogByModelId, [modelId]: info }
+		},
+		getCrossCatalog(modelId: string): Record<string, unknown> | undefined {
+			return crossCatalogByModelId[modelId]
 		},
 		getStateManager() {
 			return {
@@ -121,6 +129,9 @@ vi.mock("@cline/llms", () => ({
 	getGeneratedModelsForProvider: vi.fn((providerId: string) => mocks.getGeneratedModels(providerId)),
 	getModelsForProviderSync: vi.fn((providerId: string) => mocks.getRegistryModels(providerId)),
 	MODEL_COLLECTIONS_BY_PROVIDER_ID: {},
+	// SDK-shaped cross-provider catalog lookup; the store does its own
+	// fill-only-missing merge on top of the result.
+	fillCrossProviderModelInfo: vi.fn((base: unknown, modelId: string) => mocks.getCrossCatalog(modelId) ?? base),
 }))
 
 const modelInfoA: ModelInfo = {
@@ -1257,5 +1268,52 @@ describe("createProviderConfigStore", () => {
 		expect(selection?.modelInfoSource).not.toBe("fallback")
 		expect(selection?.modelInfo.contextWindow).toBe(200_000)
 		expect(mocks.getSavedProviderSettings("openrouter")?.model).toBe(liveOnlyId)
+	})
+})
+
+describe("cross-provider catalog fill", () => {
+	beforeEach(() => {
+		mocks.reset()
+		vi.clearAllMocks()
+		vi.resetModules()
+	})
+
+	it("shows the cross-provider catalog window for a model its provider slot does not describe", async () => {
+		const { resolveRuntimeModelSelection } = await import("./store")
+		// The Cleanapis case: an openai-compatible gateway selling a catalog
+		// model id that has no row under the provider's own slot.
+		mocks.setCrossCatalog("gpt-5.6-sol", {
+			id: "gpt-5.6-sol",
+			name: "GPT-5.6 Sol",
+			contextWindow: 1_050_000,
+			maxTokens: 128_000,
+		})
+
+		const selection = resolveRuntimeModelSelection(parseProviderId("openai-compatible"), "gpt-5.6-sol")
+
+		expect(selection.modelInfoSource).toBe("catalog")
+		expect(selection.modelInfo.contextWindow).toBe(1_050_000)
+		expect(selection.modelInfo.maxTokens).toBe(128_000)
+	})
+
+	it("never overrides metadata the provider-scoped catalog already declared", async () => {
+		const { resolveRuntimeModelSelection } = await import("./store")
+		mocks.setRegistryModels("openai-compatible", {
+			"declared-model": { id: "declared-model", name: "Declared", contextWindow: 333_000 },
+		})
+		mocks.setCrossCatalog("declared-model", { id: "declared-model", contextWindow: 999_999 })
+
+		const selection = resolveRuntimeModelSelection(parseProviderId("openai-compatible"), "declared-model")
+
+		expect(selection.modelInfo.contextWindow).toBe(333_000)
+	})
+
+	it("keeps unknown models unknown — nothing is fabricated", async () => {
+		const { resolveRuntimeModelSelection } = await import("./store")
+
+		const selection = resolveRuntimeModelSelection(parseProviderId("openai-compatible"), "mystery-model")
+
+		expect(selection.modelInfoSource).toBe("fallback")
+		expect(selection.modelInfo.contextWindow).toBeUndefined()
 	})
 })

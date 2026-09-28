@@ -1,3 +1,8 @@
+export type { CrossProviderModelMatch } from "./catalog/catalog-cross-lookup";
+export {
+	fillCrossProviderModelInfo,
+	findCrossProviderModelInfo,
+} from "./catalog/catalog-cross-lookup";
 export {
 	getGeneratedModelsForProvider,
 	getGeneratedProviderModels,

@@ -146,6 +146,32 @@ export function unregisterModel(providerId: string, modelId: string): boolean {
 	return CUSTOM_MODELS.get(providerId)?.delete(modelId) ?? false;
 }
 
+/**
+ * Runtime-registered models (models.json `registerModel` entries and custom
+ * provider collections) matched by model id across ALL providers. This is the
+ * live input for cross-provider metadata lookups: it reads the registry
+ * directly (no merged views, no cache) so `registerModel` results are never
+ * stale and providers that only exist as CUSTOM_MODELS keys are not missed.
+ */
+export function findRegisteredModelsSync(
+	modelId: string,
+): { providerId: string; info: ModelInfo }[] {
+	const out: { providerId: string; info: ModelInfo }[] = [];
+	for (const [providerId, models] of CUSTOM_MODELS) {
+		const info = models.get(modelId);
+		if (info) {
+			out.push({ providerId, info });
+		}
+	}
+	for (const [providerId, collection] of CUSTOM_PROVIDERS) {
+		const info = collection.models[modelId];
+		if (info) {
+			out.push({ providerId, info });
+		}
+	}
+	return out;
+}
+
 export function unregisterProvider(providerId: string): boolean {
 	CUSTOM_MODELS.delete(providerId);
 	return CUSTOM_PROVIDERS.delete(providerId);
