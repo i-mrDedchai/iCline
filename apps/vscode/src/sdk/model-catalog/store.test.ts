@@ -1308,6 +1308,35 @@ describe("cross-provider catalog fill", () => {
 		expect(selection.modelInfo.contextWindow).toBe(333_000)
 	})
 
+	it("prefers the endpoint's own /models-declared window (live cache) over the cross-catalog majority", async () => {
+		const { resolveRuntimeModelSelection } = await import("./store")
+		// The Settings form's /models refresh mirrors the endpoint's declared
+		// limits into the live models cache (refreshOpenAiModels). The reseller
+		// declares 444_444 for `gpt-5.6-sol` while the bundled catalog's
+		// majority votes 1_050_000 — the provider's own statement must win,
+		// exactly as it would if the user read it on the provider's website.
+		mocks.setModelsCache("openAiCompatible", {
+			"gpt-5.6-sol": {
+				name: "GPT-5.6 Sol",
+				contextWindow: 444_444,
+				maxTokens: 64_000,
+				supportsPromptCache: false,
+			},
+		})
+		mocks.setCrossCatalog("gpt-5.6-sol", {
+			id: "gpt-5.6-sol",
+			name: "GPT-5.6 Sol",
+			contextWindow: 1_050_000,
+			maxTokens: 128_000,
+		})
+
+		const selection = resolveRuntimeModelSelection(parseProviderId("openai-compatible"), "gpt-5.6-sol")
+
+		expect(selection.modelInfoSource).toBe("catalog")
+		expect(selection.modelInfo.contextWindow).toBe(444_444)
+		expect(selection.modelInfo.maxTokens).toBe(64_000)
+	})
+
 	it("keeps unknown models unknown — nothing is fabricated", async () => {
 		const { resolveRuntimeModelSelection } = await import("./store")
 

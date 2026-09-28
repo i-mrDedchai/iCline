@@ -61,6 +61,14 @@ export {
 	syncStoredProviderRegistration,
 } from "../../../../sdk/packages/core/src/services/providers/local-provider-registry"
 
+// Real /models payload extraction re-exported from the sdk source, so tests
+// exercise the same id/declared-limits parsing as production (refreshOpenAiModels
+// mirrors those limits into the live models cache).
+export {
+	extractModelsFromPayload,
+	type ModelSourceEntry,
+} from "../../../../sdk/packages/core/src/services/providers/model-source"
+
 export type GlobalCompactionStrategy = "basic" | "agentic"
 
 export function readCompactionStrategyGlobally(): GlobalCompactionStrategy {

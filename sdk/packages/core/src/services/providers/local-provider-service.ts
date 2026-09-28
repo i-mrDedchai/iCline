@@ -45,7 +45,8 @@ import {
 	writeModelsFile,
 } from "./local-provider-registry";
 import {
-	fetchModelIdsFromSource,
+	fetchModelsFromSource,
+	type ModelSourceEntry,
 	resolveModelsSourceUrl,
 } from "./model-source";
 import { isProviderSettingsUsable } from "./provider-readiness";
@@ -349,17 +350,25 @@ function normalizeHeaders(
 }
 
 function buildProviderModels(
-	modelIds: string[],
+	entries: ModelSourceEntry[],
 	capabilities: ProviderCapability[] | undefined,
 ) {
 	const supportsVision = capabilities?.includes("vision") ?? false;
 	const supportsReasoning = capabilities?.includes("reasoning") ?? false;
 	return Object.fromEntries(
-		modelIds.map((id) => [
-			id,
+		entries.map((entry) => [
+			entry.id,
 			{
-				id,
-				name: id,
+				id: entry.id,
+				name: entry.name ?? entry.id,
+				// Per-model limits the provider's own /models payload declared.
+				...(entry.contextWindow !== undefined
+					? { contextWindow: entry.contextWindow }
+					: {}),
+				...(entry.maxInputTokens !== undefined
+					? { maxInputTokens: entry.maxInputTokens }
+					: {}),
+				...(entry.maxTokens !== undefined ? { maxTokens: entry.maxTokens } : {}),
 				supportsVision,
 				supportsAttachments: supportsVision,
 				supportsReasoning,
@@ -368,20 +377,29 @@ function buildProviderModels(
 	);
 }
 
-async function resolveModelIds(params: {
+async function resolveModelEntries(params: {
 	providerId: string;
 	explicitModels?: string[];
 	modelsSourceUrl?: string;
 	fallbackModelIds?: string[];
 	shouldRecompute: boolean;
-}): Promise<string[]> {
+	apiKey?: string;
+}): Promise<ModelSourceEntry[]> {
 	if (!params.shouldRecompute) {
-		return params.fallbackModelIds ?? [];
+		return (params.fallbackModelIds ?? []).map((id) => ({ id }));
 	}
-	const fetchedModels = params.modelsSourceUrl
-		? await fetchModelIdsFromSource(params.modelsSourceUrl, params.providerId)
+	const fetched: ModelSourceEntry[] = params.modelsSourceUrl
+		? await fetchModelsFromSource(params.modelsSourceUrl, params.providerId, {
+				apiKey: params.apiKey,
+			})
 		: [];
-	return [...new Set([...(params.explicitModels ?? []), ...fetchedModels])];
+	const byId = new Map(fetched.map((entry) => [entry.id, entry]));
+	const ids = [
+		...new Set([...(params.explicitModels ?? []), ...fetched.map((e) => e.id)]),
+	];
+	// Typed ids keep their identity; when the source also knows the id, its
+	// declared limits are used.
+	return ids.map((id) => byId.get(id) ?? { id });
 }
 
 function removeProviderFromSettingsState(
@@ -455,12 +473,14 @@ export async function addLocalProvider(
 
 	const typedModels = uniqueTrimmed(request.models);
 	const sourceUrl = request.modelsSourceUrl?.trim();
-	const modelIds = await resolveModelIds({
+	const modelEntries = await resolveModelEntries({
 		providerId,
 		explicitModels: typedModels,
 		modelsSourceUrl: sourceUrl,
 		shouldRecompute: true,
+		apiKey: request.apiKey?.trim() || undefined,
 	});
+	const modelIds = modelEntries.map((entry) => entry.id);
 	if (modelIds.length === 0) {
 		throw new Error(
 			"at least one model is required (manual or via modelsSourceUrl)",
@@ -504,8 +524,7 @@ export async function addLocalProvider(
 			client: request.client,
 			capabilities,
 			modelsSourceUrl: sourceUrl,
-		},
-		models: buildProviderModels(modelIds, capabilities),
+		},			models: buildProviderModels(modelEntries, capabilities),
 	};
 	await writeModelsFile(modelsPath, modelsState);
 	registerCustomProvider(providerId, modelsState.providers[providerId]);
@@ -572,7 +591,7 @@ export async function updateLocalProvider(
 				modelsSourceUrl: registeredProvider?.modelsSourceUrl,
 			},
 			models: seedModelId
-				? buildProviderModels([seedModelId], existingSettings.capabilities)
+				? buildProviderModels([{ id: seedModelId }], existingSettings.capabilities)
 				: {},
 		};
 	}
@@ -615,13 +634,18 @@ export async function updateLocalProvider(
 	const existingModelIds = Object.keys(existingEntry.models ?? {})
 		.map((id) => id.trim())
 		.filter(Boolean);
-	const modelIds = await resolveModelIds({
+	const storedApiKey = manager.getProviderSettings(providerId)?.apiKey;
+	const existingApiKey =
+		typeof storedApiKey === "string" ? storedApiKey : undefined;
+	const modelEntries = await resolveModelEntries({
 		providerId,
 		explicitModels,
 		modelsSourceUrl: nextModelsSourceUrl,
 		fallbackModelIds: existingModelIds,
 		shouldRecompute: shouldRecomputeModels,
+		apiKey: request.apiKey?.trim() || existingApiKey?.trim() || undefined,
 	});
+	const modelIds = modelEntries.map((entry) => entry.id);
 	if (modelIds.length === 0) {
 		throw new Error(
 			"at least one model is required (manual or via modelsSourceUrl)",
@@ -677,8 +701,7 @@ export async function updateLocalProvider(
 			client,
 			capabilities,
 			modelsSourceUrl: nextModelsSourceUrl,
-		},
-		models: buildProviderModels(modelIds, capabilities),
+		},			models: buildProviderModels(modelEntries, capabilities),
 	};
 	await writeModelsFile(modelsPath, modelsState);
 	registerCustomProvider(providerId, modelsState.providers[providerId]);

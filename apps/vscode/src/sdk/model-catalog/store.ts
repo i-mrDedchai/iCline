@@ -183,6 +183,7 @@ type ModelsCacheKey =
 	| "vercel"
 	| "zenmux"
 	| "xaiSubscription"
+	| "openAiCompatible"
 
 /**
  * Map SDK provider id → live models-cache key. Providers without an entry are
@@ -202,6 +203,11 @@ const LIVE_MODELS_CACHE_KEY_BY_SDK_PROVIDER: Readonly<Partial<Record<string, Mod
 	"vercel-ai-gateway": "vercel",
 	zenmux: "zenmux",
 	xai: "xaiSubscription",
+	// The user-configured OpenAI Compatible gateway (and the legacy `openai`
+	// spelling of the same provider): the Settings form's /models refresh
+	// mirrors the endpoint's own declared limits here, so a custom gateway
+	// selling `gpt-5.6-sol` shows ITS context window instead of a blank.
+	"openai-compatible": "openAiCompatible",
 }
 
 function liveModelsCacheKeyForProvider(providerId: ProviderId): ModelsCacheKey | undefined {

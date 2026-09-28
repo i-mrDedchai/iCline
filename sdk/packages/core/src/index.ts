@@ -729,6 +729,16 @@ export {
 	type ProviderConfigFields,
 } from "./services/providers/provider-config-fields";
 export { isProviderSettingsUsable } from "./services/providers/provider-readiness";
+export {
+	type FetchModelSourceOptions,
+	type ModelSourceEntry,
+	deriveEndpointModelsUrl,
+	extractModelIdsFromPayload,
+	extractModelsFromPayload,
+	fetchModelIdsFromSource,
+	fetchModelsFromSource,
+	resolveModelsSourceUrl,
+} from "./services/providers/model-source";
 export * from "./services/session-import";
 export {
 	type MigrateLegacyProviderSettingsOptions,

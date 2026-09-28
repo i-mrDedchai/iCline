@@ -2,7 +2,8 @@
 
 import * as Llms from "@cline/llms";
 import {
-	fetchModelIdsFromSource,
+	deriveEndpointModelsUrl,
+	fetchModelsFromSource,
 	resolveModelsSourceUrl,
 } from "../providers/model-source";
 import type {
@@ -757,17 +758,43 @@ function resolvePublicCacheKey(
 	return `${providerId}:${normalizeBaseUrl(config.baseUrl)}`;
 }
 
+/**
+ * Where this provider's public model list lives: the spec's `modelsSourceUrl`
+ * (rebased onto the user's baseUrl when they changed it), or — for a custom
+ * endpoint the user configured on a provider without its own model source —
+ * the endpoint's own `{baseUrl}/models`. Custom OpenAI-compatible gateways
+ * (resellers/proxies) publish their model specs — context windows included —
+ * through exactly that endpoint, so the values come from the provider itself
+ * instead of being guessed. Only an explicitly configured baseUrl is used;
+ * failures degrade to the bundled catalog.
+ */
+function resolvePublicModelsSourceUrl(
+	providerId: string,
+	config: ProviderConfig,
+): string | undefined {
+	const provider =
+		Llms.MODEL_COLLECTIONS_BY_PROVIDER_ID[providerId]?.provider;
+	const specUrl = resolveModelsSourceUrl(
+		config.baseUrl,
+		provider?.baseUrl,
+		provider?.modelsSourceUrl,
+	);
+	if (specUrl) {
+		return specUrl;
+	}
+	// Providers whose model list is owned by a private fetcher keep that flow.
+	if (isPrivateModelCatalogProvider(providerId)) {
+		return undefined;
+	}
+	return deriveEndpointModelsUrl(config.baseUrl);
+}
+
 async function getPublicProviderModels(
 	providerId: string,
 	modelCatalog: ModelCatalogConfig | undefined,
 	config: ProviderConfig,
+	sourceUrl: string,
 ): Promise<Record<string, ModelInfo>> {
-	const collection = Llms.MODEL_COLLECTIONS_BY_PROVIDER_ID[providerId];
-	const sourceUrl = resolveModelsSourceUrl(
-		config.baseUrl,
-		collection?.provider.baseUrl,
-		collection?.provider.modelsSourceUrl,
-	);
 	if (!sourceUrl) {
 		return {};
 	}
@@ -786,12 +813,21 @@ async function getPublicProviderModels(
 		return inFlight;
 	}
 
-	const request = fetchModelIdsFromSource(sourceUrl, providerId)
-		.then((modelIds) => {
+	const request = fetchModelsFromSource(sourceUrl, providerId, {
+		apiKey: resolveAuthToken(config),
+	})
+		.then((entries) => {
+			// Provider-declared limits (context window etc.) ride along: what the
+			// endpoint publishes about its models is the provider's own statement.
 			const data = Object.fromEntries(
-				modelIds.map((id) => [
-					id,
-					buildModelFromPrivateSource(id, { name: id }),
+				entries.map((entry) => [
+					entry.id,
+					buildModelFromPrivateSource(entry.id, {
+						name: entry.name ?? entry.id,
+						contextWindow: entry.contextWindow,
+						maxInputTokens: entry.maxInputTokens,
+						maxTokens: entry.maxTokens,
+					}),
 				]),
 			);
 			PUBLIC_MODELS_CACHE.set(cacheKey, {
@@ -1034,24 +1070,31 @@ export async function resolveProviderConfig(
 		// still hits the default local model endpoint. Failures are swallowed
 		// below, so an unreachable server just leaves the picker on the bundled
 		// catalog.
-		const hasPublicModelSource = Boolean(
+		const hasSpecModelSource = Boolean(
 			Llms.MODEL_COLLECTIONS_BY_PROVIDER_ID[providerId]?.provider
 				.modelsSourceUrl,
 		);
-		const publicConfig: ProviderConfig | undefined = hasPublicModelSource
-			? (config ?? {
-					providerId: providerId as ProviderConfig["providerId"],
-					modelId: defaults.modelId,
-					baseUrl: defaults.baseUrl,
-				})
-			: config;
-		const publicModels = publicConfig
-			? await getPublicProviderModels(
-					providerId,
-					modelCatalog,
-					publicConfig,
-				).catch(() => ({}))
-			: {};			// Runtime registry overrides (models.json entries) are user-authored
+		const publicConfig: ProviderConfig | undefined =
+			config ??
+			(hasSpecModelSource
+				? {
+						providerId: providerId as ProviderConfig["providerId"],
+						modelId: defaults.modelId,
+						baseUrl: defaults.baseUrl,
+					}
+				: undefined);
+		const publicModelsUrl = publicConfig
+			? resolvePublicModelsSourceUrl(providerId, publicConfig)
+			: undefined;
+		const publicModels =
+			publicModelsUrl && publicConfig
+				? await getPublicProviderModels(
+						providerId,
+						modelCatalog,
+						publicConfig,
+						publicModelsUrl,
+					).catch(() => ({}))
+				: {};			// Runtime registry overrides (models.json entries) are user-authored
 			// metadata and must win over every fetched catalog: a model the user
 			// declared with `contextWindow: 1000000` must not be re-described by a
 			// live/private fetch that reports a different (or absent) window.

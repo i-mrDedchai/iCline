@@ -1,3 +1,101 @@
+export interface ModelSourceEntry {
+	id: string;
+	name?: string;
+	contextWindow?: number;
+	maxInputTokens?: number;
+	maxTokens?: number;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function positiveInt(value: unknown): number | undefined {
+	return typeof value === "number" && Number.isFinite(value) && value > 0
+		? Math.floor(value)
+		: undefined;
+}
+
+function firstPositive(values: unknown[]): number | undefined {
+	for (const value of values) {
+		const parsed = positiveInt(value);
+		if (parsed !== undefined) return parsed;
+	}
+	return undefined;
+}
+
+/**
+ * Per-model limits as published by the provider's own `/models` payload.
+ *
+ * OpenAI-compatible gateways disagree on field names, so the common spellings
+ * are all read: OpenRouter (`context_length`, `top_provider.max_context_length`,
+ * `top_provider.max_completion_tokens`), vLLM/SGLang (`max_model_len`),
+ * llama.cpp (`n_ctx`), LiteLLM (`max_input_tokens`/`max_tokens`), and generic
+ * `context_window`/`max_output_tokens`. What a provider declares here is the
+ * provider's own statement of its limits — the most faithful source available
+ * ("as stated on the provider's website").
+ */
+function readEntryMetadata(entry: Record<string, unknown>): {
+	name?: string;
+	contextWindow?: number;
+	maxInputTokens?: number;
+	maxTokens?: number;
+} {
+	const topProvider = isRecord(entry.top_provider) ? entry.top_provider : undefined;
+	const limits = isRecord(entry.limits) ? entry.limits : undefined;
+	return {
+		name: typeof entry.name === "string" && entry.name.trim() ? entry.name.trim() : undefined,
+		contextWindow: firstPositive([
+			entry.context_length,
+			entry.context_window,
+			entry.max_context_length,
+			entry.n_ctx,
+			entry.max_model_len,
+			topProvider?.max_context_length,
+			limits?.context,
+		]),
+		maxInputTokens: firstPositive([
+			entry.max_input_tokens,
+			entry.max_prompt_tokens,
+			topProvider?.max_input_tokens,
+			limits?.input,
+		]),
+		maxTokens: firstPositive([
+			entry.max_output_tokens,
+			entry.max_completion_tokens,
+			entry.max_tokens,
+			topProvider?.max_output_tokens,
+			topProvider?.max_completion_tokens,
+			limits?.output,
+		]),
+	};
+}
+
+function readEntry(item: unknown): ModelSourceEntry | undefined {
+	if (typeof item === "string") {
+		const id = item.trim();
+		return id ? { id } : undefined;
+	}
+	if (!isRecord(item)) return undefined;
+	// Id resolution stays exactly as before: id, then name, then model.
+	let id = "";
+	for (const value of [item.id, item.name, item.model]) {
+		if (typeof value === "string" && value.trim()) {
+			id = value.trim();
+			break;
+		}
+	}
+	if (!id) return undefined;
+	const metadata = readEntryMetadata(item);
+	return {
+		id,
+		...(metadata.name && metadata.name !== id ? { name: metadata.name } : {}),
+		...(metadata.contextWindow !== undefined ? { contextWindow: metadata.contextWindow } : {}),
+		...(metadata.maxInputTokens !== undefined ? { maxInputTokens: metadata.maxInputTokens } : {}),
+		...(metadata.maxTokens !== undefined ? { maxTokens: metadata.maxTokens } : {}),
+	};
+}
+
 function parseModelIdList(input: unknown): string[] {
 	if (!Array.isArray(input)) return [];
 	return input
@@ -16,48 +114,99 @@ function parseModelIdList(input: unknown): string[] {
 		.filter((id) => id.length > 0);
 }
 
+/**
+ * Extract model entries (id + whatever per-model limits the payload declares)
+ * from a `/models` response. Supports root arrays, `{data:[…]}`,
+ * `{models:[…]}`, `{models:{id:…}}` maps, and provider-scoped
+ * `{providers:{<id>:{models:[…]}}}` shapes.
+ */
+export function extractModelsFromPayload(
+	payload: unknown,
+	providerId: string,
+): ModelSourceEntry[] {
+	const out: ModelSourceEntry[] = [];
+	const seen = new Set<string>();
+	const consume = (item: unknown): void => {
+		const entry = readEntry(item);
+		if (entry && !seen.has(entry.id)) {
+			seen.add(entry.id);
+			out.push(entry);
+		}
+	};
+
+	if (Array.isArray(payload)) {
+		for (const item of payload) consume(item);
+		return out;
+	}
+	if (!isRecord(payload)) return out;
+
+	const direct = payload.data ?? payload.models;
+	if (Array.isArray(direct)) {
+		for (const item of direct) consume(item);
+		if (out.length > 0) return out;
+	}
+	if (isRecord(direct)) {
+		for (const [id, value] of Object.entries(direct)) {
+			consume(isRecord(value) ? { ...value, id: value.id ?? id } : { id });
+		}
+		if (out.length > 0) return out;
+	}
+	// Legacy map shape (keys are ids) without a wrapping data/models array.
+	if (isRecord(payload.models)) {
+		for (const [id, value] of Object.entries(payload.models)) {
+			consume(isRecord(value) ? { ...value, id: value.id ?? id } : { id });
+		}
+		if (out.length > 0) return out;
+	}
+
+	const scoped = isRecord(payload.providers)
+		? payload.providers[providerId]
+		: undefined;
+	if (isRecord(scoped)) {
+		const nested = scoped.models ?? scoped;
+		if (Array.isArray(nested)) {
+			for (const item of nested) consume(item);
+		} else if (isRecord(nested)) {
+			for (const [id, value] of Object.entries(nested)) {
+				consume(isRecord(value) ? { ...value, id: value.id ?? id } : { id });
+			}
+		}
+	}
+	return out;
+}
+
 export function extractModelIdsFromPayload(
 	payload: unknown,
 	providerId: string,
 ): string[] {
 	const rootArray = parseModelIdList(payload);
 	if (rootArray.length > 0) return rootArray;
-	if (!payload || typeof payload !== "object") return [];
-
-	const data = payload as {
-		data?: unknown;
-		models?: unknown;
-		providers?: Record<string, unknown>;
-	};
-
-	const direct = parseModelIdList(data.data ?? data.models);
-	if (direct.length > 0) return direct;
-
-	if (
-		data.models &&
-		typeof data.models === "object" &&
-		!Array.isArray(data.models)
-	) {
-		const keys = Object.keys(data.models).filter((k) => k.trim().length > 0);
-		if (keys.length > 0) return keys;
-	}
-
-	const scoped = data.providers?.[providerId];
-	if (scoped && typeof scoped === "object") {
-		const nested = scoped as { models?: unknown };
-		const list = parseModelIdList(nested.models ?? scoped);
-		if (list.length > 0) return list;
-	}
-
-	return [];
+	return extractModelsFromPayload(payload, providerId).map((entry) => entry.id);
 }
 
-export async function fetchModelIdsFromSource(
+export interface FetchModelSourceOptions {
+	/**
+	 * API key for endpoints that require authentication. Sent as both an
+	 * `Authorization: Bearer` header and an `x-api-key` header (the two
+	 * spellings OpenAI-compatible gateways ask for).
+	 */
+	apiKey?: string;
+}
+
+export async function fetchModelsFromSource(
 	url: string,
 	providerId: string,
-): Promise<string[]> {
+	options: FetchModelSourceOptions = {},
+): Promise<ModelSourceEntry[]> {
+	const headers: Record<string, string> = {};
+	const token = options.apiKey?.trim();
+	if (token) {
+		headers.Authorization = `Bearer ${token}`;
+		headers["x-api-key"] = token;
+	}
 	const response = await fetch(url, {
 		method: "GET",
+		headers,
 		signal: AbortSignal.timeout(5_000),
 	});
 	if (!response.ok) {
@@ -65,10 +214,19 @@ export async function fetchModelIdsFromSource(
 			`failed to fetch models from ${url}: HTTP ${response.status}`,
 		);
 	}
-	return extractModelIdsFromPayload(
+	return extractModelsFromPayload(
 		(await response.json()) as unknown,
 		providerId,
 	);
+}
+
+export async function fetchModelIdsFromSource(
+	url: string,
+	providerId: string,
+	options: FetchModelSourceOptions = {},
+): Promise<string[]> {
+	const entries = await fetchModelsFromSource(url, providerId, options);
+	return entries.map((entry) => entry.id);
 }
 
 function trimTrailingSlash(value: string): string {
@@ -104,5 +262,27 @@ export function resolveModelsSourceUrl(
 		return configured.toString();
 	} catch {
 		return source;
+	}
+}
+
+/**
+ * Derive a model-list URL for an endpoint the user configured themselves
+ * (`{baseUrl}/models`) when the provider has no model source of its own.
+ * Custom OpenAI-compatible gateways (resellers, proxies) publish their model
+ * specs — including context windows — through exactly this endpoint.
+ */
+export function deriveEndpointModelsUrl(
+	baseUrl: string | undefined,
+): string | undefined {
+	const configuredBase = baseUrl?.trim();
+	if (!configuredBase) return undefined;
+	try {
+		const url = new URL(configuredBase);
+		url.pathname = `${trimTrailingSlash(url.pathname)}/models`;
+		url.search = "";
+		url.hash = "";
+		return url.toString();
+	} catch {
+		return undefined;
 	}
 }

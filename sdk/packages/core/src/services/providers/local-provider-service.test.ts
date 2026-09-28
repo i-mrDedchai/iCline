@@ -2355,6 +2355,7 @@ describe("refreshProviderModelsFromSource", () => {
 			"http://tailscale-host:11434/api/tags",
 			{
 				method: "GET",
+				headers: {},
 				signal: expect.any(AbortSignal),
 			},
 		);

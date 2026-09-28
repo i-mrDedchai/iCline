@@ -84,6 +84,7 @@ export class StateManager {
 		vercelModels: { data: Record<string, ModelInfo>; timestamp: number } | null
 		zenmuxModels: { data: Record<string, ModelInfo>; timestamp: number } | null
 		xaiSubscriptionModels: { data: Record<string, ModelInfo>; timestamp: number } | null
+		openAiCompatibleModels: { data: Record<string, ModelInfo>; timestamp: number } | null
 	} = {
 		openRouterModels: null,
 		groqModels: null,
@@ -97,6 +98,7 @@ export class StateManager {
 		vercelModels: null,
 		zenmuxModels: null,
 		xaiSubscriptionModels: null,
+		openAiCompatibleModels: null,
 	}
 
 	// Debounced persistence state
@@ -502,7 +504,8 @@ export class StateManager {
 			| "liteLlm"
 			| "vercel"
 			| "zenmux"
-			| "xaiSubscription",
+			| "xaiSubscription"
+			| "openAiCompatible",
 		models: Record<string, ModelInfo>,
 	): void {
 		const cacheKey = `${provider}Models` as keyof typeof this.modelInfoCache
@@ -522,7 +525,8 @@ export class StateManager {
 			| "liteLlm"
 			| "vercel"
 			| "zenmux"
-			| "xaiSubscription",
+			| "xaiSubscription"
+			| "openAiCompatible",
 	): Record<string, ModelInfo> | null {
 		const cacheKey = `${provider}Models` as keyof typeof this.modelInfoCache
 		const cached = this.modelInfoCache[cacheKey]

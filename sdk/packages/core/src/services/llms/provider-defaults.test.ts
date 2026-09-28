@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
 	clearLiveModelsCatalogCache,
 	clearPrivateModelsCatalogCache,
+	clearPublicModelsCatalogCache,
 	getLiveModelsCatalog,
 	isPrivateModelCatalogProvider,
 	resolveProviderConfig,
@@ -11,6 +12,7 @@ import {
 afterEach(() => {
 	clearLiveModelsCatalogCache();
 	clearPrivateModelsCatalogCache();
+	clearPublicModelsCatalogCache();
 	vi.unstubAllGlobals();
 	vi.restoreAllMocks();
 });
@@ -614,7 +616,9 @@ describe("resolveProviderConfig", () => {
 
 		expect(fetchMock).toHaveBeenCalledWith(
 			"http://tailscale-host:11434/api/tags",
-			{ method: "GET", signal: expect.any(AbortSignal) },
+			// headers carries auth when a key is configured (x-api-key + Bearer);
+			// keyless local sources just send an empty set.
+			{ method: "GET", headers: {}, signal: expect.any(AbortSignal) },
 		);
 		expect(Object.keys(resolved?.knownModels ?? {})).toEqual(["local-llama"]);
 	});
@@ -983,5 +987,85 @@ describe("cross-provider catalog fill", () => {
 		expect(resolved?.knownModels?.["gpt-5.6-sol"]).toMatchObject({
 			contextWindow: 123_456,
 		});
+	});
+});
+
+describe("custom endpoint model metadata (/models of the provider)", () => {
+	afterEach(() => {
+		resetRegistry();
+	});
+
+	it("uses the limits the provider itself publishes, over cross-provider catalog values", async () => {
+		// The Cleanapis case: a custom OpenAI-compatible endpoint whose own
+		// /models response states the model's limits — the provider's own words
+		// must win over the catalog majority (1,050,000 for gpt-5.6-sol).
+		const fetchMock = vi.fn(async (url: unknown) => {
+			expect(String(url)).toBe("https://clean.example/v1/models");
+			return {
+				ok: true,
+				json: async () => ({
+					data: [
+						{
+							id: "gpt-5.6-sol",
+							context_length: 444_000,
+							max_completion_tokens: 64_000,
+						},
+					],
+				}),
+			};
+		});
+		vi.stubGlobal("fetch", fetchMock);
+
+		const resolved = await resolveProviderConfig("openai-compatible", undefined, {
+			providerId: "openai-compatible",
+			modelId: "gpt-5.6-sol",
+			baseUrl: "https://clean.example/v1",
+			apiKey: "sk-test",
+		});
+
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+		const [, init] = fetchMock.mock.calls[0] as unknown as [
+			string,
+			{ headers: Record<string, string> },
+		];
+		expect(init.headers.Authorization).toBe("Bearer sk-test");
+		expect(init.headers["x-api-key"]).toBe("sk-test");
+		expect(resolved?.knownModels?.["gpt-5.6-sol"]).toMatchObject({
+			contextWindow: 444_000,
+			maxTokens: 64_000,
+		});
+	});
+
+	it("degrades to cross-provider catalog metadata when the endpoint rejects the fetch", async () => {
+		const fetchMock = vi.fn(async () => ({
+			ok: false,
+			status: 401,
+			json: async () => ({}),
+		}));
+		vi.stubGlobal("fetch", fetchMock);
+		registerModel("openai-compatible", "gpt-5.6-sol", {
+			id: "gpt-5.6-sol",
+			name: "GPT-5.6 Sol",
+		});
+
+		const resolved = await resolveProviderConfig("openai-compatible", undefined, {
+			providerId: "openai-compatible",
+			modelId: "gpt-5.6-sol",
+			baseUrl: "https://clean.example/v1",
+		});
+
+		expect(resolved?.knownModels?.["gpt-5.6-sol"]).toMatchObject({
+			contextWindow: 1_050_000,
+		});
+	});
+
+	it("does not fetch anything for providers without a configured endpoint", async () => {
+		const fetchMock = vi.fn();
+		vi.stubGlobal("fetch", fetchMock);
+
+		const resolved = await resolveProviderConfig("openai-compatible");
+
+		expect(fetchMock).not.toHaveBeenCalled();
+		expect(resolved?.knownModels).toBeDefined();
 	});
 });
