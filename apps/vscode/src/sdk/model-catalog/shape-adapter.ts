@@ -27,7 +27,7 @@
  * | extension ModelInfo field | source | default if missing |
  * | --- | --- | --- |
  * | name | `sdk.name ?? sdk.id` | n/a (id is required) |
- * | contextWindow | `sdk.contextWindow` if finite number | SD.contextWindow (128_000) |
+ * | contextWindow | `sdk.contextWindow` if finite number, else `sdk.maxInputTokens` if finite number | omitted (unknown) — never fabricated |
  * | maxTokens | `sdk.maxTokens` if finite number | SD.maxTokens (-1) |
  * | supportsImages | capabilities includes `images` or `vision` | SD.supportsImages (true) when capabilities absent |
  * | supportsPromptCache | capabilities includes `prompt-cache`; if capabilities absent, use SD | SD.supportsPromptCache (false) |
@@ -42,6 +42,11 @@
  * `status`, and capabilities other than `images`/`vision`/`prompt-cache`/
  * `reasoning` (for example `tools`, `streaming`, `structured_output`,
  * `temperature`).
+ *
+ * `contextWindow` is deliberately NOT defaulted to SD.contextWindow: the old
+ * fabricated 128K for every model whose metadata lacked a window, and the UI
+ * presented it as the model's supported context ("Context: 128K") while the
+ * runtime budgeted against it. An unknown window stays unknown.
  *
  * Extension-only fields not populated by this adapter: `thinkingConfig`,
  * `tiers`, `temperature`, `apiFormat`, `supportsGlobalEndpoint`, and local
@@ -188,12 +193,27 @@ export function adaptSdkModelInfo(input: unknown): ModelInfo {
 		})
 	}
 
+	const rawMaxInputTokens = input.maxInputTokens
+	if (rawMaxInputTokens !== undefined && !isFiniteNumber(rawMaxInputTokens)) {
+		throw new CatalogShapeError("SDK model-info `maxInputTokens` must be a finite number when present.", {
+			details: { receivedType: typeof rawMaxInputTokens },
+		})
+	}
+
 	const capabilities = readStringArray(input.capabilities)
 	const pricing = readPricing(input.pricing)
 
+	// An input budget (maxInputTokens) is the same fact as a context window for
+	// models whose catalog only reports one of the two; prefer the explicit
+	// contextWindow and never invent a number when both are absent.
+	const contextWindow = isFiniteNumber(rawContextWindow)
+		? rawContextWindow
+		: isFiniteNumber(rawMaxInputTokens)
+			? rawMaxInputTokens
+			: undefined
 	const result: ModelInfo = {
 		name: rawName ?? id,
-		contextWindow: isFiniteNumber(rawContextWindow) ? rawContextWindow : openAiModelInfoSafeDefaults.contextWindow,
+		...(contextWindow !== undefined ? { contextWindow } : {}),
 		maxTokens: isFiniteNumber(rawMaxTokens) ? rawMaxTokens : openAiModelInfoSafeDefaults.maxTokens,
 		supportsPromptCache: capabilities
 			? capabilities.includes(PROMPT_CACHE_CAPABILITY)

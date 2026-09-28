@@ -1,4 +1,4 @@
-import { type ModelInfo, openAiModelInfoSafeDefaults } from "@shared/api"
+import type { ModelInfo } from "@shared/api"
 import type { ProviderConfigResponse } from "@shared/proto/cline/models"
 import { fromProtobufModelInfo } from "@shared/proto-conversions/models/typeConversion"
 import type { Mode } from "@shared/storage/types"
@@ -31,7 +31,10 @@ export function useProviderModelSelection(
 		defaultModelId,
 		config,
 		commitSelection,
-		fallbackModelInfo = openAiModelInfoSafeDefaults,
+		// Unknown model metadata stays unknown: fabricating the openai-compatible
+		// safe defaults here displayed "Context: 128K" for models whose real
+		// window is 500K/1M (the metadata is simply not known yet).
+		fallbackModelInfo = { supportsPromptCache: false },
 		customModelInfo,
 	}: UseProviderModelSelectionOptions,
 ) {

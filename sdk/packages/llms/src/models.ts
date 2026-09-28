@@ -31,6 +31,7 @@ export {
 	getAllProviders,
 	getModelOverridesForProvider,
 	getModelsForProvider,
+	getModelsForProviderSync,
 	getProvider,
 	getProviderCollection,
 	getProviderCollectionSync,

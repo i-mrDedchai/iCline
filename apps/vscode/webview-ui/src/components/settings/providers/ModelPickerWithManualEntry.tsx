@@ -1,4 +1,4 @@
-import { type ModelInfo, openAiModelInfoSafeDefaults } from "@shared/api"
+import type { ModelInfo } from "@shared/api"
 import { VSCodeButton, VSCodeDropdown, VSCodeOption, VSCodeTextField } from "@vscode/webview-ui-toolkit/react"
 import { useEffect, useState } from "react"
 import type { ProviderId } from "@/context/ExtensionStateContext"
@@ -20,10 +20,16 @@ export interface ModelPickerWithManualEntryProps {
 	onSelect: (selection: ModelPickerSelection) => void
 }
 
+/**
+ * A manually entered id has no known metadata. Carry none — the old
+ * `{ ...openAiModelInfoSafeDefaults, name }` snapshot fabricated a 128K
+ * context window that the UI then displayed as the model's supported
+ * context ("Context: 128K") for models that actually take 500K/1M.
+ */
 function customModelInfo(modelId: string): ModelInfo {
 	return {
-		...openAiModelInfoSafeDefaults,
 		name: modelId,
+		supportsPromptCache: false,
 	}
 }
 

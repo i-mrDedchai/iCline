@@ -1,8 +1,8 @@
 import {
 	createGateway,
 	createHandlerAsync,
+	getModelsForProviderSync,
 	hasRegisteredHandler,
-	MODEL_COLLECTIONS_BY_PROVIDER_ID,
 	normalizeProviderId,
 	toGatewayModelCapabilities,
 } from "@cline/llms";
@@ -103,11 +103,16 @@ export function resolveKnownModelsFromConfig(
 	config: AgentConfig,
 ): Record<string, ModelInfo> | undefined {
 	const pc = config.providerConfig as ProviderConfig | undefined;
+	// Registry lookup goes through getModelsForProviderSync: the collection view
+	// (MODEL_COLLECTIONS_BY_PROVIDER_ID[...].models) does not include models
+	// registered at runtime (models.json `registerModel` entries), so reading it
+	// directly dropped their declared limits (e.g. a 1M contextWindow) and the
+	// runtime budgeted against fabricated defaults instead.
+	const registryModels = getModelsForProviderSync(config.providerId);
 	const knownModels = pc?.knownModels
 		? pc.knownModels
 		: (config.knownModels ??
-			MODEL_COLLECTIONS_BY_PROVIDER_ID[config.providerId]?.models ??
-			undefined);
+			(Object.keys(registryModels).length > 0 ? registryModels : undefined));
 	// Caller-configured limits are authoritative for the selected model —
 	// surface them to the gateway so the resolved model definition carries
 	// the right limits (e.g. Ollama's num_ctx derives from the resolved

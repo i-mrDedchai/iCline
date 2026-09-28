@@ -75,7 +75,30 @@ const BUILTIN_PROVIDER_MANIFESTS_BY_ID: Record<
 function getBuiltInProviderManifest(
 	providerId: string,
 ): BuiltInProviderManifest | undefined {
-	return BUILTIN_PROVIDER_MANIFESTS_BY_ID[providerId];
+	const snapshot = BUILTIN_PROVIDER_MANIFESTS_BY_ID[providerId];
+	// BUILTIN_PROVIDER_MANIFESTS is captured at module load, so providers and
+	// models registered later (models.json custom providers, per-model entries
+	// that extend a builtin provider) are invisible through the snapshot alone
+	// and their declared metadata (contextWindow, pricing, …) gets replaced by
+	// fabricated defaults downstream. Compose the manifest from the LIVE
+	// registry at call time; the snapshot only fills gaps the live view does
+	// not carry (env hints for static builtin specs).
+	const live = Llms.MODEL_COLLECTIONS_BY_PROVIDER_ID[providerId];
+	if (!snapshot && !live) {
+		return undefined;
+	}
+	return {
+		id: providerId,
+		baseUrl: live?.provider.baseUrl ?? snapshot?.baseUrl ?? "",
+		modelsSourceUrl:
+			live?.provider.modelsSourceUrl ?? snapshot?.modelsSourceUrl,
+		modelId: live?.provider.defaultModelId ?? snapshot?.modelId ?? "",
+		knownModels: Llms.getModelsForProviderSync(providerId),
+		capabilities: live?.provider.capabilities ?? snapshot?.capabilities,
+		env: snapshot?.env,
+		client: live?.provider.client ?? snapshot?.client ?? "openai-compatible",
+		protocol: live?.provider.protocol ?? snapshot?.protocol,
+	};
 }
 
 function getOpenAICompatibleProviderManifests(): Record<
@@ -837,10 +860,10 @@ async function fetchLiveModelsCatalog(
 			const signal = init?.signal
 				? AbortSignal.any([init.signal, timeout])
 				: timeout;
-			return globalThis.fetch(input, { ...init, signal });
-		},
-		globalThis.fetch,
-	);
+		return globalThis.fetch(input, { ...init, signal });
+	},
+	globalThis.fetch,
+);
 	return Llms.fetchLiveProviderModels(url, fetchWithTimeout, {
 		includeClineCloudModels,
 	});
@@ -948,9 +971,19 @@ export async function resolveProviderConfig(
 	}
 
 	try {
-		const liveCatalog = modelCatalog?.loadLatestOnInit
-			? await getLiveModelsCatalog(modelCatalog)
-			: undefined;
+		// The shared catalog (models.dev + the Cline feed) only carries rows for
+		// providers in its key space. Runtime-registered custom providers can
+		// never resolve one, so skip the network load for them — their models
+		// come from the live registry (manifest knownModels / user overrides).
+		const sharedCatalogKeys =
+			Llms.resolveProviderModelCatalogKeys(providerId);
+		const canUseSharedCatalog =
+			Llms.isBuiltInProviderId(providerId) ||
+			sharedCatalogKeys.some((key) => key !== providerId);
+		const liveCatalog =
+			modelCatalog?.loadLatestOnInit && canUseSharedCatalog
+				? await getLiveModelsCatalog(modelCatalog)
+				: undefined;
 		const liveModels = liveCatalog
 			? resolveCatalogModels(providerId, liveCatalog)
 			: {};
@@ -981,15 +1014,25 @@ export async function resolveProviderConfig(
 					modelCatalog,
 					publicConfig,
 				).catch(() => ({}))
-			: {};
-		const knownModels = await mergeKnownModels(
-			providerId,
-			defaults.knownModels,
-			liveModels,
-			privateModels,
-			publicModels,
-			config?.knownModels,
-		);
+			: {};			// Runtime registry overrides (models.json entries) are user-authored
+			// metadata and must win over every fetched catalog: a model the user
+			// declared with `contextWindow: 1000000` must not be re-described by a
+			// live/private fetch that reports a different (or absent) window.
+			const registryModelOverrides = await Llms.getModelOverridesForProvider(
+				providerId,
+			).catch(() => ({}));
+			const userKnownModels = {
+				...registryModelOverrides,
+				...(config?.knownModels ?? {}),
+			};
+			const knownModels = await mergeKnownModels(
+				providerId,
+				defaults.knownModels,
+				liveModels,
+				privateModels,
+				publicModels,
+				userKnownModels,
+			);
 
 		return {
 			...defaults,

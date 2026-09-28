@@ -45,8 +45,11 @@ function toProtobufThinkingConfig(appConfig: ModelInfo["thinkingConfig"] | undef
 export function fromProtobufModelInfo(protoInfo: OpenRouterModelInfo): ModelInfo {
 	return {
 		name: protoInfo.name,
-		maxTokens: protoInfo.maxTokens,
-		contextWindow: protoInfo.contextWindow,
+		// proto3 scalars default to 0 on the wire; for limits that means "not
+		// set" (0 is never a legitimate window/output budget). Normalize back
+		// to undefined so downstream surfaces do not render "0"/fake values.
+		maxTokens: (protoInfo.maxTokens ?? 0) > 0 || protoInfo.maxTokens === -1 ? protoInfo.maxTokens : undefined,
+		contextWindow: (protoInfo.contextWindow ?? 0) > 0 ? protoInfo.contextWindow : undefined,
 		supportsImages: protoInfo.supportsImages,
 		supportsPromptCache: protoInfo.supportsPromptCache,
 		supportsReasoning: protoInfo.supportsReasoning,

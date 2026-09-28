@@ -10,12 +10,15 @@ const gatewayMock = vi.hoisted(() => {
 		// registered handler" so existing tests exercise the gateway path.
 		hasRegisteredHandler: vi.fn(() => false),
 		createHandlerAsync: vi.fn(),
+		// Merged registry model lookup (runtime-registered models included).
+		getModelsForProviderSync: vi.fn(() => ({})),
 	};
 });
 
 vi.mock("@cline/llms", async (importOriginal) => ({
 	createGateway: gatewayMock.createGateway,
 	MODEL_COLLECTIONS_BY_PROVIDER_ID: {},
+	getModelsForProviderSync: gatewayMock.getModelsForProviderSync,
 	hasRegisteredHandler: gatewayMock.hasRegisteredHandler,
 	createHandlerAsync: gatewayMock.createHandlerAsync,
 	normalizeProviderId: (id: string) => id,
@@ -37,6 +40,8 @@ describe("createAgentModelFromConfig", () => {
 		gatewayMock.hasRegisteredHandler.mockReset();
 		gatewayMock.hasRegisteredHandler.mockReturnValue(false);
 		gatewayMock.createHandlerAsync.mockReset();
+		gatewayMock.getModelsForProviderSync.mockReset();
+		gatewayMock.getModelsForProviderSync.mockReturnValue({});
 	});
 
 	it("forwards effective telemetry into the gateway", async () => {
@@ -413,6 +418,54 @@ describe("createAgentModelFromConfig", () => {
 					expect.objectContaining({
 						providerId: "ollama",
 						timeoutMs: 180000,
+					}),
+				],
+			}),
+		);
+	});
+
+	it("surfaces runtime-registered registry models (models.json entries) with their declared limits", async () => {
+		const { createAgentModelFromConfig } = await import("./handler-factory");
+
+		// Models registered at runtime (models.json `registerModel` entries) only
+		// surface through the merged registry accessor. Before the fix, the
+		// bare collection view missed them and the runtime lost declared limits
+		// (e.g. a 1M contextWindow became a fabricated 128K default).
+		gatewayMock.getModelsForProviderSync.mockReturnValue({
+			"wide-proxy-model": {
+				id: "wide-proxy-model",
+				name: "Wide Proxy Model",
+				contextWindow: 1_000_000,
+				maxInputTokens: 1_000_000,
+			},
+		});
+
+		createAgentModelFromConfig(
+			{
+				providerId: "some-proxy",
+				modelId: "wide-proxy-model",
+				systemPrompt: "",
+				tools: [],
+				providerConfig: {
+					providerId: "some-proxy",
+					modelId: "wide-proxy-model",
+				},
+			},
+			undefined,
+		);
+
+		expect(gatewayMock.createGateway).toHaveBeenLastCalledWith(
+			expect.objectContaining({
+				providerConfigs: [
+					expect.objectContaining({
+						providerId: "some-proxy",
+						models: [
+							expect.objectContaining({
+								id: "wide-proxy-model",
+								contextWindow: 1_000_000,
+								maxInputTokens: 1_000_000,
+							}),
+						],
 					}),
 				],
 			}),

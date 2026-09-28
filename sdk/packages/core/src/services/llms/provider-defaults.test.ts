@@ -1,3 +1,4 @@
+import { registerModel, registerProvider, resetRegistry } from "@cline/llms";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
 	clearLiveModelsCatalogCache,
@@ -862,5 +863,92 @@ describe("resolveProviderConfig", () => {
 		);
 		expect(resolved?.knownModels?.["gpt-5.4"]).toBeUndefined();
 		expect(resolved?.knownModels?.["gpt-5.4-nano"]).toBeUndefined();
+	});
+});
+
+describe("runtime registry integration (models.json)", () => {
+	afterEach(() => {
+		resetRegistry();
+	});
+
+	it("keeps declared context windows for models registered at runtime", async () => {
+		// models.json entries that extend an existing provider register through
+		// `registerModel`. The old module-load snapshot dropped them, so
+		// consumers fabricated a 128K context window for e.g. a 1M model.
+		registerModel("openrouter", "wide-proxy-model", {
+			id: "wide-proxy-model",
+			name: "Wide Proxy Model",
+			contextWindow: 1_000_000,
+		});
+
+		const resolved = await resolveProviderConfig("openrouter");
+		expect(resolved?.knownModels?.["wide-proxy-model"]).toMatchObject({
+			id: "wide-proxy-model",
+			contextWindow: 1_000_000,
+		});
+	});
+
+	it("resolves providers registered after module load with their model metadata", async () => {
+		// A custom provider (e.g. "Cleanapis") registered at runtime was
+		// invisible to the module-load manifest snapshot: resolveProviderConfig
+		// returned undefined and every display fell back to fabricated defaults.
+		registerProvider({
+			provider: {
+				id: "clean-proxy",
+				name: "Clean Proxy",
+				defaultModelId: "big-context-model",
+				baseUrl: "https://example.invalid/v1",
+				client: "openai-compatible",
+				protocol: "openai-chat",
+				source: "file",
+			},
+			models: {
+				"big-context-model": {
+					id: "big-context-model",
+					name: "Big Context Model",
+					contextWindow: 500_000,
+				},
+			},
+		});
+
+		const resolved = await resolveProviderConfig("clean-proxy");
+		expect(resolved?.modelId).toBe("big-context-model");
+		expect(resolved?.knownModels?.["big-context-model"]).toMatchObject({
+			contextWindow: 500_000,
+		});
+	});
+
+	it("stays network-free for custom providers the shared catalog cannot describe", async () => {
+		const fetchMock = vi.fn();
+		vi.stubGlobal("fetch", fetchMock);
+		registerProvider({
+			provider: {
+				id: "clean-proxy",
+				name: "Clean Proxy",
+				defaultModelId: "big-context-model",
+				baseUrl: "https://example.invalid/v1",
+				client: "openai-compatible",
+				source: "file",
+			},
+			models: {
+				"big-context-model": {
+					id: "big-context-model",
+					name: "Big Context Model",
+					contextWindow: 500_000,
+				},
+			},
+		});
+
+		const resolved = await resolveProviderConfig("clean-proxy", {
+			loadLatestOnInit: true,
+		});
+
+		// Resolving the custom provider's models must not hit the shared
+		// models.dev/Cline feed: that catalog has no rows for custom ids, and
+		// the pointless fetches showed up as network noise on every picker load.
+		expect(fetchMock).not.toHaveBeenCalled();
+		expect(resolved?.knownModels?.["big-context-model"]).toMatchObject({
+			contextWindow: 500_000,
+		});
 	});
 });

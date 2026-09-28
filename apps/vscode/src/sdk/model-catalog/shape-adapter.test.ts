@@ -113,7 +113,9 @@ describe("adaptSdkModelInfo", () => {
 		it("fills documented safe defaults for LiteLLM-like sparse input", () => {
 			const model = adaptSdkModelInfo({ id: "gpt-5.4", name: "GPT-5.4" })
 			expect(model.name).toBe("GPT-5.4")
-			expect(model.contextWindow).toBe(openAiModelInfoSafeDefaults.contextWindow)
+			// Unknown context windows stay unknown: the old SD default fabricated
+			// 128K and the UI presented it as the model's supported context.
+			expect(model.contextWindow).toBeUndefined()
 			expect(model.maxTokens).toBe(openAiModelInfoSafeDefaults.maxTokens)
 			expect(model.supportsImages).toBe(openAiModelInfoSafeDefaults.supportsImages)
 			expect(model.supportsPromptCache).toBe(openAiModelInfoSafeDefaults.supportsPromptCache)
@@ -123,6 +125,14 @@ describe("adaptSdkModelInfo", () => {
 			expect(model.cacheReadsPrice).toBeUndefined()
 			expect(model.cacheWritesPrice).toBeUndefined()
 			expect(model.description).toBeUndefined()
+		})
+
+		it("prefers contextWindow and falls back to maxInputTokens without fabricating", () => {
+			expect(adaptSdkModelInfo({ id: "a", contextWindow: 500_000, maxInputTokens: 200_000 }).contextWindow).toBe(500_000)
+			// LiteLLM-style model_info only reports max_input_tokens; that budget
+			// IS the context window fact for such models.
+			expect(adaptSdkModelInfo({ id: "b", maxInputTokens: 1_048_576 }).contextWindow).toBe(1_048_576)
+			expect(adaptSdkModelInfo({ id: "c" }).contextWindow).toBeUndefined()
 		})
 
 		it("falls back to id when name is omitted and passes through description", () => {

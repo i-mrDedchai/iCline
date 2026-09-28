@@ -10,6 +10,10 @@ const mocks = vi.hoisted(() => {
 	let apiConfiguration: MockApiConfiguration = {}
 	let providerSettingsById: Record<string, Record<string, unknown>> = {}
 	let generatedModelsByProvider: Record<string, Record<string, ModelInfo>> = {}
+	// Registry models are SDK-shaped (id + optional metadata), not extension
+	// ModelInfo — the shape adapter is what converts them.
+	type RegistryModel = { id: string } & Record<string, unknown>
+	let registryModelsByProvider: Record<string, Record<string, RegistryModel>> = {}
 	let modelsCacheByKey: Record<string, Record<string, ModelInfo>> = {}
 	let modelsFile: { version: 1; providers: Record<string, { models?: Record<string, Record<string, unknown>> }> } = {
 		version: 1,
@@ -29,6 +33,7 @@ const mocks = vi.hoisted(() => {
 			apiConfiguration = {}
 			providerSettingsById = {}
 			generatedModelsByProvider = {}
+			registryModelsByProvider = {}
 			modelsFile = { version: 1, providers: {} }
 			modelsCacheByKey = {}
 			saveProviderSettings.mockClear()
@@ -44,6 +49,12 @@ const mocks = vi.hoisted(() => {
 		},
 		getGeneratedModels(providerId: string): Record<string, ModelInfo> {
 			return generatedModelsByProvider[providerId] ?? {}
+		},
+		setRegistryModels(providerId: string, models: Record<string, RegistryModel>): void {
+			registryModelsByProvider = { ...registryModelsByProvider, [providerId]: models }
+		},
+		getRegistryModels(providerId: string): Record<string, RegistryModel> {
+			return registryModelsByProvider[providerId] ?? {}
 		},
 		getSavedProviderSettings(providerId: string): Record<string, unknown> | undefined {
 			return providerSettingsById[providerId]
@@ -108,6 +119,7 @@ vi.mock("@cline/core", () => ({
 
 vi.mock("@cline/llms", () => ({
 	getGeneratedModelsForProvider: vi.fn((providerId: string) => mocks.getGeneratedModels(providerId)),
+	getModelsForProviderSync: vi.fn((providerId: string) => mocks.getRegistryModels(providerId)),
 	MODEL_COLLECTIONS_BY_PROVIDER_ID: {},
 }))
 
@@ -228,6 +240,37 @@ describe("createProviderConfigStore", () => {
 			apiFormat: "openai-responses",
 			capabilities: ["prompt-cache"],
 		})
+	})
+
+	it("resolves runtime-registered registry models with their declared context window", async () => {
+		const { createProviderConfigStore } = await import("./store")
+		// models.json entries that extend an existing provider register into the
+		// merged registry (getModelsForProviderSync). Before the fix the bare
+		// collection lookup missed them and the display fabricated 128K.
+		mocks.setRegistryModels("deepseek", {
+			"wide-proxy-model": { id: "wide-proxy-model", name: "Wide Proxy Model", contextWindow: 1_000_000 },
+		})
+		mocks.setProviderSettings({ deepseek: { provider: "deepseek", model: "wide-proxy-model" } })
+		const store = createProviderConfigStore()
+		const providerId = parseProviderId("deepseek")
+
+		const selection = store.readSelection(providerId, "act")
+		expect(selection?.modelInfoSource).toBe("catalog")
+		expect(selection?.modelInfo).toMatchObject({
+			name: "Wide Proxy Model",
+			contextWindow: 1_000_000,
+		})
+	})
+
+	it("does not fabricate a context window for unknown models", async () => {
+		const { createProviderConfigStore } = await import("./store")
+		mocks.setProviderSettings({ deepseek: { provider: "deepseek", model: "mystery-model" } })
+		const store = createProviderConfigStore()
+		const providerId = parseProviderId("deepseek")
+
+		const selection = store.readSelection(providerId, "act")
+		expect(selection?.modelInfoSource).toBe("fallback")
+		expect(selection?.modelInfo.contextWindow).toBeUndefined()
 	})
 
 	it("round-trips generic provider selections using the in-process modelInfo envelope", async () => {
@@ -406,7 +449,11 @@ describe("createProviderConfigStore", () => {
 		expect(mocks.getModelsFile().providers["openai-compatible"]?.models?.["default-custom"]).toBeUndefined()
 		expect(first?.overrides).toBeUndefined()
 		expect(second?.overrides).toBeUndefined()
-		expect(first?.modelInfo).toMatchObject({ contextWindow: 128_000, supportsImages: true, temperature: 0 })
+		// Unknown model metadata stays unknown: the old fallback fabricated the
+		// openai-compatible safe defaults (a 128K context window) and the UI
+		// displayed it as the model's supported context.
+		expect(first?.modelInfo).toMatchObject({ name: "default-custom", supportsPromptCache: false })
+		expect(first?.modelInfo.contextWindow).toBeUndefined()
 		expect(first?.modelInfo.maxTokens).toBeUndefined()
 		expect(syncStoredProviderRegistration).not.toHaveBeenCalled()
 	})
@@ -653,7 +700,9 @@ describe("createProviderConfigStore", () => {
 			cacheReadsPrice: 0,
 		})
 		expect(selection?.modelInfo.maxTokens).toBeUndefined()
-		expect(selection?.modelInfo.temperature).toBe(0)
+		// No fabricated defaults: unknown temperature stays unknown (the -1
+		// sentinel is still stripped on the way out).
+		expect(selection?.modelInfo.temperature).toBeUndefined()
 		expect(mocks.getApiConfiguration().actModeOpenAiModelInfo).not.toHaveProperty("maxTokens")
 		expect(mocks.getApiConfiguration().actModeOpenAiModelInfo).not.toHaveProperty("temperature", -1)
 		expect(syncStoredProviderRegistration).toHaveBeenCalledTimes(1)
@@ -715,7 +764,7 @@ describe("createProviderConfigStore", () => {
 
 		expect(selection?.overrides).toEqual({ contextWindow: 64_000, capabilities: ["tools"] })
 		expect(selection?.modelInfo.maxTokens).toBeUndefined()
-		expect(selection?.modelInfo.temperature).toBe(0)
+		expect(selection?.modelInfo.temperature).toBeUndefined()
 		expect(syncStoredProviderRegistration).not.toHaveBeenCalled()
 	})
 

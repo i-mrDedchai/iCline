@@ -1,4 +1,4 @@
-import { type ApiConfiguration, type ModelInfo, openAiModelInfoSafeDefaults, openRouterDefaultModelInfo } from "@shared/api"
+import { type ApiConfiguration, type ModelInfo, openRouterDefaultModelInfo } from "@shared/api"
 import type { Mode } from "@shared/storage/types"
 import { useMemo } from "react"
 import { getModeSpecificFields } from "@/components/settings/utils/providerUtils"
@@ -48,7 +48,10 @@ export function useDynamicProviderSelection(
 	const hideUsageCost = useProviderUsageCostDisplay(providerId) === "hide"
 	return useMemo(() => {
 		const fields = readFields(apiConfiguration, mode)
-		const fallbackInfo = FALLBACK_INFO_BY_PROVIDER[providerId] ?? openAiModelInfoSafeDefaults
+		// Unknown model metadata stays unknown (no fabricated 128K context
+		// window); FALLBACK_INFO_BY_PROVIDER still seeds the providers whose
+		// pre-commit default really is that catalog model.
+		const fallbackInfo = FALLBACK_INFO_BY_PROVIDER[providerId] ?? { supportsPromptCache: false }
 
 		const resolve = (id: string | undefined, info: ModelInfo | undefined, defaultId = ""): DynamicProviderSelection => ({
 			selectedModelId: id || defaultId,

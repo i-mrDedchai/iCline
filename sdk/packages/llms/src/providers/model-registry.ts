@@ -70,10 +70,19 @@ export async function getProviderCollection(
 	return getProviderFromCache(providerId);
 }
 
-export async function getModelsForProvider(
+/**
+ * Sync twin of {@link getModelsForProvider}. The merged view matters because
+ * `MODEL_COLLECTIONS_BY_PROVIDER_ID[providerId].models` intentionally reflects
+ * only the provider collection (bundled or CUSTOM_PROVIDERS) and does NOT
+ * include models registered via {@link registerModel} (models.json entries
+ * that extend an existing provider). Consumers that resolve model metadata
+ * (context windows, pricing) must use this accessor or they silently fall
+ * back to fabricated defaults for those models.
+ */
+export function getModelsForProviderSync(
 	providerId: string,
 	options: GetModelsForProviderOptions = {},
-): Promise<Record<string, ModelInfo>> {
+): Record<string, ModelInfo> {
 	const collection = getProviderFromCache(providerId);
 	const builtInModels = collection?.models ?? {};
 	const customModels = CUSTOM_MODELS.get(providerId);
@@ -88,6 +97,13 @@ export async function getModelsForProvider(
 	return Object.fromEntries(
 		Object.entries(models).filter(([, model]) => matches(model)),
 	);
+}
+
+export async function getModelsForProvider(
+	providerId: string,
+	options: GetModelsForProviderOptions = {},
+): Promise<Record<string, ModelInfo>> {
+	return getModelsForProviderSync(providerId, options);
 }
 
 /**

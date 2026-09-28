@@ -5,7 +5,7 @@ import {
 	syncStoredProviderRegistration,
 	writeModelsFileSync,
 } from "@cline/core"
-import { getGeneratedModelsForProvider, MODEL_COLLECTIONS_BY_PROVIDER_ID } from "@cline/llms"
+import { getGeneratedModelsForProvider, getModelsForProviderSync } from "@cline/llms"
 import { ModelCapabilitySchema } from "@cline/shared"
 import { type ApiConfiguration, type ApiProvider, type ModelInfo, openAiModelInfoSafeDefaults } from "@shared/api"
 import { ApiFormat } from "@shared/proto/cline/models"
@@ -231,10 +231,7 @@ function readLiveCachedModelInfo(providerId: ProviderId, modelId: string): Model
  */
 function isKnownModelIdForProvider(providerId: ProviderId, modelId: string): boolean {
 	const sdkProviderId = toSdkProviderId(providerId)
-	if (
-		getGeneratedModelsForProvider(sdkProviderId)[modelId] ||
-		MODEL_COLLECTIONS_BY_PROVIDER_ID[sdkProviderId]?.models[modelId]
-	) {
+	if (getGeneratedModelsForProvider(sdkProviderId)[modelId] || getModelsForProviderSync(sdkProviderId)[modelId]) {
 		return true
 	}
 	if (readLiveCachedModelInfo(providerId, modelId)) {
@@ -259,7 +256,24 @@ function sanitizeResolvedModelInfo(modelInfo: ModelInfo): ModelInfo {
 	return next
 }
 
+/**
+ * Truly unknown model: carry no fabricated metadata. The old fallback stamped
+ * `openAiModelInfoSafeDefaults` (contextWindow 128_000) onto every unknown id,
+ * which the UI then displayed as the model's supported context window
+ * ("Context: 128K") and the runtime budgeted compaction against — even when
+ * the model actually supported 500K/1M. Unknown now stays unknown.
+ */
 function fallbackModelInfo(modelId: string): ModelInfo {
+	return sanitizeResolvedModelInfo({ name: modelId, supportsPromptCache: false })
+}
+
+/**
+ * Diff base for the legacy openai-compatible snapshot migration ONLY. Legacy
+ * snapshots may themselves contain fabricated safe-default values (e.g. the
+ * 128K context); diffing against the same fabrication keeps those from being
+ * re-persisted as user-authored overrides in models.json.
+ */
+function legacyDiffBaseModelInfo(modelId: string): ModelInfo {
 	return sanitizeResolvedModelInfo({ ...openAiModelInfoSafeDefaults, name: modelId })
 }
 
@@ -472,7 +486,11 @@ function readBaseModelInfoForProvider(providerId: ProviderId, modelId: string): 
 		}
 	}
 
-	const collectionModelInfo = MODEL_COLLECTIONS_BY_PROVIDER_ID[sdkProviderId]?.models[modelId]
+	// getModelsForProviderSync merges runtime-registered models (models.json
+	// `registerModel` entries) over the collection view; the bare
+	// MODEL_COLLECTIONS_BY_PROVIDER_ID[...].models lookup misses those and their
+	// declared metadata (contextWindow, pricing).
+	const collectionModelInfo = getModelsForProviderSync(sdkProviderId)[modelId]
 	if (isModelInfo(collectionModelInfo)) {
 		return collectionModelInfo
 	}
@@ -824,7 +842,7 @@ function migrateLegacyModelOverridesIfNeeded(providerId: ProviderId, modelId: st
 	if (readBaseModelInfoForProvider(providerId, modelId) !== undefined) {
 		return
 	}
-	const overrides = legacyModelInfoToOverrides(modelInfo as LegacyModelInfo, fallbackModelInfo(modelId))
+	const overrides = legacyModelInfoToOverrides(modelInfo as LegacyModelInfo, legacyDiffBaseModelInfo(modelId))
 	if (overrides) {
 		try {
 			writeModelOverrides(providerId, modelId, overrides)
