@@ -4,12 +4,14 @@ import { v4 as uuidv4 } from "uuid"
 import type { BalanceResponse, OrganizationBalanceResponse, UserResponse } from "../../../../shared/ClineAccount"
 import {
 	buildTeamAttachOutcomeCall,
+	E2E_GATEWAY_API_KEY,
 	E2E_MOCK_ALPHA_TEAM_CALLS,
 	E2E_MOCK_API_RESPONSES,
 	E2E_MOCK_BETA_TEAM_CALLS,
 	E2E_MOCK_CLINE_MODELS,
 	E2E_MOCK_CLINE_RECOMMENDED_MODELS,
 	E2E_MOCK_EDITOR_TOOL_CALL,
+	E2E_MOCK_GATEWAY_MODELS,
 	E2E_MOCK_OUTPUT_LIMIT_RESPONSES,
 	E2E_MOCK_OVERSIZED_EDITOR_TOOL_CALL,
 	E2E_MOCK_TEAM_AWAIT_CALL,
@@ -274,6 +276,10 @@ export class ClineApiServerMock {
 			const authHeader = req.headers.authorization
 			const isAuthRequired =
 				!path.startsWith("/.test/") &&
+				// The custom gateway stub validates its own API key per request
+				// (like the real Cleanapis endpoint) instead of minting Cline API
+				// user tokens, so it opts out of the shared token middleware.
+				!path.startsWith("/e2e-gateway/") &&
 				path !== "/health" &&
 				path !== "/api/v1/auth/token" &&
 				path !== "/api/v1/auth/register"
@@ -321,6 +327,21 @@ export class ClineApiServerMock {
 							status: "ok",
 							timestamp: new Date().toISOString(),
 						})
+					}
+				}
+
+				// Custom gateway stub: the model list is public knowledge only WITH
+				// the key — 401 without one, exactly like the real reseller
+				// endpoints this exercises (cleanapis.com/v1/models).
+				if (baseRoute === "/e2e-gateway/v1") {
+					if (endpoint === "/models" && method === "GET") {
+						const bearerToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : undefined
+						const providedKey =
+							bearerToken ?? (Array.isArray(req.headers["x-api-key"]) ? undefined : req.headers["x-api-key"])
+						if (providedKey !== E2E_GATEWAY_API_KEY) {
+							return sendApiError("Unauthorized", 401)
+						}
+						return sendJson(E2E_MOCK_GATEWAY_MODELS)
 					}
 				}
 

@@ -37,6 +37,11 @@ export const E2E_REGISTERED_MOCK_ENDPOINTS = {
 		GET: ["/", "/ping"],
 		PUT: [],
 	},
+	"/e2e-gateway/v1": {
+		GET: ["/models"],
+		POST: [],
+		PUT: [],
+	},
 }
 
 /**
@@ -165,6 +170,44 @@ export const E2E_MOCK_OUTPUT_LIMIT_RESPONSES = {
 		"OUTPUT_LIMIT_CUT_HERE — the answer was still being written when the output budget ran out, right in the middle of a",
 	/** Turn-ending text streamed after the runtime continues the turn. */
 	COMPLETE: "OUTPUT_LIMIT_CONTINUED_OK",
+}
+
+// ---------------------------------------------------------------------------
+// Custom gateway stub: a user-configured OpenAI-compatible endpoint (the
+// Cleanapis case) that publishes its model list — context window included —
+// through its own `/models` endpoint and REQUIRES the API key to read it
+// (401 without one, exactly like cleanapis.com/v1/models). The Settings
+// context-window e2e points the OpenAI Compatible provider at this gateway
+// and asserts the Settings "Context:" row shows the DECLARED window.
+// ---------------------------------------------------------------------------
+
+/** API key the gateway requires on /models (sent as Bearer and x-api-key). */
+export const E2E_GATEWAY_API_KEY = "e2e-gateway-key-444"
+
+/**
+ * The model the gateway sells under a catalog-known id while declaring its own
+ * context window. `gpt-5.6-sol` on purpose: the bundled catalog's
+ * cross-provider majority describes that id as 1,050,000, so a Settings row
+ * showing 444,444 proves the value came from the provider's own `/models`
+ * payload — and the fix.39 smoke saw a blank row for exactly this id
+ * ("Context ไม่แสดงเลย").
+ */
+export const E2E_GATEWAY_MODEL_ID = "gpt-5.6-sol"
+
+export const E2E_GATEWAY_CONTEXT_LENGTH = 444_444
+
+export const E2E_MOCK_GATEWAY_MODELS = {
+	data: [
+		{
+			id: E2E_GATEWAY_MODEL_ID,
+			name: "GPT-5.6 Sol (e2e gateway)",
+			context_length: E2E_GATEWAY_CONTEXT_LENGTH,
+			top_provider: {
+				context_length: E2E_GATEWAY_CONTEXT_LENGTH,
+				max_completion_tokens: 64_000,
+			},
+		},
+	],
 }
 
 export const E2E_MOCK_CLINE_RECOMMENDED_MODELS = {
