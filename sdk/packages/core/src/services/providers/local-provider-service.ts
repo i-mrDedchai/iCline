@@ -858,6 +858,7 @@ export async function listLocalProviders(
 							info,
 						),
 						modelList,
+						source: info?.source,
 					},
 					rank: getPopularRank(info?.metadata),
 				};

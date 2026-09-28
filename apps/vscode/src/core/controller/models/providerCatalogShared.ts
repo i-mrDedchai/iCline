@@ -76,6 +76,7 @@ export function toProviderListingProto(listing: ProviderListing): ProviderListin
 	return ProviderListingProto.create({
 		id: listing.id,
 		name: listing.name,
+		isCustom: listing.isCustom ?? false,
 		defaultModelId: listing.defaultModelId,
 		family: listing.family,
 		protocol: listing.protocol,

@@ -548,6 +548,7 @@ describe("ProviderCatalog Phase 3.5 listProviders", () => {
 		expect(listings[0]).toEqual({
 			id: providerId,
 			name: "OpenRouter",
+			isCustom: false,
 			defaultModelId: "anthropic/claude-sonnet-4.6",
 			protocol: "openai-chat",
 			authDescription: "OpenRouter AI platform",

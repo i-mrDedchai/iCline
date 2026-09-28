@@ -273,6 +273,12 @@ export type UsageCostDisplay = "show" | "hide"
 export interface ProviderListing {
 	readonly id: ProviderId
 	readonly name: string
+	/**
+	 * True for user-created custom providers (registry source "file"), which
+	 * the Settings "Custom providers" card can edit and delete — bundled
+	 * catalog entries are not user-editable.
+	 */
+	readonly isCustom?: boolean
 	readonly defaultModelId?: string
 	readonly family?: string
 	readonly protocol?: string

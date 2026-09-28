@@ -197,6 +197,7 @@ function toProviderListing(provider: ProviderListItem): ProviderListing {
 	return {
 		id: parseProviderId(provider.id),
 		name: hostLabelOverride ?? provider.name,
+		isCustom: provider.source === "file",
 		defaultModelId: optionalNonEmpty(provider.defaultModelId),
 		protocol: provider.protocol,
 		// ProviderListing intentionally does not include full model-list data.

@@ -239,6 +239,13 @@ export interface ProviderListItem {
 	configValues?: Record<string, ProviderConfigFieldPrimitive>;
 	modelList?: ProviderModel[];
 	family?: string;
+	/**
+	 * Registry provenance of the provider: "system" (bundled), "file" (the
+	 * user's models.json — i.e. a custom provider they created), or
+	 * "discovery". Drives provider-management surfaces that only apply to
+	 * user-created providers.
+	 */
+	source?: "system" | "file" | "discovery";
 }
 
 export interface VoiceInputSelection {

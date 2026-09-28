@@ -79,6 +79,7 @@ describe("provider model catalog handlers", () => {
 			{
 				id: "deepseek",
 				name: "DeepSeek",
+				isCustom: false,
 				defaultModelId: "deepseek-v4-flash",
 				family: undefined,
 				protocol: "openai-chat",
@@ -86,6 +87,8 @@ describe("provider model catalog handlers", () => {
 				baseUrlDescription: undefined,
 				allowsCustomModelIds: false,
 				usageCostDisplay: "show",
+				modelCount: undefined,
+				freeModelCount: undefined,
 			},
 		])
 		expect(catalog.listProviders).toHaveBeenCalledTimes(1)

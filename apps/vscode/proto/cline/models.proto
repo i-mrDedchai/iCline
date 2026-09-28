@@ -75,6 +75,13 @@ service ModelsService {
   // gateway clamps a level the model does not advertise (Sakana's `max` reaches a
   // model whose top level is `xhigh` as X-High), and no other surface reports it.
   rpc resolveReasoningEffort(ResolveReasoningEffortRequest) returns (ResolveReasoningEffortResponse);
+
+  // iCline: custom provider management (multi-provider CRUD). Each call
+  // returns the refreshed provider listings so the UI updates in one round
+  // trip. Failures reject with the reason (never a silent empty success).
+  rpc createCustomProvider(CustomProviderMutationRequest) returns (ProviderListingsResponse);
+  rpc updateCustomProvider(CustomProviderMutationRequest) returns (ProviderListingsResponse);
+  rpc deleteCustomProvider(StringRequest) returns (ProviderListingsResponse);
 }
 
 // List of VS Code LM models
@@ -190,6 +197,11 @@ message ProviderListing {
   // `@cline/llms`. When "hide", consumers must suppress per-token pricing
   // and total cost displays (matches the CLI's `shouldShowCliUsageCost`).
   string usage_cost_display = 11;
+
+  // True for user-created custom providers (registered from models.json,
+  // registry source "file") — drives the Settings "Custom providers"
+  // management card (edit/delete) versus the bundled catalog listings.
+  bool is_custom = 14;
 }
 
 message ProviderListingsResponse {
@@ -342,6 +354,21 @@ message WriteProviderConfigPatch {
 message WriteProviderConfigRequest {
   string provider_id = 1;
   WriteProviderConfigPatch patch = 2;
+}
+
+// Create/update payload for a user-created custom provider. On update an
+// empty api_key keeps the stored key (write-only credential); an empty
+// base_url is only valid for update (create needs a baseUrl or an apiKey).
+message CustomProviderMutationRequest {
+  string provider_id = 1;
+  optional string name = 2;
+  optional string base_url = 3;
+  optional string api_key = 4;
+  map<string, string> headers = 5;
+  optional int64 timeout_ms = 6;
+  repeated string models = 7;
+  optional string default_model_id = 8;
+  optional string models_source_url = 9;
 }
 
 message CommitModelSelectionRequest {
