@@ -74,6 +74,23 @@ const MAX_TOKENS_CONTINUATION_PROMPT =
 	"If you were about to write a file, write it now with the editor tool, splitting large content into several smaller tool calls. " +
 	"Prefer acting with tool calls over further analysis.";
 
+/**
+ * Share of the truncated turn's output ceiling that reasoning may consume on
+ * its continuation turns. A turn cut off by the output limit after spending
+ * its whole budget on reasoning (the fix.37 smoke run's sub-agents died at
+ * 31,999/32,000 output tokens mid-thinking, before writing any file) burns
+ * the continuation the same way unless reasoning itself is bounded, so the
+ * recovery turns carry an explicit thinking budget and the rest of the
+ * ceiling stays available for visible output and tool calls.
+ */
+const THINKING_BUDGET_CONTINUATION_SHARE = 0.25;
+
+/**
+ * A truncation counts as "burned on reasoning" when reasoning consumed at
+ * least this share of the output tokens the turn managed to produce.
+ */
+const THINKING_BURNED_SHARE = 0.5;
+
 /** Cap on tool names listed in the "unknown tool" result, so the message stays readable. */
 const MAX_TOOL_NAMES_IN_ERROR = 40;
 
@@ -531,6 +548,13 @@ export class AgentRuntime {
 	 * providers that require them first in the following turn.
 	 */
 	private pendingHookContexts: string[] = [];
+	/**
+	 * Thinking budget forced onto continuation turns after a truncation that
+	 * burned the output ceiling on reasoning. Cleared when a run starts and
+	 * whenever a turn makes progress with tool calls. Only ever lowers the
+	 * budget — an explicitly configured one is never raised.
+	 */
+	private thinkingBudgetOverride: number | undefined;
 	private readonly state = {
 		agentId: "",
 		agentRole: undefined as string | undefined,
@@ -882,6 +906,7 @@ export class AgentRuntime {
 		this.state.lastErrorReported = false;
 		this.state.usage = cloneUsage(DEFAULT_USAGE);
 		this.overflowRecoveryAttempted = false;
+		this.thinkingBudgetOverride = undefined;
 
 		try {
 			await this.callBeforeRunHooks();
@@ -991,6 +1016,7 @@ export class AgentRuntime {
 				// continuation budget applies to consecutive tool-less truncations.
 				if (toolCalls.length > 0) {
 					maxTokensContinuations = 0;
+					this.thinkingBudgetOverride = undefined;
 				}
 
 				finalAssistantMessage = message;
@@ -1019,6 +1045,7 @@ export class AgentRuntime {
 				}
 
 				if (finishReason === "max-tokens" && toolCalls.length === 0) {
+					this.capThinkingBudgetForContinuation(message);
 					// A turn cut off by the output limit is recoverable — failing the
 					// whole run here killed sub-agents mid-reasoning before they wrote
 					// any file. Nudge the model to pick up where it stopped instead;
@@ -1450,6 +1477,9 @@ export class AgentRuntime {
 			modelTools: this.config.modelTools,
 			signal: this.abortController?.signal,
 			options: mergeModelOptions(this.config.modelOptions, {
+				...(this.thinkingBudgetOverride !== undefined
+					? { thinkingBudgetTokens: this.thinkingBudgetOverride }
+					: {}),
 				metadata: modelRequestMetadata,
 			}),
 		};
@@ -1933,6 +1963,54 @@ export class AgentRuntime {
 		return (
 			error instanceof AgentRuntimeAbortError ||
 			this.abortController?.signal.aborted === true
+		);
+	}
+
+	/**
+	 * A turn cut off by the output limit after burning its ceiling on reasoning
+	 * would burn the continuation the same way — the model keeps analyzing and
+	 * never reaches a tool call. Bound reasoning on the continuation turns
+	 * instead: an explicit thinking budget leaves the rest of the output
+	 * ceiling for actual output. The override only ever lowers the budget — a
+	 * configured budget is never raised.
+	 */
+	private capThinkingBudgetForContinuation(message: AgentMessage): void {
+		const metrics = message.metrics;
+		const outputTokens = metrics?.outputTokens ?? 0;
+		const reasoningTokens = metrics?.reasoningTokenCount ?? 0;
+		if (
+			outputTokens <= 0 ||
+			reasoningTokens < outputTokens * THINKING_BURNED_SHARE
+		) {
+			return;
+		}
+		const computed = Math.max(
+			1,
+			Math.floor(outputTokens * THINKING_BUDGET_CONTINUATION_SHARE),
+		);
+		const configured = this.config.modelOptions?.thinkingBudgetTokens;
+		const configuredBudget =
+			typeof configured === "number" &&
+			Number.isInteger(configured) &&
+			configured > 0
+				? configured
+				: undefined;
+		const budget = Math.min(
+			computed,
+			configuredBudget ?? Number.POSITIVE_INFINITY,
+		);
+		this.thinkingBudgetOverride =
+			this.thinkingBudgetOverride === undefined
+				? budget
+				: Math.min(this.thinkingBudgetOverride, budget);
+		this.config.logger?.debug(
+			"Output limit hit while reasoning; capping the thinking budget for continuation turns",
+			{
+				iteration: this.state.iteration,
+				outputTokens,
+				reasoningTokenCount: reasoningTokens,
+				thinkingBudgetTokens: this.thinkingBudgetOverride,
+			},
 		);
 	}
 

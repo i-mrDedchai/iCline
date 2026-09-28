@@ -515,6 +515,117 @@ describe("AgentRuntime", () => {
 		expect(model.requests).toHaveLength(4);
 	});
 
+	it("caps the thinking budget on continuation turns after a reasoning-burned truncation", async () => {
+		const model = new ScriptedModel([
+			() => [
+				{ type: "reasoning-delta", text: "thinking..." },
+				{
+					type: "usage",
+					usage: { outputTokens: 1000, reasoningTokenCount: 950 },
+				},
+				{ type: "finish", reason: "max-tokens" },
+			],
+			() => [
+				{ type: "text-delta", text: "done" },
+				{ type: "finish", reason: "stop" },
+			],
+		]);
+		const runtime = new AgentRuntime({ model });
+
+		const result = await runtime.run("Hi");
+
+		expect(result.status).toBe("completed");
+		expect(model.requests).toHaveLength(2);
+		expect(model.requests[0].options?.thinkingBudgetTokens).toBeUndefined();
+		// 25% of the 1,000-token ceiling the truncated turn burned on reasoning.
+		expect(model.requests[1].options?.thinkingBudgetTokens).toBe(250);
+	});
+
+	it("never raises an explicitly configured thinking budget on continuation turns", async () => {
+		const model = new ScriptedModel([
+			() => [
+				{ type: "reasoning-delta", text: "thinking..." },
+				{
+					type: "usage",
+					usage: { outputTokens: 1000, reasoningTokenCount: 950 },
+				},
+				{ type: "finish", reason: "max-tokens" },
+			],
+			() => [
+				{ type: "text-delta", text: "done" },
+				{ type: "finish", reason: "stop" },
+			],
+		]);
+		const runtime = new AgentRuntime({
+			model,
+			modelOptions: { thinkingBudgetTokens: 100 },
+		});
+
+		const result = await runtime.run("Hi");
+
+		expect(result.status).toBe("completed");
+		expect(model.requests[0].options?.thinkingBudgetTokens).toBe(100);
+		expect(model.requests[1].options?.thinkingBudgetTokens).toBe(100);
+	});
+
+	it("drops the thinking cap once a turn makes progress with a tool call", async () => {
+		const model = new ScriptedModel([
+			() => [
+				{ type: "reasoning-delta", text: "thinking..." },
+				{
+					type: "usage",
+					usage: { outputTokens: 1000, reasoningTokenCount: 950 },
+				},
+				{ type: "finish", reason: "max-tokens" },
+			],
+			() => [
+				{
+					type: "tool-call-delta",
+					toolCallId: "call_1",
+					toolName: "echo",
+					input: { text: "hi" },
+				},
+				{ type: "finish", reason: "tool-calls" },
+			],
+			() => [
+				{ type: "text-delta", text: "done" },
+				{ type: "finish", reason: "stop" },
+			],
+		]);
+		const runtime = new AgentRuntime({ model, tools: [createEchoTool()] });
+
+		const result = await runtime.run("Hi");
+
+		expect(result.status).toBe("completed");
+		expect(model.requests).toHaveLength(3);
+		expect(model.requests[1].options?.thinkingBudgetTokens).toBe(250);
+		expect(model.requests[2].options?.thinkingBudgetTokens).toBeUndefined();
+	});
+
+	it("leaves the thinking budget alone when the truncation did not burn it on reasoning", async () => {
+		const model = new ScriptedModel([
+			() => [
+				{ type: "text-delta", text: "long visible output..." },
+				{
+					type: "usage",
+					usage: { outputTokens: 1000, reasoningTokenCount: 400 },
+				},
+				{ type: "finish", reason: "max-tokens" },
+			],
+			() => [
+				{ type: "text-delta", text: "done" },
+				{ type: "finish", reason: "stop" },
+			],
+		]);
+		const runtime = new AgentRuntime({ model });
+
+		const result = await runtime.run("Hi");
+
+		expect(result.status).toBe("completed");
+		expect(model.requests).toHaveLength(2);
+		expect(model.requests[1].options?.thinkingBudgetTokens).toBeUndefined();
+	});
+
 	it("does not persist an empty assistant message when the model stream fails", async () => {
 		const model = new ScriptedModel([
 			() => [{ type: "finish", reason: "error", error: "upstream failed" }],
