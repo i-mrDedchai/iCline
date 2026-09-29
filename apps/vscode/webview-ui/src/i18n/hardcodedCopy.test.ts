@@ -19,6 +19,12 @@ import { describe, expect, it } from "vitest"
 const MIGRATED = [
 	"components/settings/PreferredLanguageSetting.tsx",
 	"components/settings/sections/GeneralSettingsSection.tsx",
+	"components/settings/sections/DebugSection.tsx",
+	"components/settings/sections/TerminalSettingsSection.tsx",
+	"components/settings/sections/ApiConfigurationSection.tsx",
+	"components/settings/sections/FeatureSettingsSection.tsx",
+	"components/settings/sections/RemoteConfigSection.tsx",
+	"components/settings/sections/AboutSection.tsx",
 	// Migrated in the picker round; kept here so a new English string cannot slip in
 	// beside the translator that is already in use.
 	"components/chat/ModelOptionsPanel.tsx",
@@ -27,6 +33,11 @@ const MIGRATED = [
 	"components/common/OrgProviderPolicyNotice.tsx",
 	"components/common/ReasoningEffortNotice.tsx",
 	"components/settings/ReasoningEffortSelector.tsx",
+	// The welcome screen: the two mode headings live here, the cards and their
+	// popover in `icline/`.
+	"components/welcome/SuggestedTasks.tsx",
+	"components/welcome/icline/IclineQuickStartCard.tsx",
+	"components/welcome/icline/QuickStartPromptPopover.tsx",
 ]
 
 /**
@@ -40,8 +51,14 @@ const EXEMPT: ReadonlyArray<string> = []
 
 const SRC_DIR = join(__dirname, "..")
 
-/** Text sitting directly between two tags, e.g. `>Download<`. */
-const JSX_TEXT = />[^<>{}\n]*[A-Za-z][^<>{}\n]*</g
+/**
+ * Text sitting directly before a closing tag, e.g. `>Download</`. Requiring the `</`
+ * is what keeps TypeScript out of the scan: `=> Promise<void>` and `Set<X> = new Set<…>`
+ * both look like `>text<` to a regex, but neither closes a tag. The cost is that copy
+ * followed by an inline element (`<p>Some text <a …>link</a></p>`) is not detected —
+ * this is a net, not a proof, and a net that cries wolf gets deleted.
+ */
+const JSX_TEXT = />[^<>{}\n]*[A-Za-z][^<>{}\n]*<\//g
 /** A user-facing attribute given a literal instead of a translated expression. */
 const LITERAL_ATTRIBUTE = /\b(title|placeholder|aria-label|label)=(["'])[^"'{}\n]{3,}\2/g
 /** Anything that looks like a word: rejects `</div>`, `>=`, punctuation-only nodes. */
@@ -61,7 +78,7 @@ function violations(file: string): string[] {
 	const source = readFileSync(join(SRC_DIR, file), "utf8")
 	const found: string[] = []
 	for (const match of source.match(JSX_TEXT) ?? []) {
-		const text = match.slice(1, -1).trim()
+		const text = match.slice(1, -2).trim()
 		if (STARTS_LIKE_COPY.test(text) && !LOOKS_LIKE_TYPE_SYNTAX.test(text) && LOOKS_LIKE_COPY.test(text)) {
 			found.push(`text node: ${text}`)
 		}
@@ -98,7 +115,7 @@ describe("the scan itself", () => {
 		`
 		const found: string[] = []
 		for (const match of source.match(JSX_TEXT) ?? []) {
-			const text = match.slice(1, -1).trim()
+			const text = match.slice(1, -2).trim()
 			if (STARTS_LIKE_COPY.test(text) && !LOOKS_LIKE_TYPE_SYNTAX.test(text) && LOOKS_LIKE_COPY.test(text)) {
 				found.push(text)
 			}
@@ -111,11 +128,13 @@ describe("the scan itself", () => {
 	it("does not mistake TypeScript for copy", () => {
 		const source = `
 			const NAMES: ReadonlySet<PickerStringKey> = new Set<PickerStringKey>(["effortMax"])
-			const Node = () => <span className="text-xs" />
+			const reset: (global?: boolean) => Promise<void> = async () => {}
+			interface Props { onReset: (global?: boolean) => Promise<void> }
+			const Bar = ({ label }: { label: string }) => <span className="text-xs" />
 		`
 		const found: string[] = []
 		for (const match of source.match(JSX_TEXT) ?? []) {
-			const text = match.slice(1, -1).trim()
+			const text = match.slice(1, -2).trim()
 			if (STARTS_LIKE_COPY.test(text) && !LOOKS_LIKE_TYPE_SYNTAX.test(text) && LOOKS_LIKE_COPY.test(text)) {
 				found.push(text)
 			}

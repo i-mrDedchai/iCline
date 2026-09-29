@@ -12,7 +12,7 @@ import {
 } from "./locales"
 import { pickerStrings } from "./namespaces/picker"
 import { createPickerTranslator, formatPickerString, type PickerStringKey } from "./picker"
-import { createTranslator, NAMESPACES, type Namespace } from "./strings"
+import { createTranslator, NAMESPACES, type Namespace, splitOnPlaceholder } from "./strings"
 
 const NAMESPACE_NAMES = Object.keys(NAMESPACES) as Namespace[]
 
@@ -35,6 +35,21 @@ describe("namespace tables", () => {
 			for (const locale of TRANSLATED_LOCALES) {
 				for (const [key, value] of Object.entries(NAMESPACES[namespace][locale] ?? {})) {
 					expect(value, `${namespace}.${locale}.${key} must not be empty`).toBeTruthy()
+				}
+			}
+		}
+	})
+
+	// A translation that drops or renames a `{name}` marker renders the marker itself —
+	// or silently loses the value it stood for. A reviewer reading tables by eye will not
+	// catch it; this does, for every key of every namespace.
+	it("keeps the same placeholder names in every locale", () => {
+		const placeholders = (text: string) => (text.match(/\{(\w+)\}/g) ?? []).sort()
+		for (const namespace of NAMESPACE_NAMES) {
+			for (const [key, english] of Object.entries(NAMESPACES[namespace].en)) {
+				for (const locale of TRANSLATED_LOCALES) {
+					const table = NAMESPACES[namespace][locale] as Record<string, string> | undefined
+					expect(placeholders(table?.[key] ?? ""), `${namespace}.${locale}.${key}`).toEqual(placeholders(english))
 				}
 			}
 		}
@@ -65,6 +80,71 @@ describe("createTranslator", () => {
 			"Max → High · this model does not accept Max, so High is sent",
 		)
 		expect(formatPickerString(translate, "effortClampNearest", { requested: "Max" })).toContain("{applied}")
+	})
+})
+
+/**
+ * Sentences that carry links are composed from placeholders, so the copy itself has to
+ * stay composable: a translation that mistypes a placeholder leaks `{quickFixes}` to
+ * the screen, and one that drops it silently reorders the sentence. Asserting the
+ * composed result per locale catches both, and pins the English source's wording.
+ */
+/**
+ * Stitch a two-link sentence together exactly as its component does: split the notice on
+ * its first placeholder, split the remainder on the second, and put the labels between
+ * the pieces. The component and this helper must agree, which is what makes the
+ * assertions below meaningful.
+ */
+function composeLinkedSentence(title: string, notice: string, labels: [string, string], placeholders: [string, string]): string {
+	const [beforeFirst, afterFirst] = splitOnPlaceholder(notice, placeholders[0])
+	const [between, afterSecond] = splitOnPlaceholder(afterFirst, placeholders[1])
+	return `${title} ${beforeFirst}${labels[0]}${between}${labels[1]}${afterSecond}`.trim()
+}
+
+const TERMINAL_SENTENCE_PLACEHOLDERS: [string, string] = ["quickFixes", "guide"]
+
+describe("sentences with inline links", () => {
+	it("keeps the English terminal sentence in one readable order", () => {
+		const translate = createTranslator("en", "settings")
+		expect(
+			composeLinkedSentence(
+				translate("terminalIssuesTitle"),
+				translate("terminalIssuesNotice"),
+				[translate("terminalIssuesQuickFixes"), translate("terminalIssuesGuide")],
+				TERMINAL_SENTENCE_PLACEHOLDERS,
+			),
+		).toBe("Having terminal issues? Check our Terminal Quick Fixes or the Complete Troubleshooting Guide.")
+	})
+
+	// Every locale has to compose the same way: a translation that mistypes a placeholder
+	// leaks `{quickFixes}` onto the screen, and the sentence is the thing a user reads.
+	for (const locale of TRANSLATED_LOCALES) {
+		it(`composes the terminal sentence in ${locale} without leaking a placeholder`, () => {
+			const translate = createTranslator(locale, "settings")
+			const composed = composeLinkedSentence(
+				translate("terminalIssuesTitle"),
+				translate("terminalIssuesNotice"),
+				[translate("terminalIssuesQuickFixes"), translate("terminalIssuesGuide")],
+				TERMINAL_SENTENCE_PLACEHOLDERS,
+			)
+			expect(composed).not.toMatch(/\{\w+\}/)
+			expect(composed).toContain(translate("terminalIssuesQuickFixes"))
+			expect(composed).toContain(translate("terminalIssuesGuide"))
+		})
+	}
+
+	it("keeps the English telemetry sentence in one readable order", () => {
+		const translate = createTranslator("en", "settings")
+		expect(
+			composeLinkedSentence(
+				"",
+				translate("telemetryNotice"),
+				[translate("telemetryOverviewLink"), translate("telemetryPrivacyLink")],
+				["overview", "privacy"],
+			),
+		).toBe(
+			"Help improve Cline by sending usage data and error reports. No code, prompts, or personal information are ever sent. See our telemetry overview and privacy policy for more details.",
+		)
 	})
 })
 
@@ -112,8 +192,17 @@ describe("localeFromTag", () => {
 	it("falls back to the primary subtag only when that is unambiguous", () => {
 		expect(localeFromTag("th")).toBe("th")
 		expect(localeFromTag("fr-CA")).toBe("fr")
-		// zh-CN and zh-TW both claim `zh`, so a bare tag must not guess one of them.
-		expect(localeFromTag("zh")).toBeUndefined()
+		// pt-BR and pt-PT both claim `pt`, and no alias settles it, so a bare `pt`
+		// must not be guessed at.
+		expect(localeFromTag("pt")).toBeUndefined()
+	})
+
+	it("resolves the Chinese spellings a system may report", () => {
+		expect(localeFromTag("zh")).toBe("zh-CN")
+		expect(localeFromTag("zh-Hans")).toBe("zh-CN")
+		expect(localeFromTag("zh-Hans-CN")).toBe("zh-CN")
+		expect(localeFromTag("zh-Hant")).toBe("zh-TW")
+		expect(localeFromTag("zh-TW")).toBe("zh-TW")
 	})
 
 	it("ignores tags it does not know", () => {
@@ -136,6 +225,17 @@ describe("resolveTranslatedLocale", () => {
 		["the explicit setting over an English VS Code", { preferredLanguage: "Thai - ไทย", systemLanguage: "en-US" }, "th"],
 		["English when nothing identifies a language", {}, "en"],
 		["English for empty inputs", { preferredLanguage: "", systemLanguage: "" }, "en"],
+		["Japanese from the setting", { preferredLanguage: "Japanese - 日本語" }, "ja"],
+		["Japanese from the VS Code language", { systemLanguage: "ja" }, "ja"],
+		["Simplified Chinese from the setting", { preferredLanguage: "Simplified Chinese - 简体中文" }, "zh-CN"],
+		["Simplified Chinese from an alias tag", { systemLanguage: "zh-Hans-CN" }, "zh-CN"],
+		// Traditional Chinese is offered by the picker but has no table yet, so it is a
+		// named language that degrades — the case the extensibility design promises.
+		[
+			"English for Traditional Chinese, which has no table yet",
+			{ preferredLanguage: "Traditional Chinese - 繁體中文" },
+			"en",
+		],
 		// The point of separating the two steps: we can name Turkish, we just have no
 		// Turkish copy yet, and naming it must not produce blanks or raw keys.
 		[
