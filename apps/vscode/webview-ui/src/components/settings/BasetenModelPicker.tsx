@@ -4,6 +4,7 @@ import Fuse from "fuse.js"
 import React, { KeyboardEvent, useEffect, useMemo, useRef, useState } from "react"
 import { useDynamicProviderSelection } from "@/hooks/useDynamicProviderSelection"
 import { useProviderModels } from "@/hooks/useProviderModels"
+import { useTranslation } from "@/i18n/useTranslation"
 import { useExtensionState } from "../../context/ExtensionStateContext"
 import { highlight } from "../history/HistoryView"
 import { ModelInfoView } from "./common/ModelInfoView"
@@ -17,6 +18,7 @@ interface BasetenModelPickerProps {
 
 const BasetenModelPicker: React.FC<BasetenModelPickerProps> = ({ isPopup, currentMode }) => {
 	const { apiConfiguration, basetenModels: dynamicBasetenModels } = useExtensionState()
+	const tr = useTranslation("providers")
 	const { handleModeFieldsChange } = useApiConfigurationHandlers()
 	const modeFields = getModeSpecificFields(apiConfiguration, currentMode)
 	// Curated Baseten catalog from the SDK over gRPC. The local
@@ -198,7 +200,7 @@ const BasetenModelPicker: React.FC<BasetenModelPickerProps> = ({ isPopup, curren
 			</style>
 			<div className="flex flex-col">
 				<label htmlFor="model-search">
-					<span className="font-medium">Model</span>
+					<span className="font-medium">{tr("modelLabel")}</span>
 				</label>
 				<div className="relative w-full" ref={dropdownRef}>
 					<VSCodeTextField
@@ -209,7 +211,7 @@ const BasetenModelPicker: React.FC<BasetenModelPickerProps> = ({ isPopup, curren
 							setIsDropdownVisible(true)
 						}}
 						onKeyDown={handleKeyDown}
-						placeholder="Search and select a model..."
+						placeholder={tr("modelSearchPlaceholder")}
 						role="combobox"
 						style={{
 							width: "100%",
@@ -219,7 +221,7 @@ const BasetenModelPicker: React.FC<BasetenModelPickerProps> = ({ isPopup, curren
 						value={searchTerm}>
 						{searchTerm && (
 							<div
-								aria-label="Clear search"
+								aria-label={tr("clearSearch")}
 								className="input-icon-button codicon codicon-close flex justify-center items-center h-full"
 								onClick={() => {
 									setSearchTerm("")

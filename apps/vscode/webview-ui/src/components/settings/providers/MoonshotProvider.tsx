@@ -3,6 +3,7 @@ import { Mode } from "@shared/storage/types"
 import { VSCodeDropdown, VSCodeOption } from "@vscode/webview-ui-toolkit/react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useStaticProviderSelection } from "@/hooks/useStaticProviderSelection"
+import { useTranslation } from "@/i18n/useTranslation"
 import { ModelsServiceClient } from "@/services/grpc-client"
 import { ApiKeyField } from "../common/ApiKeyField"
 import { ModelInfoView } from "../common/ModelInfoView"
@@ -11,6 +12,10 @@ import { DropdownContainer, ModelSelector } from "../common/ModelSelector"
 /**
  * Props for the MoonshotProvider component
  */
+/** Endpoint hostnames, not copy: they are the values the dropdown stores. */
+const MOONSHOT_INTL_HOST = "api.moonshot.ai"
+const MOONSHOT_CN_HOST = "api.moonshot.cn"
+
 interface MoonshotProviderProps {
 	showModelOptions: boolean
 	isPopup?: boolean
@@ -22,6 +27,7 @@ interface MoonshotProviderProps {
  */
 export const MoonshotProvider = ({ showModelOptions, isPopup, currentMode }: MoonshotProviderProps) => {
 	const { apiConfiguration } = useExtensionState()
+	const tr = useTranslation("providers")
 
 	// Get the normalized configuration
 	const { models, selectedModelId, selectedModelInfo, hideUsageCost } = useStaticProviderSelection(
@@ -34,7 +40,7 @@ export const MoonshotProvider = ({ showModelOptions, isPopup, currentMode }: Moo
 		<div>
 			<DropdownContainer className="dropdown-container" style={{ position: "inherit" }}>
 				<label htmlFor="moonshot-entrypoint">
-					<span style={{ fontWeight: 500, marginTop: 5 }}>Moonshot Entrypoint</span>
+					<span style={{ fontWeight: 500, marginTop: 5 }}>{tr("moonshotEntrypointLabel")}</span>
 				</label>
 				<VSCodeDropdown
 					id="moonshot-entrypoint"
@@ -56,12 +62,11 @@ export const MoonshotProvider = ({ showModelOptions, isPopup, currentMode }: Moo
 						position: "relative",
 					}}
 					value={apiConfiguration?.moonshotApiLine || "international"}>
-					<VSCodeOption value="international">api.moonshot.ai</VSCodeOption>
-					<VSCodeOption value="china">api.moonshot.cn</VSCodeOption>
+					<VSCodeOption value="international">{MOONSHOT_INTL_HOST}</VSCodeOption>
+					<VSCodeOption value="china">{MOONSHOT_CN_HOST}</VSCodeOption>
 				</VSCodeDropdown>
 			</DropdownContainer>
 			<ApiKeyField
-				helpText="This key is stored locally and only used to make API requests from this extension."
 				initialValue={apiConfiguration?.moonshotApiKey || ""}
 				onChange={async (value) => {
 					await ModelsServiceClient.updateApiConfiguration(
@@ -86,7 +91,6 @@ export const MoonshotProvider = ({ showModelOptions, isPopup, currentMode }: Moo
 			{showModelOptions && (
 				<>
 					<ModelSelector
-						label="Model"
 						models={models}
 						onChange={async (e: any) => {
 							const value = e.target.value

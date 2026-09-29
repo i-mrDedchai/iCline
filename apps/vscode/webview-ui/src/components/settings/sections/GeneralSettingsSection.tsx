@@ -31,7 +31,7 @@ const GeneralSettingsSection = ({ renderSectionHeader }: GeneralSettingsSectionP
 				<div className="mb-[5px]">
 					<Tooltip>
 						<TooltipContent hidden={remoteConfigSettings?.telemetrySetting === undefined}>
-							{tr("telemetryManaged")}
+							{tr("managedByOrganization")}
 						</TooltipContent>
 						<TooltipTrigger asChild>
 							<div className="flex items-center gap-2 mb-[5px]">

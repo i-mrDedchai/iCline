@@ -4,6 +4,7 @@ import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useProviderConfig } from "@/hooks/useProviderConfig"
 import { useStaticProviderSelection } from "@/hooks/useStaticProviderSelection"
+import { useTranslation } from "@/i18n/useTranslation"
 import { AccountServiceClient } from "@/services/grpc-client"
 import { resolveModelThinkingOptions } from "@/utils/modelThinkingOptions"
 import { ModelInfoView } from "../common/ModelInfoView"
@@ -31,6 +32,7 @@ interface OpenAiCodexProviderProps {
  */
 export const OpenAiCodexProvider = ({ showModelOptions, isPopup, currentMode }: OpenAiCodexProviderProps) => {
 	const { apiConfiguration, openAiCodexIsAuthenticated } = useExtensionState()
+	const tr = useTranslation("providers")
 	const { config, commitSelection } = useProviderConfig(OPENAI_CODEX_PROVIDER_ID)
 	const {
 		models,
@@ -87,7 +89,7 @@ export const OpenAiCodexProvider = ({ showModelOptions, isPopup, currentMode }: 
 							justifyContent: "space-between",
 							alignItems: "center",
 						}}>
-						<span style={{ color: "var(--vscode-descriptionForeground)" }}>Signed in to OpenAI Codex</span>
+						<span style={{ color: "var(--vscode-descriptionForeground)" }}>{tr("openAiCodexSignedIn")}</span>
 						<VSCodeButton appearance="secondary" onClick={handleSignOut}>
 							Sign Out
 						</VSCodeButton>
@@ -100,9 +102,10 @@ export const OpenAiCodexProvider = ({ showModelOptions, isPopup, currentMode }: 
 								color: "var(--vscode-descriptionForeground)",
 								marginBottom: "10px",
 							}}>
-							Sign in with your ChatGPT Plus or Pro subscription to use GPT-5 models without an API key.
+							{" "}
+							{tr("openAiCodexSignInHint")}
 						</p>
-						<VSCodeButton onClick={handleSignIn}>Sign in to OpenAI Codex</VSCodeButton>
+						<VSCodeButton onClick={handleSignIn}>{tr("openAiCodexSignIn")}</VSCodeButton>
 					</div>
 				)}
 			</div>
@@ -110,7 +113,6 @@ export const OpenAiCodexProvider = ({ showModelOptions, isPopup, currentMode }: 
 			{showModelOptions && (
 				<>
 					<ModelSelector
-						label="Model"
 						models={models}
 						onChange={(event: Event) => handleModelChange((event.target as HTMLSelectElement | null)?.value ?? "")}
 						selectedModelId={selectedModelId}

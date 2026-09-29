@@ -1,5 +1,7 @@
 import { VSCodeLink, VSCodeTextField } from "@vscode/webview-ui-toolkit/react"
 import { useEffect, useRef, useState } from "react"
+import { formatString } from "@/i18n/strings"
+import { useTranslation } from "@/i18n/useTranslation"
 import { useDebounceEffect } from "@/utils/useDebounceEffect"
 
 /**
@@ -23,10 +25,11 @@ export const ApiKeyField = ({
 	onChange,
 	providerName,
 	signupUrl,
-	placeholder = "Enter API Key...",
+	placeholder,
 	helpText,
-	label = `${providerName} API Key`,
+	label,
 }: ApiKeyFieldProps) => {
+	const tr = useTranslation("providers")
 	const [localValue, setLocalValue] = useState(initialValue)
 	const isFocusedRef = useRef(false)
 	const hasPendingUserEditRef = useRef(false)
@@ -74,12 +77,12 @@ export const ApiKeyField = ({
 					hasPendingUserEditRef.current = true
 					setLocalValue((e.target as HTMLInputElement | null)?.value ?? "")
 				}}
-				placeholder={placeholder}
+				placeholder={placeholder ?? tr("apiKeyPlaceholder")}
 				required={true}
 				style={{ width: "100%" }}
 				type="password"
 				value={localValue}>
-				<span style={{ fontWeight: 500 }}>{label}</span>
+				<span style={{ fontWeight: 500 }}>{label ?? formatString(tr, "apiKeyLabel", { provider: providerName })}</span>
 			</VSCodeTextField>
 			<p
 				style={{
@@ -87,7 +90,7 @@ export const ApiKeyField = ({
 					marginTop: 3,
 					color: "var(--vscode-descriptionForeground)",
 				}}>
-				{helpText || "This key is stored locally and only used to make API requests from this extension."}
+				{helpText || tr("apiKeyHelp")}
 				{!localValue && signupUrl && (
 					<VSCodeLink
 						href={signupUrl}
@@ -95,7 +98,7 @@ export const ApiKeyField = ({
 							display: "inline",
 							fontSize: "inherit",
 						}}>
-						You can get a{/^[aeiou]/i.test(providerName) ? "n" : ""} {providerName} API key by signing up here.
+						{formatString(tr, "apiKeySignup", { provider: providerName })}
 					</VSCodeLink>
 				)}
 			</p>

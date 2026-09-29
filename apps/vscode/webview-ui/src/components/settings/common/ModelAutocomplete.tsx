@@ -3,6 +3,7 @@ import { VSCodeTextField } from "@vscode/webview-ui-toolkit/react"
 import Fuse from "fuse.js"
 import { KeyboardEvent, useEffect, useId, useMemo, useRef, useState } from "react"
 import styled from "styled-components"
+import { useTranslation } from "@/i18n/useTranslation"
 import { highlight } from "../../history/HistoryView"
 
 interface ModelAutocompleteProps {
@@ -21,9 +22,10 @@ export const ModelAutocomplete = ({
 	selectedModelId,
 	onChange,
 	zIndex = AUTOCOMPLETE_Z_INDEX,
-	label = "Model",
-	placeholder = "Search and select a model...",
+	label,
+	placeholder,
 }: ModelAutocompleteProps) => {
+	const tr = useTranslation("providers")
 	const [searchTerm, setSearchTerm] = useState(selectedModelId || "")
 	const [isDropdownVisible, setIsDropdownVisible] = useState(false)
 	const [selectedIndex, setSelectedIndex] = useState(-1)
@@ -154,7 +156,7 @@ export const ModelAutocomplete = ({
 			</style>
 			<div style={{ display: "flex", flexDirection: "column" }}>
 				<label htmlFor={inputId}>
-					<span style={{ fontWeight: 500 }}>{label}</span>
+					<span style={{ fontWeight: 500 }}>{label ?? tr("modelLabel")}</span>
 				</label>
 
 				<DropdownWrapper ref={dropdownRef}>
@@ -179,7 +181,7 @@ export const ModelAutocomplete = ({
 							setIsDropdownVisible(true)
 						}}
 						onKeyDown={handleKeyDown}
-						placeholder={placeholder}
+						placeholder={placeholder ?? tr("modelSearchPlaceholder")}
 						role="combobox"
 						style={{
 							width: "100%",
@@ -189,7 +191,7 @@ export const ModelAutocomplete = ({
 						value={searchTerm}>
 						{searchTerm && (
 							<div
-								aria-label="Clear search"
+								aria-label={tr("clearSearch")}
 								className="input-icon-button codicon codicon-close"
 								onClick={() => {
 									setSearchTerm("")
@@ -207,7 +209,7 @@ export const ModelAutocomplete = ({
 					</VSCodeTextField>
 					{isDropdownVisible && (
 						<DropdownList
-							aria-label="Model suggestions"
+							aria-label={tr("modelSuggestions")}
 							id={listboxId}
 							ref={dropdownListRef}
 							role="listbox"

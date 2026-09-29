@@ -4,6 +4,8 @@ import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useProviderConfig } from "@/hooks/useProviderConfig"
 import { useProviderModelSelection } from "@/hooks/useProviderModelSelection"
 import { useStaticProviderSelection } from "@/hooks/useStaticProviderSelection"
+import { formatString } from "@/i18n/strings"
+import { useTranslation } from "@/i18n/useTranslation"
 import { resolveModelThinkingOptions } from "@/utils/modelThinkingOptions"
 import { ApiKeyField } from "../common/ApiKeyField"
 import { BaseUrlField } from "../common/BaseUrlField"
@@ -30,6 +32,7 @@ interface AnthropicProviderProps {
  */
 export const AnthropicProvider = ({ showModelOptions, isPopup, currentMode }: AnthropicProviderProps) => {
 	const { apiConfiguration, remoteConfigSettings } = useExtensionState()
+	const tr = useTranslation("providers")
 	const { config, write, commitSelection } = useProviderConfig(PROVIDER_ID)
 
 	// Get the normalized configuration
@@ -98,9 +101,8 @@ export const AnthropicProvider = ({ showModelOptions, isPopup, currentMode }: An
 				<BaseUrlField
 					disabled={!!remoteConfigSettings?.anthropicBaseUrl}
 					initialValue={config?.baseUrl}
-					label="Use custom base URL"
 					onChange={handleBaseUrlChange}
-					placeholder="Default: https://api.anthropic.com"
+					placeholder={formatString(tr, "defaultValue", { value: "https://api.anthropic.com" })}
 					showLockIcon={!!remoteConfigSettings?.anthropicBaseUrl}
 				/>
 			</RemotelyConfiguredInputWrapper>
@@ -108,7 +110,6 @@ export const AnthropicProvider = ({ showModelOptions, isPopup, currentMode }: An
 			{showModelOptions && (
 				<>
 					<ModelSelector
-						label="Model"
 						models={models}
 						onChange={(e) => handleModelChange(e.target.value)}
 						selectedModelId={selectedModelId}

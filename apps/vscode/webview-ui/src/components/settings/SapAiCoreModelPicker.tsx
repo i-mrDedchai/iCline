@@ -2,6 +2,7 @@ import { SapAiCoreModelDeployment } from "@shared/proto/index.cline"
 import { VSCodeDropdown, VSCodeOption } from "@vscode/webview-ui-toolkit/react"
 import React, { memo, useEffect, useMemo } from "react"
 import { useProviderModels } from "@/hooks/useProviderModels"
+import { useTranslation } from "@/i18n/useTranslation"
 import { DropdownContainer } from "./common/ModelSelector"
 
 const SAP_AI_CORE_MODEL_PICKER_Z_INDEX = 1_000
@@ -35,6 +36,7 @@ const SapAiCoreModelPicker: React.FC<SapAiCoreModelPickerProps> = ({
 	placeholder = "Select a model...",
 	useOrchestrationMode = true,
 }) => {
+	const tr = useTranslation("providers")
 	const { models: sapAiCoreModels } = useProviderModels("sapaicore")
 
 	const visibleSapAiCoreModels = useMemo(() => {
@@ -177,7 +179,7 @@ const SapAiCoreModelPicker: React.FC<SapAiCoreModelPickerProps> = ({
 	return (
 		<DropdownContainer className="dropdown-container" zIndex={SAP_AI_CORE_MODEL_PICKER_Z_INDEX}>
 			<label htmlFor="sap-ai-core-model-dropdown">
-				<span className="font-medium">Model</span>
+				<span className="font-medium">{tr("modelLabel")}</span>
 			</label>
 			<VSCodeDropdown
 				id="sap-ai-core-model-dropdown"

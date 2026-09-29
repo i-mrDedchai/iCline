@@ -3,6 +3,8 @@ import { VSCodeDropdown, VSCodeOption } from "@vscode/webview-ui-toolkit/react"
 import { useState } from "react"
 import styled from "styled-components"
 import { useProviderModels } from "@/hooks/useProviderModels"
+import { formatString, type Translator } from "@/i18n/strings"
+import { useTranslation } from "@/i18n/useTranslation"
 import { ModelDescriptionMarkdown } from "../ModelDescriptionMarkdown"
 import { formatPrice, hasThinkingBudget, supportsBrowserUse, supportsImages, supportsPromptCache } from "../utils/pricingUtils"
 
@@ -96,12 +98,12 @@ const ProviderRoutingLabel = styled.label`
  * Format price for compact display (e.g., "$5/M" for $5 per million tokens)
  * Price is already in per-million format from OpenRouter
  */
-const formatCompactPrice = (price: number | undefined): string => {
+const formatCompactPrice = (price: number | undefined, tr: Translator<"providers">): string => {
 	if (price === undefined) {
-		return "N/A"
+		return tr("infoNotAvailable")
 	}
 	if (price === 0) {
-		return "Free"
+		return tr("infoFree")
 	}
 	if (price < 0.01) {
 		return `$${price.toFixed(4)}/M`
@@ -115,9 +117,9 @@ const formatCompactPrice = (price: number | undefined): string => {
 /**
  * Format context window for compact display (e.g., "200K")
  */
-const formatCompactContext = (contextWindow: number | undefined): string => {
+const formatCompactContext = (contextWindow: number | undefined, tr: Translator<"providers">): string => {
 	if (!contextWindow) {
-		return "N/A"
+		return tr("infoNotAvailable")
 	}
 	if (contextWindow >= 1_000_000) {
 		return `${(contextWindow / 1_000_000).toFixed(contextWindow % 1_000_000 === 0 ? 0 : 1)}M`
@@ -131,6 +133,7 @@ const formatCompactContext = (contextWindow: number | undefined): string => {
 const formatTiers = (
 	tiers: ModelInfo["tiers"],
 	priceType: "inputPrice" | "outputPrice" | "cacheReadsPrice" | "cacheWritesPrice",
+	tr: Translator<"providers">,
 ): JSX.Element[] => {
 	if (!tiers || tiers.length === 0) {
 		return []
@@ -145,19 +148,14 @@ const formatTiers = (
 				return null
 			}
 
+			// The whole line is one key with two markers: the comparison symbols are math,
+			// not prose, so every language can place them around its own unit word.
+			const unbounded = tier.contextWindow === Number.POSITIVE_INFINITY || tier.contextWindow >= Number.MAX_SAFE_INTEGER
+			const range = unbounded ? `> ${prevLimit.toLocaleString()}` : `<= ${tier.contextWindow?.toLocaleString()}`
+
 			return (
 				<span key={`tier-${tier.contextWindow}`} style={{ paddingLeft: "15px" }}>
-					{formatPrice(price)}/million tokens (
-					{tier.contextWindow === Number.POSITIVE_INFINITY || tier.contextWindow >= Number.MAX_SAFE_INTEGER ? (
-						<span>
-							{">"} {prevLimit.toLocaleString()}
-						</span>
-					) : (
-						<span>
-							{"<="} {tier.contextWindow?.toLocaleString()}
-						</span>
-					)}
-					{" tokens)"}
+					{formatString(tr, "infoTierPrice", { price: formatPrice(price), range })}
 					{index < arr.length - 1 && <br />}
 				</span>
 			)
@@ -196,6 +194,7 @@ export const ModelInfoView = ({
 	showProviderRouting,
 	hideUsageCost,
 }: ModelInfoViewProps) => {
+	const tr = useTranslation("providers")
 	const [advancedExpanded, setAdvancedExpanded] = useState(false)
 
 	const { models: geminiModels } = useProviderModels("gemini")
@@ -222,9 +221,9 @@ export const ModelInfoView = ({
 			<InfoRow>
 				{modelInfo.contextWindow !== undefined && modelInfo.contextWindow > 0 && (
 					<InfoItem>
-						<InfoLabel>Context: </InfoLabel>
+						<InfoLabel>{tr("infoContextLabel")} </InfoLabel>
 						<InfoValue>
-							{formatCompactContext(modelInfo.contextWindow)}
+							{formatCompactContext(modelInfo.contextWindow, tr)}
 							{modelInfo.contextWindowSource && (
 								<span
 									data-testid="context-window-source"
@@ -237,12 +236,12 @@ export const ModelInfoView = ({
 										padding: "0 3px",
 									}}>
 									{modelInfo.contextWindowSource === "gateway"
-										? "gateway"
+										? tr("infoSourceGateway")
 										: modelInfo.contextWindowSource === "override"
-											? "override"
+											? tr("infoSourceOverride")
 											: modelInfo.contextWindowSource === "catalog"
-												? "catalog"
-												: "default"}
+												? tr("infoSourceCatalog")
+												: tr("infoSourceDefault")}
 								</span>
 							)}
 						</InfoValue>
@@ -255,8 +254,10 @@ export const ModelInfoView = ({
 					(modelInfo.description?.toLowerCase().includes("subscription") ||
 						modelInfo.description?.toLowerCase().includes("included")) && (
 						<InfoItem>
-							<InfoLabel>Pricing: </InfoLabel>
-							<InfoValue style={{ color: "var(--vscode-terminal-ansiGreen)" }}>Included in subscription</InfoValue>
+							<InfoLabel>{tr("infoPricingLabel")} </InfoLabel>
+							<InfoValue style={{ color: "var(--vscode-terminal-ansiGreen)" }}>
+								{tr("infoIncludedInSubscription")}
+							</InfoValue>
 						</InfoItem>
 					)}
 				{!hideUsageCost &&
@@ -267,8 +268,8 @@ export const ModelInfoView = ({
 					) &&
 					modelInfo.inputPrice !== undefined && (
 						<InfoItem>
-							<InfoLabel>Input: </InfoLabel>
-							<InfoValue>{formatCompactPrice(modelInfo.inputPrice)}</InfoValue>
+							<InfoLabel>{tr("infoInputLabel")} </InfoLabel>
+							<InfoValue>{formatCompactPrice(modelInfo.inputPrice, tr)}</InfoValue>
 						</InfoItem>
 					)}
 				{!hideUsageCost &&
@@ -279,11 +280,11 @@ export const ModelInfoView = ({
 					) &&
 					modelInfo.outputPrice !== undefined && (
 						<InfoItem>
-							<InfoLabel>Output: </InfoLabel>
+							<InfoLabel>{tr("infoOutputLabel")} </InfoLabel>
 							<InfoValue>
 								{hasThinkingConfig && modelInfo.thinkingConfig?.outputPrice !== undefined
-									? formatCompactPrice(modelInfo.thinkingConfig.outputPrice)
-									: formatCompactPrice(modelInfo.outputPrice)}
+									? formatCompactPrice(modelInfo.thinkingConfig.outputPrice, tr)
+									: formatCompactPrice(modelInfo.outputPrice, tr)}
 							</InfoValue>
 						</InfoItem>
 					)}
@@ -292,23 +293,23 @@ export const ModelInfoView = ({
 			{/* Collapsible Advanced Section */}
 			<CollapsibleHeader onClick={() => setAdvancedExpanded(!advancedExpanded)}>
 				<CollapsibleArrow $isExpanded={advancedExpanded}>▶</CollapsibleArrow>
-				Advanced
+				{tr("infoAdvanced")}
 			</CollapsibleHeader>
 			<CollapsibleContent $isExpanded={advancedExpanded}>
 				<AdvancedSection>
 					{/* Capabilities */}
 					<AdvancedRow>
-						<AdvancedLabel>Images</AdvancedLabel>
-						<AdvancedValue>{hasImages ? "Yes" : "No"}</AdvancedValue>
+						<AdvancedLabel>{tr("infoImages")}</AdvancedLabel>
+						<AdvancedValue>{hasImages ? tr("infoValueYes") : tr("infoValueNo")}</AdvancedValue>
 					</AdvancedRow>
 					<AdvancedRow>
-						<AdvancedLabel>Browser</AdvancedLabel>
-						<AdvancedValue>{hasBrowser ? "Yes" : "No"}</AdvancedValue>
+						<AdvancedLabel>{tr("infoBrowser")}</AdvancedLabel>
+						<AdvancedValue>{hasBrowser ? tr("infoValueYes") : tr("infoValueNo")}</AdvancedValue>
 					</AdvancedRow>
 					{!isGemini && (
 						<AdvancedRow>
-							<AdvancedLabel>Prompt Caching</AdvancedLabel>
-							<AdvancedValue>{hasCaching ? "Yes" : "No"}</AdvancedValue>
+							<AdvancedLabel>{tr("infoPromptCaching")}</AdvancedLabel>
+							<AdvancedValue>{hasCaching ? tr("infoValueYes") : tr("infoValueNo")}</AdvancedValue>
 						</AdvancedRow>
 					)}
 
@@ -317,14 +318,14 @@ export const ModelInfoView = ({
 						<>
 							{modelInfo.cacheReadsPrice !== undefined && (
 								<AdvancedRow>
-									<AdvancedLabel>Cache Reads</AdvancedLabel>
-									<AdvancedValue>{formatCompactPrice(modelInfo.cacheReadsPrice)}</AdvancedValue>
+									<AdvancedLabel>{tr("infoCacheReads")}</AdvancedLabel>
+									<AdvancedValue>{formatCompactPrice(modelInfo.cacheReadsPrice, tr)}</AdvancedValue>
 								</AdvancedRow>
 							)}
 							{modelInfo.cacheWritesPrice !== undefined && (
 								<AdvancedRow>
-									<AdvancedLabel>Cache Writes</AdvancedLabel>
-									<AdvancedValue>{formatCompactPrice(modelInfo.cacheWritesPrice)}</AdvancedValue>
+									<AdvancedLabel>{tr("infoCacheWrites")}</AdvancedLabel>
+									<AdvancedValue>{formatCompactPrice(modelInfo.cacheWritesPrice, tr)}</AdvancedValue>
 								</AdvancedRow>
 							)}
 						</>
@@ -333,18 +334,18 @@ export const ModelInfoView = ({
 					{/* Tiered Pricing */}
 					{!hideUsageCost && hasTiers && (
 						<div style={{ marginTop: 8 }}>
-							<div style={{ fontWeight: 500, marginBottom: 4 }}>Tiered Pricing:</div>
+							<div style={{ fontWeight: 500, marginBottom: 4 }}>{tr("infoTieredPricing")}</div>
 							{modelInfo.tiers && (
 								<>
 									<div>
-										<span style={{ fontWeight: 500 }}>Input:</span>
+										<span style={{ fontWeight: 500 }}>{tr("infoInputLabel")}</span>
 										<br />
-										{formatTiers(modelInfo.tiers, "inputPrice")}
+										{formatTiers(modelInfo.tiers, "inputPrice", tr)}
 									</div>
 									<div style={{ marginTop: 4 }}>
-										<span style={{ fontWeight: 500 }}>Output:</span>
+										<span style={{ fontWeight: 500 }}>{tr("infoOutputLabel")}</span>
 										<br />
-										{formatTiers(modelInfo.tiers, "outputPrice")}
+										{formatTiers(modelInfo.tiers, "outputPrice", tr)}
 									</div>
 								</>
 							)}
@@ -354,15 +355,15 @@ export const ModelInfoView = ({
 					{/* Provider Routing */}
 					{showProviderRouting && onProviderSortingChange && (
 						<ProviderRoutingContainer>
-							<ProviderRoutingLabel>Provider Routing</ProviderRoutingLabel>
+							<ProviderRoutingLabel>{tr("infoRoutingLabel")}</ProviderRoutingLabel>
 							<VSCodeDropdown
 								onChange={(e: any) => onProviderSortingChange(e.target.value)}
 								style={{ width: "100%" }}
 								value={providerSorting || ""}>
-								<VSCodeOption value="">Default</VSCodeOption>
-								<VSCodeOption value="price">Price</VSCodeOption>
-								<VSCodeOption value="throughput">Throughput</VSCodeOption>
-								<VSCodeOption value="latency">Latency</VSCodeOption>
+								<VSCodeOption value="">{tr("infoRoutingDefault")}</VSCodeOption>
+								<VSCodeOption value="price">{tr("infoRoutingPrice")}</VSCodeOption>
+								<VSCodeOption value="throughput">{tr("infoRoutingThroughput")}</VSCodeOption>
+								<VSCodeOption value="latency">{tr("infoRoutingLatency")}</VSCodeOption>
 							</VSCodeDropdown>
 							<p
 								style={{
@@ -371,12 +372,10 @@ export const ModelInfoView = ({
 									marginBottom: 0,
 									color: "var(--vscode-descriptionForeground)",
 								}}>
-								{!providerSorting &&
-									"Load balance across providers (AWS, Google Vertex, etc.), prioritizing price while considering uptime"}
-								{providerSorting === "price" && "Sort by price, prioritizing the lowest cost provider"}
-								{providerSorting === "throughput" &&
-									"Sort by throughput, prioritizing highest throughput (may increase cost)"}
-								{providerSorting === "latency" && "Sort by response time, prioritizing lowest latency"}
+								{!providerSorting && tr("infoRoutingDefaultHint")}
+								{providerSorting === "price" && tr("infoRoutingPriceHint")}
+								{providerSorting === "throughput" && tr("infoRoutingThroughputHint")}
+								{providerSorting === "latency" && tr("infoRoutingLatencyHint")}
 							</p>
 						</ProviderRoutingContainer>
 					)}

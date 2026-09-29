@@ -8,6 +8,7 @@ import React, { KeyboardEvent, useEffect, useMemo, useRef, useState } from "reac
 import { useMount } from "react-use"
 import { useDynamicProviderSelection } from "@/hooks/useDynamicProviderSelection"
 import { useProviderModels } from "@/hooks/useProviderModels"
+import { useTranslation } from "@/i18n/useTranslation"
 import { useExtensionState } from "../../context/ExtensionStateContext"
 import { ModelsServiceClient } from "../../services/grpc-client"
 import { highlight } from "../history/HistoryView"
@@ -22,6 +23,7 @@ interface GroqModelPickerProps {
 
 const GroqModelPicker: React.FC<GroqModelPickerProps> = ({ isPopup, currentMode }) => {
 	const { apiConfiguration, groqModels: dynamicGroqModels, setGroqModels } = useExtensionState()
+	const tr = useTranslation("providers")
 	const { handleModeFieldsChange } = useApiConfigurationHandlers()
 	const modeFields = getModeSpecificFields(apiConfiguration, currentMode)
 	// Groq's curated catalog comes from the SDK over gRPC. The local
@@ -203,7 +205,7 @@ const GroqModelPicker: React.FC<GroqModelPickerProps> = ({ isPopup, currentMode 
 			</style>
 			<div className="flex flex-col">
 				<label htmlFor="model-search">
-					<span className="font-medium">Model</span>
+					<span className="font-medium">{tr("modelLabel")}</span>
 				</label>
 				<div className="relative w-full" ref={dropdownRef}>
 					<VSCodeTextField
@@ -214,7 +216,7 @@ const GroqModelPicker: React.FC<GroqModelPickerProps> = ({ isPopup, currentMode 
 							setIsDropdownVisible(true)
 						}}
 						onKeyDown={handleKeyDown}
-						placeholder="Search and select a model..."
+						placeholder={tr("modelSearchPlaceholder")}
 						role="combobox"
 						style={{
 							width: "100%",
@@ -224,7 +226,7 @@ const GroqModelPicker: React.FC<GroqModelPickerProps> = ({ isPopup, currentMode 
 						value={searchTerm}>
 						{searchTerm && (
 							<div
-								aria-label="Clear search"
+								aria-label={tr("clearSearch")}
 								className="input-icon-button codicon codicon-close flex justify-center items-center h-full"
 								onClick={() => {
 									setSearchTerm("")

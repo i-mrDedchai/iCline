@@ -6,6 +6,8 @@ import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useProviderConfig } from "@/hooks/useProviderConfig"
 import { useProviderModelSelection } from "@/hooks/useProviderModelSelection"
 import { useProviderModels } from "@/hooks/useProviderModels"
+import { formatString, splitOnPlaceholder } from "@/i18n/strings"
+import { useTranslation } from "@/i18n/useTranslation"
 import { AccountServiceClient } from "@/services/grpc-client"
 import { DROPDOWN_Z_INDEX } from "../ApiOptions"
 import { ApiKeyField } from "../common/ApiKeyField"
@@ -17,6 +19,9 @@ import { useApiConfigurationHandlers } from "../utils/useApiConfigurationHandler
 import { useProviderApiKeyField } from "../utils/useProviderApiKeyField"
 
 const PROVIDER_ID = "xai"
+
+/** The Grok CLI session file the CLI-only state is detected from. */
+const XAI_CLI_AUTH_PATH = "~/.grok/auth.json"
 
 /**
  * Prefer the iCline default (Composer 2.5 Fast) when present in the auth-aware
@@ -52,6 +57,7 @@ interface XaiProviderProps {
 
 export const XaiProvider = ({ showModelOptions, isPopup, currentMode }: XaiProviderProps) => {
 	const { apiConfiguration, xaiOAuthIsAuthenticated, xaiGrokCliIsAuthenticated, xaiSubscriptionModels } = useExtensionState()
+	const tr = useTranslation("providers")
 
 	const { handleModeFieldChange } = useApiConfigurationHandlers()
 	const { config, write, commitSelection } = useProviderConfig(PROVIDER_ID)
@@ -159,17 +165,21 @@ export const XaiProvider = ({ showModelOptions, isPopup, currentMode }: XaiProvi
 
 	const connectionVariant = oauthConnected ? "oauth" : cliOnlyConnected ? "cli" : "disconnected"
 	const connectionLabel = oauthConnected
-		? "Connected — Grok (OAuth & Subscription)"
+		? tr("xaiConnectedOauth")
 		: cliOnlyConnected
-			? "Connected — Grok CLI auth only"
-			: "Not connected"
+			? tr("xaiConnectedCli")
+			: tr("notConnected")
 	const connectionDetail = oauthConnected
-		? `${modelCount} models (CLI + subscription)`
+		? formatString(tr, "xaiSubscriptionModelCount", { count: modelCount })
 		: cliOnlyConnected
-			? "OAuth signed out. Session from ~/.grok/auth.json is still active."
+			? formatString(tr, "xaiCliSessionDetail", { path: XAI_CLI_AUTH_PATH })
 			: hasApiKey
-				? "Pay-as-you-go API key — console.x.ai models"
+				? tr("xaiPaygKeyDetail")
 				: undefined
+	// The CLI-only paragraph keeps a code span around the path, so the sentence is split
+	// on its `{path}` marker rather than re-glued from fragments (which would freeze
+	// English word order into the layout).
+	const [cliNoticeBefore, cliNoticeAfter] = splitOnPlaceholder(tr("xaiCliOnlyNotice"), "path")
 
 	return (
 		<div>
@@ -179,7 +189,7 @@ export const XaiProvider = ({ showModelOptions, isPopup, currentMode }: XaiProvi
 						<AuthConnectionBadge detail={connectionDetail} label={connectionLabel} variant={connectionVariant} />
 						<div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
 							<VSCodeButton appearance="secondary" onClick={handleSignOut}>
-								Sign Out OAuth
+								{tr("xaiSignOut")}
 							</VSCodeButton>
 						</div>
 					</div>
@@ -192,14 +202,15 @@ export const XaiProvider = ({ showModelOptions, isPopup, currentMode }: XaiProvi
 								color: "var(--vscode-descriptionForeground)",
 								marginTop: 8,
 							}}>
-							⚠️ OAuth was signed out, but Grok CLI login at <code>~/.grok/auth.json</code> is still detected. Sign
-							out of Grok CLI separately to fully disconnect.
+							{cliNoticeBefore}
+							<code>{XAI_CLI_AUTH_PATH}</code>
+							{cliNoticeAfter}
 						</p>
-						<VSCodeButton onClick={handleSignIn}>Sign in to Grok (OAuth)</VSCodeButton>
+						<VSCodeButton onClick={handleSignIn}>{tr("xaiSignIn")}</VSCodeButton>
 					</div>
 				) : (
 					<div>
-						<AuthConnectionBadge label="Not connected to Grok" variant="disconnected" />
+						<AuthConnectionBadge label={tr("xaiNotConnected")} variant="disconnected" />
 						<p
 							style={{
 								fontSize: "12px",
@@ -207,10 +218,9 @@ export const XaiProvider = ({ showModelOptions, isPopup, currentMode }: XaiProvi
 								marginBottom: "10px",
 								marginTop: 10,
 							}}>
-							🔐 Sign in with SuperGrok or X Premium for Composer 2.5 Fast, Grok Build, Grok 4.3 and more. Add an
-							API key for extra pay-as-you-go models.
+							{tr("xaiSignInPitch")}
 						</p>
-						<VSCodeButton onClick={handleSignIn}>Sign in to Grok (OAuth)</VSCodeButton>
+						<VSCodeButton onClick={handleSignIn}>{tr("xaiSignIn")}</VSCodeButton>
 					</div>
 				)}
 			</div>
@@ -228,7 +238,7 @@ export const XaiProvider = ({ showModelOptions, isPopup, currentMode }: XaiProvi
 						marginTop: -10,
 						color: "var(--vscode-descriptionForeground)",
 					}}>
-					Optional: pay-as-you-go API key from console.x.ai for additional models beyond your subscription.
+					{tr("xaiApiKeyOptional")}
 				</p>
 			</div>
 
@@ -241,8 +251,8 @@ export const XaiProvider = ({ showModelOptions, isPopup, currentMode }: XaiProvi
 								color: "var(--vscode-errorForeground)",
 								marginBottom: 8,
 							}}>
-							Failed to load models{error ? `: ${error}` : ""}
-							{isStale && modelCount > 0 ? " (showing cached list)" : ""}
+							{error ? formatString(tr, "modelLoadFailedWithDetail", { error }) : tr("modelLoadFailed")}
+							{isStale && modelCount > 0 ? tr("modelListCachedSuffix") : ""}
 						</p>
 					)}
 					{showLoading && (
@@ -252,11 +262,10 @@ export const XaiProvider = ({ showModelOptions, isPopup, currentMode }: XaiProvi
 								color: "var(--vscode-descriptionForeground)",
 								marginBottom: 8,
 							}}>
-							Loading models…
+							{tr("modelListLoading")}
 						</p>
 					)}
 					<ModelSelector
-						label="Model"
 						models={models}
 						onChange={(event: Event) => handleModelChange(getEventValue(event))}
 						selectedModelId={selectedModelId}
@@ -274,13 +283,13 @@ export const XaiProvider = ({ showModelOptions, isPopup, currentMode }: XaiProvi
 									}
 								}}
 								style={{ marginTop: 0 }}>
-								Modify reasoning effort
+								{tr("modifyReasoningEffort")}
 							</VSCodeCheckbox>
 
 							{reasoningEffortSelected && (
 								<div>
 									<label htmlFor="reasoning-effort-dropdown">
-										<span style={{}}>Reasoning Effort</span>
+										<span style={{}}>{tr("reasoningEffortLabel")}</span>
 									</label>
 									<DropdownContainer className="dropdown-container" zIndex={DROPDOWN_Z_INDEX - 100}>
 										<VSCodeDropdown
@@ -288,8 +297,8 @@ export const XaiProvider = ({ showModelOptions, isPopup, currentMode }: XaiProvi
 											onChange={(event) => handleReasoningEffortChange(getEventValue(event))}
 											style={{ width: "100%", marginTop: 3 }}
 											value={modeFields.reasoningEffort || "high"}>
-											<VSCodeOption value="low">low</VSCodeOption>
-											<VSCodeOption value="high">high</VSCodeOption>
+											<VSCodeOption value="low">{tr("effortLow")}</VSCodeOption>
+											<VSCodeOption value="high">{tr("effortHigh")}</VSCodeOption>
 										</VSCodeDropdown>
 									</DropdownContainer>
 									<p
@@ -299,7 +308,7 @@ export const XaiProvider = ({ showModelOptions, isPopup, currentMode }: XaiProvi
 											marginBottom: 0,
 											color: "var(--vscode-descriptionForeground)",
 										}}>
-										High effort may produce more thorough analysis but takes longer and uses more tokens.
+										{tr("reasoningEffortHighHint")}
 									</p>
 								</div>
 							)}

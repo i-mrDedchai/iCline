@@ -15,13 +15,19 @@
  */
 import type { TranslatedLocale } from "./locales"
 import { pickerStrings } from "./namespaces/picker"
+import { providersStrings } from "./namespaces/providers"
 import { quickStartStrings } from "./namespaces/quickStart"
 import { settingsStrings } from "./namespaces/settings"
 
 /** A namespace's copy: a complete table per locale the core can render. */
 export type NamespaceTables<Keys extends string = string> = Record<TranslatedLocale, Record<Keys, string>>
 
-export const NAMESPACES = { picker: pickerStrings, quickStart: quickStartStrings, settings: settingsStrings }
+export const NAMESPACES = {
+	picker: pickerStrings,
+	providers: providersStrings,
+	quickStart: quickStartStrings,
+	settings: settingsStrings,
+}
 
 export type Namespace = keyof typeof NAMESPACES
 export type StringKey<N extends Namespace> = keyof (typeof NAMESPACES)[N]["en"] & string

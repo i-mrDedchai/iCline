@@ -5,12 +5,17 @@ import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useProviderConfig } from "@/hooks/useProviderConfig"
 import { useProviderModelSelection } from "@/hooks/useProviderModelSelection"
 import { useStaticProviderSelection } from "@/hooks/useStaticProviderSelection"
+import { useTranslation } from "@/i18n/useTranslation"
 import { ApiKeyField } from "../common/ApiKeyField"
 import { ModelInfoView } from "../common/ModelInfoView"
 import { DropdownContainer, ModelSelector } from "../common/ModelSelector"
 import { useProviderApiKeyField } from "../utils/useProviderApiKeyField"
 
 const PROVIDER_ID = "zai"
+
+/** Endpoint hostnames, not copy: they are the values the dropdown stores. */
+const ZAI_INTL_HOST = "api.z.ai"
+const ZAI_CN_HOST = "open.bigmodel.cn"
 
 // VSCodeDropdown's onChange supplies `Event | React.FormEvent<HTMLElement>`,
 // so accept the same union here. We only read `target.value`, which is present
@@ -42,6 +47,7 @@ interface ZAiProviderProps {
  */
 export const ZAiProvider = ({ showModelOptions, isPopup, currentMode }: ZAiProviderProps) => {
 	const { apiConfiguration } = useExtensionState()
+	const tr = useTranslation("providers")
 	const { config, write, commitSelection } = useProviderConfig(PROVIDER_ID)
 	const {
 		models,
@@ -86,7 +92,7 @@ export const ZAiProvider = ({ showModelOptions, isPopup, currentMode }: ZAiProvi
 		<div>
 			<DropdownContainer className="dropdown-container" style={{ position: "inherit" }}>
 				<label htmlFor="zai-entrypoint">
-					<span style={{ fontWeight: 500, marginTop: 5 }}>Z AI Entrypoint</span>
+					<span style={{ fontWeight: 500, marginTop: 5 }}>{tr("zaiEntrypointLabel")}</span>
 				</label>
 				<VSCodeDropdown
 					id="zai-entrypoint"
@@ -96,8 +102,8 @@ export const ZAiProvider = ({ showModelOptions, isPopup, currentMode }: ZAiProvi
 						position: "relative",
 					}}
 					value={selectedEntrypoint}>
-					<VSCodeOption value="international">api.z.ai</VSCodeOption>
-					<VSCodeOption value="china">open.bigmodel.cn</VSCodeOption>
+					<VSCodeOption value="international">{ZAI_INTL_HOST}</VSCodeOption>
+					<VSCodeOption value="china">{ZAI_CN_HOST}</VSCodeOption>
 				</VSCodeDropdown>
 			</DropdownContainer>
 			<p
@@ -106,8 +112,7 @@ export const ZAiProvider = ({ showModelOptions, isPopup, currentMode }: ZAiProvi
 					marginTop: 3,
 					color: "var(--vscode-descriptionForeground)",
 				}}>
-				Please select the appropriate API entrypoint based on your location. If you are in China, choose open.bigmodel.cn
-				. Otherwise, choose api.z.ai.
+				{tr("zaiEntrypointHint")}
 			</p>
 			<ApiKeyField
 				initialValue={savedApiKeyMask || apiConfiguration?.zaiApiKey || ""}
@@ -123,7 +128,6 @@ export const ZAiProvider = ({ showModelOptions, isPopup, currentMode }: ZAiProvi
 			{showModelOptions && (
 				<>
 					<ModelSelector
-						label="Model"
 						models={models}
 						onChange={(event: Event) => handleModelChange(getEventValue(event))}
 						selectedModelId={selectedModelId}

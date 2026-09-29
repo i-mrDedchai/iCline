@@ -4,6 +4,8 @@ import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useProviderConfig } from "@/hooks/useProviderConfig"
 import { useProviderModelSelection } from "@/hooks/useProviderModelSelection"
 import { useProviderModels } from "@/hooks/useProviderModels"
+import { formatString } from "@/i18n/strings"
+import { useTranslation } from "@/i18n/useTranslation"
 import { resolveModelThinkingOptions } from "@/utils/modelThinkingOptions"
 import { DebouncedTextField } from "../common/DebouncedTextField"
 import { ModelInfoView } from "../common/ModelInfoView"
@@ -25,6 +27,7 @@ interface ClaudeCodeProviderProps {
  */
 export const ClaudeCodeProvider = ({ showModelOptions, isPopup, currentMode }: ClaudeCodeProviderProps) => {
 	const { apiConfiguration } = useExtensionState()
+	const tr = useTranslation("providers")
 	const { handleFieldChange } = useApiConfigurationHandlers()
 	const providerId = "claude-code"
 	const { models, defaultModelId } = useProviderModels(providerId)
@@ -57,10 +60,10 @@ export const ClaudeCodeProvider = ({ showModelOptions, isPopup, currentMode }: C
 			<DebouncedTextField
 				initialValue={apiConfiguration?.claudeCodePath || ""}
 				onChange={(value) => handleFieldChange("claudeCodePath", value)}
-				placeholder="Default: claude"
+				placeholder={formatString(tr, "defaultValue", { value: "claude" })}
 				style={{ width: "100%", marginTop: 3 }}
 				type="text">
-				<span style={{ fontWeight: 500 }}>Claude Code CLI Path</span>
+				<span style={{ fontWeight: 500 }}>{tr("claudeCodePathLabel")}</span>
 			</DebouncedTextField>
 
 			<p
@@ -69,12 +72,12 @@ export const ClaudeCodeProvider = ({ showModelOptions, isPopup, currentMode }: C
 					marginTop: 3,
 					color: "var(--vscode-descriptionForeground)",
 				}}>
-				Path to the Claude Code CLI.
+				{tr("claudeCodePathHint")}
 			</p>
 
 			{showModelOptions && (
 				<>
-					<ModelSelector label="Model" models={models} onChange={handleModelSelect} selectedModelId={selectedModelId} />
+					<ModelSelector models={models} onChange={handleModelSelect} selectedModelId={selectedModelId} />
 
 					{(selectedModelId === "sonnet" || selectedModelId === "opus") && (
 						<p
@@ -84,7 +87,7 @@ export const ClaudeCodeProvider = ({ showModelOptions, isPopup, currentMode }: C
 								marginTop: 2,
 								color: "var(--vscode-descriptionForeground)",
 							}}>
-							Use the latest version of {selectedModelId} by default.
+							{formatString(tr, "claudeCodeModelDefault", { model: selectedModelId })}
 						</p>
 					)}
 

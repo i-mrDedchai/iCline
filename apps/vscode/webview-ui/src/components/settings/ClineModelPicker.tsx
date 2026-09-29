@@ -12,6 +12,7 @@ import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useDynamicProviderSelection } from "@/hooks/useDynamicProviderSelection"
 import { useProviderConfig } from "@/hooks/useProviderConfig"
 import { useProviderModels } from "@/hooks/useProviderModels"
+import { useTranslation } from "@/i18n/useTranslation"
 import { StateServiceClient } from "@/services/grpc-client"
 import { resolveModelThinkingOptions } from "@/utils/modelThinkingOptions"
 import { highlight } from "../history/HistoryView"
@@ -93,6 +94,7 @@ const FREE_MODELS_FALLBACK: FeaturedModelCardEntry[] = CLINE_RECOMMENDED_MODELS_
 const ClineModelPicker: React.FC<ClineModelPickerProps> = ({ isPopup, currentMode, showProviderRouting, initialTab }) => {
 	const { handleFieldChange } = useApiConfigurationHandlers()
 	const { apiConfiguration, favoritedModelIds } = useExtensionState()
+	const tr = useTranslation("providers")
 	const { models: catalogClineModels, defaultModelId: clineDefaultModelId } = useProviderModels("cline")
 	const { config, write: writeProviderConfig, commitSelection } = useProviderConfig("cline")
 	const { recommended: rpcRecommended, free: rpcFree, freeAllowlist } = useClineSettingsModelList()
@@ -342,7 +344,7 @@ const ClineModelPicker: React.FC<ClineModelPickerProps> = ({ isPopup, currentMod
 			</style>
 			<div style={{ display: "flex", flexDirection: "column" }}>
 				<label htmlFor="model-search">
-					<span style={{ fontWeight: 500 }}>Model</span>
+					<span style={{ fontWeight: 500 }}>{tr("modelLabel")}</span>
 				</label>
 
 				{/* Tabs */}
@@ -403,7 +405,7 @@ const ClineModelPicker: React.FC<ClineModelPickerProps> = ({ isPopup, currentMod
 							setIsDropdownVisible(true)
 						}}
 						onKeyDown={handleKeyDown}
-						placeholder="Search and select a model..."
+						placeholder={tr("modelSearchPlaceholder")}
 						role="combobox"
 						style={{
 							width: "100%",
@@ -413,7 +415,7 @@ const ClineModelPicker: React.FC<ClineModelPickerProps> = ({ isPopup, currentMod
 						value={searchTerm}>
 						{searchTerm && (
 							<button
-								aria-label="Clear search"
+								aria-label={tr("clearSearch")}
 								className="input-icon-button codicon codicon-close"
 								onClick={() => {
 									setSearchTerm("")

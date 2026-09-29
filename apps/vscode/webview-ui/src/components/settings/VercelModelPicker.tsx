@@ -7,6 +7,7 @@ import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react"
 import { useMount } from "react-use"
 import styled from "styled-components"
 import { useExtensionState } from "@/context/ExtensionStateContext"
+import { useTranslation } from "@/i18n/useTranslation"
 import { resolveModelThinkingOptions } from "@/utils/modelThinkingOptions"
 import { highlight } from "../history/HistoryView"
 import { ModelInfoView } from "./common/ModelInfoView"
@@ -23,6 +24,7 @@ interface VercelModelPickerProps {
 const VercelModelPicker: React.FC<VercelModelPickerProps> = ({ isPopup, currentMode }) => {
 	const { handleModeFieldsChange } = useApiConfigurationHandlers()
 	const { apiConfiguration, vercelAiGatewayModels, refreshVercelAiGatewayModels } = useExtensionState()
+	const tr = useTranslation("providers")
 	const modeFields = getModeSpecificFields(apiConfiguration, currentMode)
 	// Vercel AI Gateway uses its own model fields
 	const [searchTerm, setSearchTerm] = useState(modeFields.vercelAiGatewayModelId || "")
@@ -187,7 +189,7 @@ const VercelModelPicker: React.FC<VercelModelPickerProps> = ({ isPopup, currentM
 			</style>
 			<div style={{ display: "flex", flexDirection: "column" }}>
 				<label htmlFor="vercel-model-search">
-					<span style={{ fontWeight: 500 }}>Model</span>
+					<span style={{ fontWeight: 500 }}>{tr("modelLabel")}</span>
 				</label>
 
 				<DropdownWrapper ref={dropdownRef}>
@@ -204,7 +206,7 @@ const VercelModelPicker: React.FC<VercelModelPickerProps> = ({ isPopup, currentM
 							setIsDropdownVisible(true)
 						}}
 						onKeyDown={handleKeyDown}
-						placeholder="Search and select a model..."
+						placeholder={tr("modelSearchPlaceholder")}
 						role="combobox"
 						style={{
 							width: "100%",
@@ -214,7 +216,7 @@ const VercelModelPicker: React.FC<VercelModelPickerProps> = ({ isPopup, currentM
 						value={searchTerm}>
 						{searchTerm && (
 							<div
-								aria-label="Clear search"
+								aria-label={tr("clearSearch")}
 								className="input-icon-button codicon codicon-close"
 								onClick={() => {
 									setSearchTerm("")

@@ -6,6 +6,8 @@ import UseCustomPromptCheckbox from "@/components/settings/UseCustomPromptCheckb
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useProviderConfig } from "@/hooks/useProviderConfig"
 import { useProviderModelSelection } from "@/hooks/useProviderModelSelection"
+import { formatString, splitOnPlaceholder } from "@/i18n/strings"
+import { useTranslation } from "@/i18n/useTranslation"
 import { ModelsServiceClient } from "@/services/grpc-client"
 import { BaseUrlField } from "../common/BaseUrlField"
 import { DebouncedTextField } from "../common/DebouncedTextField"
@@ -15,6 +17,12 @@ import { useApiConfigurationHandlers } from "../utils/useApiConfigurationHandler
 /**
  * Props for the LMStudioProvider component
  */
+/**
+ * The shell command the setup note tells the user to run. A command is not copy — it
+ * has to stay byte-identical in every language — so it is a constant rather than a key.
+ */
+const LM_STUDIO_SERVER_COMMAND = "lms server start"
+
 interface LMStudioProviderProps {
 	showModelOptions: boolean
 	isPopup?: boolean
@@ -39,6 +47,13 @@ interface LMStudioApiModel {
  */
 export const LMStudioProvider = ({ currentMode }: LMStudioProviderProps) => {
 	const { apiConfiguration } = useExtensionState()
+	const tr = useTranslation("providers")
+
+	// Both reference paragraphs weave links (and the `lms server start` command) into
+	// their sentences, so they are split on their placeholders instead of concatenated.
+	const [introBeforeQuickstart] = splitOnPlaceholder(tr("lmStudioIntro"), "quickstart")
+	const [serverIntroBeforeLink, serverIntroAfterLink] = splitOnPlaceholder(tr("lmStudioServerIntro"), "server")
+	const [serverIntroBetween, serverIntroAfterCommand] = splitOnPlaceholder(serverIntroAfterLink, "command")
 	const { handleFieldChange } = useApiConfigurationHandlers()
 	const { config, write, commitSelection } = useProviderConfig("lmstudio")
 
@@ -153,12 +168,12 @@ export const LMStudioProvider = ({ currentMode }: LMStudioProviderProps) => {
 		<div className="flex flex-col gap-2">
 			<BaseUrlField
 				initialValue={config?.baseUrl ?? apiConfiguration?.lmStudioBaseUrl}
-				label="Use custom base URL"
+				label={tr("baseUrlToggle")}
 				onChange={handleBaseUrlChange}
-				placeholder="Default: http://localhost:1234"
+				placeholder={formatString(tr, "defaultValue", { value: "http://localhost:1234" })}
 			/>
 
-			<div className="font-semibold">Model</div>
+			<div className="font-semibold">{tr("modelLabel")}</div>
 			{lmStudioModels.length > 0 ? (
 				<DropdownContainer className="dropdown-container" onFocusCapture={() => void requestLmStudioModels()} zIndex={10}>
 					<VSCodeDropdown
@@ -182,35 +197,36 @@ export const LMStudioProvider = ({ currentMode }: LMStudioProviderProps) => {
 					<DebouncedTextField
 						initialValue={displayedSelectedModelId || ""}
 						onChange={handleModelChange}
-						placeholder={"e.g. meta-llama-3.1-8b-instruct"}
+						placeholder={tr("lmStudioModelPlaceholder")}
 						style={{ width: "100%" }}
 					/>
 				</div>
 			)}
 
-			<div className="font-semibold">Context Window</div>
+			<div className="font-semibold">{tr("lmStudioContextWindowLabel")}</div>
 			<VSCodeTextField
 				className="w-full pointer-events-none"
 				disabled={true}
-				title="Not editable - the value is returned by the connected endpoint"
+				title={tr("lmStudioContextWindowTitle")}
 				value={String(currentLoadedContext ?? lmStudioMaxTokens ?? "0")}
 			/>
 
 			<UseCustomPromptCheckbox providerId="lmstudio" />
 
 			<div className="text-xs text-description">
-				LM Studio allows you to run models locally on your computer. For instructions on how to get started, see their
+				{introBeforeQuickstart}
 				<VSCodeLink href="https://lmstudio.ai/docs" style={{ display: "inline", fontSize: "inherit" }}>
-					quickstart guide.
-				</VSCodeLink>
-				You will also need to start LM Studio's{" "}
-				<VSCodeLink className="inline" href="https://lmstudio.ai/docs/basics/server">
-					local server
+					{tr("lmStudioQuickstartLink")}
 				</VSCodeLink>{" "}
-				feature with <code>lms server start</code> to use it with this extension.{" "}
+				{serverIntroBeforeLink}
+				<VSCodeLink className="inline" href="https://lmstudio.ai/docs/basics/server">
+					{tr("lmStudioLocalServerLink")}
+				</VSCodeLink>
+				{serverIntroBetween}
+				<code>{LM_STUDIO_SERVER_COMMAND}</code>
+				{serverIntroAfterCommand}{" "}
 				<div className="text-error">
-					<span className="font-semibold">Note:</span> Cline uses complex prompts, so behavior can vary across models.
-					Less capable models may not work as expected.
+					<span className="font-semibold">{tr("noteLabel")}</span> {tr("complexPromptNote")}
 				</div>
 			</div>
 		</div>

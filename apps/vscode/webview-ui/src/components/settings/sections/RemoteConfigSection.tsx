@@ -346,7 +346,7 @@ export function RemoteConfigSection({ renderSectionHeader }: RemoteConfigSection
 	return (
 		<BaseRemoteConfigSection renderSectionHeader={renderSectionHeader}>
 			<div className="flex flex-col gap-2">
-				<p className="text-description text-xs mb-2">{tr("remoteManagedNotice")}</p>
+				<p className="text-description text-xs mb-2">{tr("managedByOrganization")}</p>
 
 				<OtelSettingsSection />
 				<PromptUploadingSection />

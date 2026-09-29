@@ -1,5 +1,6 @@
 import { VSCodeCheckbox, VSCodeTextField } from "@vscode/webview-ui-toolkit/react"
 import { useEffect, useState } from "react"
+import { useTranslation } from "@/i18n/useTranslation"
 import { useDebouncedInput } from "../utils/useDebouncedInput"
 
 /**
@@ -27,11 +28,12 @@ interface BaseUrlFieldProps {
 export const BaseUrlField = ({
 	initialValue,
 	onChange,
-	label = "Use custom base URL",
-	placeholder = "Default: https://api.example.com",
+	label,
+	placeholder,
 	disabled = false,
 	showLockIcon = false,
 }: BaseUrlFieldProps) => {
+	const tr = useTranslation("providers")
 	const [isEnabled, setIsEnabled] = useState(!!initialValue)
 	const [localValue, setLocalValue] = useDebouncedInput(initialValue || "", onChange)
 
@@ -54,7 +56,7 @@ export const BaseUrlField = ({
 		<div>
 			<div className="flex items-center gap-2">
 				<VSCodeCheckbox checked={isEnabled} disabled={disabled} onChange={handleToggle}>
-					{label}
+					{label ?? tr("baseUrlToggle")}
 				</VSCodeCheckbox>
 				{showLockIcon && <i className="codicon codicon-lock text-(--vscode-descriptionForeground) text-sm" />}
 			</div>
@@ -63,7 +65,7 @@ export const BaseUrlField = ({
 				<VSCodeTextField
 					disabled={disabled}
 					onInput={(e: any) => setLocalValue(e.target.value.trim())}
-					placeholder={placeholder}
+					placeholder={placeholder ?? tr("baseUrlPlaceholder")}
 					style={{ width: "100%", marginTop: 3 }}
 					type="text"
 					value={localValue}

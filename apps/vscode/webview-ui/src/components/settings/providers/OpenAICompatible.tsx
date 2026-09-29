@@ -9,6 +9,8 @@ import { Tooltip } from "@/components/ui/tooltip"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useDynamicProviderSelection } from "@/hooks/useDynamicProviderSelection"
 import { fromProtobufProviderModelOverrides, type ProviderModelOverrides, useProviderConfig } from "@/hooks/useProviderConfig"
+import { formatString } from "@/i18n/strings"
+import { useTranslation } from "@/i18n/useTranslation"
 import { ModelsServiceClient } from "@/services/grpc-client"
 import { OPENAI_COMPATIBLE_POLICY_ID, resolveModelThinkingOptions } from "@/utils/modelThinkingOptions"
 import { getAsVar, VSC_DESCRIPTION_FOREGROUND } from "@/utils/vscStyles"
@@ -58,6 +60,11 @@ export const OpenAICompatibleProvider = ({
 	currentMode,
 }: OpenAICompatibleProviderProps) => {
 	const { apiConfiguration, remoteConfigSettings } = useExtensionState()
+	const tr = useTranslation("providers")
+	// The managed-by-organization sentence belongs to the Settings surface (the General
+	// tab's telemetry switch and the Remote Config tab show the same one) and is read
+	// from that table rather than copied here, so the wording cannot drift.
+	const settingsTr = useTranslation("settings")
 	const { handleFieldChange, handleModeFieldChange } = useApiConfigurationHandlers()
 	const { config, write, commitSelection } = useProviderConfig(providerId)
 
@@ -172,7 +179,7 @@ export const OpenAICompatibleProvider = ({
 		(key: NumericModelOverrideKey, label: string, value: string) => {
 			const parsed = parseOptionalFiniteNumber(value)
 			if (!parsed.valid) {
-				setModelFieldErrors((current) => ({ ...current, [key]: `${label} must be a valid number.` }))
+				setModelFieldErrors((current) => ({ ...current, [key]: formatString(tr, "numberFieldError", { label }) }))
 				return
 			}
 			setModelFieldErrors((current) => {
@@ -199,7 +206,7 @@ export const OpenAICompatibleProvider = ({
 			}
 			updateModelOverride(key, parsed.value)
 		},
-		[updateModelOverride, openAiModelInfo, selectedModelId],
+		[updateModelOverride, openAiModelInfo, selectedModelId, tr],
 	)
 
 	// Debounced function to refresh OpenAI models (prevents excessive API calls while typing)
@@ -304,7 +311,7 @@ export const OpenAICompatibleProvider = ({
 				<TooltipTrigger>
 					<div className="mb-2.5">
 						<div className="flex items-center gap-2 mb-1">
-							<span style={{ fontWeight: 500 }}>Base URL</span>
+							<span style={{ fontWeight: 500 }}>{tr("baseUrlLabel")}</span>
 							{remoteConfigSettings?.openAiBaseUrl !== undefined && (
 								<i className="codicon codicon-lock text-description text-sm" />
 							)}
@@ -321,22 +328,22 @@ export const OpenAICompatibleProvider = ({
 								void write({ baseUrl: value }).catch((error) => handleProviderConfigWriteError("base URL", error))
 								debouncedRefreshOpenAiModels(value, latestOpenAiApiKeyRef.current)
 							}}
-							placeholder={"Enter base URL..."}
+							placeholder={tr("baseUrlEntryPlaceholder")}
 							style={{ width: "100%", marginBottom: 10 }}
 							type="text"
 						/>
 					</div>
 				</TooltipTrigger>
 				<TooltipContent hidden={remoteConfigSettings?.openAiBaseUrl === undefined}>
-					This setting is managed by your organization's remote configuration
+					{settingsTr("managedByOrganization")}
 				</TooltipContent>
 			</Tooltip>
 
 			<ApiKeyField initialValue={savedApiKeyMask} onChange={handleApiKeyChange} providerName="OpenAI Compatible" />
 
 			<label htmlFor="openai-compatible-model-picker">
-				<span style={{ fontWeight: 500 }}>Model ID</span>
-				{isRefreshingOpenAiModels && <span> Loading models…</span>}
+				<span style={{ fontWeight: 500 }}>{tr("modelIdLabel")}</span>
+				{isRefreshingOpenAiModels && <span> {tr("modelListLoading")}</span>}
 			</label>
 			{openAiModelsError && <div role="alert">{openAiModelsError}</div>}
 			{availableOpenAiModels.length > 0 ? (
@@ -348,7 +355,7 @@ export const OpenAICompatibleProvider = ({
 						marginBottom: 10,
 					}}>
 					<select
-						aria-label="Model ID"
+						aria-label={tr("modelIdLabel")}
 						id="openai-compatible-model-picker"
 						onChange={(event) => {
 							const modelId = event.target.value
@@ -363,14 +370,14 @@ export const OpenAICompatibleProvider = ({
 						style={MODEL_ID_SELECT_STYLE}
 						value={selectedModelId && availableOpenAiModels.includes(selectedModelId) ? selectedModelId : ""}>
 						{selectedModelId && !availableOpenAiModels.includes(selectedModelId) && (
-							<option value="">{selectedModelId} (not in current list)</option>
+							<option value="">{formatString(tr, "modelNotInListOption", { model: selectedModelId })}</option>
 						)}
 						{availableOpenAiModels.map((modelId) => (
 							<option key={modelId} value={modelId}>
 								{modelId}
 							</option>
 						))}
-						<option value="__custom__">Use custom model ID…</option>
+						<option value="__custom__">{tr("modelUseCustomId")}</option>
 					</select>
 
 					{(isCustomOpenAiModelEntryVisible ||
@@ -378,9 +385,9 @@ export const OpenAICompatibleProvider = ({
 						<DebouncedTextField
 							initialValue={selectedModelId || ""}
 							onChange={(value) => handleOpenAiModelSelection(value)}
-							placeholder={"Enter Model ID..."}
+							placeholder={tr("enterModelIdPlaceholder")}
 							style={{ width: "100%" }}>
-							<span style={{ fontWeight: 500 }}>Custom Model ID</span>
+							<span style={{ fontWeight: 500 }}>{tr("customModelIdLabel")}</span>
 						</DebouncedTextField>
 					)}
 				</div>
@@ -388,7 +395,7 @@ export const OpenAICompatibleProvider = ({
 				<DebouncedTextField
 					initialValue={selectedModelId || ""}
 					onChange={(value) => handleOpenAiModelSelection(value)}
-					placeholder={"Enter Model ID..."}
+					placeholder={tr("enterModelIdPlaceholder")}
 					style={{ width: "100%", marginBottom: 10 }}
 				/>
 			)}
@@ -409,14 +416,14 @@ export const OpenAICompatibleProvider = ({
 							<Tooltip>
 								<TooltipTrigger>
 									<div className="flex items-center gap-2">
-										<span style={{ fontWeight: 500 }}>Custom Headers</span>
+										<span style={{ fontWeight: 500 }}>{tr("customHeadersLabel")}</span>
 										{remoteConfigSettings?.openAiHeaders !== undefined && (
 											<i className="codicon codicon-lock text-description text-sm" />
 										)}
 									</div>
 								</TooltipTrigger>
 								<TooltipContent hidden={remoteConfigSettings?.openAiHeaders === undefined}>
-									This setting is managed by your organization's remote configuration
+									{settingsTr("managedByOrganization")}
 								</TooltipContent>
 							</Tooltip>
 							<VSCodeButton
@@ -430,7 +437,7 @@ export const OpenAICompatibleProvider = ({
 										handleProviderConfigWriteError("headers", error),
 									)
 								}}>
-								Add Header
+								{tr("addHeader")}
 							</VSCodeButton>
 						</div>
 
@@ -452,7 +459,7 @@ export const OpenAICompatibleProvider = ({
 												}).catch((error) => handleProviderConfigWriteError("headers", error))
 											}
 										}}
-										placeholder="Header name"
+										placeholder={tr("headerNamePlaceholder")}
 										style={{ width: "40%" }}
 									/>
 									<DebouncedTextField
@@ -466,7 +473,7 @@ export const OpenAICompatibleProvider = ({
 												},
 											}).catch((error) => handleProviderConfigWriteError("headers", error))
 										}}
-										placeholder="Header value"
+										placeholder={tr("headerValuePlaceholder")}
 										style={{ width: "40%" }}
 									/>
 									<VSCodeButton
@@ -478,7 +485,7 @@ export const OpenAICompatibleProvider = ({
 												handleProviderConfigWriteError("headers", error),
 											)
 										}}>
-										Remove
+										{tr("removeButton")}
 									</VSCodeButton>
 								</div>
 							))}
@@ -493,20 +500,20 @@ export const OpenAICompatibleProvider = ({
 						<BaseUrlField
 							disabled={true}
 							initialValue={apiConfiguration?.azureApiVersion}
-							label="Set Azure API version"
+							label={tr("setAzureApiVersionLabel")}
 							onChange={(value) => handleFieldChange("azureApiVersion", value)}
-							placeholder={`Default: ${azureOpenAiDefaultApiVersion}`}
+							placeholder={formatString(tr, "defaultValue", { value: azureOpenAiDefaultApiVersion })}
 							showLockIcon={true}
 						/>
 					</TooltipTrigger>
-					<TooltipContent>This setting is managed by your organization's remote configuration</TooltipContent>
+					<TooltipContent>{settingsTr("managedByOrganization")}</TooltipContent>
 				</Tooltip>
 			) : (
 				<BaseUrlField
 					initialValue={apiConfiguration?.azureApiVersion}
-					label="Set Azure API version"
+					label={tr("setAzureApiVersionLabel")}
 					onChange={(value) => handleFieldChange("azureApiVersion", value)}
-					placeholder={`Default: ${azureOpenAiDefaultApiVersion}`}
+					placeholder={formatString(tr, "defaultValue", { value: azureOpenAiDefaultApiVersion })}
 				/>
 			)}
 
@@ -516,7 +523,7 @@ export const OpenAICompatibleProvider = ({
 					const isChecked = e.target.checked === true
 					return handleFieldChange("azureIdentity", isChecked)
 				}}>
-				Use Azure Identity Authentication
+				{tr("useAzureIdentity")}
 			</VSCodeCheckbox>
 
 			<div
@@ -539,7 +546,7 @@ export const OpenAICompatibleProvider = ({
 						fontWeight: 700,
 						textTransform: "uppercase",
 					}}>
-					Model Configuration
+					{tr("modelConfiguration")}
 				</span>
 			</div>
 
@@ -548,21 +555,23 @@ export const OpenAICompatibleProvider = ({
 					<VSCodeCheckbox
 						checked={!!openAiModelInfo?.supportsImages}
 						onChange={(e: any) => updateModelOverride("supportsVision", e.target.checked === true)}>
-						Supports Images
+						{tr("supportsImagesToggle")}
 					</VSCodeCheckbox>
 
 					<VSCodeCheckbox
 						checked={selectedModelOverrides.isR1FormatRequired ?? openAiModelInfo.apiFormat === ApiFormat.R1_CHAT}
 						onChange={(e: any) => updateModelOverride("isR1FormatRequired", e.target.checked === true)}>
-						Enable R1 messages format
+						{tr("enableR1Format")}
 					</VSCodeCheckbox>
 
 					<div style={{ display: "flex", gap: 10, marginTop: "5px" }}>
 						<div style={{ flex: 1 }}>
 							<DebouncedTextField
 								initialValue={formatOptionalModelNumber(openAiModelInfo?.contextWindow)}
-								onChange={(value) => updateNumericModelOverride("contextWindow", "Context Window Size", value)}>
-								<span style={{ fontWeight: 500 }}>Context Window Size</span>
+								onChange={(value) =>
+									updateNumericModelOverride("contextWindow", tr("contextWindowSizeLabel"), value)
+								}>
+								<span style={{ fontWeight: 500 }}>{tr("contextWindowSizeLabel")}</span>
 							</DebouncedTextField>
 							{modelFieldErrors.contextWindow && <div role="alert">{modelFieldErrors.contextWindow}</div>}
 						</div>
@@ -570,9 +579,9 @@ export const OpenAICompatibleProvider = ({
 						<div style={{ flex: 1 }}>
 							<DebouncedTextField
 								initialValue={formatOptionalModelNumber(openAiModelInfo?.maxTokens)}
-								onChange={(value) => updateNumericModelOverride("maxTokens", "Max Output Tokens", value)}
-								placeholder="not set">
-								<span style={{ fontWeight: 500 }}>Max Output Tokens</span>
+								onChange={(value) => updateNumericModelOverride("maxTokens", tr("maxOutputTokensLabel"), value)}
+								placeholder={tr("notSetPlaceholder")}>
+								<span style={{ fontWeight: 500 }}>{tr("maxOutputTokensLabel")}</span>
 							</DebouncedTextField>
 							{modelFieldErrors.maxTokens && <div role="alert">{modelFieldErrors.maxTokens}</div>}
 						</div>
@@ -582,8 +591,10 @@ export const OpenAICompatibleProvider = ({
 						<div style={{ flex: 1 }}>
 							<DebouncedTextField
 								initialValue={formatOptionalModelNumber(openAiModelInfo?.inputPrice)}
-								onChange={(value) => updateNumericModelOverride("inputPrice", "Input Price", value)}>
-								<span style={{ fontWeight: 500 }}>Input Price / 1M tokens</span>
+								onChange={(value) =>
+									updateNumericModelOverride("inputPrice", tr("inputPricePerMillionLabel"), value)
+								}>
+								<span style={{ fontWeight: 500 }}>{tr("inputPricePerMillionLabel")}</span>
 							</DebouncedTextField>
 							{modelFieldErrors.inputPrice && <div role="alert">{modelFieldErrors.inputPrice}</div>}
 						</div>
@@ -591,8 +602,10 @@ export const OpenAICompatibleProvider = ({
 						<div style={{ flex: 1 }}>
 							<DebouncedTextField
 								initialValue={formatOptionalModelNumber(openAiModelInfo?.outputPrice)}
-								onChange={(value) => updateNumericModelOverride("outputPrice", "Output Price", value)}>
-								<span style={{ fontWeight: 500 }}>Output Price / 1M tokens</span>
+								onChange={(value) =>
+									updateNumericModelOverride("outputPrice", tr("outputPricePerMillionLabel"), value)
+								}>
+								<span style={{ fontWeight: 500 }}>{tr("outputPricePerMillionLabel")}</span>
 							</DebouncedTextField>
 							{modelFieldErrors.outputPrice && <div role="alert">{modelFieldErrors.outputPrice}</div>}
 						</div>
@@ -602,9 +615,9 @@ export const OpenAICompatibleProvider = ({
 						<div>
 							<DebouncedTextField
 								initialValue={formatOptionalModelNumber(openAiModelInfo?.temperature)}
-								onChange={(value) => updateNumericModelOverride("temperature", "Temperature", value)}
-								placeholder="not set">
-								<span style={{ fontWeight: 500 }}>Temperature</span>
+								onChange={(value) => updateNumericModelOverride("temperature", tr("temperatureLabel"), value)}
+								placeholder={tr("notSetPlaceholder")}>
+								<span style={{ fontWeight: 500 }}>{tr("temperatureLabel")}</span>
 							</DebouncedTextField>
 							{modelFieldErrors.temperature && <div role="alert">{modelFieldErrors.temperature}</div>}
 						</div>
@@ -619,8 +632,7 @@ export const OpenAICompatibleProvider = ({
 					color: "var(--vscode-descriptionForeground)",
 				}}>
 				<span style={{ color: "var(--vscode-errorForeground)" }}>
-					(<span style={{ fontWeight: 500 }}>Note:</span> Cline uses complex prompts, so behavior can vary across
-					models. Less capable models may not work as expected.)
+					(<span style={{ fontWeight: 500 }}>{tr("noteLabel")}</span> {tr("complexPromptNote")})
 				</span>
 			</p>
 

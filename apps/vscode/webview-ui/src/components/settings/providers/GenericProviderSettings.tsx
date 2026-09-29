@@ -3,6 +3,7 @@ import { type ProviderId } from "@/context/ExtensionStateContext"
 import { useProviderConfig } from "@/hooks/useProviderConfig"
 import { useProviderModelSelection } from "@/hooks/useProviderModelSelection"
 import { useProviderModels } from "@/hooks/useProviderModels"
+import { useTranslation } from "@/i18n/useTranslation"
 import { resolveModelThinkingOptions } from "@/utils/modelThinkingOptions"
 import { ApiKeyField } from "../common/ApiKeyField"
 import { BaseUrlField } from "../common/BaseUrlField"
@@ -63,6 +64,7 @@ export const GenericProviderSettings = ({
 		providerName,
 		write,
 	})
+	const tr = useTranslation("providers")
 	const handleBaseUrlChange = (value: string) => {
 		void write({ baseUrl: value }).catch((err) => console.error(`Failed to update ${providerName} base URL:`, err))
 	}
@@ -72,7 +74,7 @@ export const GenericProviderSettings = ({
 			<ApiKeyField
 				initialValue={savedApiKeyMask}
 				onChange={handleApiKeyChange}
-				placeholder="Enter API Key..."
+				placeholder={tr("apiKeyPlaceholder")}
 				providerName={providerName}
 				signupUrl={signupUrl}
 			/>

@@ -3,6 +3,7 @@ import { Mode } from "@shared/storage/types"
 import { VSCodeDropdown, VSCodeOption } from "@vscode/webview-ui-toolkit/react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useStaticProviderSelection } from "@/hooks/useStaticProviderSelection"
+import { useTranslation } from "@/i18n/useTranslation"
 import { resolveModelThinkingOptions } from "@/utils/modelThinkingOptions"
 import { DROPDOWN_Z_INDEX } from "../ApiOptions"
 import { ApiKeyField } from "../common/ApiKeyField"
@@ -28,6 +29,7 @@ const qwenApiOptions: QwenApiRegions[] = Object.values(QwenApiRegions)
  */
 export const QwenProvider = ({ showModelOptions, isPopup, currentMode }: QwenProviderProps) => {
 	const { apiConfiguration } = useExtensionState()
+	const tr = useTranslation("providers")
 	const { handleFieldChange, handleModeFieldChange } = useApiConfigurationHandlers()
 
 	// Catalog and default come from the SDK via gRPC. The SDK consumes
@@ -49,7 +51,7 @@ export const QwenProvider = ({ showModelOptions, isPopup, currentMode }: QwenPro
 		<div>
 			<DropdownContainer className="dropdown-container" style={{ position: "inherit" }}>
 				<label htmlFor="qwen-line-provider">
-					<span style={{ fontWeight: 500, marginTop: 5 }}>Alibaba API Line</span>
+					<span style={{ fontWeight: 500, marginTop: 5 }}>{tr("qwenApiLineLabel")}</span>
 				</label>
 				<VSCodeDropdown
 					id="qwen-line-provider"
@@ -72,8 +74,7 @@ export const QwenProvider = ({ showModelOptions, isPopup, currentMode }: QwenPro
 					marginTop: 3,
 					color: "var(--vscode-descriptionForeground)",
 				}}>
-				Please select the appropriate API interface based on your location. If you are in China, choose the China API
-				interface. Otherwise, choose the International API interface.
+				{tr("qwenApiLineHint")}
 			</p>
 
 			<ApiKeyField
@@ -86,7 +87,6 @@ export const QwenProvider = ({ showModelOptions, isPopup, currentMode }: QwenPro
 			{showModelOptions && (
 				<>
 					<ModelSelector
-						label="Model"
 						models={models}
 						onChange={(e: any) =>
 							handleModeFieldChange(

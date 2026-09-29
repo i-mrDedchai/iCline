@@ -3,6 +3,7 @@ import { Mode } from "@shared/storage/types"
 import { VSCodeButton, VSCodeDropdown, VSCodeOption } from "@vscode/webview-ui-toolkit/react"
 import React, { useMemo } from "react"
 import { useDynamicProviderSelection } from "@/hooks/useDynamicProviderSelection"
+import { useTranslation } from "@/i18n/useTranslation"
 import { declaredEffortDefault, resolveEffortLevels, resolveModelThinkingOptions } from "@/utils/modelThinkingOptions"
 import { VSC_BUTTON_BACKGROUND, VSC_BUTTON_FOREGROUND, VSC_DESCRIPTION_FOREGROUND, VSC_FOREGROUND } from "@/utils/vscStyles"
 import { ModelInfoView } from "../common/ModelInfoView"
@@ -28,6 +29,7 @@ const OcaModelPicker: React.FC<OcaModelPickerProps> = ({
 	loading,
 	lastRefreshedAt,
 }: OcaModelPickerProps) => {
+	const tr = useTranslation("providers")
 	const { handleModeFieldsChange } = useApiConfigurationHandlers()
 	const [pendingModelId, setPendingModelId] = React.useState<string | null>(null)
 	const [showRestrictedPopup, setShowRestrictedPopup] = React.useState(false)
@@ -152,7 +154,7 @@ const OcaModelPicker: React.FC<OcaModelPickerProps> = ({
 					overflow: auto;
 				}
 			`}</style>
-			<label className="font-medium text-[12px] mt-[10px] mb-[2px]">Model</label>
+			<label className="font-medium text-[12px] mt-[10px] mb-[2px]">{tr("modelLabel")}</label>
 			<div className="relative z-100 flex items-center gap-2 mb-1">
 				<VSCodeDropdown
 					className="flex-1 text-[12px] min-h-[24px]"
@@ -200,7 +202,7 @@ const OcaModelPicker: React.FC<OcaModelPickerProps> = ({
 			) : null}
 			{!loading && selectedModelInfo && thinkingOptions.showEffort && (
 				<React.Fragment>
-					<label className="font-medium text-[12px] mt-[10px] mb-[2px]">Reasoning Effort</label>
+					<label className="font-medium text-[12px] mt-[10px] mb-[2px]">{tr("reasoningEffortLabel")}</label>
 					<div className="flex items-center gap-2 mb-1">
 						<VSCodeDropdown
 							className="flex-1 text-[12px] min-h-[24px]"

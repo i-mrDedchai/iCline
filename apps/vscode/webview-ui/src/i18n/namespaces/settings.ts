@@ -17,7 +17,9 @@ const en = {
 	preferredLanguageHint: "The language Cline uses for its replies and for this interface.",
 	// General → telemetry
 	telemetryAllow: "Allow error and usage reporting",
-	telemetryManaged: "This setting is managed by your organization's remote configuration",
+	// One key for one sentence, wherever it appears: the telemetry switch's tooltip, the
+	// Remote Config tab's summary line, and every provider field a policy locks.
+	managedByOrganization: "This setting is managed by your organization's remote configuration",
 	telemetryNotice:
 		"Help improve Cline by sending usage data and error reports. No code, prompts, or personal information are ever sent. See our {overview} and {privacy} for more details.",
 	telemetryOverviewLink: "telemetry overview",
@@ -91,7 +93,6 @@ const en = {
 	remoteOptedOutNotice: "You have opted out of remote config. Opt back in to apply it and see it here.",
 	remoteNotConfiguredNotice: "You haven't configured remote config yet. Do so through our {dashboard}.",
 	remoteDashboardLink: "dashboard",
-	remoteManagedNotice: "These settings are managed by your organization's remote configuration.",
 	remoteRefresh: "Refresh",
 	remoteRetryIn: "(Retry in: {seconds} seconds)",
 	remoteValueEnabled: "Enabled",
@@ -171,7 +172,7 @@ const th: Record<SettingsStringKey, string> = {
 	preferredLanguageLabel: "ภาษาที่ต้องการ",
 	preferredLanguageHint: "ภาษาที่ iCline ใช้ตอบกลับ และใช้แสดงผลหน้าจอนี้",
 	telemetryAllow: "อนุญาตให้ส่งข้อมูลการใช้งานและรายงานข้อผิดพลาด",
-	telemetryManaged: "การตั้งค่านี้ถูกจัดการโดย remote configuration ขององค์กรคุณ",
+	managedByOrganization: "การตั้งค่านี้ถูกจัดการโดย remote configuration ขององค์กรคุณ",
 	telemetryNotice:
 		"ช่วยพัฒนา Cline ด้วยการส่งข้อมูลการใช้งานและรายงานข้อผิดพลาด — จะไม่มีการส่งโค้ด คำสั่ง (prompt) หรือข้อมูลส่วนตัวใด ๆ ดู{overview}และ{privacy}สำหรับรายละเอียดเพิ่มเติม",
 	telemetryOverviewLink: "ภาพรวมการเก็บข้อมูล",
@@ -238,7 +239,6 @@ const th: Record<SettingsStringKey, string> = {
 	remoteOptedOutNotice: "คุณเลือกไม่ใช้ remote config อยู่ เปิดกลับเพื่อให้มีผลและแสดงที่นี่",
 	remoteNotConfiguredNotice: "คุณยังไม่ได้ตั้งค่า remote config ตั้งค่าผ่าน{dashboard}ของเรา",
 	remoteDashboardLink: "แดชบอร์ด",
-	remoteManagedNotice: "การตั้งค่าเหล่านี้ถูกจัดการโดย remote configuration ขององค์กรคุณ",
 	remoteRefresh: "รีเฟรช",
 	remoteRetryIn: "(ลองใหม่ใน: {seconds} วินาที)",
 	remoteValueEnabled: "เปิด",
@@ -315,7 +315,7 @@ const ja: Record<SettingsStringKey, string> = {
 	preferredLanguageLabel: "優先言語",
 	preferredLanguageHint: "iCline が返答に使う言語であり、この画面の表示言語でもあります。",
 	telemetryAllow: "エラーと利用状況の報告を許可する",
-	telemetryManaged: "この設定は組織のリモート構成で管理されています",
+	managedByOrganization: "この設定は組織のリモート構成で管理されています",
 	telemetryNotice:
 		"利用データとエラー報告を送信して Cline の改善にご協力ください。コード、プロンプト、個人情報は一切送信されません。詳しくは{overview}と{privacy}をご覧ください。",
 	telemetryOverviewLink: "テレメトリの概要",
@@ -384,7 +384,6 @@ const ja: Record<SettingsStringKey, string> = {
 	remoteOptedOutNotice: "リモート構成をオプトアウトしています。再び適用してここに表示するにはオプトインしてください。",
 	remoteNotConfiguredNotice: "まだリモート構成を設定していません。{dashboard}から設定してください。",
 	remoteDashboardLink: "ダッシュボード",
-	remoteManagedNotice: "これらの設定は組織のリモート構成で管理されています。",
 	remoteRefresh: "更新",
 	remoteRetryIn: "(再試行まで: {seconds} 秒)",
 	remoteValueEnabled: "有効",
@@ -461,7 +460,7 @@ const zhCN: Record<SettingsStringKey, string> = {
 	preferredLanguageLabel: "首选语言",
 	preferredLanguageHint: "iCline 用于回复以及显示本界面的语言。",
 	telemetryAllow: "允许发送错误和使用情况报告",
-	telemetryManaged: "此设置由你的组织的远程配置管理",
+	managedByOrganization: "此设置由你的组织的远程配置管理",
 	telemetryNotice:
 		"发送使用数据和错误报告有助于改进 Cline。绝不会发送代码、提示词或个人信息。详情请参阅{overview}和{privacy}。",
 	telemetryOverviewLink: "遥测概览",
@@ -525,7 +524,6 @@ const zhCN: Record<SettingsStringKey, string> = {
 	remoteOptedOutNotice: "你已退出远程配置。重新启用后它才会生效并显示在这里。",
 	remoteNotConfiguredNotice: "你还没有配置远程配置。请通过我们的{dashboard}进行配置。",
 	remoteDashboardLink: "控制台",
-	remoteManagedNotice: "这些设置由你的组织的远程配置管理。",
 	remoteRefresh: "刷新",
 	remoteRetryIn: "（{seconds} 秒后重试）",
 	remoteValueEnabled: "已启用",

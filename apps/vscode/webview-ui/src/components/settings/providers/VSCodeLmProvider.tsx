@@ -6,6 +6,8 @@ import { useCallback, useEffect, useState } from "react"
 import type * as vscodemodels from "vscode"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useProviderConfig } from "@/hooks/useProviderConfig"
+import { splitOnPlaceholder } from "@/i18n/strings"
+import { useTranslation } from "@/i18n/useTranslation"
 import { ModelsServiceClient } from "@/services/grpc-client"
 import { DROPDOWN_Z_INDEX, DropdownContainer } from "../ApiOptions"
 import { getModeSpecificFields } from "../utils/providerUtils"
@@ -18,6 +20,11 @@ interface VSCodeLmProviderProps {
 export const VSCodeLmProvider = ({ currentMode }: VSCodeLmProviderProps) => {
 	const [vsCodeLmModels, setVsCodeLmModels] = useState<vscodemodels.LanguageModelChatSelector[]>([])
 	const { apiConfiguration } = useExtensionState()
+	const tr = useTranslation("providers")
+
+	// Two links sit inside this paragraph; placeholders let each language place them.
+	const [introBeforeCopilot, introAfterCopilot] = splitOnPlaceholder(tr("vscodeLmIntro"), "copilot")
+	const [introBetweenLinks, introAfterRefresh] = splitOnPlaceholder(introAfterCopilot, "refresh")
 	const { handleModeFieldChange } = useApiConfigurationHandlers()
 	const { config, commitSelection } = useProviderConfig("vscode-lm")
 
@@ -77,7 +84,7 @@ export const VSCodeLmProvider = ({ currentMode }: VSCodeLmProviderProps) => {
 				onFocusCapture={() => void requestVsCodeLmModels()}
 				zIndex={DROPDOWN_Z_INDEX - 2}>
 				<label htmlFor="vscode-lm-model">
-					<span style={{ fontWeight: 500 }}>Language Model</span>
+					<span style={{ fontWeight: 500 }}>{tr("vscodeLmModelLabel")}</span>
 				</label>
 				{vsCodeLmModels.length > 0 ? (
 					<VSCodeDropdown
@@ -85,7 +92,7 @@ export const VSCodeLmProvider = ({ currentMode }: VSCodeLmProviderProps) => {
 						onChange={(e) => handleModelSelect((e.target as HTMLInputElement).value)}
 						style={{ width: "100%" }}
 						value={selectedModelId}>
-						<VSCodeOption value="">Select a model...</VSCodeOption>
+						<VSCodeOption value="">{tr("modelSelectPlaceholder")}</VSCodeOption>
 						{vsCodeLmModels.map((model) => {
 							const value = stringifyVsCodeLmModelSelector(model)
 							return (
@@ -102,17 +109,17 @@ export const VSCodeLmProvider = ({ currentMode }: VSCodeLmProviderProps) => {
 							marginTop: "5px",
 							color: "var(--vscode-descriptionForeground)",
 						}}>
-						Uses models contributed by other extensions through the VS Code Language Model API. The most common source
-						is GitHub Copilot — install the{" "}
-						<a href="https://marketplace.visualstudio.com/items?itemName=GitHub.copilot">Copilot extension</a> and
-						enable models in Copilot settings — but any extension that registers a language model provider will appear
-						here.{" "}
+						{introBeforeCopilot}
+						<a href="https://marketplace.visualstudio.com/items?itemName=GitHub.copilot">
+							{tr("vscodeLmCopilotLink")}
+						</a>
+						{introBetweenLinks}
 						<VSCodeLink
 							onClick={() => void requestVsCodeLmModels()}
 							style={{ display: "inline", fontSize: "inherit" }}>
-							Refresh the model list
-						</VSCodeLink>{" "}
-						after enabling models.
+							{tr("vscodeLmRefreshLink")}
+						</VSCodeLink>
+						{introAfterRefresh}
 					</p>
 				)}
 			</DropdownContainer>

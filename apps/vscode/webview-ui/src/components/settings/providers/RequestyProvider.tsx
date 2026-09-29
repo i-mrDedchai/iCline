@@ -4,6 +4,7 @@ import { Mode } from "@shared/storage/types"
 import { VSCodeButton, VSCodeCheckbox } from "@vscode/webview-ui-toolkit/react"
 import { useState } from "react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
+import { useTranslation } from "@/i18n/useTranslation"
 import { AccountServiceClient } from "@/services/grpc-client"
 import { ApiKeyField } from "../common/ApiKeyField"
 import { DebouncedTextField } from "../common/DebouncedTextField"
@@ -24,6 +25,7 @@ interface RequestyProviderProps {
  */
 export const RequestyProvider = ({ showModelOptions, isPopup, currentMode }: RequestyProviderProps) => {
 	const { apiConfiguration } = useExtensionState()
+	const tr = useTranslation("providers")
 	const { handleFieldChange } = useApiConfigurationHandlers()
 
 	const [requestyEndpointSelected, setRequestyEndpointSelected] = useState(!!apiConfiguration?.requestyBaseUrl)
@@ -67,7 +69,7 @@ export const RequestyProvider = ({ showModelOptions, isPopup, currentMode }: Req
 						handleFieldChange("requestyBaseUrl", undefined)
 					}
 				}}>
-				Use custom base URL
+				{tr("baseUrlToggle")}
 			</VSCodeCheckbox>
 			{requestyEndpointSelected && (
 				<DebouncedTextField
@@ -79,7 +81,7 @@ export const RequestyProvider = ({ showModelOptions, isPopup, currentMode }: Req
 							handleFieldChange("requestyBaseUrl", value)
 						}
 					}}
-					placeholder="Custom base URL"
+					placeholder={tr("requestyBaseUrlPlaceholder")}
 					style={{ width: "100%", marginBottom: 5 }}
 					type="text"
 				/>

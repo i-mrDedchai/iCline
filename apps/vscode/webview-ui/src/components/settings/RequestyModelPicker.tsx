@@ -8,6 +8,7 @@ import React, { KeyboardEvent, useEffect, useMemo, useRef, useState } from "reac
 import { useMount } from "react-use"
 import styled from "styled-components"
 import { useDynamicProviderSelection } from "@/hooks/useDynamicProviderSelection"
+import { useTranslation } from "@/i18n/useTranslation"
 import { resolveModelThinkingOptions } from "@/utils/modelThinkingOptions"
 import { useExtensionState } from "../../context/ExtensionStateContext"
 import { ModelsServiceClient } from "../../services/grpc-client"
@@ -25,6 +26,7 @@ interface RequestyModelPickerProps {
 
 const RequestyModelPicker: React.FC<RequestyModelPickerProps> = ({ isPopup, baseUrl, currentMode }) => {
 	const { apiConfiguration, requestyModels, setRequestyModels } = useExtensionState()
+	const tr = useTranslation("providers")
 	const { handleModeFieldsChange } = useApiConfigurationHandlers()
 	const modeFields = getModeSpecificFields(apiConfiguration, currentMode)
 	const [searchTerm, setSearchTerm] = useState(modeFields.requestyModelId || requestyDefaultModelId)
@@ -189,7 +191,7 @@ const RequestyModelPicker: React.FC<RequestyModelPickerProps> = ({ isPopup, base
 			</style>
 			<div style={{ display: "flex", flexDirection: "column" }}>
 				<label htmlFor="model-search">
-					<span style={{ fontWeight: 500 }}>Model</span>
+					<span style={{ fontWeight: 500 }}>{tr("modelLabel")}</span>
 				</label>
 				<DropdownWrapper ref={dropdownRef}>
 					<VSCodeTextField
@@ -200,7 +202,7 @@ const RequestyModelPicker: React.FC<RequestyModelPickerProps> = ({ isPopup, base
 							setIsDropdownVisible(true)
 						}}
 						onKeyDown={handleKeyDown}
-						placeholder="Search and select a model..."
+						placeholder={tr("modelSearchPlaceholder")}
 						role="combobox"
 						style={{
 							width: "100%",
@@ -210,7 +212,7 @@ const RequestyModelPicker: React.FC<RequestyModelPickerProps> = ({ isPopup, base
 						value={searchTerm}>
 						{searchTerm && (
 							<div
-								aria-label="Clear search"
+								aria-label={tr("clearSearch")}
 								className="input-icon-button codicon codicon-close"
 								onClick={() => {
 									handleModelChange("")

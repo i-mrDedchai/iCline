@@ -7,6 +7,8 @@ import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react"
 import { useMount } from "react-use"
 import styled from "styled-components"
 import { useExtensionState } from "@/context/ExtensionStateContext"
+import { splitOnPlaceholder } from "@/i18n/strings"
+import { useTranslation } from "@/i18n/useTranslation"
 import { resolveModelThinkingOptions } from "@/utils/modelThinkingOptions"
 import { highlight } from "../history/HistoryView"
 import { ModelInfoView } from "./common/ModelInfoView"
@@ -20,9 +22,19 @@ export interface ZenmuxModelPickerProps {
 	currentMode: Mode
 }
 
+/**
+ * The provider-pin syntax the routing note tells the user to type. Identifiers, not
+ * copy: they stay byte-identical in every language, so they are constants.
+ */
+const PROVIDER_PIN_SLUG = "model:provider-slug"
+const PROVIDER_PIN_EXAMPLE = "anthropic/claude-sonnet-4.5:anthropic"
+
 const ZenmuxModelPicker: React.FC<ZenmuxModelPickerProps> = ({ isPopup, currentMode }) => {
 	const { handleModeFieldsChange } = useApiConfigurationHandlers()
 	const { apiConfiguration, zenmuxModels, refreshZenmuxModels } = useExtensionState()
+	const tr = useTranslation("providers")
+	const [routingNoteBeforeSlug, routingNoteAfterSlug] = splitOnPlaceholder(tr("zenmuxRoutingNote"), "slug")
+	const [routingNoteBetween, routingNoteAfterExample] = splitOnPlaceholder(routingNoteAfterSlug, "example")
 	const modeFields = getModeSpecificFields(apiConfiguration, currentMode)
 	const [searchTerm, setSearchTerm] = useState(modeFields.zenmuxModelId || "")
 	const [isDropdownVisible, setIsDropdownVisible] = useState(false)
@@ -131,7 +143,7 @@ const ZenmuxModelPicker: React.FC<ZenmuxModelPickerProps> = ({ isPopup, currentM
 	return (
 		<div>
 			<label>
-				<span style={{ fontWeight: 500 }}>Model</span>
+				<span style={{ fontWeight: 500 }}>{tr("modelLabel")}</span>
 			</label>
 			<ModelPickerContainer ref={dropdownRef}>
 				<VSCodeTextField
@@ -142,7 +154,7 @@ const ZenmuxModelPicker: React.FC<ZenmuxModelPickerProps> = ({ isPopup, currentM
 						setSelectedIndex(-1)
 					}}
 					onKeyDown={handleKeyDown}
-					placeholder="Search ZenMux models..."
+					placeholder={tr("zenmuxModelSearchPlaceholder")}
 					style={{ width: "100%", marginTop: 3 }}
 					value={searchTerm}
 				/>
@@ -173,8 +185,14 @@ const ZenmuxModelPicker: React.FC<ZenmuxModelPickerProps> = ({ isPopup, currentM
 			</ModelPickerContainer>
 
 			<p style={{ fontSize: "12px", marginTop: 5, color: "var(--vscode-descriptionForeground)" }}>
-				Pin a provider with <code>model:provider-slug</code> (e.g. <code>anthropic/claude-sonnet-4.5:anthropic</code>).{" "}
-				<VSCodeLink href="https://docs.zenmux.ai/guide/advanced/provider-routing">Routing docs</VSCodeLink>
+				{routingNoteBeforeSlug}
+				<code>{PROVIDER_PIN_SLUG}</code>
+				{routingNoteBetween}
+				<code>{PROVIDER_PIN_EXAMPLE}</code>
+				{routingNoteAfterExample}{" "}
+				<VSCodeLink href="https://docs.zenmux.ai/guide/advanced/provider-routing">
+					{tr("zenmuxRoutingDocsLink")}
+				</VSCodeLink>
 			</p>
 
 			{selectedModelInfo && (

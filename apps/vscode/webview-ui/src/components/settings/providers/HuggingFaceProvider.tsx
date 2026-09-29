@@ -1,6 +1,7 @@
 import { Mode } from "@shared/storage/types"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useDynamicProviderSelection } from "@/hooks/useDynamicProviderSelection"
+import { useTranslation } from "@/i18n/useTranslation"
 import { DebouncedTextField } from "../common/DebouncedTextField"
 import { HuggingFaceModelPicker } from "../HuggingFaceModelPicker"
 import { useApiConfigurationHandlers } from "../utils/useApiConfigurationHandlers"
@@ -19,6 +20,7 @@ interface HuggingFaceProviderProps {
  */
 export const HuggingFaceProvider = ({ showModelOptions, isPopup, currentMode }: HuggingFaceProviderProps) => {
 	const { apiConfiguration } = useExtensionState()
+	const tr = useTranslation("providers")
 	const { handleFieldChange } = useApiConfigurationHandlers()
 
 	// Get the normalized configuration
@@ -29,10 +31,10 @@ export const HuggingFaceProvider = ({ showModelOptions, isPopup, currentMode }: 
 			<DebouncedTextField
 				initialValue={apiConfiguration?.huggingFaceApiKey || ""}
 				onChange={(value) => handleFieldChange("huggingFaceApiKey", value)}
-				placeholder="Enter API Key..."
+				placeholder={tr("apiKeyPlaceholder")}
 				style={{ width: "100%" }}
 				type="password">
-				<span style={{ fontWeight: 500 }}>Hugging Face API Key</span>
+				<span style={{ fontWeight: 500 }}>{tr("huggingFaceApiKeyLabel")}</span>
 			</DebouncedTextField>
 			<p
 				style={{

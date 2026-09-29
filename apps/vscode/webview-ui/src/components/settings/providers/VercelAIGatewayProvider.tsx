@@ -1,6 +1,8 @@
 import { Mode } from "@shared/storage/types"
 import { VSCodeLink } from "@vscode/webview-ui-toolkit/react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
+import { formatString } from "@/i18n/strings"
+import { useTranslation } from "@/i18n/useTranslation"
 import { DebouncedTextField } from "../common/DebouncedTextField"
 import { useApiConfigurationHandlers } from "../utils/useApiConfigurationHandlers"
 import VercelModelPicker from "../VercelModelPicker"
@@ -19,6 +21,7 @@ interface VercelAIGatewayProviderProps {
  */
 export const VercelAIGatewayProvider = ({ showModelOptions, isPopup, currentMode }: VercelAIGatewayProviderProps) => {
 	const { apiConfiguration } = useExtensionState()
+	const tr = useTranslation("providers")
 	const { handleFieldChange } = useApiConfigurationHandlers()
 
 	return (
@@ -27,10 +30,10 @@ export const VercelAIGatewayProvider = ({ showModelOptions, isPopup, currentMode
 				<DebouncedTextField
 					initialValue={apiConfiguration?.vercelAiGatewayApiKey || ""}
 					onChange={(value) => handleFieldChange("vercelAiGatewayApiKey", value)}
-					placeholder="Enter API Key..."
+					placeholder={tr("apiKeyPlaceholder")}
 					style={{ width: "100%" }}
 					type="password">
-					<span style={{ fontWeight: 500 }}>Vercel AI Gateway API Key</span>
+					<span style={{ fontWeight: 500 }}>{tr("vercelApiKeyLabel")}</span>
 				</DebouncedTextField>
 				<p
 					style={{
@@ -38,15 +41,14 @@ export const VercelAIGatewayProvider = ({ showModelOptions, isPopup, currentMode
 						marginTop: "5px",
 						color: "var(--vscode-descriptionForeground)",
 					}}>
-					This key is stored locally and only used to make API requests from this extension.
+					{tr("apiKeyHelp")}
 					{!apiConfiguration?.vercelAiGatewayApiKey && (
 						<>
 							{" "}
-							You can get a Vercel AI Gateway API key by{" "}
 							<VSCodeLink
 								href="https://vercel.com/d?to=%2F%5Bteam%5D%2F%7E%2Fai"
 								style={{ display: "inline", fontSize: "inherit" }}>
-								signing up here.
+								{formatString(tr, "apiKeySignup", { provider: "Vercel AI Gateway" })}
 							</VSCodeLink>
 						</>
 					)}

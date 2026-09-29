@@ -2,6 +2,8 @@ import type { ModelInfo } from "@shared/api"
 import { VSCodeButton, VSCodeDropdown, VSCodeOption, VSCodeTextField } from "@vscode/webview-ui-toolkit/react"
 import { useEffect, useState } from "react"
 import type { ProviderId } from "@/context/ExtensionStateContext"
+import { formatString } from "@/i18n/strings"
+import { useTranslation } from "@/i18n/useTranslation"
 import { DropdownContainer } from "../common/ModelSelector"
 
 export interface ModelPickerSelection {
@@ -42,6 +44,7 @@ export function ModelPickerWithManualEntry({
 	selectedModel,
 	onSelect,
 }: ModelPickerWithManualEntryProps) {
+	const tr = useTranslation("providers")
 	const [isManualEntryVisible, setIsManualEntryVisible] = useState(false)
 	const [customModelId, setCustomModelId] = useState(() => (selectedModel.modelId in models ? "" : selectedModel.modelId))
 	const modelIds = Object.keys(models).sort((a, b) => a.localeCompare(b))
@@ -80,17 +83,17 @@ export function ModelPickerWithManualEntry({
 	return (
 		<div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
 			<label htmlFor="provider-model-picker">
-				<span className="font-medium">Model</span>
+				<span className="font-medium">{tr("modelLabel")}</span>
 			</label>
 
-			{isStale && <div role="status">Model list may be stale for the current provider configuration.</div>}
-			{isLoading && <div role="status">Loading models…</div>}
+			{isStale && <div role="status">{tr("modelListStale")}</div>}
+			{isLoading && <div role="status">{tr("modelListLoading")}</div>}
 			{error && <div role="alert">{error}</div>}
 
 			{hasModels && (
 				<DropdownContainer className="dropdown-container">
 					<VSCodeDropdown
-						aria-label="Model"
+						aria-label={tr("modelLabel")}
 						className="w-full"
 						id="provider-model-picker"
 						key={dropdownKey}
@@ -108,20 +111,22 @@ export function ModelPickerWithManualEntry({
 						}}
 						value={selectedModelInList ? selectedModel.modelId : ""}>
 						{!selectedModelInList && allowsCustomIds && selectedModel.modelId && (
-							<VSCodeOption value="">{selectedModel.modelId} (not in current list)</VSCodeOption>
+							<VSCodeOption value="">
+								{formatString(tr, "modelNotInListOption", { model: selectedModel.modelId })}
+							</VSCodeOption>
 						)}
 						{modelIds.map((modelId) => (
 							<VSCodeOption className="break-words whitespace-normal max-w-full" key={modelId} value={modelId}>
 								{modelId}
 							</VSCodeOption>
 						))}
-						{allowsCustomIds && <VSCodeOption value="__custom__">Use custom model ID…</VSCodeOption>}
+						{allowsCustomIds && <VSCodeOption value="__custom__">{tr("modelUseCustomId")}</VSCodeOption>}
 					</VSCodeDropdown>
 				</DropdownContainer>
 			)}
 
 			{!selectedModelInList && selectedModel.modelId && hasModels && (
-				<div role="status">Selected model “{selectedModel.modelId}” is not in the current list.</div>
+				<div role="status">{formatString(tr, "modelNotInListNotice", { model: selectedModel.modelId })}</div>
 			)}
 
 			{showManualEntry && (
@@ -136,13 +141,13 @@ export function ModelPickerWithManualEntry({
 								commitCustomModel(customModelId)
 							}
 						}}
-						placeholder="Enter custom model ID"
+						placeholder={tr("customModelIdPlaceholder")}
 						style={{ flexGrow: 1 }}
 						value={customModelId}>
-						<span className="font-medium">Custom model ID</span>
+						<span className="font-medium">{tr("customModelIdLabel")}</span>
 					</VSCodeTextField>
 					<VSCodeButton appearance="secondary" onClick={() => commitCustomModel(customModelId)}>
-						Use custom model
+						{tr("customModelUse")}
 					</VSCodeButton>
 				</div>
 			)}

@@ -290,7 +290,7 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 									key={feature.id}
 									label={tr(feature.labelKey)}
 									onChange={(checked) => updateSetting(feature.settingKey, checked)}
-									remoteTooltip={tr("telemetryManaged")}
+									remoteTooltip={tr("managedByOrganization")}
 								/>
 							))}
 						</div>

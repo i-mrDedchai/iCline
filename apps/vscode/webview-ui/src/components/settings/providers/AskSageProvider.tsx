@@ -3,6 +3,7 @@ import { Mode } from "@shared/storage/types"
 import { useEffect, useState } from "react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useStaticProviderSelection } from "@/hooks/useStaticProviderSelection"
+import { useTranslation } from "@/i18n/useTranslation"
 import { ApiKeyField } from "../common/ApiKeyField"
 import { DebouncedTextField } from "../common/DebouncedTextField"
 import { ModelInfoView } from "../common/ModelInfoView"
@@ -30,6 +31,7 @@ const askSageDefaultURL = "https://api.asksage.ai/server"
  */
 export const AskSageProvider = ({ showModelOptions, isPopup, currentMode }: AskSageProviderProps) => {
 	const { apiConfiguration } = useExtensionState()
+	const tr = useTranslation("providers")
 	const { handleFieldChange, handleModeFieldChange } = useApiConfigurationHandlers()
 	const { models, selectedModelId, selectedModelInfo, hideUsageCost } = useStaticProviderSelection(
 		"asksage",
@@ -79,7 +81,6 @@ export const AskSageProvider = ({ showModelOptions, isPopup, currentMode }: AskS
 	return (
 		<div>
 			<ApiKeyField
-				helpText="This key is stored locally and only used to make API requests from this extension."
 				initialValue={apiConfiguration?.asksageApiKey || ""}
 				onChange={(value) => handleFieldChange("asksageApiKey", value)}
 				providerName="AskSage"
@@ -88,16 +89,15 @@ export const AskSageProvider = ({ showModelOptions, isPopup, currentMode }: AskS
 			<DebouncedTextField
 				initialValue={apiConfiguration?.asksageApiUrl || askSageDefaultURL}
 				onChange={(value) => handleFieldChange("asksageApiUrl", value)}
-				placeholder="Enter AskSage API URL..."
+				placeholder={tr("askSageApiUrlPlaceholder")}
 				style={{ width: "100%" }}
 				type="text">
-				<span style={{ fontWeight: 500 }}>AskSage API URL</span>
+				<span style={{ fontWeight: 500 }}>{tr("askSageApiUrlLabel")}</span>
 			</DebouncedTextField>
 
 			{showModelOptions && (
 				<>
 					<ModelSelector
-						label="Model"
 						models={availableModels}
 						onChange={(e) =>
 							handleModeFieldChange(

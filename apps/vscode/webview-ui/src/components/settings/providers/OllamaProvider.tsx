@@ -6,6 +6,8 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useProviderConfig } from "@/hooks/useProviderConfig"
 import { useProviderModelSelection } from "@/hooks/useProviderModelSelection"
+import { formatString, splitOnPlaceholder } from "@/i18n/strings"
+import { useTranslation } from "@/i18n/useTranslation"
 import { ModelsServiceClient } from "@/services/grpc-client"
 import { ApiKeyField } from "../common/ApiKeyField"
 import { BaseUrlField } from "../common/BaseUrlField"
@@ -30,6 +32,7 @@ export const OllamaProvider = ({ showModelOptions, isPopup, currentMode }: Ollam
 	const { apiConfiguration } = useExtensionState()
 	const { handleFieldChange } = useApiConfigurationHandlers()
 	const { config, write, commitSelection } = useProviderConfig("ollama")
+	const tr = useTranslation("providers")
 
 	const [ollamaModels, setOllamaModels] = useState<string[]>([])
 
@@ -91,28 +94,33 @@ export const OllamaProvider = ({ showModelOptions, isPopup, currentMode }: Ollam
 		requestOllamaModels()
 	}, [requestOllamaModels])
 
+	// The intro sentence carries a link, so the link stays in the sentence rather than
+	// being appended after it: a language that introduces the link mid-sentence keeps
+	// its own word order.
+	const [introBeforeQuickstart, introAfterQuickstart] = splitOnPlaceholder(tr("ollamaIntro"), "quickstart")
+
 	return (
 		<div className="flex flex-col gap-2">
 			<BaseUrlField
 				initialValue={ollamaBaseUrl}
-				label="Use custom base URL"
+				label={tr("baseUrlToggle")}
 				onChange={handleBaseUrlChange}
-				placeholder="Default: http://localhost:11434"
+				placeholder={formatString(tr, "defaultValue", { value: "http://localhost:11434" })}
 			/>
 
 			{ollamaBaseUrl && (
 				<ApiKeyField
-					helpText="Optional API key for authenticated Ollama instances or cloud services. Leave empty for local installations."
+					helpText={tr("ollamaApiKeyHelp")}
 					initialValue={savedApiKeyMask}
 					onChange={handleApiKeyChange}
-					placeholder="Enter API Key (optional)..."
+					placeholder={tr("ollamaApiKeyPlaceholder")}
 					providerName="Ollama"
 				/>
 			)}
 
 			{/* Model selection - use filterable picker */}
 			<label htmlFor="ollama-model-selection">
-				<span className="font-semibold">Model</span>
+				<span className="font-semibold">{tr("modelLabel")}</span>
 			</label>
 			<OllamaModelPicker
 				ollamaModels={ollamaModels}
@@ -127,17 +135,12 @@ export const OllamaProvider = ({ showModelOptions, isPopup, currentMode }: Ollam
 						modelInfo: { ...ollamaModelInfo, name: trimmedModelId },
 					}).catch((error) => console.error("Failed to update Ollama model selection:", error))
 				}}
-				placeholder={ollamaModels.length > 0 ? "Search and select a model..." : "e.g. llama3.1"}
+				placeholder={ollamaModels.length > 0 ? tr("modelSearchPlaceholder") : tr("ollamaModelPlaceholder")}
 				selectedModelId={selectedModel.modelId || ""}
 			/>
 
 			{/* Show status message based on model availability */}
-			{ollamaModels.length === 0 && (
-				<p className="text-sm mt-1 text-description italic">
-					Unable to fetch models from Ollama server. Please ensure Ollama is running and accessible, or enter the model
-					ID manually above.
-				</p>
-			)}
+			{ollamaModels.length === 0 && <p className="text-sm mt-1 text-description italic">{tr("ollamaModelsUnreachable")}</p>}
 
 			{/* Render only after the provider config RPC has resolved: the
 			    debounced input fires onChange for its initial value shortly
@@ -173,9 +176,9 @@ export const OllamaProvider = ({ showModelOptions, isPopup, currentMode }: Ollam
 							}).catch((error) => console.error("Failed to update Ollama context window:", error))
 						}
 					}}
-					placeholder={"Default: 32768"}
+					placeholder={tr("ollamaContextWindowPlaceholder")}
 					style={{ width: "100%" }}>
-					<span className="font-semibold">Model Context Window</span>
+					<span className="font-semibold">{tr("ollamaContextWindowLabel")}</span>
 				</DebouncedTextField>
 			)}
 
@@ -190,13 +193,11 @@ export const OllamaProvider = ({ showModelOptions, isPopup, currentMode }: Ollam
 								handleFieldChange("requestTimeoutMs", numValue)
 							}
 						}}
-						placeholder="Default: 30000 (30 seconds)"
+						placeholder={tr("ollamaRequestTimeoutPlaceholder")}
 						style={{ width: "100%" }}>
-						<span className="font-semibold">Request Timeout (ms)</span>
+						<span className="font-semibold">{tr("ollamaRequestTimeoutLabel")}</span>
 					</DebouncedTextField>
-					<p className="text-xs mt-0 text-description">
-						Maximum time in milliseconds to wait for API responses before timing out.
-					</p>
+					<p className="text-xs mt-0 text-description">{tr("ollamaRequestTimeoutHint")}</p>
 				</>
 			)}
 
@@ -206,15 +207,15 @@ export const OllamaProvider = ({ showModelOptions, isPopup, currentMode }: Ollam
 					marginTop: "5px",
 					color: "var(--vscode-descriptionForeground)",
 				}}>
-				Ollama allows you to run models locally on your computer. For instructions on how to get started, see their{" "}
+				{introBeforeQuickstart}
 				<VSCodeLink
 					href="https://github.com/ollama/ollama/blob/main/README.md"
 					style={{ display: "inline", fontSize: "inherit" }}>
-					quickstart guide.
-				</VSCodeLink>{" "}
+					{tr("ollamaQuickstartLink")}
+				</VSCodeLink>
+				{introAfterQuickstart}{" "}
 				<span style={{ color: "var(--vscode-errorForeground)" }}>
-					(<span style={{ fontWeight: 500 }}>Note:</span> Cline uses complex prompts, so behavior can vary across
-					models. Less capable models may not work as expected.)
+					(<span style={{ fontWeight: 500 }}>{tr("noteLabel")}</span> {tr("complexPromptNote")})
 				</span>
 			</p>
 		</div>

@@ -6,6 +6,8 @@ import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useProviderConfig } from "@/hooks/useProviderConfig"
 import { useProviderModelSelection } from "@/hooks/useProviderModelSelection"
 import { useProviderModels } from "@/hooks/useProviderModels"
+import { formatString, splitOnPlaceholder } from "@/i18n/strings"
+import { useTranslation } from "@/i18n/useTranslation"
 import { resolveModelThinkingOptions } from "@/utils/modelThinkingOptions"
 import { DebouncedTextField } from "../common/DebouncedTextField"
 import { ModelAutocomplete } from "../common/ModelAutocomplete"
@@ -34,6 +36,12 @@ interface LiteLlmProviderProps {
 
 export const LiteLlmProvider = ({ showModelOptions, isPopup, currentMode }: LiteLlmProviderProps) => {
 	const { remoteConfigSettings } = useExtensionState()
+	const tr = useTranslation("providers")
+
+	// Both notes end in a link; splitting on the placeholder keeps each language's link
+	// position and punctuation.
+	const [thinkingIntroBefore, thinkingIntroAfter] = splitOnPlaceholder(tr("liteLlmThinkingIntro"), "link")
+	const [introBefore, introAfter] = splitOnPlaceholder(tr("liteLlmIntro"), "quickstart")
 	const { models, defaultModelId, isLoading, isStale, error, refresh } = useProviderModels(LITELLM_PROVIDER_ID)
 	const { config, write, commitSelection } = useProviderConfig(LITELLM_PROVIDER_ID)
 	const { selectedModelId, selectedModelInfo, commitModelSelection } = useProviderModelSelection(
@@ -85,11 +93,11 @@ export const LiteLlmProvider = ({ showModelOptions, isPopup, currentMode }: Lite
 					disabled={remoteConfigSettings?.liteLlmBaseUrl !== undefined}
 					initialValue={config?.baseUrl || ""}
 					onChange={handleBaseUrlChange}
-					placeholder={"Default: http://localhost:4000"}
+					placeholder={formatString(tr, "defaultValue", { value: "http://localhost:4000" })}
 					style={{ width: "100%" }}
 					type="text">
 					<div className="flex items-center gap-2 mb-1">
-						<span style={{ fontWeight: 500 }}>Base URL (optional)</span>
+						<span style={{ fontWeight: 500 }}>{tr("liteLlmBaseUrlLabel")}</span>
 						{remoteConfigSettings?.liteLlmBaseUrl !== undefined && <LockIcon />}
 					</div>
 				</DebouncedTextField>
@@ -99,24 +107,23 @@ export const LiteLlmProvider = ({ showModelOptions, isPopup, currentMode }: Lite
 					disabled={remoteConfigSettings?.configuredApiKeys?.litellm}
 					initialValue={savedApiKeyMask}
 					onChange={handleApiKeyChange}
-					placeholder="Default: noop"
+					placeholder={formatString(tr, "defaultValue", { value: "noop" })}
 					style={{ width: "100%" }}
 					type="password">
 					<div className="flex items-center gap-2 mb-1">
-						<span style={{ fontWeight: 500 }}>API Key</span>
+						<span style={{ fontWeight: 500 }}>{tr("liteLlmApiKeyLabel")}</span>
 						{remoteConfigSettings?.configuredApiKeys?.litellm && <LockIcon />}
 					</div>
 				</DebouncedTextField>
 			</RemotelyConfiguredInputWrapper>
 			{showModelOptions && (
 				<>
-					{isStale && <div role="status">Model list may be stale for the current LiteLLM configuration.</div>}
+					{isStale && <div role="status">{tr("liteLlmListStale")}</div>}
 					{error && <div role="alert">{error}</div>}
 					<ModelAutocomplete
-						label="Model"
 						models={models}
 						onChange={handleModelChange}
-						placeholder="Search or enter a custom model ID..."
+						placeholder={tr("liteLlmModelPlaceholder")}
 						selectedModelId={selectedModelId}
 					/>
 					<VSCodeButton
@@ -124,10 +131,10 @@ export const LiteLlmProvider = ({ showModelOptions, isPopup, currentMode }: Lite
 						disabled={isLoading}
 						onClick={onRefreshModels}>
 						{isLoading ? (
-							"Loading..."
+							tr("loading")
 						) : (
 							<>
-								Refresh models <RefreshCwIcon className="ml-1" />
+								{tr("liteLlmRefreshModels")} <RefreshCwIcon className="ml-1" />
 							</>
 						)}
 					</VSCodeButton>
@@ -143,12 +150,13 @@ export const LiteLlmProvider = ({ showModelOptions, isPopup, currentMode }: Lite
 					marginTop: "5px",
 					color: "var(--vscode-descriptionForeground)",
 				}}>
-				Extended thinking is available for models such as Sonnet-4, o3-mini, Deepseek R1, etc. More info on{" "}
+				{thinkingIntroBefore}
 				<VSCodeLink
 					href="https://docs.litellm.ai/docs/reasoning_content"
 					style={{ display: "inline", fontSize: "inherit" }}>
-					thinking mode configuration
+					{tr("liteLlmThinkingLink")}
 				</VSCodeLink>
+				{thinkingIntroAfter}
 			</p>
 
 			<p
@@ -157,11 +165,11 @@ export const LiteLlmProvider = ({ showModelOptions, isPopup, currentMode }: Lite
 					marginTop: "5px",
 					color: "var(--vscode-descriptionForeground)",
 				}}>
-				LiteLLM provides a unified interface to access various LLM providers' models. See their{" "}
+				{introBefore}
 				<VSCodeLink href="https://docs.litellm.ai/docs/" style={{ display: "inline", fontSize: "inherit" }}>
-					quickstart guide
-				</VSCodeLink>{" "}
-				for more information.
+					{tr("liteLlmQuickstartLink")}
+				</VSCodeLink>
+				{introAfter}
 			</p>
 		</div>
 	)

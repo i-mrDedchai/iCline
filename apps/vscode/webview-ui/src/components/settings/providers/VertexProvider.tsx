@@ -7,6 +7,8 @@ import { useProviderConfig } from "@/hooks/useProviderConfig"
 import { useProviderModelSelection } from "@/hooks/useProviderModelSelection"
 import { useProviderModels } from "@/hooks/useProviderModels"
 import { useProviderUsageCostDisplay } from "@/hooks/useProviderUsageCostDisplay"
+import { splitOnPlaceholder } from "@/i18n/strings"
+import { useTranslation } from "@/i18n/useTranslation"
 import { resolveModelThinkingOptions } from "@/utils/modelThinkingOptions"
 import { DROPDOWN_Z_INDEX, DropdownContainer } from "../ApiOptions"
 import { DebouncedTextField } from "../common/DebouncedTextField"
@@ -32,6 +34,12 @@ const REGIONS = VertexData.regions
  */
 export const VertexProvider = ({ showModelOptions, isPopup, currentMode }: VertexProviderProps) => {
 	const { apiConfiguration, remoteConfigSettings } = useExtensionState()
+	const tr = useTranslation("providers")
+
+	// The setup sentence IS two links, so it is split on their placeholders and each
+	// language keeps its own order (and its own wording for the two steps).
+	const [setupIntroBefore, setupIntroAfterStep1] = splitOnPlaceholder(tr("vertexSetupIntro"), "step1")
+	const [setupIntroBetween, setupIntroAfter] = splitOnPlaceholder(setupIntroAfterStep1, "step2")
 	const { models: allVertexModels, defaultModelId } = useProviderModels("vertex")
 	const { config, write, commitSelection } = useProviderConfig("vertex")
 	const { selectedModel, selectedModelId, selectedModelInfo, commitModelSelection } = useProviderModelSelection(
@@ -100,10 +108,10 @@ export const VertexProvider = ({ showModelOptions, isPopup, currentMode }: Verte
 					disabled={remoteConfigSettings?.vertexProjectId !== undefined}
 					initialValue={vertexProjectId}
 					onChange={handleProjectIdChange}
-					placeholder="Enter Project ID..."
+					placeholder={tr("vertexProjectIdPlaceholder")}
 					style={{ width: "100%" }}>
 					<div className="flex items-center gap-2 mb-1">
-						<span style={{ fontWeight: 500 }}>Google Cloud Project ID</span>
+						<span style={{ fontWeight: 500 }}>{tr("vertexProjectIdLabel")}</span>
 						{remoteConfigSettings?.vertexProjectId !== undefined && <LockIcon />}
 					</div>
 				</DebouncedTextField>
@@ -115,7 +123,7 @@ export const VertexProvider = ({ showModelOptions, isPopup, currentMode }: Verte
 						className="flex items-center gap-2 mb-1"
 						style={{ opacity: remoteConfigSettings?.vertexRegion !== undefined ? 0.4 : 1 }}>
 						<label htmlFor="vertex-region-dropdown">
-							<span className="font-medium">Google Cloud Region</span>
+							<span className="font-medium">{tr("vertexRegionLabel")}</span>
 						</label>
 						{remoteConfigSettings?.vertexRegion !== undefined && <LockIcon />}
 					</div>
@@ -125,7 +133,7 @@ export const VertexProvider = ({ showModelOptions, isPopup, currentMode }: Verte
 						onChange={(e: any) => handleRegionChange(e.target.value)}
 						style={{ width: "100%" }}
 						value={vertexRegion}>
-						<VSCodeOption value="">Select a region...</VSCodeOption>
+						<VSCodeOption value="">{tr("vertexRegionPlaceholder")}</VSCodeOption>
 						{REGIONS.map((region) => (
 							<VSCodeOption key={region} value={region}>
 								{region}
@@ -141,23 +149,24 @@ export const VertexProvider = ({ showModelOptions, isPopup, currentMode }: Verte
 					marginTop: "5px",
 					color: "var(--vscode-descriptionForeground)",
 				}}>
-				To use Google Cloud Vertex AI, you need to
+				{setupIntroBefore}
 				<VSCodeLink
 					href="https://cloud.google.com/vertex-ai/generative-ai/docs/partner-models/use-claude#before_you_begin"
 					style={{ display: "inline", fontSize: "inherit" }}>
-					{"1) create a Google Cloud account › enable the Vertex AI API › enable the desired Claude models,"}
-				</VSCodeLink>{" "}
+					{tr("vertexSetupStep1")}
+				</VSCodeLink>
+				{setupIntroBetween}
 				<VSCodeLink
 					href="https://cloud.google.com/docs/authentication/provide-credentials-adc#google-idp"
 					style={{ display: "inline", fontSize: "inherit" }}>
-					{"2) install the Google Cloud CLI › configure Application Default Credentials."}
+					{tr("vertexSetupStep2")}
 				</VSCodeLink>
+				{setupIntroAfter}
 			</p>
 
 			{showModelOptions && (
 				<>
 					<ModelSelector
-						label="Model"
 						models={modelsToUse}
 						onChange={(e: any) => {
 							const modelId = e.target.value

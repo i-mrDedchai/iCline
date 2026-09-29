@@ -2,6 +2,8 @@ import type { ZenmuxApiProtocol } from "@shared/api"
 import { Mode } from "@shared/storage/types"
 import { VSCodeButton, VSCodeDropdown, VSCodeLink, VSCodeOption } from "@vscode/webview-ui-toolkit/react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
+import { formatString, splitOnPlaceholder } from "@/i18n/strings"
+import { useTranslation } from "@/i18n/useTranslation"
 import { AccountServiceClient } from "@/services/grpc-client"
 import { useZenmuxAccountInfo } from "../../ui/hooks/useZenmuxAccountInfo"
 import { AuthConnectionBadge } from "../common/AuthConnectionBadge"
@@ -18,6 +20,7 @@ interface ZenmuxProviderProps {
 
 const ZenmuxAccountDisplay = ({ apiKey, managementApiKey }: { apiKey?: string; managementApiKey?: string }) => {
 	const { paygBalance, subscription, isLoading } = useZenmuxAccountInfo(apiKey, managementApiKey)
+	const tr = useTranslation("providers")
 
 	if (isLoading || (!paygBalance && !subscription)) {
 		return null
@@ -25,11 +28,16 @@ const ZenmuxAccountDisplay = ({ apiKey, managementApiKey }: { apiKey?: string; m
 
 	return (
 		<div style={{ fontSize: "12px", color: "var(--vscode-descriptionForeground)", marginTop: 6 }}>
-			{paygBalance && <div>PAYG balance: ${paygBalance.totalCredits?.toFixed(2) ?? "—"} USD</div>}
+			{paygBalance && (
+				<div> {formatString(tr, "zenmuxPaygBalance", { amount: `$${paygBalance.totalCredits?.toFixed(2) ?? "—"}` })}</div>
+			)}
 			{subscription && (
 				<div>
-					Subscription ({subscription.tier}): {subscription.remainingFlows?.toFixed(1)} / {subscription.maxFlows} Flows
-					remaining (5h)
+					{formatString(tr, "zenmuxSubscriptionUsage", {
+						max: subscription.maxFlows ?? "",
+						remaining: subscription.remainingFlows?.toFixed(1) ?? "",
+						tier: subscription.tier ?? "",
+					})}
 				</div>
 			)}
 		</div>
@@ -38,8 +46,14 @@ const ZenmuxAccountDisplay = ({ apiKey, managementApiKey }: { apiKey?: string; m
 
 export const ZenmuxProvider = ({ showModelOptions, isPopup, currentMode }: ZenmuxProviderProps) => {
 	const { apiConfiguration } = useExtensionState()
+	const tr = useTranslation("providers")
 	const { handleFieldChange } = useApiConfigurationHandlers()
 	const hasZenmuxApiKey = !!apiConfiguration?.zenmuxApiKey?.trim()
+
+	// The intro sentence names both key prefixes inline, so it is split twice and the
+	// `<code>` elements land wherever the translation put their placeholders.
+	const [introBeforePayg, introAfterPayg] = splitOnPlaceholder(tr("zenmuxIntro"), "payg")
+	const [introBetweenPrefixes, introAfterSubscription] = splitOnPlaceholder(introAfterPayg, "sub")
 
 	const openZenmux = async (page: string) => {
 		try {
@@ -55,11 +69,11 @@ export const ZenmuxProvider = ({ showModelOptions, isPopup, currentMode }: Zenmu
 				detail={
 					hasZenmuxApiKey
 						? apiConfiguration?.zenmuxApiKey?.startsWith("sk-ss-v1-")
-							? "Builder Subscription key"
-							: "Pay As You Go key"
-						: "Create a key on zenmux.ai after signing in"
+							? tr("zenmuxDetailSubscription")
+							: tr("zenmuxDetailPayg")
+						: tr("zenmuxDetailNoKey")
 				}
-				label={hasZenmuxApiKey ? "Connected — ZenMux API key" : "Not connected — ZenMux API key required"}
+				label={hasZenmuxApiKey ? tr("zenmuxBadgeConnected") : tr("zenmuxBadgeDisconnected")}
 				variant={hasZenmuxApiKey ? "oauth" : "disconnected"}
 			/>
 			<p
@@ -68,42 +82,45 @@ export const ZenmuxProvider = ({ showModelOptions, isPopup, currentMode }: Zenmu
 					color: "var(--vscode-descriptionForeground)",
 					marginBottom: 10,
 				}}>
-				Sign in with Email, GitHub, or Google on ZenMux, then create an API key for Pay As You Go (<code>sk-ai-v1-</code>)
-				or Builder subscription (<code>sk-ss-v1-</code>).{" "}
-				<VSCodeLink href="https://docs.zenmux.ai/guide/quickstart">Docs</VSCodeLink>
+				{introBeforePayg}
+				<code>sk-ai-v1-</code>
+				{introBetweenPrefixes}
+				<code>sk-ss-v1-</code>
+				{introAfterSubscription}{" "}
+				<VSCodeLink href="https://docs.zenmux.ai/guide/quickstart">{tr("zenmuxDocsLink")}</VSCodeLink>
 			</p>
 
 			<div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
 				<VSCodeButton appearance="secondary" onClick={() => openZenmux("login")}>
-					Sign in to ZenMux
+					{tr("zenmuxSignIn")}
 				</VSCodeButton>
 				<VSCodeButton appearance="secondary" onClick={() => openZenmux("payg")}>
-					PAYG API Key
+					{tr("zenmuxPaygKey")}
 				</VSCodeButton>
 				<VSCodeButton appearance="secondary" onClick={() => openZenmux("subscription")}>
-					Subscription API Key
+					{tr("zenmuxSubscriptionKey")}
 				</VSCodeButton>
 				<VSCodeButton appearance="secondary" onClick={() => openZenmux("management")}>
-					Management API Key
+					{tr("zenmuxManagementKey")}
 				</VSCodeButton>
 			</div>
 
 			<DebouncedTextField
 				initialValue={apiConfiguration?.zenmuxApiKey || ""}
 				onChange={(value) => handleFieldChange("zenmuxApiKey", value)}
-				placeholder="sk-ai-v1-... or sk-ss-v1-..."
+				placeholder={tr("zenmuxApiKeyPlaceholder")}
 				style={{ width: "100%" }}
 				type="password">
-				<span style={{ fontWeight: 500 }}>ZenMux API Key</span>
+				<span style={{ fontWeight: 500 }}>{tr("zenmuxApiKeyLabel")}</span>
 			</DebouncedTextField>
 
 			<DebouncedTextField
 				initialValue={apiConfiguration?.zenmuxManagementApiKey || ""}
 				onChange={(value) => handleFieldChange("zenmuxManagementApiKey", value)}
-				placeholder="Optional — for balance & subscription info"
+				placeholder={tr("zenmuxManagementKeyPlaceholder")}
 				style={{ width: "100%", marginTop: 10 }}
 				type="password">
-				<span style={{ fontWeight: 500 }}>Management API Key (optional)</span>
+				<span style={{ fontWeight: 500 }}>{tr("zenmuxManagementKeyLabel")}</span>
 			</DebouncedTextField>
 
 			{(apiConfiguration?.zenmuxApiKey || apiConfiguration?.zenmuxManagementApiKey) && (
@@ -115,28 +132,27 @@ export const ZenmuxProvider = ({ showModelOptions, isPopup, currentMode }: Zenmu
 
 			<div style={{ marginTop: 12 }}>
 				<label>
-					<span style={{ fontWeight: 500 }}>API Protocol</span>
+					<span style={{ fontWeight: 500 }}>{tr("zenmuxApiProtocolLabel")}</span>
 				</label>
 				<DropdownContainer className="dropdown-container" zIndex={formDropdownZIndex(0)}>
 					<VSCodeDropdown
 						onChange={(e: any) => handleFieldChange("zenmuxApiProtocol", e.target.value as ZenmuxApiProtocol)}
 						style={{ width: "100%", marginTop: 3 }}
 						value={apiConfiguration?.zenmuxApiProtocol || "openai"}>
-						<VSCodeOption value="openai">OpenAI Chat Completions (recommended)</VSCodeOption>
-						<VSCodeOption value="anthropic">Anthropic Messages</VSCodeOption>
-						<VSCodeOption value="openai-responses">OpenAI Responses</VSCodeOption>
-						<VSCodeOption value="gemini">Google Gemini / Vertex</VSCodeOption>
+						<VSCodeOption value="openai">{tr("zenmuxProtocolOpenAi")}</VSCodeOption>
+						<VSCodeOption value="anthropic">{tr("zenmuxProtocolAnthropic")}</VSCodeOption>
+						<VSCodeOption value="openai-responses">{tr("zenmuxProtocolOpenAiResponses")}</VSCodeOption>
+						<VSCodeOption value="gemini">{tr("zenmuxProtocolGemini")}</VSCodeOption>
 					</VSCodeDropdown>
 				</DropdownContainer>
 				<p style={{ fontSize: "12px", color: "var(--vscode-descriptionForeground)", marginTop: 5 }}>
-					ZenMux supports cross-protocol routing — OpenAI protocol can call any model. Use Anthropic/Gemini native
-					protocols when your tool chain requires them.
+					{tr("zenmuxApiProtocolHint")}
 				</p>
 			</div>
 
 			<div style={{ marginTop: 8 }}>
 				<label>
-					<span style={{ fontWeight: 500 }}>Provider routing</span>
+					<span style={{ fontWeight: 500 }}>{tr("zenmuxRoutingLabel")}</span>
 				</label>
 				<DropdownContainer className="dropdown-container" zIndex={formDropdownZIndex(1)}>
 					<VSCodeDropdown
@@ -145,10 +161,10 @@ export const ZenmuxProvider = ({ showModelOptions, isPopup, currentMode }: Zenmu
 						}
 						style={{ width: "100%", marginTop: 3 }}
 						value={apiConfiguration?.zenmuxProviderRouting || "default"}>
-						<VSCodeOption value="default">Default (ZenMux intelligent routing)</VSCodeOption>
-						<VSCodeOption value="latency">Lowest latency</VSCodeOption>
-						<VSCodeOption value="price">Lowest price</VSCodeOption>
-						<VSCodeOption value="throughput">Highest throughput</VSCodeOption>
+						<VSCodeOption value="default">{tr("zenmuxRoutingDefault")}</VSCodeOption>
+						<VSCodeOption value="latency">{tr("zenmuxRoutingLatency")}</VSCodeOption>
+						<VSCodeOption value="price">{tr("zenmuxRoutingPrice")}</VSCodeOption>
+						<VSCodeOption value="throughput">{tr("zenmuxRoutingThroughput")}</VSCodeOption>
 					</VSCodeDropdown>
 				</DropdownContainer>
 			</div>

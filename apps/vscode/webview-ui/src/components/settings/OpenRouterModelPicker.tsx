@@ -10,6 +10,7 @@ import styled from "styled-components"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useDynamicProviderSelection } from "@/hooks/useDynamicProviderSelection"
 import { useProviderConfig } from "@/hooks/useProviderConfig"
+import { useTranslation } from "@/i18n/useTranslation"
 import { StateServiceClient } from "@/services/grpc-client"
 import { resolveModelThinkingOptions } from "@/utils/modelThinkingOptions"
 import { highlight } from "../history/HistoryView"
@@ -50,6 +51,7 @@ const OpenRouterModelPicker: React.FC<OpenRouterModelPickerProps> = ({ isPopup, 
 	const { handleModeFieldsChange, handleFieldChange } = useApiConfigurationHandlers()
 	const { commitSelection } = useProviderConfig("openrouter")
 	const { apiConfiguration, favoritedModelIds, openRouterModels, refreshOpenRouterModels } = useExtensionState()
+	const tr = useTranslation("providers")
 	const modeFields = getModeSpecificFields(apiConfiguration, currentMode)
 	const [searchTerm, setSearchTerm] = useState(modeFields.openRouterModelId || openRouterDefaultModelId)
 	const [isDropdownVisible, setIsDropdownVisible] = useState(false)
@@ -230,7 +232,7 @@ const OpenRouterModelPicker: React.FC<OpenRouterModelPickerProps> = ({ isPopup, 
 			</style>
 			<div style={{ display: "flex", flexDirection: "column" }}>
 				<label htmlFor="model-search">
-					<span style={{ fontWeight: 500 }}>Model</span>
+					<span style={{ fontWeight: 500 }}>{tr("modelLabel")}</span>
 				</label>
 
 				<DropdownWrapper ref={dropdownRef}>
@@ -247,7 +249,7 @@ const OpenRouterModelPicker: React.FC<OpenRouterModelPickerProps> = ({ isPopup, 
 							setIsDropdownVisible(true)
 						}}
 						onKeyDown={handleKeyDown}
-						placeholder="Search and select a model..."
+						placeholder={tr("modelSearchPlaceholder")}
 						role="combobox"
 						style={{
 							width: "100%",
@@ -257,7 +259,7 @@ const OpenRouterModelPicker: React.FC<OpenRouterModelPickerProps> = ({ isPopup, 
 						value={searchTerm}>
 						{searchTerm && (
 							<div
-								aria-label="Clear search"
+								aria-label={tr("clearSearch")}
 								className="input-icon-button codicon codicon-close"
 								onClick={() => {
 									setSearchTerm("")
