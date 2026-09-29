@@ -137,6 +137,59 @@ const CONTRACTS = [
 		why: "the About tab's Thai heading ships",
 	},
 
+	// --- fix.47: the whole api-config tab speaks the user's language — every provider
+	// form, and the shared fields they are built from. Each marker is a string that only
+	// exists in this round's tables, and each one keeps a placeholder where the sentence
+	// has one, so a translation that drops the marker is caught in the shipped bytes.
+	{
+		round: "fix.47",
+		bundle: "webview",
+		marker: "API Key ของ {provider}",
+		why: "the shared API-key label is translated and still carries its {provider} placeholder",
+	},
+	{
+		round: "fix.47",
+		bundle: "webview",
+		marker: "ความหน่วงต่ำสุด",
+		why: "the ZenMux provider-routing dropdown ships translated",
+	},
+	{
+		round: "fix.47",
+		bundle: "webview",
+		marker: "ベース推論モデル",
+		why: "Japanese ships for the Bedrock form, not just the tabs translated in fix.46",
+	},
+	{
+		round: "fix.47",
+		bundle: "webview",
+		marker: "编排模式",
+		why: "Simplified Chinese ships for the SAP AI Core form",
+	},
+	{
+		round: "fix.47",
+		bundle: "webview",
+		marker: "หน้าต่างบริบทของโมเดล",
+		why: "Thai ships for the Ollama form's context-window field",
+	},
+	{
+		round: "fix.47",
+		bundle: "webview",
+		marker: "ตั้งค่า {field} แล้ว",
+		why: "a sentence that names a field by its own translated label keeps its placeholder and its Thai translation",
+	},
+	{
+		round: "fix.47",
+		bundle: "webview",
+		marker: "Default: {value}",
+		why: "the shared `Default: {value}` template is what the base-URL/model placeholders compose from",
+	},
+	{
+		round: "fix.47",
+		bundle: "webview",
+		marker: "LM Studio allows you to run models locally on your computer. For instructions on how to get started, see their {quickstart}",
+		why: "a linked sentence stays one key with its {quickstart} placeholder",
+	},
+
 	// --- fix.44: the Base URL hint stops advertising someone else's gateway ---
 	{
 		round: "fix.44",
