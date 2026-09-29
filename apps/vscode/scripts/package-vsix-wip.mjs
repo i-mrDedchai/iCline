@@ -2,6 +2,11 @@
 /**
  * WIP VSIX packager for local smoke tests (maintainer tool, committed).
  * Optional: --fix N  → {baseVersion}-fix.N (baseVersion has any prior -fix.* stripped)
+ *           --no-verify → skip the contract gate (env ICLINE_SKIP_VERIFY=1 also works)
+ *
+ * After vsce succeeds the pack is gated on scripts/verify-vsix-contracts.mjs:
+ * a non-zero exit fails the pack, so a VSIX that dropped an earlier round's
+ * contract never leaves dist/ unnoticed.
  *
  * Mutates package.json and webview-ui/src/icline/build-metadata.ts only while
  * vsce runs. Sidecar backups are written first so a killed pack (Ctrl+C /
@@ -28,6 +33,8 @@ const pkgBakPath = path.join(extRoot, ".package.json.wip.bak")
 const metaPath = path.join(extRoot, "webview-ui", "src", "icline", "build-metadata.ts")
 const metaBakPath = path.join(extRoot, ".build-metadata.wip.bak")
 const vsceJs = path.join(extRoot, "node_modules", "@vscode", "vsce", "vsce")
+const repoRoot = path.resolve(extRoot, "..", "..")
+const verifyScript = path.join(repoRoot, "scripts", "verify-vsix-contracts.mjs")
 
 function recoverStaleBackup(bakPath, targetPath) {
 	if (!fs.existsSync(bakPath)) {
@@ -69,7 +76,9 @@ if (!fs.existsSync(vsceJs)) {
 	process.exit(1)
 }
 
-const fixN = parseFixNumber(process.argv.slice(2))
+const argv = process.argv.slice(2)
+const skipVerify = argv.includes("--no-verify") || process.env.ICLINE_SKIP_VERIFY === "1"
+const fixN = parseFixNumber(argv)
 // Strip any accidental -fix.* suffix left on package.json from a failed pack.
 const baseVersion = String(pkg.version || "0.0.0").replace(/(-fix\.\d+)+$/i, "")
 const packVersion = fixN ? `${baseVersion}-fix.${fixN}` : baseVersion
@@ -92,6 +101,35 @@ function formatBuiltAt() {
  * restored after vsce by restoreAll, so the committed copy stays at whatever
  * the last sync:docs run wrote.
  */
+/**
+ * Run scripts/verify-vsix-contracts.mjs against the artifact just packed.
+ *
+ * Called BEFORE restoreAll() on purpose: the stamped build metadata is what puts
+ * the `dev build N · fix.M` label into the freshly built webview bundle, so the
+ * byte comparison inside the checker is only meaningful while the stamp is in
+ * place. Restore first and every byte check degrades to "skipped — labels differ".
+ */
+function runContractGate(vsixPath) {
+	if (skipVerify) {
+		console.warn("\nContract gate skipped (--no-verify)")
+		return 0
+	}
+	if (!fs.existsSync(verifyScript)) {
+		console.error(`\nContract gate missing at ${verifyScript} — pass --no-verify to pack anyway`)
+		return 1
+	}
+	console.log("\nRunning VSIX contract gate…")
+	const result = spawnSync(process.execPath, [verifyScript, "--vsix", vsixPath, "--local", extRoot], {
+		stdio: "inherit",
+		cwd: repoRoot,
+		env: process.env,
+	})
+	if (result.status !== 0) {
+		console.error(`\nContract gate failed with exit ${result.status ?? "?"} — the VSIX is on disk but is not shippable`)
+	}
+	return result.status ?? 1
+}
+
 function stampBuildMetadata() {
 	if (!fs.existsSync(metaPath)) {
 		return
@@ -172,6 +210,11 @@ try {
 		{ stdio: "inherit", cwd: extRoot, env: process.env },
 	)
 	exitCode = result.status ?? 1
+	// Gate the pack on the contracts the artifact must still carry, while the fix
+	// label is still stamped (see runContractGate).
+	if (exitCode === 0) {
+		exitCode = runContractGate(out)
+	}
 } finally {
 	restoreAll()
 }

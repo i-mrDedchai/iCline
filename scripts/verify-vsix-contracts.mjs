@@ -58,6 +58,10 @@ const WEBVIEW_BUNDLE = "extension/webview-ui/build/assets/index.js"
  * present — rather than function names, which esbuild mangles (`verify at the
  * SDK dist instead` is the note every round wrote by hand).
  *
+ * Add `absent: true` for a round whose whole point was a *removal* (fix.44
+ * dropped a third-party gateway from the Base URL hint): the marker must then be
+ * gone from the bundle, so copy a later round deleted cannot creep back in.
+ *
  * `round` names the build that introduced the contract, and every entry must
  * hold in the *current* build — so `--round fix.42` asks "is what fix.42 added
  * still there", not "did fix.42 contain this exact string". Wording that a later
@@ -68,6 +72,15 @@ const WEBVIEW_BUNDLE = "extension/webview-ui/build/assets/index.js"
  * left failing: a table with permanent noise stops being read.
  */
 const CONTRACTS = [
+	// --- fix.44: the Base URL hint stops advertising someone else's gateway ---
+	{
+		round: "fix.44",
+		bundle: "webview",
+		marker: "https://cleanapis.com/v1",
+		absent: true,
+		why: "the placeholder shows one generic example, not a named gateway",
+	},
+
 	// --- fix.43: the custom-provider card is usable and lists its own models ---
 	{ round: "fix.43", bundle: "webview", marker: '"data-testid":"custom-provider-manager"', why: "the card mounts" },
 	{
@@ -425,7 +438,13 @@ function run(options) {
 				add(contract.round, false, contract.marker, `${contract.bundle} bundle missing`)
 				continue
 			}
-			add(contract.round, haystack.includes(contract.marker), contract.marker, `${contract.bundle} — ${contract.why}`)
+			const present = haystack.includes(contract.marker)
+			add(
+				contract.round,
+				contract.absent ? !present : present,
+				`${contract.absent ? "absent: " : ""}${contract.marker}`,
+				`${contract.bundle} — ${contract.why}`,
+			)
 		}
 
 		const failed = checks.filter((check) => !check.ok)
