@@ -190,6 +190,46 @@ const CONTRACTS = [
 		why: "Japanese ships for the welcome hero, not just Settings",
 	},
 
+	// --- fix.49a: the Customize modal (Rules / Hooks / Skills), the MCP server
+	// surfaces and the full history view speak the user's language. One marker per
+	// surface, each a string that only exists in this round's tables.
+	{
+		round: "fix.49a",
+		bundle: "webview",
+		marker: "กฎช่วยให้คุณให้แนวทางระดับระบบแก่ Cline",
+		why: "the Rules tab intro ships translated (Thai)",
+	},
+	{
+		round: "fix.49a",
+		bundle: "webview",
+		marker: "การเปิด/ปิดฮุกยังไม่รองรับบน Windows",
+		why: "the Hooks Windows banner ships translated",
+	},
+	{
+		round: "fix.49a",
+		bundle: "webview",
+		marker: "เพิ่ม remote MCP server ด้วยการใส่ชื่อและ URL endpoint",
+		why: "the add-remote-server intro ships translated",
+	},
+	{
+		round: "fix.49a",
+		bundle: "webview",
+		marker: "รีสตาร์ทเซิร์ฟเวอร์",
+		why: "the MCP server row actions ship translated",
+	},
+	{
+		round: "fix.49a",
+		bundle: "webview",
+		marker: "ลบประวัติทั้งหมด",
+		why: "the full history view footer ships translated",
+	},
+	{
+		round: "fix.49a",
+		bundle: "webview",
+		marker: "フックファイルが存在すれば実行されます",
+		why: "Japanese ships for the Hooks platform note, not just Settings",
+	},
+
 	// --- fix.47: the whole api-config tab speaks the user's language — every provider
 	// form, and the shared fields they are built from. Each marker is a string that only
 	// exists in this round's tables, and each one keeps a placeholder where the sentence

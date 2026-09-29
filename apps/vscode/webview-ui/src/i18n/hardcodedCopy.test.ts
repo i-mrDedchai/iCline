@@ -103,6 +103,18 @@ const MIGRATED = [
 	"components/chat/auto-approve-menu/AutoApproveBar.tsx",
 	"components/chat/auto-approve-menu/AutoApproveModal.tsx",
 	"components/chat/auto-approve-menu/AutoApproveMenuItem.tsx",
+	// fix.49a: the Customize modal (Rules / Hooks / Skills) plus the MCP server
+	// surfaces and the full history view with its row items — one screen each.
+	"components/cline-rules/ClineRulesToggleModal.tsx",
+	"components/cline-rules/NewRuleRow.tsx",
+	"components/cline-rules/RuleRow.tsx",
+	"components/cline-rules/HookRow.tsx",
+	"components/cline-rules/RulesToggleList.tsx",
+	"components/mcp/chat-display/McpDisplayModeDropdown.tsx",
+	"components/mcp/configuration/tabs/add-server/AddRemoteServerForm.tsx",
+	"components/mcp/configuration/tabs/installed/server-row/ServerRow.tsx",
+	"components/history/HistoryView.tsx",
+	"components/history/HistoryViewItem.tsx",
 ]
 
 /**
@@ -144,12 +156,13 @@ const LITERAL_ATTRIBUTE = /\b(title|placeholder|aria-label|label|helpText)=(["']
 const LOOKS_LIKE_COPY = /[A-Za-z]{2}/
 /**
  * A one-token text node that is an identifier, not copy: a URL, a key prefix, a model
- * id or a number (`https://api.sakana.ai/v1`, `sk-ai-v1-`, `llama3.1`, `32768`).
- * Provider forms render these right beside their prose, and translating one would be a
- * bug — a translated key prefix cannot work. Requiring a digit, dot or slash is what
- * keeps single-word *labels* (`Retry`, `Model`, `Note:`) inside the net.
+ * id, a number, or an example value shown as a placeholder (`https://api.sakana.ai/v1`,
+ * `sk-ai-v1-`, `llama3.1`, `32768`, `mcp-server`). Provider and server forms render
+ * these right beside their prose, and translating one would be a bug — a translated
+ * key prefix or example slug cannot work. Requiring a digit, dot, slash or dash is
+ * what keeps single-word *labels* (`Retry`, `Model`, `Note:`) inside the net.
  */
-const LOOKS_LIKE_IDENTIFIER = /^[A-Za-z0-9._:/#&=@+%-]*[0-9./][A-Za-z0-9._:/#&=@+%-]*$/
+const LOOKS_LIKE_IDENTIFIER = /^[A-Za-z0-9._:/#&=@+%-]*[0-9./-][A-Za-z0-9._:/#&=@+%-]*$/
 /**
  * The two heuristics that keep TypeScript out of a text scan, both pinned by the
  * `scan itself` test below:
@@ -181,6 +194,13 @@ function violations(file: string): string[] {
 		}
 	}
 	for (const match of source.match(LITERAL_ATTRIBUTE) ?? []) {
+		// A placeholder whose value is an identifier-shaped example (`mcp-server`, a
+		// sample URL) is fixture data rendered as a hint, not copy — translating it
+		// would break the example it demonstrates.
+		const value = match.slice(match.indexOf("=") + 2, -1)
+		if (match.startsWith("placeholder") && LOOKS_LIKE_IDENTIFIER.test(value)) {
+			continue
+		}
 		found.push(`attribute: ${match}`)
 	}
 	return found
