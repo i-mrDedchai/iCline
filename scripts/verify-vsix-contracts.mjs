@@ -31,6 +31,12 @@
  * Exit codes: 0 all checks passed · 1 a check failed · 2 the run could not
  * happen (bad arguments, no such build) — so it can gate a pack.
  *
+ * Besides the contract table it checks the archive's shape (both bundles present,
+ * no pack litter), the version label baked into the webview, the bundles' bytes
+ * against the checkout that packed them, and that the project's localization files
+ * (package.nls*.json, l10n bundles) all shipped and every `%key%` the manifest uses
+ * resolves.
+ *
  * Auditing a build from an earlier round: pass --no-local, or the byte check
  * compares that round's bundles against the current checkout and reports the
  * (expected) difference as a failure. The byte check also skips itself when the
@@ -72,6 +78,20 @@ const WEBVIEW_BUNDLE = "extension/webview-ui/build/assets/index.js"
  * left failing: a table with permanent noise stops being read.
  */
 const CONTRACTS = [
+	// --- fix.45: the General tab renders in the user's language ---
+	{
+		round: "fix.45",
+		bundle: "webview",
+		marker: "The language Cline uses for its replies and for this interface.",
+		why: "the Preferred Language hint names both things the setting drives",
+	},
+	{
+		round: "fix.45",
+		bundle: "webview",
+		marker: "อนุญาตให้ส่งข้อมูลการใช้งานและรายงานข้อผิดพลาด",
+		why: "the General tab's Thai copy actually ships (the setting changes the UI, not just the model's replies)",
+	},
+
 	// --- fix.44: the Base URL hint stops advertising someone else's gateway ---
 	{
 		round: "fix.44",
@@ -331,7 +351,8 @@ function run(options) {
 		const manifestPath = join(temp, "extension", "package.json")
 		const hostPath = join(temp, HOST_BUNDLE)
 		const webviewPath = join(temp, WEBVIEW_BUNDLE)
-		const version = existsSync(manifestPath) ? JSON.parse(readFileSync(manifestPath, "utf8")).version : undefined
+		const manifest = existsSync(manifestPath) ? JSON.parse(readFileSync(manifestPath, "utf8")) : undefined
+		const version = manifest?.version
 		// Walk the whole archive (the two VSIX root entries included), so the entry
 		// count matches what `vsce` reports for the same build.
 		const files = walk(temp)
@@ -357,6 +378,71 @@ function run(options) {
 			"no pack litter (.wip.bak / .icline-tmp)",
 			litter.length === 0 ? `${files.length} entries` : litter.map((f) => relative(temp, f)).join(", "),
 		)
+
+		// --- language bundles -----------------------------------------------
+		// The manifest localizes through `%key%` placeholders that VS Code resolves from
+		// package.nls.json (default) and package.nls.<lang>.json (one file per language),
+		// and the host localizes through l10n bundles. A key with no default entry ships
+		// the literal `%extension.displayName%` to the Marketplace, and a missing file or
+		// missing translation silently falls back — none of which a smoke run can see. So
+		// every localization file in the checkout that produced the pack must be inside
+		// the archive, and every placeholder the packed manifest uses must resolve.
+		const nlsFiles = existsSync(localRoot)
+			? readdirSync(localRoot).filter((name) => /^package\.nls(\.[\w-]+)?\.json$/.test(name))
+			: []
+		const packedNls = {}
+		for (const name of nlsFiles) {
+			const packedPath = join(temp, "extension", name)
+			const present = existsSync(packedPath)
+			add(
+				"language bundles",
+				present,
+				name,
+				present ? "shipped" : `missing from the archive (${nlsFiles.length} in the checkout)`,
+			)
+			if (!present) {
+				continue
+			}
+			try {
+				packedNls[name] = JSON.parse(readFileSync(packedPath, "utf8"))
+			} catch (error) {
+				add("language bundles", false, `${name} parses`, error.message)
+			}
+		}
+		// The package's own l10n bundles, whatever layout they use (VS Code accepts both
+		// `l10n/bundle.l10n.<locale>.json` and a folder per locale) — derived from the
+		// checkout so the check cannot pin a layout the project never agreed on.
+		const l10nRoot = join(localRoot, "l10n")
+		const l10nBundles = existsSync(l10nRoot) ? walk(l10nRoot).map((file) => relative(localRoot, file)) : []
+		for (const bundle of l10nBundles) {
+			add(
+				"language bundles",
+				existsSync(join(temp, "extension", bundle)),
+				bundle,
+				`${l10nBundles.length} host bundle(s) in the checkout`,
+			)
+		}
+		if (manifest && packedNls["package.nls.json"]) {
+			const referenced = [...new Set([...JSON.stringify(manifest).matchAll(/"%([\w.]+)%"/g)].map((match) => match[1]))]
+			const unresolved = referenced.filter((key) => !(key in packedNls["package.nls.json"]))
+			add(
+				"language bundles",
+				unresolved.length === 0,
+				"every %key% the manifest uses resolves",
+				referenced.length === 0
+					? "the manifest uses no localized keys"
+					: unresolved.length === 0
+						? `${referenced.length} key(s): ${referenced.join(", ")}`
+						: `unresolved: ${unresolved.join(", ")}`,
+			)
+			const unused = Object.keys(packedNls["package.nls.json"]).filter((key) => !referenced.includes(key))
+			add(
+				"language bundles",
+				true,
+				"no key sits unused in package.nls.json",
+				unused.length === 0 ? "every key is referenced" : `unused (harmless, i18n round removes them): ${unused.join(", ")}`,
+			)
+		}
 
 		// --- version label --------------------------------------------------
 		// Read before the byte check: whether the two builds are even comparable
