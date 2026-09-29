@@ -92,6 +92,51 @@ const CONTRACTS = [
 		why: "the General tab's Thai copy actually ships (the setting changes the UI, not just the model's replies)",
 	},
 
+	// --- fix.46: Settings, the welcome headings and the Quick Start cards render in
+	// the user's language, and the four locales are real tables rather than labels ---
+	{
+		round: "fix.46",
+		bundle: "webview",
+		marker: "เริ่มไว [Starts] กับ iCline",
+		why: "the welcome heading ships translated and keeps the `[ ]` emphasis the component styles",
+	},
+	{
+		round: "fix.46",
+		bundle: "webview",
+		marker: "แก้ไข prompt สำหรับ {task}",
+		why: "the Quick Start popover's aria-label is translated and still carries its {task} placeholder",
+	},
+	{
+		round: "fix.46",
+		bundle: "webview",
+		marker: "บีบอัดอัตโนมัติ",
+		why: "the Features tab's Thai copy ships (the tab moved off hardcoded English)",
+	},
+	{
+		round: "fix.46",
+		bundle: "webview",
+		marker: "自動圧縮",
+		why: "Japanese is a real table, not a language the picker offers and the app ignores",
+	},
+	{
+		round: "fix.46",
+		bundle: "webview",
+		marker: "指标导出器",
+		why: "Simplified Chinese ships too — the Remote Config tab is the third locale's proof",
+	},
+	{
+		round: "fix.46",
+		bundle: "webview",
+		marker: "iCline is a {standalone} VS Code extension based on Cline.",
+		why: "the About sentence keeps its inline `{standalone}` marker so each language can place the emphasised word",
+	},
+	{
+		round: "fix.46",
+		bundle: "webview",
+		marker: "จุดเด่นของ iCline",
+		why: "the About tab's Thai heading ships",
+	},
+
 	// --- fix.44: the Base URL hint stops advertising someone else's gateway ---
 	{
 		round: "fix.44",
