@@ -29,6 +29,23 @@ vi.mock("@/services/grpc-client", () => ({
 	},
 }))
 
+// fix.48: `useTranslation` reads the locale from `ExtensionStateContext`, which
+// this spec never provides. Mock the hook so the component renders the English
+// source (the same values the assertions below were written against) — the
+// locale tables themselves are pinned by `src/i18n/i18n.test.ts`.
+vi.mock("@/i18n/useTranslation", () => ({
+	useTranslation: () => (key: string) => key,
+}))
+vi.mock("@/i18n/strings", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("@/i18n/strings")>()
+	return {
+		...actual,
+		formatString: (_tr: (key: string) => string, key: string, values: Record<string, string | number>) =>
+			actual.formatString(((k: string) => k) as never, key as never, values),
+		splitOnPlaceholder: actual.splitOnPlaceholder,
+	}
+})
+
 function fillField(testId: string, value: string) {
 	fireEvent.change(screen.getByTestId(testId), { target: { value } })
 }

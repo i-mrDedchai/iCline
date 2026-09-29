@@ -36,6 +36,14 @@ const MIGRATED = [
 	"components/settings/VercelModelPicker.tsx",
 	"components/settings/ZenmuxModelPicker.tsx",
 	"components/settings/providers/OcaModelPicker.tsx",
+	// The settings shell itself: the rail, the view header, the stats and the provider
+	// selector are one screen with the tabs they switch between.
+	"components/common/ViewHeader.tsx",
+	"components/settings/ApiOptions.tsx",
+	"components/settings/CustomProviderManager.tsx",
+	"components/settings/ProviderStatsCard.tsx",
+	"components/settings/SettingsView.tsx",
+	"components/settings/providers/OcaProvider.tsx",
 	"components/settings/common/ApiKeyField.tsx",
 	"components/settings/common/BaseUrlField.tsx",
 	"components/settings/common/ModelAutocomplete.tsx",
@@ -83,10 +91,18 @@ const MIGRATED = [
 	"components/common/ReasoningEffortNotice.tsx",
 	"components/settings/ReasoningEffortSelector.tsx",
 	// The welcome screen: the two mode headings live here, the cards and their
-	// popover in `icline/`.
+	// popover in `icline/`. fix.48 adds the hero, the history preview, the chat
+	// composer and the auto-approve bar + modal — one screen with its footer.
 	"components/welcome/SuggestedTasks.tsx",
+	"components/welcome/HomeHeader.tsx",
 	"components/welcome/icline/IclineQuickStartCard.tsx",
 	"components/welcome/icline/QuickStartPromptPopover.tsx",
+	"components/history/HistoryPreview.tsx",
+	"components/chat/ChatView.tsx",
+	"components/chat/ChatTextArea.tsx",
+	"components/chat/auto-approve-menu/AutoApproveBar.tsx",
+	"components/chat/auto-approve-menu/AutoApproveModal.tsx",
+	"components/chat/auto-approve-menu/AutoApproveMenuItem.tsx",
 ]
 
 /**

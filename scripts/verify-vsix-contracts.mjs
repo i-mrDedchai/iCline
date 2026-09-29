@@ -137,6 +137,59 @@ const CONTRACTS = [
 		why: "the About tab's Thai heading ships",
 	},
 
+	// --- fix.48: the Settings shell, the custom-provider card, the Effort help, the
+	// chat composer + history, the welcome hero and the auto-approve bar/modal speak
+	// the user's language. One marker per surface, each a string that only exists in
+	// this round's tables, so a translation that drops one is caught in the bytes.
+	{
+		round: "fix.48",
+		bundle: "webview",
+		marker: "การตั้งค่า API",
+		why: "the Settings tab rail ships translated (Thai)",
+	},
+	{
+		round: "fix.48",
+		bundle: "webview",
+		marker: "+ เพิ่ม Provider",
+		why: "the custom-provider card's add action ships translated",
+	},
+	{
+		round: "fix.48",
+		bundle: "webview",
+		marker: "ระดับสูงขึ้นคิดลึกขึ้น",
+		why: "the Reasoning Effort help ships translated",
+	},
+	{
+		round: "fix.48",
+		bundle: "webview",
+		marker: "พิมพ์งานของคุณที่นี่...",
+		why: "the chat composer's new-task placeholder ships translated",
+	},
+	{
+		round: "fix.48",
+		bundle: "webview",
+		marker: "วันนี้จะสร้างอะไรดี?",
+		why: "the welcome hero heading ships translated",
+	},
+	{
+		round: "fix.48",
+		bundle: "webview",
+		marker: "ให้ iCline ทำสิ่งเหล่านี้ได้โดยไม่ต้องขออนุมัติ",
+		why: "the auto-approve intro ships translated",
+	},
+	{
+		round: "fix.48",
+		bundle: "webview",
+		marker: "ดูทั้งหมด",
+		why: "the history preview's View All ships translated",
+	},
+	{
+		round: "fix.48",
+		bundle: "webview",
+		marker: "今日は何を作りましょうか?",
+		why: "Japanese ships for the welcome hero, not just Settings",
+	},
+
 	// --- fix.47: the whole api-config tab speaks the user's language — every provider
 	// form, and the shared fields they are built from. Each marker is a string that only
 	// exists in this round's tables, and each one keeps a placeholder where the sentence
