@@ -1,23 +1,24 @@
 # แผนรองรับหลายภาษา (i18n) — iCline
 
-> จัดทำ: 2026-09-29 · สถานะ: **กำลังทำ — เฟส 1 เสร็จ, เฟส 2 กวาดได้ครึ่งทางของ Settings แล้ว** (รอบ `fix.46`)
+> จัดทำ: 2026-09-29 · สถานะ: **กำลังทำ — เฟส 1 เสร็จ, เฟส 2 กวาด Settings ครบแล้ว (รวมฟอร์ม provider ทั้งหมด)** (รอบ `fix.47`)
 > คำถามตั้งต้นของผู้ใช้: "ตอนนี้มีการ UI หรือการตั้งค่าภาษาอะไรยังไงส่วนไหนแล้วบ้าง และเราต้องเพิ่มอะไรบ้าง"
+> วิธีเพิ่มภาษา/ตรวจคำแปล: [i18n-contributing.md](./i18n-contributing.md)
 
-### สถานะล่าสุด (2026-09-29, `fix.46`)
+### สถานะล่าสุด (2026-09-29, `fix.47`)
 
 | เฟส | สถานะ | หลักฐาน |
 |---|---|---|
 | 0 ตัดสินใจ | ✅ **ตอบแล้ว (2026-09-29)** | **เริ่ม 4 ภาษา: อังกฤษ/ไทย/จีน(ตัวย่อ)/ญี่ปุ่น** (`TRANSLATED_LOCALES`) · ที่เหลือออกแบบให้ *เพิ่ม/แปลได้เมื่อต้องการ* (แก้ 3 จุด: `TRANSLATED_LOCALES` + ตารางต่อ namespace + เทสต์บังคับคีย์ครบเอง) · **ผู้ตรวจคำแปลอาจใช้ sub-agent เฉพาะทาง** ⇒ ยังไม่มีเจ้าภาพตรวจถาวร (เป็นงานค้างด้านคุณภาพ ไม่ใช่ด้านโครงสร้าง) |
 | 1 แกนกลาง | ✅ **เสร็จ** | `webview-ui/src/i18n/` (`locales.ts` ครอบทั้ง 19 ภาษา + `TAG_ALIASES` สำหรับ `zh`/`zh-Hans`/`zh-Hant` · `strings.ts` + namespace registry 3 namespace · `useTranslation`) · เทสต์บังคับคีย์ครบทุก locale/namespace + **placeholder ต้องตรงกับอังกฤษ** |
-| 2 กวาด webview | 🔄 **Settings ครบ 7 แท็บ + หน้าต้อนรับ/Quick Starts** | namespace `settings` (general/telemetry/terminal/debug/api-config/features/remote-config/about) + `quickStart` · ไฟล์ที่ migrate = รายการ `MIGRATED` 17 ไฟล์ใน `i18n/hardcodedCopy.test.ts` · ตารางภาษา **en/th/ja/zh-CN** |
+| 2 กวาด webview | 🔄 **Settings ครบทั้งแท็บ — รวมฟอร์ม provider ทุกตัวและ dropdown เลือกโมเดลของแต่ละ provider** | namespace `settings` (general/telemetry/terminal/debug/api-config/features/remote-config/about) + `quickStart` + **`providers` (262 คีย์: ฟิลด์ที่ใช้ร่วมกัน + ทุกฟอร์ม)** · รายการ `MIGRATED` **63 ไฟล์** (30 อยู่ใน `settings/providers/`) · ตารางภาษา **en/th/ja/zh-CN** · รวม **477 คีย์ ⇒ 1,908 ข้อความ** |
 | 3 manifest + host | ⬜ ยังไม่เริ่ม | ด่านตรวจไฟล์ภาษาอยู่ใน `scripts/verify-vsix-contracts.mjs` แล้ว (กลุ่ม `language bundles`: `package.nls*` + `l10n/**`) — พร้อมรองรับงานเฟสนี้ |
-| 4 เสริมด่าน | ✅ ทำแล้วสำหรับทุกเซกชันที่ migrate | ด่าน hardcode (`i18n/hardcodedCopy.test.ts` 17 ไฟล์) + เทสต์ placeholder-parity + ด่าน nls/l10n ในตัวตรวจ VSIX + **e2e สลับภาษาจริงใน VS Code** (`src/test/e2e/settings-language.test.ts`) · **contract 7 ข้อของ fix.46 ปักสตริงไทย/ญี่ปุ่น/จีนในไบต์ของ VSIX** ⇒ เหลือแค่ทำซ้ำให้ครบทุกเซกชันที่จะ migrate
+| 4 เสริมด่าน | ✅ ทำแล้วสำหรับทุกเซกชันที่ migrate | ด่าน hardcode (`i18n/hardcodedCopy.test.ts` 63 ไฟล์) + เทสต์ placeholder-parity + ด่าน nls/l10n ในตัวตรวจ VSIX + **e2e สลับภาษาจริงใน VS Code** (`src/test/e2e/settings-language.test.ts`) · **contract ของ fix.46/fix.47 ข้อของ fix.46 ปักสตริงไทย/ญี่ปุ่น/จีนในไบต์ของ VSIX** ⇒ เหลือแค่ทำซ้ำให้ครบทุกเซกชันที่จะ migrate
 
 **สิ่งที่ยังเป็นอังกฤษแข็ง** (นับด้วย heuristic เดียวกับด่าน, 2026-09-29):
 
 | พื้นที่ | จุดที่ยังอังกฤษ | หมายเหตุ |
 |---|---|---|
-| แท็บ api-config: ฟอร์ม provider | ~251 จุดใน `components/settings/` (Bedrock 21 · OpenAICompatible 19 · ModelInfoView 18 · Zenmux 17 · SapAiCore 14 · …) | มากที่สุดและผู้ใช้เห็นบ่อยที่สุด ⇒ **งานถัดไปที่ควรทำก่อน** |
+| แท็บ api-config: ฟอร์ม provider | ✅ **แปลแล้วทั้งชุด** (`fix.47`): ฟิลด์ที่ใช้ร่วมกัน (`ApiKeyField`/`BaseUrlField`/`ModelSelector`/`ModelAutocomplete`/`ModelInfoView`/`RemotelyConfiguredInputWrapper`/`ModelPickerWithManualEntry`) + ฟอร์มทุกตัว (OpenAICompatible · Anthropic · Bedrock · SapAiCore · Ollama · Zenmux · Sakana · LM Studio · Vertex · LiteLLM · AskSage · OpenRouter · Claude Code · VS Code LM · Qwen · Qwen Code · Dify · Requesty · OpenAI Codex · Hugging Face · Xai · Z.AI · Hicap · Vercel · Aihubmix · Moonshot · OCA) + dropdown เลือกโมเดลทุกตัว | **งานถัดไป:** เปลือกแท็บ `settings/ApiOptions.tsx` (รวมข้อความ "Provider options are managed by your organization's remote configuration") · โมดัล Add Custom Provider (`CustomProviderManager`) · `ProviderStatsCard` |
 | Chat / composer | ~92 จุด | รวมข้อความสถานะ/ปุ่มในห้องแชท |
 | `components/ui/` | ~84 จุด | ส่วนใหญ่เป็น aria/label ของ primitive — ต้องดูรายตัวว่าอันไหนเป็น copy จริง |
 | Worktrees 20 · MCP 18 · cline-rules 14 · History 14 · Team 11 · Marketplace 10 · Account 10 · Onboarding 7 · Browser 5 | ~109 จุด | |
