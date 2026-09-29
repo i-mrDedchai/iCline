@@ -5,6 +5,8 @@ import { VSCodeButton, VSCodeLink, VSCodeRadio, VSCodeRadioGroup, VSCodeTextFiel
 import { useState } from "react"
 import { LINKS } from "@/constants"
 import { useExtensionState } from "@/context/ExtensionStateContext"
+import { splitOnPlaceholder } from "@/i18n/strings"
+import { useTranslation } from "@/i18n/useTranslation"
 import { McpServiceClient } from "@/services/grpc-client"
 
 type TransportType = "streamableHttp" | "sse"
@@ -22,24 +24,26 @@ const AddRemoteServerForm = ({ onCancel, onServerAdded, showEditConfiguration = 
 	const [isSubmitting, setIsSubmitting] = useState(false)
 	const [error, setError] = useState("")
 	const { setMcpServers } = useExtensionState()
+	const tr = useTranslation("customize")
+	const [introBefore, introAfter] = splitOnPlaceholder(tr("mcpAddRemoteIntro"), "{here}")
 
 	const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
 		e.preventDefault()
 
 		if (!serverName.trim()) {
-			setError("Server name is required")
+			setError(tr("mcpAddRemoteNameRequired"))
 			return
 		}
 
 		if (!serverUrl.trim()) {
-			setError("Server URL is required")
+			setError(tr("mcpAddRemoteUrlRequired"))
 			return
 		}
 
 		try {
 			new URL(serverUrl)
 		} catch (_err) {
-			setError("Invalid URL format")
+			setError(tr("mcpAddRemoteUrlInvalid"))
 			return
 		}
 
@@ -65,19 +69,20 @@ const AddRemoteServerForm = ({ onCancel, onServerAdded, showEditConfiguration = 
 			onServerAdded()
 		} catch (error) {
 			setIsSubmitting(false)
-			setError(error instanceof Error ? error.message : "Failed to add server")
+			setError(error instanceof Error ? error.message : tr("mcpAddRemoteFailed"))
 		}
 	}
 
 	return (
 		<div className="p-4 px-5">
+			{" "}
 			<div className="text-(--vscode-foreground) mb-2">
-				Add a remote MCP server by providing a name and its URL endpoint. Learn more{" "}
+				{introBefore}
 				<VSCodeLink href={LINKS.DOCUMENTATION.REMOTE_MCP_SERVER_DOCS} style={{ display: "inline" }}>
-					here.
+					{tr("mcpAddRemoteHere")}
 				</VSCodeLink>
+				{introAfter}
 			</div>
-
 			<form onSubmit={handleSubmit}>
 				<div className="mb-2">
 					<VSCodeTextField
@@ -89,10 +94,9 @@ const AddRemoteServerForm = ({ onCancel, onServerAdded, showEditConfiguration = 
 						}}
 						placeholder="mcp-server"
 						value={serverName}>
-						Server Name
+						{tr("mcpAddRemoteNameLabel")}
 					</VSCodeTextField>
 				</div>
-
 				<div className="mb-2">
 					<VSCodeTextField
 						className="w-full mr-4"
@@ -103,12 +107,13 @@ const AddRemoteServerForm = ({ onCancel, onServerAdded, showEditConfiguration = 
 						}}
 						placeholder="https://example.com/mcp-server"
 						value={serverUrl}>
-						Server URL
+						{tr("mcpAddRemoteUrlLabel")}
 					</VSCodeTextField>
 				</div>
-
 				<div className="mb-3">
-					<label className={`block text-sm font-medium mb-2 ${isSubmitting ? "opacity-50" : ""}`}>Transport Type</label>
+					<label className={`block text-sm font-medium mb-2 ${isSubmitting ? "opacity-50" : ""}`}>
+						{tr("mcpTransportType")}
+					</label>
 					<VSCodeRadioGroup
 						disabled={isSubmitting}
 						onChange={(e) => {
@@ -124,13 +129,10 @@ const AddRemoteServerForm = ({ onCancel, onServerAdded, showEditConfiguration = 
 						</VSCodeRadio>
 					</VSCodeRadioGroup>
 				</div>
-
-				{error && <div className="mb-3 text-(--vscode-errorForeground)">{error}</div>}
-
+				{error && <div className="mb-3 text-(--vscode-errorForeground)">{error}</div>}{" "}
 				<VSCodeButton className="w-full" disabled={isSubmitting} type="submit">
-					{isSubmitting ? "Connecting..." : "Add Server"}
+					{isSubmitting ? tr("mcpAddRemoteConnecting") : tr("mcpAddRemoteAdd")}
 				</VSCodeButton>
-
 				{onCancel && (
 					<VSCodeButton
 						appearance="secondary"
@@ -139,10 +141,9 @@ const AddRemoteServerForm = ({ onCancel, onServerAdded, showEditConfiguration = 
 						onClick={onCancel}
 						style={{ marginTop: "8px" }}
 						type="button">
-						Cancel
+						{tr("mcpAddRemoteCancel")}
 					</VSCodeButton>
 				)}
-
 				{showEditConfiguration && (
 					<VSCodeButton
 						appearance="secondary"
@@ -152,7 +153,7 @@ const AddRemoteServerForm = ({ onCancel, onServerAdded, showEditConfiguration = 
 							})
 						}}
 						style={{ width: "100%", marginBottom: "5px", marginTop: 15 }}>
-						Edit Configuration
+						{tr("mcpAddRemoteEditConfig")}
 					</VSCodeButton>
 				)}
 			</form>

@@ -8,6 +8,8 @@ import { GroupedVirtuoso } from "react-virtuoso"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select"
 import { useExtensionState } from "@/context/ExtensionStateContext"
+import { formatString } from "@/i18n/strings"
+import { useTranslation } from "@/i18n/useTranslation"
 import { TaskServiceClient } from "@/services/grpc-client"
 import { formatSize } from "@/utils/format"
 import ViewHeader from "../common/ViewHeader"
@@ -25,19 +27,22 @@ const isToday = (timestamp: number): boolean => {
 	return today.toDateString() === date.toDateString()
 }
 
-const HISTORY_FILTERS = {
-	newest: "Newest",
-	oldest: "Oldest",
-	mostExpensive: "Most Expensive",
-	mostTokens: "Most Tokens",
-	mostRelevant: "Most Relevant",
-	workspaceOnly: "Workspace Only",
-	favoritesOnly: "Favorites Only",
-}
+type HistoryFilterKey = "newest" | "oldest" | "mostExpensive" | "mostTokens" | "mostRelevant" | "workspaceOnly" | "favoritesOnly"
+
+const HISTORY_FILTER_KEYS: HistoryFilterKey[] = [
+	"newest",
+	"oldest",
+	"mostExpensive",
+	"mostTokens",
+	"mostRelevant",
+	"workspaceOnly",
+	"favoritesOnly",
+]
 
 const HISTORY_PAGE_SIZE = 50
 
 const HistoryView = ({ onDone }: HistoryViewProps) => {
+	const tr = useTranslation("customize")
 	const extensionStateContext = useExtensionState()
 	const { taskHistory, onRelinquishControl, environment } = extensionStateContext
 	const [searchQuery, setSearchQuery] = useState("")
@@ -373,10 +378,10 @@ const HistoryView = ({ onDone }: HistoryViewProps) => {
 
 		const groups: { tasks: any[]; label: string }[] = []
 		if (todayTasks.length > 0) {
-			groups.push({ tasks: todayTasks, label: "Today" })
+			groups.push({ tasks: todayTasks, label: tr("historyGroupToday") })
 		}
 		if (olderTasks.length > 0) {
-			groups.push({ tasks: olderTasks, label: "Older" })
+			groups.push({ tasks: olderTasks, label: tr("historyGroupOlder") })
 		}
 
 		return {
@@ -409,7 +414,7 @@ const HistoryView = ({ onDone }: HistoryViewProps) => {
 	return (
 		<div className="fixed overflow-hidden inset-0 flex flex-col w-full">
 			{/* HEADER */}
-			<ViewHeader environment={environment} onDone={onDone} title="History" />
+			<ViewHeader environment={environment} onDone={onDone} title={tr("historyTitle")} />
 
 			{/* FILTERS */}
 			<div className="flex flex-col gap-3 px-3">
@@ -426,12 +431,12 @@ const HistoryView = ({ onDone }: HistoryViewProps) => {
 								setSortOption("mostRelevant")
 							}
 						}}
-						placeholder="Fuzzy search history..."
+						placeholder={tr("historySearchPlaceholder")}
 						value={searchQuery}>
 						<div className="codicon codicon-search opacity-80 mt-0.5 !text-sm" slot="start" />
 						{searchQuery && (
 							<div
-								aria-label="Clear search"
+								aria-label={tr("historyClearSearch")}
 								className="input-icon-button codicon codicon-close flex justify-center items-center h-full"
 								onClick={() => setSearchQuery("")}
 								slot="end"
@@ -469,7 +474,21 @@ const HistoryView = ({ onDone }: HistoryViewProps) => {
 							<FunnelIcon className="!size-2 text-foreground" />
 						</SelectTrigger>
 						<SelectContent position="popper">
-							{Object.entries(HISTORY_FILTERS).map(([key, value]) => {
+							{HISTORY_FILTER_KEYS.map((key) => {
+								const value =
+									key === "newest"
+										? tr("historySortNewest")
+										: key === "oldest"
+											? tr("historySortOldest")
+											: key === "mostExpensive"
+												? tr("historySortMostExpensive")
+												: key === "mostTokens"
+													? tr("historySortMostTokens")
+													: key === "mostRelevant"
+														? tr("historySortMostRelevant")
+														: key === "workspaceOnly"
+															? tr("historyFilterWorkspace")
+															: tr("historyFilterFavorites")
 								const isSortOption = ["newest", "oldest", "mostExpensive", "mostTokens", "mostRelevant"].includes(
 									key,
 								)
@@ -515,7 +534,7 @@ const HistoryView = ({ onDone }: HistoryViewProps) => {
 						Footer: () =>
 							hasMoreTasks ? (
 								<div className="px-4 py-3 text-center text-xs text-description">
-									{isLoadingHistory ? "Loading..." : ""}
+									{isLoadingHistory ? tr("historyLoadingMore") : ""}
 								</div>
 							) : null,
 					}}
@@ -547,52 +566,60 @@ const HistoryView = ({ onDone }: HistoryViewProps) => {
 			<div className="p-2.5 border-t border-t-border-panel">
 				<div className="flex gap-2.5 mb-2.5">
 					<Button className="flex-1" onClick={() => handleBatchHistorySelect(true)} variant="secondary">
-						Select All
+						{tr("historySelectAll")}
 					</Button>
 					<Button className="flex-1" onClick={() => handleBatchHistorySelect(false)} variant="secondary">
-						Select None
+						{tr("historySelectNone")}
 					</Button>
 				</div>
 				{/* iCline: task history export/import */}
 				<div className="flex gap-2.5 mb-2.5">
 					<Button
-						aria-label={selectedItems.length > 0 ? "Export selected tasks" : "Export all tasks"}
+						aria-label={selectedItems.length > 0 ? tr("historyExportSelected") : tr("historyExportAll")}
 						className="flex-1"
 						disabled={isExporting || isImporting || taskHistory.length === 0}
 						onClick={handleExportHistory}
 						variant="secondary">
 						<DownloadIcon className="size-3.5" />
-						{isExporting ? "Exporting…" : selectedItems.length > 0 ? `Export (${selectedItems.length})` : "Export"}
+						{isExporting
+							? tr("historyExporting")
+							: selectedItems.length > 0
+								? formatString(tr, "historyExportCount", { count: selectedItems.length })
+								: tr("historyExport")}
 					</Button>
 					<Button
-						aria-label="Import tasks from archive"
+						aria-label={tr("historyImportArchive")}
 						className="flex-1"
 						disabled={isExporting || isImporting}
 						onClick={handleImportHistory}
 						variant="secondary">
 						<UploadIcon className="size-3.5" />
-						{isImporting ? "Importing…" : "Import"}
+						{isImporting ? tr("historyImporting") : tr("historyImport")}
 					</Button>
 				</div>
 				{selectedItems.length > 0 ? (
 					<Button
-						aria-label="Delete selected items"
+						aria-label={tr("historyDeleteSelected")}
 						className="w-full"
 						onClick={() => {
 							handleDeleteSelectedHistoryItems(selectedItems)
 						}}
 						variant="danger">
-						Delete {selectedItems.length > 1 ? selectedItems.length : ""} Selected
+						{selectedItems.length > 1
+							? formatString(tr, "historyDeleteCountSelected", { count: selectedItems.length })
+							: tr("historyDeleteSelectedPlain")}
 						{selectedItemsSize > 0 ? ` (${formatSize(selectedItemsSize)})` : ""}
 					</Button>
 				) : (
 					<Button
-						aria-label="Delete all history"
+						aria-label={tr("historyDeleteAll")}
 						className="w-full"
 						disabled={deleteAllDisabled || (taskHistory.length === 0 && tasks.length === 0)}
 						onClick={handleDeleteAllHistory}
 						variant="danger">
-						Delete All History{totalTasksSize !== null ? ` (${formatSize(totalTasksSize)})` : ""}
+						{totalTasksSize !== null
+							? formatString(tr, "historyDeleteAllWithSize", { size: formatSize(totalTasksSize) })
+							: tr("historyDeleteAllPlain")}
 					</Button>
 				)}
 			</div>

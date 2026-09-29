@@ -14,6 +14,7 @@
  * can render blank copy.
  */
 import type { TranslatedLocale } from "./locales"
+import { customizeStrings } from "./namespaces/customize"
 import { pickerStrings } from "./namespaces/picker"
 import { providersStrings } from "./namespaces/providers"
 import { quickStartStrings } from "./namespaces/quickStart"
@@ -23,6 +24,7 @@ import { settingsStrings } from "./namespaces/settings"
 export type NamespaceTables<Keys extends string = string> = Record<TranslatedLocale, Record<Keys, string>>
 
 export const NAMESPACES = {
+	customize: customizeStrings,
 	picker: pickerStrings,
 	providers: providersStrings,
 	quickStart: quickStartStrings,

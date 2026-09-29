@@ -3,6 +3,7 @@ import { DeleteHookRequest, HooksToggles } from "@shared/proto/cline/file"
 import { PenIcon, Trash2Icon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
+import { useTranslation } from "@/i18n/useTranslation"
 import { FileServiceClient } from "@/services/grpc-client"
 
 interface HookRowProps {
@@ -26,6 +27,7 @@ const HookRow: React.FC<HookRowProps> = ({
 	onToggle,
 	onDelete,
 }) => {
+	const tr = useTranslation("customize")
 	const handleEditClick = () => {
 		FileServiceClient.openFile(StringRequest.create({ value: absolutePath })).catch((err) =>
 			console.error("Failed to open file:", err),
@@ -57,12 +59,7 @@ const HookRow: React.FC<HookRowProps> = ({
 
 				{/* Toggle Switch */}
 				<div className="flex items-center space-x-2 gap-2">
-					<div
-						title={
-							isWindows
-								? "Hook toggling is not yet supported on Windows in this foundation PR. Hooks execute when the hook file exists."
-								: undefined
-						}>
+					<div title={isWindows ? tr("hookWindowsToggleTitle") : undefined}>
 						<Switch
 							checked={enabled}
 							className="mx-1"
@@ -71,15 +68,20 @@ const HookRow: React.FC<HookRowProps> = ({
 							onClick={() => onToggle(hookName, !enabled)}
 							style={isWindows ? { opacity: 0.5, cursor: "not-allowed" } : undefined}
 						/>
-					</div>
-					<Button aria-label="Edit hook file" onClick={handleEditClick} size="xs" title="Edit hook file" variant="icon">
-						<PenIcon />
-					</Button>
+					</div>{" "}
 					<Button
-						aria-label="Delete hook file"
+						aria-label={tr("editHookAriaLabel")}
+						onClick={handleEditClick}
+						size="xs"
+						title={tr("editHookTitle")}
+						variant="icon">
+						<PenIcon />
+					</Button>{" "}
+					<Button
+						aria-label={tr("deleteHookAriaLabel")}
 						onClick={handleDeleteClick}
 						size="xs"
-						title="Delete hook file"
+						title={tr("deleteHookTitle")}
 						variant="icon">
 						<Trash2Icon />
 					</Button>

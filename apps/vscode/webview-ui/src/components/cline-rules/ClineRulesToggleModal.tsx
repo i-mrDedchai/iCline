@@ -18,6 +18,8 @@ import PopupModalContainer from "@/components/common/PopupModalContainer"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import useRemoteConfigSettings from "@/hooks/useRemoteConfigSettings"
+import { splitOnPlaceholder } from "@/i18n/strings"
+import { useTranslation } from "@/i18n/useTranslation"
 import { FileServiceClient } from "@/services/grpc-client"
 import { isMacOSOrLinux } from "@/utils/platformUtils"
 import HookRow from "./HookRow"
@@ -59,6 +61,9 @@ const ClineRulesToggleModal: React.FC = () => {
 	const [arrowPosition, setArrowPosition] = useState(0)
 	const [menuPosition, setMenuPosition] = useState(0)
 	const [currentView, setCurrentView] = useState<"rules" | "hooks" | "skills">("rules")
+	const tr = useTranslation("customize")
+	const [rulesIntroBefore, rulesIntroAfter] = splitOnPlaceholder(tr("rulesIntro"), "{docs}")
+	const [hooksNoteBefore, hooksNoteAfter] = splitOnPlaceholder(tr("hooksPlatformNote"), "{docs}")
 
 	// Auto-switch to rules tab if hooks become disabled while viewing hooks tab
 	useEffect(() => {
@@ -358,11 +363,12 @@ const ClineRulesToggleModal: React.FC = () => {
 		<div className="inline-flex min-w-0 max-w-full items-center" ref={modalRef}>
 			<div className="inline-flex w-full items-center" ref={buttonRef}>
 				<Tooltip>
-					{!isVisible && <TooltipContent>Customize</TooltipContent>}
+					{" "}
+					{!isVisible && <TooltipContent>{tr("customizeTooltip")}</TooltipContent>}
 					<TooltipTrigger>
 						<VSCodeButton
 							appearance="icon"
-							aria-label={isVisible ? "Hide Customize" : "Show Customize"}
+							aria-label={isVisible ? tr("customizeHideAriaLabel") : tr("customizeShowAriaLabel")}
 							className="p-0 m-0 flex items-center"
 							onClick={() => setIsVisible(!isVisible)}>
 							<i className="codicon codicon-law" style={{ fontSize: "12.5px" }} />
@@ -391,15 +397,15 @@ const ClineRulesToggleModal: React.FC = () => {
 									flexWrap: "wrap",
 								}}>
 								<TabButton isActive={currentView === "rules"} onClick={() => setCurrentView("rules")}>
-									Rules
+									{tr("tabRules")}
 								</TabButton>
 								{hooksEnabled && (
 									<TabButton isActive={currentView === "hooks"} onClick={() => setCurrentView("hooks")}>
-										Hooks
+										{tr("tabHooks")}
 									</TabButton>
 								)}
 								<TabButton isActive={currentView === "skills"} onClick={() => setCurrentView("skills")}>
-									Skills
+									{tr("tabSkills")}
 								</TabButton>
 							</div>
 						</div>
@@ -409,9 +415,7 @@ const ClineRulesToggleModal: React.FC = () => {
 							<div className="flex items-center gap-2 px-3 py-3 mb-4 bg-vscode-textBlockQuote-background border-l-[3px] border-vscode-textLink-foreground">
 								<i className="codicon codicon-lock text-sm" />
 								<span className="text-base">
-									{currentView === "rules"
-										? "Your organization manages some rules"
-										: "Your organization manages some skills"}
+									{currentView === "rules" ? tr("orgManagedRules") : tr("orgManagedSkills")}
 								</span>
 							</div>
 						) : null}
@@ -420,26 +424,30 @@ const ClineRulesToggleModal: React.FC = () => {
 						<div className="text-xs text-description mb-4">
 							{currentView === "rules" ? (
 								<p>
-									Rules allow you to provide Cline with system-level guidance. Think of them as a persistent way
-									to include context and preferences for your projects or globally for every conversation.{" "}
+									{rulesIntroBefore}
 									<VSCodeLink
 										className="text-xs"
 										href="https://docs.cline.bot/features/cline-rules"
 										style={{ display: "inline", fontSize: "inherit" }}>
-										Docs
+										{tr("docsLink")}
 									</VSCodeLink>
+									{rulesIntroAfter}
 								</p>
 							) : currentView === "skills" ? (
 								<p>
-									Skills are reusable instruction sets that Cline can activate on-demand. When a task matches a
-									skill's description, Cline uses the <span className="font-bold">use_skill</span> tool to load
-									the full instructions.
+									{(() => {
+										const [before, after] = splitOnPlaceholder(tr("skillsIntro"), "{tool}")
+										return (
+											<>
+												{before}
+												<span className="font-bold">{tr("skillsIntroTool")}</span>
+												{after}
+											</>
+										)
+									})()}
 								</p>
 							) : (
-								<p>
-									Hooks allow you to execute custom scripts at specific points in Cline's execution lifecycle,
-									enabling automation and integration with external tools.
-								</p>
+								<p>{tr("hooksIntro")}</p>
 							)}
 						</div>
 					</div>
@@ -451,7 +459,7 @@ const ClineRulesToggleModal: React.FC = () => {
 								{/* Remote Rules Section */}
 								{hasRemoteRules && (
 									<div className="mb-3">
-										<div className="text-sm font-normal mb-2">Enterprise Rules</div>
+										<div className="text-sm font-normal mb-2">{tr("sectionEnterpriseRules")}</div>
 										<div className="flex flex-col gap-0">
 											{remoteRules.map((rule) => {
 												const enabled = rule.locked || rule.enabled
@@ -474,7 +482,7 @@ const ClineRulesToggleModal: React.FC = () => {
 
 								{/* Global Rules Section */}
 								<div className="mb-3">
-									<div className="text-sm font-normal mb-2">Global Rules</div>
+									<div className="text-sm font-normal mb-2">{tr("sectionGlobalRules")}</div>
 
 									{/* File-based Global Rules */}
 									<RulesToggleList
@@ -490,7 +498,7 @@ const ClineRulesToggleModal: React.FC = () => {
 
 								{/* Local Rules Section */}
 								<div className="-mb-2.5">
-									<div className="text-sm font-normal mb-2">Workspace Rules</div>
+									<div className="text-sm font-normal mb-2">{tr("sectionWorkspaceRules")}</div>
 									<RulesToggleList
 										isGlobal={false}
 										listGap="small"
@@ -534,15 +542,20 @@ const ClineRulesToggleModal: React.FC = () => {
 							<>
 								<div className="text-xs text-description mb-4">
 									<p>
-										{isWindows
-											? "On Windows, hooks execute whenever the hook file exists."
-											: "Toggle to enable/disable (chmod +x/-x)."}{" "}
-										<VSCodeLink
-											className="text-xs"
-											href="https://docs.cline.bot/features/hooks"
-											style={{ display: "inline", fontSize: "inherit" }}>
-											Docs
-										</VSCodeLink>
+										{isWindows ? (
+											<>
+												{hooksNoteBefore}
+												<VSCodeLink
+													className="text-xs"
+													href="https://docs.cline.bot/features/hooks"
+													style={{ display: "inline", fontSize: "inherit" }}>
+													{tr("docsLink")}
+												</VSCodeLink>
+												{hooksNoteAfter}
+											</>
+										) : (
+											tr("hooksToggleModeHint")
+										)}
 									</p>
 								</div>
 								{/* Hooks Tab */}
@@ -550,17 +563,13 @@ const ClineRulesToggleModal: React.FC = () => {
 								{isWindows && (
 									<div className="flex items-center gap-2 px-3 py-3 mb-4 bg-vscode-inputValidation-warningBackground border-l-[3px] border-vscode-inputValidation-warningBorder">
 										<i className="codicon codicon-warning text-sm" />
-										<span className="text-base">
-											Hook toggling is not yet supported on Windows in this foundation PR. Hooks can be
-											created, edited, and deleted, and execute whenever the hook file exists. Coming next:
-											JSON-backed hook enabled/disabled state across platforms.
-										</span>
+										<span className="text-base">{tr("hooksWindowsBanner")}</span>
 									</div>
 								)}
 
 								{/* Global Hooks */}
 								<div className="mb-3">
-									<div className="text-sm font-normal mb-2">Global Hooks</div>
+									<div className="text-sm font-normal mb-2">{tr("sectionGlobalHooks")}</div>
 									<div className="flex flex-col gap-0">
 										{globalHooks
 											.sort((a, b) => a.name.localeCompare(b.name))
@@ -635,7 +644,7 @@ const ClineRulesToggleModal: React.FC = () => {
 								{/* Enterprise Skills Section (remote) */}
 								{hasRemoteSkills && (
 									<div className="mb-3">
-										<div className="text-sm font-normal mb-2">Enterprise Skills</div>
+										<div className="text-sm font-normal mb-2">{tr("sectionEnterpriseSkills")}</div>
 										<div className="flex flex-col gap-0">
 											{remoteSkills
 												.sort((a, b) => a.name.localeCompare(b.name))
@@ -660,7 +669,7 @@ const ClineRulesToggleModal: React.FC = () => {
 
 								{/* Global Skills Section */}
 								<div className="mb-3">
-									<div className="text-sm font-normal mb-2">Global Skills</div>
+									<div className="text-sm font-normal mb-2">{tr("sectionGlobalSkills")}</div>
 									<div className="flex flex-col gap-0">
 										{globalSkills
 											.filter((s) => !s.path.startsWith("remote:"))
@@ -681,7 +690,7 @@ const ClineRulesToggleModal: React.FC = () => {
 
 								{/* Workspace Skills Section */}
 								<div className="-mb-2.5">
-									<div className="text-sm font-normal mb-2">Workspace Skills</div>
+									<div className="text-sm font-normal mb-2">{tr("sectionWorkspaceSkills")}</div>
 									<div className="flex flex-col gap-0">
 										{localSkills
 											.sort((a, b) => a.name.localeCompare(b.name))

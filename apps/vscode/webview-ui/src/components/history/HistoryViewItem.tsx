@@ -14,6 +14,7 @@ import {
 } from "lucide-react"
 import { memo, useCallback, useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
+import { useTranslation } from "@/i18n/useTranslation"
 import { cn } from "@/lib/utils"
 import { TaskServiceClient } from "@/services/grpc-client"
 import { formatLargeNumber, formatSize } from "@/utils/format"
@@ -37,6 +38,7 @@ const HistoryViewItem = ({
 	selectedItems,
 }: HistoryViewItemProps) => {
 	const [expanded, setExpanded] = useState(false)
+	const tr = useTranslation("customize")
 
 	const isFavoritedItem = useMemo(
 		() => pendingFavoriteToggles[item.id] ?? item.isFavorited,
@@ -105,7 +107,7 @@ const HistoryViewItem = ({
 					)}
 					<div className="flex gap-2 flex-shrink-0">
 						<Button
-							aria-label="Delete"
+							aria-label={tr("historyDeleteItem")}
 							className="p-0 opacity-0 group-hover:opacity-100 transition-opacity"
 							disabled={isFavoritedItem}
 							onClick={(e) => {
@@ -118,7 +120,7 @@ const HistoryViewItem = ({
 							</span>
 						</Button>
 						<Button
-							aria-label={isFavoritedItem ? "Remove from favorites" : "Add to favorites"}
+							aria-label={isFavoritedItem ? tr("historyRemoveFavorites") : tr("historyAddFavorites")}
 							className="p-0"
 							disabled={pendingFavoriteToggles[item.id] !== undefined}
 							onClick={(e) => {
@@ -166,7 +168,7 @@ const HistoryViewItem = ({
 							<div className="flex items-center justify-between w-full">
 								<div className="flex items-center gap-1 flex-wrap w-full">
 									<div className="flex justify-between items-center w-full gap-1 text-xs">
-										<span className="font-medium text-description">Tokens:</span>
+										<span className="font-medium text-description">{tr("historyTokensLabel")}</span>
 										<div className="flex items-center gap-1 text-description text-xs">
 											<span className="flex items-center gap-1 text-description">
 												<ArrowUpIcon className="text-description !size-1" />
@@ -197,17 +199,17 @@ const HistoryViewItem = ({
 
 									{item.modelId && (
 										<div className="flex justify-between items-center w-full gap-1 text-xs">
-											<span className="font-medium text-description">Model:</span>
+											<span className="font-medium text-description">{tr("historyModelLabel")}</span>
 											<span className="text-description">{item.modelId}</span>
 										</div>
 									)}
 
 									<div className="flex justify-between items-center w-full gap-1 text-xs">
-										<span className="font-medium text-description">Size:</span>
+										<span className="font-medium text-description">{tr("historySizeLabel")}</span>
 										<span className="items-center gap-2 flex text-description">
 											{formatSize(item.size)}
 											<Button
-												aria-label="Export"
+												aria-label={tr("historyExportItem")}
 												className="m-0 p-0"
 												onClick={(e) => {
 													e.stopPropagation()

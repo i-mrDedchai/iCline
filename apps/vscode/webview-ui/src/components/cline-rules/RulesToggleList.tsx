@@ -1,3 +1,4 @@
+import { useTranslation } from "@/i18n/useTranslation"
 import NewRuleRow from "./NewRuleRow"
 import RuleRow from "./RuleRow"
 
@@ -29,6 +30,7 @@ const RulesToggleList = ({
 	}
 
 	const gapClass = gapClasses[listGap]
+	const tr = useTranslation("customize")
 
 	return (
 		<div className={`flex flex-col ${gapClass}`}>
@@ -52,7 +54,7 @@ const RulesToggleList = ({
 				<>
 					{showNoRules && (
 						<div className="flex flex-col items-center gap-3 my-3 text-(--vscode-descriptionForeground)">
-							{ruleType === "workflow" ? "No workflows found" : "No rules found"}
+							{ruleType === "workflow" ? tr("noWorkflows") : tr("noRules")}
 						</div>
 					)}
 					{showNewRule && <NewRuleRow isGlobal={isGlobal} ruleType={ruleType} />}

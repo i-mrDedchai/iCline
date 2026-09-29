@@ -1,6 +1,7 @@
 import { McpDisplayMode } from "@shared/McpDisplayMode"
 import { VSCodeDropdown, VSCodeOption } from "@vscode/webview-ui-toolkit/react"
 import React from "react"
+import { useTranslation } from "@/i18n/useTranslation"
 
 interface McpDisplayModeDropdownProps {
 	value: McpDisplayMode
@@ -12,6 +13,7 @@ interface McpDisplayModeDropdownProps {
 }
 
 const McpDisplayModeDropdown: React.FC<McpDisplayModeDropdownProps> = ({ value, onChange, id, className, style, onClick }) => {
+	const tr = useTranslation("customize")
 	const handleChange = (e: any) => {
 		const newMode = e.target.value as McpDisplayMode
 		onChange(newMode)
@@ -19,9 +21,9 @@ const McpDisplayModeDropdown: React.FC<McpDisplayModeDropdownProps> = ({ value, 
 
 	return (
 		<VSCodeDropdown className={className} id={id} onChange={handleChange} onClick={onClick} style={style} value={value}>
-			<VSCodeOption value="plain">Plain Text</VSCodeOption>
-			<VSCodeOption value="rich">Rich Display</VSCodeOption>
-			<VSCodeOption value="markdown">Markdown</VSCodeOption>
+			<VSCodeOption value="plain">{tr("mcpDisplayPlain")}</VSCodeOption>
+			<VSCodeOption value="rich">{tr("mcpDisplayRich")}</VSCodeOption>
+			<VSCodeOption value="markdown">{tr("mcpDisplayMarkdown")}</VSCodeOption>
 		</VSCodeDropdown>
 	)
 }

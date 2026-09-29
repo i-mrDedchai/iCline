@@ -21,6 +21,8 @@ import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useExtensionState } from "@/context/ExtensionStateContext"
+import { splitOnPlaceholder } from "@/i18n/strings"
+import { useTranslation } from "@/i18n/useTranslation"
 import { cn } from "@/lib/utils"
 import { McpServiceClient } from "@/services/grpc-client"
 import type { MarketplaceMcpMetadata } from "../ServersToggleList"
@@ -58,6 +60,8 @@ const ServerRow = ({
 	const [isExpanded, setIsExpanded] = useState(false)
 	const [isDeleting, setIsDeleting] = useState(false)
 	const [isRestarting, setIsRestarting] = useState(false)
+	const tr = useTranslation("customize")
+	const [timeoutHintBefore, timeoutHintAfter] = splitOnPlaceholder(tr("mcpTimeoutHint"), "{setting}")
 
 	// Check if user is managed by remote config and if this server is remote-managed.
 	// Remote MCP servers from enterprise config are always URL-based (SSE/HTTP).
@@ -235,7 +239,7 @@ const ServerRow = ({
 							handleRestart()
 						}}
 						size="icon"
-						title="Restart Server"
+						title={tr("mcpRestartServer")}
 						variant="icon">
 						<RefreshCcwIcon />
 					</Button>
@@ -248,7 +252,7 @@ const ServerRow = ({
 							handleDelete()
 						}}
 						size="icon"
-						title="Delete Server"
+						title={tr("mcpDeleteServer")}
 						variant="icon">
 						<Trash2Icon />
 					</Button>
@@ -293,7 +297,7 @@ const ServerRow = ({
 								McpServiceClient.authenticateMcpServer(StringRequest.create({ value: server.name }))
 							}}
 							variant="default">
-							Authenticate
+							{tr("mcpAuthenticate")}
 						</Button>
 					) : (
 						<Button
@@ -311,7 +315,7 @@ const ServerRow = ({
 							disabled={isDeleting}
 							onClick={handleDelete}
 							variant="danger">
-							{isDeleting ? "Deleting..." : "Delete Server"}
+							{isDeleting ? tr("mcpDeleting") : tr("mcpDeleteServer")}
 						</Button>
 					)}
 				</div>
@@ -342,7 +346,7 @@ const ServerRow = ({
 										))}
 									</div>
 								) : (
-									<div className="text-description py-2.5">No tools found</div>
+									<div className="text-description py-2.5">{tr("mcpNoTools")}</div>
 								)}
 							</VSCodePanelView>
 
@@ -358,7 +362,7 @@ const ServerRow = ({
 										))}
 									</div>
 								) : (
-									<div className="py-2.5 text-description">No resources found</div>
+									<div className="py-2.5 text-description">{tr("mcpNoResources")}</div>
 								)}
 							</VSCodePanelView>
 
@@ -382,20 +386,30 @@ const ServerRow = ({
 											padding: "10px 0",
 											color: "var(--vscode-descriptionForeground)",
 										}}>
-										No prompts found
+										{tr("mcpNoPrompts")}
 									</div>
 								)}
 							</VSCodePanelView>
 						</VSCodePanels>
 
 						<div className="my-2.5 mx-1.5">
-							<label className="block mb-1 text-[13px]">Request Timeout</label>
+							<label className="block mb-1 text-[13px]">{tr("mcpRequestTimeout")}</label>
 							<VSCodeDropdown className="w-full" onChange={handleTimeoutChange} value={timeoutValue}>
 								{TimeoutOptions}
 							</VSCodeDropdown>
 							<p className="mt-1 mb-0 text-xs text-description">
-								Applies to every request this server handles, in VS Code and the CLI. For other values, set
-								"timeout" (seconds) in cline_mcp_settings.json.
+								{(() => {
+									const [between, afterFile] = splitOnPlaceholder(timeoutHintAfter, "{file}")
+									return (
+										<>
+											{timeoutHintBefore}
+											{tr("mcpTimeoutSetting")}
+											{between}
+											<code>{tr("mcpTimeoutFile")}</code>
+											{afterFile}
+										</>
+									)
+								})()}
 							</p>
 						</div>
 						<Button
@@ -404,10 +418,10 @@ const ServerRow = ({
 							onClick={handleRestart}
 							variant="secondary">
 							{server.status === "connecting" || isRestarting
-								? "Restarting..."
+								? tr("mcpRestarting")
 								: server.disabled
-									? "Server Disabled"
-									: "Restart Server"}
+									? tr("mcpServerDisabled")
+									: tr("mcpRestartServer")}
 						</Button>
 
 						{!isRemoteManagedServer && (
@@ -416,7 +430,7 @@ const ServerRow = ({
 								disabled={isDeleting}
 								onClick={handleDelete}
 								variant="danger">
-								{isDeleting ? "Deleting..." : "Delete Server"}
+								{isDeleting ? tr("mcpDeleting") : tr("mcpDeleteServer")}
 							</Button>
 						)}
 					</div>

@@ -5,6 +5,8 @@ import { EyeIcon, InfoIcon, PenIcon, Trash2Icon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { formatString } from "@/i18n/strings"
+import { useTranslation } from "@/i18n/useTranslation"
 import { FileServiceClient } from "@/services/grpc-client"
 
 function isWin32Path(filePath: string): boolean {
@@ -44,6 +46,7 @@ const RuleRow: React.FC<{
 	// For remote rules, the rulePath is already the display name
 	const finalDisplayName = isRemote ? rulePath : ruleType === "skill" ? skillDisplayName : displayName
 	const isDisabled = isRemote && alwaysEnabled
+	const tr = useTranslation("customize")
 
 	const getRuleTypeIcon = () => {
 		switch (ruleType) {
@@ -146,9 +149,7 @@ const RuleRow: React.FC<{
 							<TooltipTrigger asChild className="cursor-help">
 								<InfoIcon className="ml-1.5 opacity-70 size-[0.85rem]" />
 							</TooltipTrigger>
-							<TooltipContent>
-								Searches recursively for all AGENTS.md files in the workspace when a top-level AGENTS.md exists
-							</TooltipContent>
+							<TooltipContent>{tr("agentsTooltip")}</TooltipContent>
 						</Tooltip>
 					)}
 				</span>
@@ -161,22 +162,30 @@ const RuleRow: React.FC<{
 						disabled={isDisabled}
 						key={rulePath}
 						onClick={() => toggleRule(rulePath, !enabled)}
-						title={isDisabled ? "This rule is required and cannot be disabled" : undefined}
+						title={isDisabled ? tr("ruleRequiredTitle") : undefined}
 					/>
 					<Button
-						aria-label={isRemote ? `View ${ruleType} file` : `Edit ${ruleType} file`}
+						aria-label={
+							isRemote
+								? formatString(tr, "viewFileAriaLabel", { type: ruleType })
+								: formatString(tr, "editFileAriaLabel", { type: ruleType })
+						}
 						onClick={handleEditClick}
 						size="xs"
-						title={isRemote ? `View ${ruleType} file (read-only)` : `Edit ${ruleType} file`}
+						title={
+							isRemote
+								? formatString(tr, "viewFileTitle", { type: ruleType })
+								: formatString(tr, "editFileTitle", { type: ruleType })
+						}
 						variant="icon">
 						{isRemote ? <EyeIcon /> : <PenIcon />}
 					</Button>
 					<Button
-						aria-label={`Delete ${ruleType} file`}
+						aria-label={formatString(tr, "deleteFileAriaLabel", { type: ruleType })}
 						disabled={isRemote}
 						onClick={handleDeleteClick}
 						size="xs"
-						title={`Delete ${ruleType} file`}
+						title={formatString(tr, "deleteFileTitle", { type: ruleType })}
 						variant="icon">
 						<Trash2Icon />
 					</Button>
