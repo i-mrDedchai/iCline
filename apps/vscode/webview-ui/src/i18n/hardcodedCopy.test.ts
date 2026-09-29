@@ -22,6 +22,55 @@ const MIGRATED = [
 	"components/settings/sections/DebugSection.tsx",
 	"components/settings/sections/TerminalSettingsSection.tsx",
 	"components/settings/sections/ApiConfigurationSection.tsx",
+	// The provider forms in the api-config tab: the shared fields every form renders,
+	// then the forms themselves.
+	// The per-provider model dropdowns render the same label and hints as the forms.
+	"components/settings/BasetenModelPicker.tsx",
+	"components/settings/ClineModelPicker.tsx",
+	"components/settings/GroqModelPicker.tsx",
+	"components/settings/HicapModelPicker.tsx",
+	"components/settings/HuggingFaceModelPicker.tsx",
+	"components/settings/OpenRouterModelPicker.tsx",
+	"components/settings/RequestyModelPicker.tsx",
+	"components/settings/SapAiCoreModelPicker.tsx",
+	"components/settings/VercelModelPicker.tsx",
+	"components/settings/ZenmuxModelPicker.tsx",
+	"components/settings/providers/OcaModelPicker.tsx",
+	"components/settings/common/ApiKeyField.tsx",
+	"components/settings/common/BaseUrlField.tsx",
+	"components/settings/common/ModelAutocomplete.tsx",
+	"components/settings/common/ModelInfoView.tsx",
+	"components/settings/common/ModelSelector.tsx",
+	"components/settings/common/RemotelyConfiguredInputWrapper.tsx",
+	"components/settings/providers/ModelPickerWithManualEntry.tsx",
+	"components/settings/providers/OpenAICompatible.tsx",
+	"components/settings/providers/SapAiCoreProvider.tsx",
+	"components/settings/providers/AihubmixProvider.tsx",
+	"components/settings/providers/AnthropicProvider.tsx",
+	"components/settings/providers/AskSageProvider.tsx",
+	"components/settings/providers/BedrockProvider.tsx",
+	"components/settings/providers/ClaudeCodeProvider.tsx",
+	"components/settings/providers/DifyProvider.tsx",
+	"components/settings/providers/GenericProviderSettings.tsx",
+	"components/settings/providers/HicapProvider.tsx",
+	"components/settings/providers/HuggingFaceProvider.tsx",
+	"components/settings/providers/LMStudioProvider.tsx",
+	"components/settings/providers/OllamaProvider.tsx",
+	"components/settings/providers/SakanaProvider.tsx",
+	"components/settings/providers/VertexProvider.tsx",
+	"components/settings/providers/ZenmuxProvider.tsx",
+	"components/settings/providers/MoonshotProvider.tsx",
+	"components/settings/providers/OpenAINative.tsx",
+	"components/settings/providers/LiteLlmProvider.tsx",
+	"components/settings/providers/OpenAiCodexProvider.tsx",
+	"components/settings/providers/OpenRouterProvider.tsx",
+	"components/settings/providers/QwenCodeProvider.tsx",
+	"components/settings/providers/QwenProvider.tsx",
+	"components/settings/providers/RequestyProvider.tsx",
+	"components/settings/providers/VSCodeLmProvider.tsx",
+	"components/settings/providers/VercelAIGatewayProvider.tsx",
+	"components/settings/providers/XaiProvider.tsx",
+	"components/settings/providers/ZAiProvider.tsx",
 	"components/settings/sections/FeatureSettingsSection.tsx",
 	"components/settings/sections/RemoteConfigSection.tsx",
 	"components/settings/sections/AboutSection.tsx",
@@ -49,6 +98,15 @@ const MIGRATED = [
  */
 const EXEMPT: ReadonlyArray<string> = []
 
+/**
+ * Files on `MIGRATED` that render no copy of their own: every visible string comes
+ * from a shared component that is already translated. They stay on the literal scan
+ * (that is what stops a later edit from typing English straight into the JSX) but not
+ * on the translator-import check — there is nothing for them to translate, and adding
+ * an unused import to satisfy a test is noise that hides the real intent.
+ */
+const DELEGATES_ONLY: ReadonlyArray<string> = ["components/settings/providers/OpenAINative.tsx"]
+
 const SRC_DIR = join(__dirname, "..")
 
 /**
@@ -59,10 +117,23 @@ const SRC_DIR = join(__dirname, "..")
  * this is a net, not a proof, and a net that cries wolf gets deleted.
  */
 const JSX_TEXT = />[^<>{}\n]*[A-Za-z][^<>{}\n]*<\//g
-/** A user-facing attribute given a literal instead of a translated expression. */
-const LITERAL_ATTRIBUTE = /\b(title|placeholder|aria-label|label)=(["'])[^"'{}\n]{3,}\2/g
+/**
+ * A user-facing attribute given a literal instead of a translated expression.
+ * `helpText` is in the list because `ApiKeyField` renders it under the field — a file
+ * that translated every label but left an English sentence in this prop reads as
+ * half-translated, and no text-node scan can see a prop value.
+ */
+const LITERAL_ATTRIBUTE = /\b(title|placeholder|aria-label|label|helpText)=(["'])[^"'{}\n]{3,}\2/g
 /** Anything that looks like a word: rejects `</div>`, `>=`, punctuation-only nodes. */
 const LOOKS_LIKE_COPY = /[A-Za-z]{2}/
+/**
+ * A one-token text node that is an identifier, not copy: a URL, a key prefix, a model
+ * id or a number (`https://api.sakana.ai/v1`, `sk-ai-v1-`, `llama3.1`, `32768`).
+ * Provider forms render these right beside their prose, and translating one would be a
+ * bug — a translated key prefix cannot work. Requiring a digit, dot or slash is what
+ * keeps single-word *labels* (`Retry`, `Model`, `Note:`) inside the net.
+ */
+const LOOKS_LIKE_IDENTIFIER = /^[A-Za-z0-9._:/#&=@+%-]*[0-9./][A-Za-z0-9._:/#&=@+%-]*$/
 /**
  * The two heuristics that keep TypeScript out of a text scan, both pinned by the
  * `scan itself` test below:
@@ -74,12 +145,22 @@ const LOOKS_LIKE_COPY = /[A-Za-z]{2}/
 const LOOKS_LIKE_TYPE_SYNTAX = /[=<>]/
 const STARTS_LIKE_COPY = /^[A-Za-z0-9"'(]/
 
+/** One text node's verdict, shared by the scan and its self-tests. */
+function looksLikeCopy(text: string): boolean {
+	return (
+		STARTS_LIKE_COPY.test(text) &&
+		!LOOKS_LIKE_TYPE_SYNTAX.test(text) &&
+		!LOOKS_LIKE_IDENTIFIER.test(text) &&
+		LOOKS_LIKE_COPY.test(text)
+	)
+}
+
 function violations(file: string): string[] {
 	const source = readFileSync(join(SRC_DIR, file), "utf8")
 	const found: string[] = []
 	for (const match of source.match(JSX_TEXT) ?? []) {
 		const text = match.slice(1, -2).trim()
-		if (STARTS_LIKE_COPY.test(text) && !LOOKS_LIKE_TYPE_SYNTAX.test(text) && LOOKS_LIKE_COPY.test(text)) {
+		if (looksLikeCopy(text)) {
 			found.push(`text node: ${text}`)
 		}
 	}
@@ -99,6 +180,10 @@ describe("migrated surfaces carry no hardcoded copy", () => {
 			expect(violations(file)).toEqual([])
 		})
 
+		if (DELEGATES_ONLY.includes(file)) {
+			continue
+		}
+
 		it(`${file} goes through the i18n core`, () => {
 			const source = readFileSync(join(SRC_DIR, file), "utf8")
 			expect(source, "must import from @/i18n").toMatch(/from "@\/i18n\//)
@@ -111,18 +196,20 @@ describe("the scan itself", () => {
 		const source = `
 			const Bad = () => <button title="Save changes">Save changes</button>
 			const Good = () => <button title={tr("save")}>{tr("save")}</button>
+			const Prop = () => <Field helpText="Stored locally" label={tr("key")} />
 			const Numbers = () => <span>{count}</span>
+			const Ids = () => <p><code>sk-ai-v1-</code><code>https://api.example.com/v1</code><code>llama3.1</code></p>
 		`
 		const found: string[] = []
 		for (const match of source.match(JSX_TEXT) ?? []) {
 			const text = match.slice(1, -2).trim()
-			if (STARTS_LIKE_COPY.test(text) && !LOOKS_LIKE_TYPE_SYNTAX.test(text) && LOOKS_LIKE_COPY.test(text)) {
+			if (looksLikeCopy(text)) {
 				found.push(text)
 			}
 		}
 		const attributes = source.match(LITERAL_ATTRIBUTE) ?? []
 		expect(found).toEqual(["Save changes"])
-		expect(attributes).toEqual(['title="Save changes"'])
+		expect(attributes).toEqual(['title="Save changes"', 'helpText="Stored locally"'])
 	})
 
 	it("does not mistake TypeScript for copy", () => {
@@ -135,10 +222,21 @@ describe("the scan itself", () => {
 		const found: string[] = []
 		for (const match of source.match(JSX_TEXT) ?? []) {
 			const text = match.slice(1, -2).trim()
-			if (STARTS_LIKE_COPY.test(text) && !LOOKS_LIKE_TYPE_SYNTAX.test(text) && LOOKS_LIKE_COPY.test(text)) {
+			if (looksLikeCopy(text)) {
 				found.push(text)
 			}
 		}
 		expect(found).toEqual([])
+	})
+
+	it("keeps single-word labels in the net but lets identifiers through", () => {
+		expect(["Model", "Retry", "Note:", "Custom", "Docs"].filter(looksLikeCopy)).toEqual([
+			"Model",
+			"Retry",
+			"Note:",
+			"Custom",
+			"Docs",
+		])
+		expect(["sk-ai-v1-", "https://api.sakana.ai/v1", "llama3.1", "32768", "gpt-5-mini"].filter(looksLikeCopy)).toEqual([])
 	})
 })

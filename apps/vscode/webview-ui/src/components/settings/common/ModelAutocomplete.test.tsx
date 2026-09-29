@@ -3,6 +3,13 @@ import type { FocusEventHandler, FormEventHandler, KeyboardEventHandler, ReactNo
 import { describe, expect, it, vi } from "vitest"
 import { ModelAutocomplete } from "./ModelAutocomplete"
 
+// The field's placeholder and aria labels come from the i18n tables, and the locale
+// is read from the extension state, so the spec supplies the same minimal state the
+// app does.
+vi.mock("@/context/ExtensionStateContext", () => ({
+	useExtensionState: () => ({ preferredLanguage: "English" }),
+}))
+
 vi.mock("@vscode/webview-ui-toolkit/react", () => ({
 	VSCodeTextField: ({
 		children,

@@ -3,6 +3,12 @@ import type { ChangeEventHandler, FormEventHandler, KeyboardEventHandler, ReactN
 import { describe, expect, it, vi } from "vitest"
 import { type ModelPickerSelection, ModelPickerWithManualEntry } from "./ModelPickerWithManualEntry"
 
+// The picker's labels come from the i18n tables, and the locale is read from the
+// extension state, so the spec supplies the same minimal state the app does.
+vi.mock("@/context/ExtensionStateContext", () => ({
+	useExtensionState: () => ({ preferredLanguage: "English" }),
+}))
+
 // Render the toolkit web components as native elements so value/change
 // behavior is observable in jsdom.
 vi.mock("@vscode/webview-ui-toolkit/react", () => ({
