@@ -16,6 +16,23 @@ vi.mock("@/services/grpc-client", () => ({
 	},
 }))
 
+// fix.49b: `useTranslation` reads the locale from `ExtensionStateContext`, which
+// this spec never provides. Mock the hook so the component renders the English
+// source (the same values the assertions below were written against) — the
+// locale tables themselves are pinned by `src/i18n/i18n.test.ts`.
+vi.mock("@/i18n/useTranslation", () => ({
+	useTranslation: () => (key: string) => key,
+}))
+vi.mock("@/i18n/strings", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("@/i18n/strings")>()
+	return {
+		...actual,
+		formatString: (_tr: (key: string) => string, key: string, values: Record<string, string | number>) =>
+			actual.formatString(((k: string) => k) as never, key as never, values),
+		splitOnPlaceholder: actual.splitOnPlaceholder,
+	}
+})
+
 const activeTeamState = {
 	active: true,
 	teamId: "team-1",
@@ -92,8 +109,8 @@ describe("TeamPanel", () => {
 
 		render(<TeamPanel onDone={() => {}} />)
 
-		expect(await screen.findByText(/not active for this session/i)).toBeInTheDocument()
-		expect(screen.queryByRole("button", { name: /spawn/i })).not.toBeInTheDocument()
+		expect(await screen.findByText("teamInactive")).toBeInTheDocument()
+		expect(screen.queryByRole("button", { name: "teamSpawn" })).not.toBeInTheDocument()
 	})
 
 	it("renders the topology, member models, and the mailbox", async () => {
@@ -116,10 +133,10 @@ describe("TeamPanel", () => {
 		render(<TeamPanel onDone={() => {}} />)
 		await screen.findByText("alice")
 
-		fireEvent.change(screen.getByLabelText(/agent id/i), { target: { value: "bob" } })
-		fireEvent.change(screen.getByLabelText(/role/i), { target: { value: "fix the flaky tests" } })
-		fireEvent.change(screen.getByLabelText(/model/i), { target: { value: "anthropic/claude-sonnet-4.6" } })
-		fireEvent.click(screen.getByRole("button", { name: /spawn/i }))
+		fireEvent.change(screen.getByLabelText("teamAgentIdLabel"), { target: { value: "bob" } })
+		fireEvent.change(screen.getByLabelText("teamRoleLabel"), { target: { value: "fix the flaky tests" } })
+		fireEvent.change(screen.getByLabelText("teamModelFieldLabel"), { target: { value: "anthropic/claude-sonnet-4.6" } })
+		fireEvent.click(screen.getByRole("button", { name: "teamSpawn" }))
 
 		await waitFor(() =>
 			expect(TeamServiceClient.spawnTeamMember).toHaveBeenCalledWith({
@@ -135,9 +152,9 @@ describe("TeamPanel", () => {
 		render(<TeamPanel onDone={() => {}} />)
 		await screen.findByText("alice")
 
-		fireEvent.change(screen.getByLabelText(/agent id/i), { target: { value: "bob" } })
-		fireEvent.change(screen.getByLabelText(/role/i), { target: { value: "help out" } })
-		fireEvent.click(screen.getByRole("button", { name: /spawn/i }))
+		fireEvent.change(screen.getByLabelText("teamAgentIdLabel"), { target: { value: "bob" } })
+		fireEvent.change(screen.getByLabelText("teamRoleLabel"), { target: { value: "help out" } })
+		fireEvent.click(screen.getByRole("button", { name: "teamSpawn" }))
 
 		await waitFor(() =>
 			expect(TeamServiceClient.spawnTeamMember).toHaveBeenCalledWith({
@@ -155,9 +172,9 @@ describe("TeamPanel", () => {
 		render(<TeamPanel onDone={() => {}} />)
 		await screen.findByText("alice")
 
-		fireEvent.change(screen.getByLabelText(/agent id/i), { target: { value: "bob" } })
-		fireEvent.change(screen.getByLabelText(/role/i), { target: { value: "help out" } })
-		fireEvent.click(screen.getByRole("button", { name: /spawn/i }))
+		fireEvent.change(screen.getByLabelText("teamAgentIdLabel"), { target: { value: "bob" } })
+		fireEvent.change(screen.getByLabelText("teamRoleLabel"), { target: { value: "help out" } })
+		fireEvent.click(screen.getByRole("button", { name: "teamSpawn" }))
 
 		expect(await screen.findByText("team is full")).toBeInTheDocument()
 	})

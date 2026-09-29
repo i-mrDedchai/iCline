@@ -115,6 +115,24 @@ const MIGRATED = [
 	"components/mcp/configuration/tabs/installed/server-row/ServerRow.tsx",
 	"components/history/HistoryView.tsx",
 	"components/history/HistoryViewItem.tsx",
+	// fix.49b: the standalone views — shared ui primitives take a translated label
+	// from their caller, and Worktrees / Team / Marketplace / Account / Onboarding /
+	// Browser render from the `surfaces` namespace.
+	"components/ui/alert.tsx",
+	"components/ui/dialog.tsx",
+	"components/common/WhatsNewModal.tsx",
+	"components/worktrees/WorktreesView.tsx",
+	"components/worktrees/CreateWorktreeModal.tsx",
+	"components/worktrees/DeleteWorktreeModal.tsx",
+	"components/team/TeamPanel.tsx",
+	"components/marketplace/MarketplaceView.tsx",
+	"components/account/AccountView.tsx",
+	"components/account/AccountWelcomeView.tsx",
+	"components/account/ClineAuthStatus.tsx",
+	"components/account/CreditBalance.tsx",
+	"components/account/CreditsHistoryTable.tsx",
+	"components/onboarding/OnboardingView.tsx",
+	"components/browser/BrowserSettingsMenu.tsx",
 ]
 
 /**
@@ -133,7 +151,14 @@ const EXEMPT: ReadonlyArray<string> = []
  * on the translator-import check — there is nothing for them to translate, and adding
  * an unused import to satisfy a test is noise that hides the real intent.
  */
-const DELEGATES_ONLY: ReadonlyArray<string> = ["components/settings/providers/OpenAINative.tsx"]
+const DELEGATES_ONLY: ReadonlyArray<string> = [
+	"components/settings/providers/OpenAINative.tsx",
+	// fix.49b: the shared ui primitives render no copy of their own — the dismiss
+	// and close labels arrive translated from the caller (`dismissLabel`,
+	// `closeLabel`), so there is nothing for them to translate.
+	"components/ui/alert.tsx",
+	"components/ui/dialog.tsx",
+]
 
 const SRC_DIR = join(__dirname, "..")
 

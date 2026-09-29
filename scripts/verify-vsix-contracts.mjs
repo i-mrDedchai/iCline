@@ -230,6 +230,74 @@ const CONTRACTS = [
 		why: "Japanese ships for the Hooks platform note, not just Settings",
 	},
 
+	// --- fix.50: the standalone views (Worktrees / Team / Marketplace / Account /
+	// Onboarding / Browser) read from the new `surfaces` namespace. One marker per
+	// surface, each a string that only exists in this round's tables.
+	{
+		round: "fix.50",
+		bundle: "webview",
+		marker: "จะสร้างสำเนาโปรเจกต์บน branch ใหม่และเปิดในหน้าต่างแยก",
+		why: "the create-worktree description ships translated (Thai)",
+	},
+	{
+		round: "fix.50",
+		bundle: "webview",
+		marker: "เซสชันนี้ไม่ได้เปิดใช้ agent teams",
+		why: "the team inactive state ships translated",
+	},
+	{
+		round: "fix.50",
+		bundle: "webview",
+		marker: "องค์กรของคุณจัดการเซิร์ฟเวอร์ MCP บางส่วน",
+		why: "the marketplace org notice ships translated",
+	},
+	{
+		round: "fix.50",
+		bundle: "webview",
+		marker: "สมัครบัญชีเพื่อเข้าถึงโมเดลล่าสุด",
+		why: "the account welcome intro ships translated",
+	},
+	{
+		round: "fix.50",
+		bundle: "webview",
+		marker: "現在利用可能な ClinePass モデルがありません",
+		why: "Japanese ships for the onboarding empty state",
+	},
+	{
+		round: "fix.50",
+		bundle: "webview",
+		marker: "การเชื่อมต่อเบราว์เซอร์",
+		why: "the browser connection popover ships translated",
+	},
+
+	// --- fix.50: the manifest commands and the host update/notebook messages
+	// localize. The manifest resolves through package.nls (checked by the language
+	// bundles gate); the host goes through the l10n bundles under `l10n/`.
+	{
+		round: "fix.50",
+		bundle: "manifest",
+		marker: "งานใหม่",
+		why: "the New Task command title ships translated (Thai nls)",
+	},
+	{
+		round: "fix.50",
+		bundle: "manifestJa",
+		marker: "新しいタスク",
+		why: "Japanese ships for the manifest command titles",
+	},
+	{
+		round: "fix.50",
+		bundle: "l10nTh",
+		marker: "ต้องมีส่วนขยาย Jupyter จึงจะดู diff ของโน้ตบุ๊กได้",
+		why: "the host notebook-diff message ships translated, not just wrapped",
+	},
+	{
+		round: "fix.50",
+		bundle: "l10nJa",
+		marker: "iCline の最新リリース: {0}（更新あり）",
+		why: "the host update status keeps its placeholder in Japanese",
+	},
+
 	// --- fix.47: the whole api-config tab speaks the user's language — every provider
 	// form, and the shared fields they are built from. Each marker is a string that only
 	// exists in this round's tables, and each one keeps a placeholder where the sentence
@@ -605,13 +673,20 @@ function run(options) {
 		// checkout so the check cannot pin a layout the project never agreed on.
 		const l10nRoot = join(localRoot, "l10n")
 		const l10nBundles = existsSync(l10nRoot) ? walk(l10nRoot).map((file) => relative(localRoot, file)) : []
+		const packedL10n = {}
 		for (const bundle of l10nBundles) {
+			const packedPath = join(temp, "extension", bundle)
 			add(
 				"language bundles",
-				existsSync(join(temp, "extension", bundle)),
+				existsSync(packedPath),
 				bundle,
 				`${l10nBundles.length} host bundle(s) in the checkout`,
 			)
+			if (existsSync(packedPath)) {
+				// `walk`/`relative` give platform separators; the contract table names
+				// bundles the way the archive does (forward slashes on every OS).
+				packedL10n[bundle.replaceAll("\\", "/")] = readFileSync(packedPath, "utf8")
+			}
 		}
 		if (manifest && packedNls["package.nls.json"]) {
 			const referenced = [...new Set([...JSON.stringify(manifest).matchAll(/"%([\w.]+)%"/g)].map((match) => match[1]))]
@@ -709,6 +784,14 @@ function run(options) {
 		for (const [kind, file] of Object.entries(sources)) {
 			loaded[kind] = existsSync(file) ? readFileSync(file, "utf8") : undefined
 		}
+		// The manifest resolves through package.nls, so a manifest marker is checked
+		// against the packed Thai nls table rather than a JS bundle.
+		loaded.manifest = packedNls["package.nls.th.json"] ? JSON.stringify(packedNls["package.nls.th.json"]) : undefined
+		loaded.manifestJa = packedNls["package.nls.ja.json"] ? JSON.stringify(packedNls["package.nls.ja.json"]) : undefined
+		// The host translates through the l10n bundles, so those markers come from the
+		// packed copies too — a bundle left out of the archive ships English-only.
+		loaded.l10nTh = packedL10n["l10n/bundle.l10n.th.json"]
+		loaded.l10nJa = packedL10n["l10n/bundle.l10n.ja.json"]
 		for (const contract of selected) {
 			const haystack = loaded[contract.bundle]
 			if (haystack === undefined) {
