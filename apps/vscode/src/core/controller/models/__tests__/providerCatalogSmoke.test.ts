@@ -82,7 +82,14 @@ describe("provider model catalog backend smoke", () => {
 		expect(config.providerId).toBe("deepseek")
 		expect(config.actSelection?.providerId).toBe("deepseek")
 		expect(config.actSelection?.modelId).toBe(modelId)
-		expect(config.actSelection?.modelInfo).toEqual(modelInfo)
+		// The store stamps where a context window came from so the Settings row can show a
+		// provenance badge; that annotation is not part of the model description the resolver
+		// hands the picker, so compare the description and pin the annotation separately.
+		const { contextWindowSource, ...resolvedDescription } = config.actSelection?.modelInfo ?? {}
+		expect(resolvedDescription).toEqual(modelInfo)
+		// DeepSeek's context window is declared by the provider's own metadata (bundled catalog
+		// ∪ live /models cache) — the case the badge calls "gateway".
+		expect(contextWindowSource).toBe("gateway")
 		expect(JSON.stringify(config)).not.toContain("SECRET")
 	})
 })
