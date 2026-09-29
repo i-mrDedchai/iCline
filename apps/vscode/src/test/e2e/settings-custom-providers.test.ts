@@ -1,7 +1,35 @@
-import { expect } from "@playwright/test"
+import { expect, type Frame } from "@playwright/test"
 import { getMockApiServerUrl } from "./fixtures/server"
 import { E2E_GATEWAY_API_KEY, E2E_GATEWAY_MODEL_ID } from "./fixtures/server/api"
 import { e2e } from "./utils/helpers"
+
+/**
+ * Delete a provider through the card's two-step confirmation.
+ *
+ * Both steps are plain buttons in a card that sits under the api-config form, and
+ * that form re-lays itself out as state posts land — selecting a provider, in
+ * particular, re-renders the options above the card after the click that selected
+ * it. `click({ delay })`, which the rest of this suite uses to let a *list* own its
+ * own mouseup, is the wrong tool here: it holds the button down for 40ms, and a
+ * press that spans one of those re-layouts dispatches its mouseup on the element
+ * that moved into that spot. The click is then silently lost — no interception
+ * error, because Playwright's pre-press checks (visible / stable / enabled / not
+ * covered) all passed — which is exactly how this spec used to fail: a 30s timeout
+ * that read as "the confirm button never appeared" rather than "the Delete press
+ * went nowhere".
+ *
+ * So: press atomically (no artificial delay), then assert the confirm state
+ * explicitly, which turns any lost press into an immediate, legible failure
+ * instead of a hang.
+ */
+async function deleteCustomProvider(sidebar: Frame, providerId: string): Promise<void> {
+	const deleteButton = sidebar.getByTestId(`custom-provider-delete-${providerId}`)
+	const confirmButton = sidebar.getByTestId(`custom-provider-delete-confirm-${providerId}`)
+	await expect(deleteButton).toBeVisible({ timeout: 10_000 })
+	await deleteButton.click()
+	await expect(confirmButton).toBeVisible({ timeout: 5_000 })
+	await confirmButton.click()
+}
 
 /**
  * E2E guard for multi custom-provider management (add / edit / delete / auto-fetch models).
@@ -78,8 +106,7 @@ e2e("Settings — custom providers can be added, edited, deleted and models auto
 	})
 
 	// --- 4. Delete one behind the confirmation, keep the other ---
-	await sidebar.getByTestId("custom-provider-delete-e2e-gw-two").click({ delay: 40 })
-	await sidebar.getByTestId("custom-provider-delete-confirm-e2e-gw-two").click({ delay: 40 })
+	await deleteCustomProvider(sidebar, "e2e-gw-two")
 	await expect(sidebar.getByTestId("custom-provider-row-e2e-gw-two")).toHaveCount(0, { timeout: 15_000 })
 	await expect(sidebar.getByTestId("custom-provider-row-e2e-gw-auto")).toBeVisible()
 })
@@ -101,8 +128,7 @@ e2e("Settings — deleting the provider in use falls back instead of stranding t
 	// run leaves the provider behind — creating it again would then fail on the
 	// duplicate id rather than on anything this test is about.
 	if (await row.isVisible().catch(() => false)) {
-		await sidebar.getByTestId(`custom-provider-delete-${ACTIVE_PROVIDER_ID}`).click({ delay: 40 })
-		await sidebar.getByTestId(`custom-provider-delete-confirm-${ACTIVE_PROVIDER_ID}`).click({ delay: 40 })
+		await deleteCustomProvider(sidebar, ACTIVE_PROVIDER_ID)
 		await expect(row).toHaveCount(0, { timeout: 15_000 })
 	}
 
@@ -126,8 +152,7 @@ e2e("Settings — deleting the provider in use falls back instead of stranding t
 	await expect(sidebar.getByTestId(`provider-option-${ACTIVE_PROVIDER_ID}`)).toHaveCount(0, { timeout: 5_000 })
 
 	// Now delete what is in use.
-	await sidebar.getByTestId(`custom-provider-delete-${ACTIVE_PROVIDER_ID}`).click({ delay: 40 })
-	await sidebar.getByTestId(`custom-provider-delete-confirm-${ACTIVE_PROVIDER_ID}`).click({ delay: 40 })
+	await deleteCustomProvider(sidebar, ACTIVE_PROVIDER_ID)
 	await expect(row).toHaveCount(0, { timeout: 15_000 })
 
 	// The affected mode must not keep pointing at a provider that no longer exists.
