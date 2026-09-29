@@ -9,6 +9,7 @@ import XIcon from "@/assets/XIcon"
 import WhatsNewItems from "@/components/common/WhatsNewItems"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { useExtensionState } from "@/context/ExtensionStateContext"
+import { useTranslation } from "@/i18n/useTranslation"
 
 interface WhatsNewModalProps {
 	open: boolean
@@ -19,6 +20,7 @@ interface WhatsNewModalProps {
 }
 
 const WhatsNewModal: React.FC<WhatsNewModalProps> = ({ open, onClose, version, welcomeBanners, onBannerAction }) => {
+	const tr = useTranslation("surfaces")
 	const { refreshOpenRouterModels } = useExtensionState()
 
 	// Get latest model list in case user hits shortcut button to set model
@@ -37,7 +39,8 @@ const WhatsNewModal: React.FC<WhatsNewModalProps> = ({ open, onClose, version, w
 			<DialogContent
 				aria-describedby="whats-new-description"
 				aria-labelledby="whats-new-title"
-				className="pt-5 px-5 pb-4 gap-0">
+				className="pt-5 px-5 pb-4 gap-0"
+				closeLabel={tr("uiClose")}>
 				<div id="whats-new-description">
 					<h2
 						className="text-lg font-semibold mb-3 pr-6"
@@ -59,7 +62,7 @@ const WhatsNewModal: React.FC<WhatsNewModalProps> = ({ open, onClose, version, w
 						<div className="flex items-center gap-4">
 							{/* X/Twitter */}
 							<a
-								aria-label="Follow us on X"
+								aria-label={tr("marketplaceSocialX")}
 								className="text-[var(--vscode-foreground)] hover:text-[var(--vscode-textLink-activeForeground)] transition-colors"
 								href="https://x.com/cline"
 								rel="noopener noreferrer"
@@ -69,7 +72,7 @@ const WhatsNewModal: React.FC<WhatsNewModalProps> = ({ open, onClose, version, w
 
 							{/* Discord */}
 							<a
-								aria-label="Join our Discord"
+								aria-label={tr("marketplaceSocialDiscord")}
 								className="text-[var(--vscode-foreground)] hover:text-[var(--vscode-textLink-activeForeground)] transition-colors"
 								href="https://discord.gg/cline"
 								rel="noopener noreferrer"
@@ -79,7 +82,7 @@ const WhatsNewModal: React.FC<WhatsNewModalProps> = ({ open, onClose, version, w
 
 							{/* GitHub */}
 							<a
-								aria-label="Star us on GitHub"
+								aria-label={tr("marketplaceSocialGithub")}
 								className="text-[var(--vscode-foreground)] hover:text-[var(--vscode-textLink-activeForeground)] transition-colors"
 								href="https://github.com/cline/cline"
 								rel="noopener noreferrer"
@@ -89,7 +92,7 @@ const WhatsNewModal: React.FC<WhatsNewModalProps> = ({ open, onClose, version, w
 
 							{/* Reddit */}
 							<a
-								aria-label="Join our subreddit"
+								aria-label={tr("marketplaceSocialReddit")}
 								className="text-[var(--vscode-foreground)] hover:text-[var(--vscode-textLink-activeForeground)] transition-colors"
 								href="https://www.reddit.com/r/cline/"
 								rel="noopener noreferrer"
@@ -99,7 +102,7 @@ const WhatsNewModal: React.FC<WhatsNewModalProps> = ({ open, onClose, version, w
 
 							{/* LinkedIn */}
 							<a
-								aria-label="Follow us on LinkedIn"
+								aria-label={tr("marketplaceSocialLinkedin")}
 								className="text-[var(--vscode-foreground)] hover:text-[var(--vscode-textLink-activeForeground)] transition-colors"
 								href="https://www.linkedin.com/company/clinebot/"
 								rel="noopener noreferrer"

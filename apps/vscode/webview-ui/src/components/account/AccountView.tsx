@@ -9,6 +9,7 @@ import { useInterval } from "react-use"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { type ClineUser, handleSignOut } from "@/context/ClineAuthContext"
 import { useExtensionState } from "@/context/ExtensionStateContext"
+import { useTranslation } from "@/i18n/useTranslation"
 import { AccountServiceClient } from "@/services/grpc-client"
 import ViewHeader from "../common/ViewHeader"
 import VSCodeButtonLink from "../common/VSCodeButtonLink"
@@ -43,11 +44,12 @@ type CachedData = {
 const ClineEnvOptions = ["Production", "Staging", "Local"] as const
 
 const AccountView = ({ onDone, clineUser, organizations, activeOrganization }: AccountViewProps) => {
+	const tr = useTranslation("surfaces")
 	const { environment } = useExtensionState()
 
 	return (
 		<div className="fixed inset-0 flex flex-col overflow-hidden">
-			<ViewHeader environment={environment} onDone={onDone} showEnvironmentSuffix title="Account" />
+			<ViewHeader environment={environment} onDone={onDone} showEnvironmentSuffix title={tr("accountTitle")} />
 			<div className="grow flex flex-col px-5 overflow-y-auto">
 				{clineUser?.uid ? (
 					<ClineAccountView
@@ -66,6 +68,7 @@ const AccountView = ({ onDone, clineUser, organizations, activeOrganization }: A
 }
 
 const ClineAccountView = ({ clineUser, userOrganizations, activeOrganization, clineEnv }: ClineAccountViewProps) => {
+	const tr = useTranslation("surfaces")
 	const { email, displayName, appBaseUrl, uid } = clineUser
 	const { remoteConfigSettings, environment } = useExtensionState()
 
@@ -133,9 +136,9 @@ const ClineAccountView = ({ clineUser, userOrganizations, activeOrganization, cl
 			const newPaymentsData = response.paymentTransactions
 			setPaymentsData((prev) => (deepEqual(newPaymentsData, prev) ? prev : newPaymentsData))
 		} catch (error) {
-			console.error("Failed to fetch user credit:", error)
+			console.error(tr("accountFailedCredit"), error)
 		}
-	}, [])
+	}, [tr])
 
 	const fetchCreditBalance = useCallback(
 		async (id: string, skipCache = false) => {
@@ -167,13 +170,13 @@ const ClineAccountView = ({ clineUser, userOrganizations, activeOrganization, cl
 				// Cache the updated data
 				cacheCurrentData(id)
 			} catch (error) {
-				console.error("Failed to fetch credit balance:", error)
+				console.error(tr("accountFailedBalance"), error)
 			} finally {
 				setLastFetchTime(Date.now())
 				setIsLoading(false)
 			}
 		},
-		[isLoading, uid, fetchUserCredit, loadCachedData],
+		[isLoading, uid, fetchUserCredit, loadCachedData, tr],
 	)
 
 	const handleOrganizationChange = useCallback(
@@ -307,7 +310,7 @@ const ClineAccountView = ({ clineUser, userOrganizations, activeOrganization, cl
 				<div className="flex flex-col w-full gap-1 mb-6">
 					<div className="flex items-center flex-wrap gap-y-4">
 						{/* {user.photoUrl ? (
-								<img src={user.photoUrl} alt="Profile" className="size-16 rounded-full mr-4" />
+								<img src={user.photoUrl} alt={tr("accountProfile")} className="size-16 rounded-full mr-4" />
 							) : ( */}
 						<div className="size-16 rounded-full bg-button-background flex items-center justify-center text-2xl text-button-foreground mr-4">
 							{displayName?.[0] || email?.[0] || "?"}
@@ -342,7 +345,7 @@ const ClineAccountView = ({ clineUser, userOrganizations, activeOrganization, cl
 									</TooltipContent>
 								</Tooltip>
 								{activeOrganization && (
-									<VSCodeTag className="text-xs p-2" title="Role">
+									<VSCodeTag className="text-xs p-2" title={tr("accountRole")}>
 										{getMainRole(activeOrganization.roles)}
 									</VSCodeTag>
 								)}
@@ -390,7 +393,7 @@ const ClineAccountView = ({ clineUser, userOrganizations, activeOrganization, cl
 				{isClineTester && environment !== "selfHosted" && (
 					<div className="w-full gap-1 items-end">
 						<VSCodeDivider className="w-full my-3" />
-						<div className="text-sm font-semibold">Cline Environment</div>
+						<div className="text-sm font-semibold">{tr("accountEnvironment")}</div>
 						<VSCodeDropdown
 							className="w-full mt-1"
 							currentValue={clineEnv}

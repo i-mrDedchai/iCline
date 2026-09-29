@@ -1,0 +1,19 @@
+{
+	"Jupyter extension is required for notebook diffs.": "ต้องมีส่วนขยาย Jupyter จึงจะดู diff ของโน้ตบุ๊กได้",
+	"iCline {0} is available (installed: {1}). Download the .vsix from Releases and reinstall — VS Code does not auto-update iCline.": "มี iCline {0} ให้อัปเดต (ติดตั้งอยู่: {1}) ดาวน์โหลดไฟล์ .vsix จาก Releases แล้วติดตั้งใหม่ — VS Code ไม่อัปเดต iCline ให้อัตโนมัติ",
+	"View Release": "ดู Release",
+	"Dismiss": "ปิด",
+	"Cline official released {0}. Your iCline fork ({1}) may benefit from an upstream sync.": "Cline ต้นทางออก {0} แล้ว ฟอร์ก iCline ของคุณ ({1}) อาจได้ประโยชน์จากการซิงก์กับต้นทาง",
+	"View Upstream": "ดูต้นทาง",
+	"iCline version: {0}": "เวอร์ชัน iCline: {0}",
+	"Latest iCline release: {0} (update available)": "รีลีส iCline ล่าสุด: {0} (มีอัปเดต)",
+	"Latest iCline release: {0}": "รีลีส iCline ล่าสุด: {0}",
+	"Latest iCline release: unavailable (configure iCline.updates.releasesUrl)": "รีลีส iCline ล่าสุด: ไม่พร้อมใช้งาน (ตั้งค่า iCline.updates.releasesUrl)",
+	"Latest Cline official: {0} (ahead of iCline)": "Cline ต้นทางล่าสุด: {0} (นำหน้า iCline)",
+	"Latest Cline official: {0}": "Cline ต้นทางล่าสุด: {0}",
+	"Latest Cline official: unavailable": "Cline ต้นทางล่าสุด: ไม่พร้อมใช้งาน",
+	"Safe update model:": "โมเดลการอัปเดตที่ปลอดภัย:",
+	"• iCline updates use extension ID {0} — separate from saoudrizwan.claude-dev": "• iCline อัปเดตด้วยรหัสส่วนขยาย {0} — แยกจาก saoudrizwan.claude-dev",
+	"• Official Cline auto-update will NOT overwrite iCline": "• การอัปเดตอัตโนมัติของ Cline ต้นทางจะไม่ทับ iCline",
+	"• Merge upstream with scripts/sync-upstream.ps1, then release a new iCline build": "• รวมอัปสตรีมด้วย scripts/sync-upstream.ps1 แล้วออกบิลด์ iCline ใหม่"
+}

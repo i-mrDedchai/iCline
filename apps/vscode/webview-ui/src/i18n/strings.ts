@@ -19,6 +19,7 @@ import { pickerStrings } from "./namespaces/picker"
 import { providersStrings } from "./namespaces/providers"
 import { quickStartStrings } from "./namespaces/quickStart"
 import { settingsStrings } from "./namespaces/settings"
+import { surfacesStrings } from "./namespaces/surfaces"
 
 /** A namespace's copy: a complete table per locale the core can render. */
 export type NamespaceTables<Keys extends string = string> = Record<TranslatedLocale, Record<Keys, string>>
@@ -29,6 +30,7 @@ export const NAMESPACES = {
 	providers: providersStrings,
 	quickStart: quickStartStrings,
 	settings: settingsStrings,
+	surfaces: surfacesStrings,
 }
 
 export type Namespace = keyof typeof NAMESPACES

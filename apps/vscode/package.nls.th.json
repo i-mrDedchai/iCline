@@ -1,4 +1,25 @@
 {
 	"extension.displayName": "iCline — เอเจนต์เขียนโค้ด (standalone)",
-	"extension.description": "Fork ของ Cline สำหรับ VS Code — ใช้ iCline อย่างเดียวได้ ไม่ต้องติดตั้ง Cline official. รองรับ Grok, ZenMux, OpenRouter และ provider อื่นๆ"
+	"extension.description": "Fork ของ Cline สำหรับ VS Code — ใช้ iCline อย่างเดียวได้ ไม่ต้องติดตั้ง Cline official. รองรับ Grok, ZenMux, OpenRouter และ provider อื่นๆ",
+	"command.iCline.plusButtonClicked": "งานใหม่",
+	"command.iCline.mcpButtonClicked": "เซิร์ฟเวอร์ MCP",
+	"command.iCline.marketplaceButtonClicked": "ปรับแต่ง",
+	"command.iCline.historyButtonClicked": "ประวัติ",
+	"command.iCline.accountButtonClicked": "บัญชี",
+	"command.iCline.settingsButtonClicked": "การตั้งค่า",
+	"command.iCline.addToChat": "เพิ่มเข้า iCline",
+	"command.iCline.addTerminalOutputToChat": "เพิ่มเข้า iCline",
+	"command.iCline.focusChatInput": "ไปที่ช่องแชท",
+	"command.iCline.generateGitCommitMessage": "ให้ iCline เขียน commit message",
+	"command.iCline.abortGitCommitMessage": "หยุดเขียน commit message",
+	"command.iCline.explainCode": "อธิบายด้วย iCline",
+	"command.iCline.improveCode": "ปรับปรุงด้วย iCline",
+	"command.iCline.jupyterGenerateCell": "ให้ iCline เขียน Jupyter cell",
+	"command.iCline.jupyterExplainCell": "อธิบาย Jupyter cell ด้วย iCline",
+	"command.iCline.jupyterImproveCell": "ปรับปรุง Jupyter cell ด้วย iCline",
+	"command.iCline.openWalkthrough": "เปิดคำแนะนำการใช้งาน",
+	"command.iCline.reconstructTaskHistory": "สร้างประวัติงานใหม่",
+	"command.iCline.checkForUpdates": "ตรวจอัปเดต (iCline และ Cline)",
+	"command.iCline.reviewComment.reply": "ตอบกลับ",
+	"command.iCline.reviewComment.addToChat": "เพิ่มเข้าแชท iCline"
 }

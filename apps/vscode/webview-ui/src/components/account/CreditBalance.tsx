@@ -1,4 +1,6 @@
 import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
+import { formatString } from "@/i18n/strings"
+import { useTranslation } from "@/i18n/useTranslation"
 import VSCodeButtonLink from "../common/VSCodeButtonLink"
 import { StyledCreditDisplay } from "./StyledCreditDisplay"
 
@@ -11,11 +13,14 @@ type CreditBalanceProps = {
 }
 
 export const CreditBalance = ({ balance, fetchCreditBalance, creditUrl, lastFetchTime, isLoading }: CreditBalanceProps) => {
+	const tr = useTranslation("surfaces")
 	return (
 		<div
 			className="w-full flex flex-col items-center"
-			title={`Last updated: ${new Date(lastFetchTime).toLocaleTimeString()}`}>
-			<div className="text-sm text-(--vscode-descriptionForeground) mb-3 font-azeret-mono font-light">CURRENT BALANCE</div>
+			title={formatString(tr, "accountLastUpdated", { time: new Date(lastFetchTime).toLocaleTimeString() })}>
+			<div className="text-sm text-(--vscode-descriptionForeground) mb-3 font-azeret-mono font-light">
+				{tr("accountCurrentBalance")}
+			</div>
 
 			<div className="font-bold text-2xl mb-6 flex items-center gap-2">
 				{balance === null ? <span>----</span> : <StyledCreditDisplay balance={balance} />}
@@ -23,14 +28,15 @@ export const CreditBalance = ({ balance, fetchCreditBalance, creditUrl, lastFetc
 					appearance="icon"
 					className={`mt-1 ${isLoading ? "animate-spin" : ""}`}
 					disabled={isLoading}
-					onClick={fetchCreditBalance}>
-					<span className="codicon codicon-refresh"></span>
+					onClick={fetchCreditBalance}
+					title={tr("accountRefreshBalance")}>
+					<span className="codicon codicon-refresh" />
 				</VSCodeButton>
 			</div>
 
 			<div className="w-full">
 				<VSCodeButtonLink className="w-full" href={creditUrl.href}>
-					Add Credits
+					{tr("accountAddCredits")}
 				</VSCodeButtonLink>
 			</div>
 		</div>

@@ -14,6 +14,7 @@ import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useHasFeatureFlag } from "@/hooks/useFeatureFlag"
 import { useProviderConfig } from "@/hooks/useProviderConfig"
 import { useProviderModels } from "@/hooks/useProviderModels"
+import { useTranslation } from "@/i18n/useTranslation"
 import { cn } from "@/lib/utils"
 import { AccountServiceClient, StateServiceClient, UiServiceClient } from "@/services/grpc-client"
 import ApiConfigurationSection from "../settings/sections/ApiConfigurationSection"
@@ -82,6 +83,7 @@ const ModelSelection = ({
 	setSearchTerm,
 	onboardingModels,
 }: ModelSelectionProps) => {
+	const tr = useTranslation("surfaces")
 	const isClinePass = userType === NEW_USER_TYPE.CLINE_PASS
 	const modelGroups = onboardingModels[getModelGroupKey(userType)]
 	// ClinePass costs are covered by the subscription, so prices are hidden.
@@ -122,7 +124,7 @@ const ModelSelection = ({
 					</ItemTitle>
 					{isSelected && model.info && (
 						<ItemDescription>
-							<span className="text-foreground/70 text-sm">Support: </span>
+							<span className="text-foreground/70 text-sm">{tr("onboardingSupport")} </span>
 							<span className="text-foreground text-sm">{getCapabilities(model.info).join(", ")}</span>
 						</ItemDescription>
 					)}
@@ -132,14 +134,14 @@ const ModelSelection = ({
 						<div className="flex flex-col gap-3">
 							<div className="inline-flex gap-1 [&_svg]:stroke-success [&_svg]:size-3 items-center text-sm">
 								<ZapIcon />
-								<span>Speed: </span>
+								<span>{tr("onboardingSpeed")} </span>
 								<span className="text-foreground/70">{getSpeedLabel(model.latency)}</span>
 							</div>
 							{model.info && (
 								<div className="flex w-full justify-between">
 									<div className="inline-flex gap-1 [&_svg]:stroke-foreground [&_svg]:size-3 items-center text-sm">
 										<ListIcon />
-										<span>Context: </span>
+										<span>{tr("onboardingContext")} </span>
 										<span className="text-foreground/70">{(model?.info.contextWindow || 0) / 1000}k</span>
 									</div>
 									{!hidePrice && <Badge>{getPriceRange(model.info)}</Badge>}
@@ -156,8 +158,8 @@ const ModelSelection = ({
 	if (isClinePass && modelGroups.length === 0) {
 		return (
 			<div className="flex w-full max-w-lg flex-col items-center justify-center my-8 px-2 text-center">
-				<p className="text-foreground text-sm m-0">No ClinePass models are available right now.</p>
-				<p className="text-foreground/70 text-sm mt-1">Please choose another option or try again later.</p>
+				<p className="text-foreground text-sm m-0">{tr("onboardingNoModels")}</p>
+				<p className="text-foreground/70 text-sm mt-1">{tr("onboardingChooseOther")}</p>
 			</div>
 		)
 	}
@@ -188,7 +190,9 @@ const ModelSelection = ({
 			{!isClinePass && (
 				<div className="flex w-full max-w-lg flex-col gap-6 my-4 border-t border-muted-foreground">
 					<div className="flex flex-col gap-3 mt-6" key="search-results">
-						<h4 className="text-sm font-bold text-foreground/70 uppercase mb-2">other options</h4>
+						<h4 className="text-sm font-bold text-foreground/70 uppercase mb-2">
+							{tr("onboardingOtherOptionsLink")}
+						</h4>
 						<Input
 							autoFocus={false}
 							className="focus-visible:border-button-background"
@@ -199,7 +203,7 @@ const ModelSelection = ({
 								setSearchTerm(e.target.value)
 							}}
 							onClick={() => onSelectModel("")}
-							placeholder="Search model..."
+							placeholder={tr("onboardingSearchModel")}
 							type="search"
 							value={searchTerm}
 						/>
@@ -256,50 +260,54 @@ type UserTypeSelectionProps = {
 	userTypeSelections: ReturnType<typeof getUserTypeSelections>
 }
 
-const UserTypeSelectionStep = ({ userType, onSelectUserType, userTypeSelections }: UserTypeSelectionProps) => (
-	<div className="flex flex-col w-full items-center">
-		<div className="flex w-full max-w-lg flex-col gap-3 my-2">
-			{userTypeSelections.map((option) => {
-				const isSelected = userType === option.type
+const UserTypeSelectionStep = ({ userType, onSelectUserType, userTypeSelections }: UserTypeSelectionProps) => {
+	const tr = useTranslation("surfaces")
 
-				return (
-					<Item
-						className={cn("cursor-pointer hover:cursor-pointer w-full", {
-							"bg-input-background/50 border border-input-foreground/30": isSelected,
-						})}
-						key={option.type}
-						onClick={() => onSelectUserType(option.type)}>
-						<ItemMedia className="[&_svg]:stroke-button-background" variant="icon">
-							{isSelected ? <CircleCheckIcon className="stroke-1.5" /> : <CircleIcon className="stroke-1" />}
-						</ItemMedia>
-						<ItemContent className="w-full">
-							<ItemTitle>{option.title}</ItemTitle>
-							<ItemDescription>
-								{option.description}
-								{option.learnMoreUrl && (
-									<>
-										{" "}
-										<VSCodeLink
-											className="inline"
-											onClick={(e) => {
-												e.stopPropagation()
-												UiServiceClient.openUrl(
-													StringRequest.create({ value: option.learnMoreUrl }),
-												).catch((err) => console.error("Failed to open learn more link:", err))
-											}}
-											style={{ fontSize: "inherit" }}>
-											Learn more
-										</VSCodeLink>
-									</>
-								)}
-							</ItemDescription>
-						</ItemContent>
-					</Item>
-				)
-			})}
+	return (
+		<div className="flex flex-col w-full items-center">
+			<div className="flex w-full max-w-lg flex-col gap-3 my-2">
+				{userTypeSelections.map((option) => {
+					const isSelected = userType === option.type
+
+					return (
+						<Item
+							className={cn("cursor-pointer hover:cursor-pointer w-full", {
+								"bg-input-background/50 border border-input-foreground/30": isSelected,
+							})}
+							key={option.type}
+							onClick={() => onSelectUserType(option.type)}>
+							<ItemMedia className="[&_svg]:stroke-button-background" variant="icon">
+								{isSelected ? <CircleCheckIcon className="stroke-1.5" /> : <CircleIcon className="stroke-1" />}
+							</ItemMedia>
+							<ItemContent className="w-full">
+								<ItemTitle>{option.title}</ItemTitle>
+								<ItemDescription>
+									{option.description}
+									{option.learnMoreUrl && (
+										<>
+											{" "}
+											<VSCodeLink
+												className="inline"
+												onClick={(e) => {
+													e.stopPropagation()
+													UiServiceClient.openUrl(
+														StringRequest.create({ value: option.learnMoreUrl }),
+													).catch((err) => console.error(tr("onboardingFailedLearnMore"), err))
+												}}
+												style={{ fontSize: "inherit" }}>
+												{tr("onboardingLearnMore")}
+											</VSCodeLink>
+										</>
+									)}
+								</ItemDescription>
+							</ItemContent>
+						</Item>
+					)
+				})}
+			</div>
 		</div>
-	</div>
-)
+	)
+}
 
 type OnboardingStepContentProps = {
 	step: number
@@ -356,6 +364,7 @@ const OnboardingStepContent = ({
 }
 
 const OnboardingViewContent = ({ onboardingModels }: { onboardingModels: OnboardingModelGroup }) => {
+	const tr = useTranslation("surfaces")
 	const { handleFieldsChange } = useApiConfigurationHandlers()
 	const { openRouterModels, hideSettings, hideAccount, setShowWelcome } = useExtensionState()
 	const isClinePassEnabled = useHasFeatureFlag(CLINE_PASS_FEATURE_FLAG)
@@ -540,7 +549,7 @@ const OnboardingViewContent = ({ onboardingModels }: { onboardingModels: Onboard
 
 			await AccountServiceClient.accountLoginClicked({})
 				.catch((error) => {
-					console.error("Failed to log in during onboarding:", error)
+					console.error(tr("onboardingFailedLogin"), error)
 				})
 				.finally(() => {
 					if (loginAttemptIdRef.current !== loginAttemptId) {
@@ -657,7 +666,7 @@ const OnboardingViewContent = ({ onboardingModels }: { onboardingModels: Onboard
 								onClick={() => handleFooterAction(btn.action)}
 								variant={btn.variant}>
 								{showSpinner && <LoaderCircleIcon className="mr-2 size-4 animate-spin" />}
-								{showSpinner ? "Waiting for sign in..." : btn.text}
+								{showSpinner ? tr("onboardingWaitingSignIn") : btn.text}
 							</Button>
 						)
 					})}

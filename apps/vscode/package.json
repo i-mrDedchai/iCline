@@ -1,9 +1,10 @@
 {
 	"name": "iCline",
 	"displayName": "%extension.displayName%",
-	"description": "Standalone Cline fork for VS Code — no official Cline required. Supports Grok, ZenMux, OpenRouter, and other providers.",
+	"description": "%extension.description%",
 	"version": "0.1.18-dev.6",
 	"icon": "assets/icons/icon.png",
+	"l10n": "./l10n",
 	"engines": {
 		"vscode": "^1.101.0"
 	},
@@ -146,32 +147,32 @@
 		"commands": [
 			{
 				"command": "iCline.plusButtonClicked",
-				"title": "New Task",
+				"title": "%command.iCline.plusButtonClicked%",
 				"icon": "$(add)"
 			},
 			{
 				"command": "iCline.mcpButtonClicked",
-				"title": "MCP Servers",
+				"title": "%command.iCline.mcpButtonClicked%",
 				"icon": "$(server)"
 			},
 			{
 				"command": "iCline.marketplaceButtonClicked",
-				"title": "Customize",
+				"title": "%command.iCline.marketplaceButtonClicked%",
 				"icon": "$(wrench)"
 			},
 			{
 				"command": "iCline.historyButtonClicked",
-				"title": "History",
+				"title": "%command.iCline.historyButtonClicked%",
 				"icon": "$(history)"
 			},
 			{
 				"command": "iCline.accountButtonClicked",
-				"title": "Account",
+				"title": "%command.iCline.accountButtonClicked%",
 				"icon": "$(account)"
 			},
 			{
 				"command": "iCline.settingsButtonClicked",
-				"title": "Settings",
+				"title": "%command.iCline.settingsButtonClicked%",
 				"icon": "$(settings-gear)"
 			},
 			{
@@ -188,83 +189,83 @@
 			},
 			{
 				"command": "iCline.addToChat",
-				"title": "Add to iCline",
+				"title": "%command.iCline.addToChat%",
 				"category": "iCline"
 			},
 			{
 				"command": "iCline.addTerminalOutputToChat",
-				"title": "Add to iCline",
+				"title": "%command.iCline.addTerminalOutputToChat%",
 				"category": "iCline"
 			},
 			{
 				"command": "iCline.focusChatInput",
-				"title": "Jump to Chat Input",
+				"title": "%command.iCline.focusChatInput%",
 				"category": "iCline"
 			},
 			{
 				"command": "iCline.generateGitCommitMessage",
-				"title": "Generate Commit Message with iCline",
+				"title": "%command.iCline.generateGitCommitMessage%",
 				"category": "iCline",
 				"icon": "$(cline-icon)"
 			},
 			{
 				"command": "iCline.abortGitCommitMessage",
-				"title": "Generate Commit Message with Cline - Stop",
+				"title": "%command.iCline.abortGitCommitMessage%",
 				"category": "iCline",
 				"icon": "$(debug-stop)"
 			},
 			{
 				"command": "iCline.explainCode",
-				"title": "Explain with iCline",
+				"title": "%command.iCline.explainCode%",
 				"category": "iCline"
 			},
 			{
 				"command": "iCline.improveCode",
-				"title": "Improve with iCline",
+				"title": "%command.iCline.improveCode%",
 				"category": "iCline"
 			},
 			{
 				"command": "iCline.jupyterGenerateCell",
-				"title": "Generate Jupyter Cell with iCline",
+				"title": "%command.iCline.jupyterGenerateCell%",
 				"category": "iCline",
 				"icon": "$(sparkle)"
 			},
 			{
 				"command": "iCline.jupyterExplainCell",
-				"title": "Explain Jupyter Cell with iCline",
+				"title": "%command.iCline.jupyterExplainCell%",
 				"category": "iCline",
 				"icon": "$(question)"
 			},
 			{
 				"command": "iCline.jupyterImproveCell",
-				"title": "Improve Jupyter Cell with iCline",
+				"title": "%command.iCline.jupyterImproveCell%",
 				"category": "iCline",
 				"icon": "$(lightbulb)"
 			},
 			{
 				"command": "iCline.openWalkthrough",
-				"title": "Open Walkthrough",
+				"title": "%command.iCline.openWalkthrough%",
 				"category": "iCline"
 			},
 			{
 				"command": "iCline.reconstructTaskHistory",
-				"title": "Reconstruct Task History",
+				"title": "%command.iCline.reconstructTaskHistory%",
 				"category": "iCline"
 			},
 			{
 				"command": "iCline.checkForUpdates",
-				"title": "Check for Updates (iCline & Cline upstream)",
+				"title": "%command.iCline.checkForUpdates%",
 				"category": "iCline"
 			},
 			{
 				"command": "iCline.reviewComment.reply",
-				"title": "Reply",
+				"title": "%command.iCline.reviewComment.reply%",
 				"category": "iCline",
 				"enablement": "!commentIsEmpty"
 			},
 			{
 				"command": "iCline.reviewComment.addToChat",
-				"title": "Add to iCline Chat",
+				"title": "%command.iCline.reviewComment.addToChat%",
 				"category": "iCline",
 				"icon": "$(link-external)"
 			}

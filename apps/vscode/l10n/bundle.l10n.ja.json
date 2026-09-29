@@ -1,0 +1,19 @@
+{
+	"Jupyter extension is required for notebook diffs.": "ノートブックの diff には Jupyter 拡張機能が必要です。",
+	"iCline {0} is available (installed: {1}). Download the .vsix from Releases and reinstall — VS Code does not auto-update iCline.": "iCline {0} が利用可能です（インストール済み: {1}）。Releases から .vsix をダウンロードして再インストールしてください — VS Code は iCline を自動更新しません。",
+	"View Release": "リリースを表示",
+	"Dismiss": "閉じる",
+	"Cline official released {0}. Your iCline fork ({1}) may benefit from an upstream sync.": "Cline 公式が {0} をリリースしました。あなたの iCline フォーク（{1}）は上流との同期が役立つ可能性があります。",
+	"View Upstream": "上流を表示",
+	"iCline version: {0}": "iCline バージョン: {0}",
+	"Latest iCline release: {0} (update available)": "iCline の最新リリース: {0}（更新あり）",
+	"Latest iCline release: {0}": "iCline の最新リリース: {0}",
+	"Latest iCline release: unavailable (configure iCline.updates.releasesUrl)": "iCline の最新リリース: 利用不可（iCline.updates.releasesUrl を設定してください）",
+	"Latest Cline official: {0} (ahead of iCline)": "Cline 公式の最新: {0}（iCline より先行）",
+	"Latest Cline official: {0}": "Cline 公式の最新: {0}",
+	"Latest Cline official: unavailable": "Cline 公式の最新: 利用不可",
+	"Safe update model:": "安全な更新モデル:",
+	"• iCline updates use extension ID {0} — separate from saoudrizwan.claude-dev": "• iCline の更新は拡張機能 ID {0} を使用します — saoudrizwan.claude-dev とは別です",
+	"• Official Cline auto-update will NOT overwrite iCline": "• Cline 公式の自動更新が iCline を上書きすることはありません",
+	"• Merge upstream with scripts/sync-upstream.ps1, then release a new iCline build": "• scripts/sync-upstream.ps1 で上流をマージしてから、新しい iCline ビルドをリリースしてください"
+}

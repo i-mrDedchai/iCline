@@ -1,0 +1,19 @@
+{
+	"Jupyter extension is required for notebook diffs.": "笔记本 diff 需要 Jupyter 扩展。",
+	"iCline {0} is available (installed: {1}). Download the .vsix from Releases and reinstall — VS Code does not auto-update iCline.": "iCline {0} 可用（已安装: {1}）。请从 Releases 下载 .vsix 并重新安装 — VS Code 不会自动更新 iCline。",
+	"View Release": "查看发布",
+	"Dismiss": "关闭",
+	"Cline official released {0}. Your iCline fork ({1}) may benefit from an upstream sync.": "Cline 官方发布了 {0}。你的 iCline 分支（{1}）可能受益于上游同步。",
+	"View Upstream": "查看上游",
+	"iCline version: {0}": "iCline 版本: {0}",
+	"Latest iCline release: {0} (update available)": "最新的 iCline 发布: {0}（有可用更新）",
+	"Latest iCline release: {0}": "最新的 iCline 发布: {0}",
+	"Latest iCline release: unavailable (configure iCline.updates.releasesUrl)": "最新的 iCline 发布: 不可用（请配置 iCline.updates.releasesUrl）",
+	"Latest Cline official: {0} (ahead of iCline)": "最新的 Cline 官方版本: {0}（领先 iCline）",
+	"Latest Cline official: {0}": "最新的 Cline 官方版本: {0}",
+	"Latest Cline official: unavailable": "最新的 Cline 官方版本: 不可用",
+	"Safe update model:": "安全更新模型:",
+	"• iCline updates use extension ID {0} — separate from saoudrizwan.claude-dev": "• iCline 更新使用扩展 ID {0} — 与 saoudrizwan.claude-dev 相互独立",
+	"• Official Cline auto-update will NOT overwrite iCline": "• Cline 官方自动更新不会覆盖 iCline",
+	"• Merge upstream with scripts/sync-upstream.ps1, then release a new iCline build": "• 使用 scripts/sync-upstream.ps1 合并上游，然后发布新的 iCline 构建"
+}

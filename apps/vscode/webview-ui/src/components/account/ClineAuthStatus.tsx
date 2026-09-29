@@ -1,11 +1,13 @@
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
+import { useTranslation } from "@/i18n/useTranslation"
 
 interface ClineAuthStatusProps {
 	message: string | null
 }
 
 export const ClineAuthStatus = ({ message }: ClineAuthStatusProps) => {
+	const tr = useTranslation("surfaces")
 	const [didCopy, setDidCopy] = useState(false)
 
 	if (!message) {
@@ -14,7 +16,7 @@ export const ClineAuthStatus = ({ message }: ClineAuthStatusProps) => {
 
 	const codeMatch = message.match(/(?:code(?:\s+in\s+your\s+browser)?\s*:?\s*)([A-Z0-9-]{4,})/i)
 	const authCode = codeMatch?.[1]
-	const displayMessage = authCode ? "Enter this code in your browser:" : message
+	const displayMessage = authCode ? tr("accountEnterCode") : message
 
 	const handleCopy = async () => {
 		if (!authCode) {
@@ -45,8 +47,8 @@ export const ClineAuthStatus = ({ message }: ClineAuthStatusProps) => {
 			{authCode ? (
 				<div className="mt-2 flex items-center gap-2">
 					<div className="font-mono text-2xl font-semibold tracking-wider">{authCode}</div>
-					<Button aria-label="Copy Cline sign-in code" onClick={handleCopy} size="sm" variant="secondary">
-						{didCopy ? "Copied" : "Copy"}
+					<Button aria-label={tr("accountCopyCode")} onClick={handleCopy} size="sm" variant="secondary">
+						{didCopy ? tr("accountCopied") : tr("accountCopy")}
 					</Button>
 				</div>
 			) : null}

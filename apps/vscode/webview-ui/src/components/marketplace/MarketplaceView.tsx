@@ -18,9 +18,12 @@ import {
 	SparklesIcon,
 	Trash2Icon,
 } from "lucide-react"
-import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { Switch } from "@/components/ui/switch"
 import { useExtensionState } from "@/context/ExtensionStateContext"
+import type { SurfacesStringKey } from "@/i18n/namespaces/surfaces"
+import { formatString, splitOnPlaceholder } from "@/i18n/strings"
+import { useTranslation } from "@/i18n/useTranslation"
 import { MarketplaceServiceClient, McpServiceClient } from "@/services/grpc-client"
 import { Tab, TabContent, TabList, TabTrigger } from "../common/Tab"
 import ViewHeader from "../common/ViewHeader"
@@ -36,65 +39,61 @@ type MarketplaceViewProps = {
 	onDone: () => void
 }
 
+type PrimitiveIntroKey = "marketplaceSkillIntro" | "marketplaceMcpIntro" | "marketplacePluginIntro"
+type PrimitiveLinkKey = "marketplaceSkillLink" | "marketplaceMcpLink" | "marketplacePluginLink"
+type PrimitiveLinkHref = "https://agentskills.io/" | "https://modelcontextprotocol.io/" | "https://docs.cline.bot/sdk/plugins"
+
 type PrimitiveConfig = {
 	type: PrimitiveType
 	label: string
 	singular: string
 	plural: string
 	title: string
-	description: ReactNode
 	icon: LucideIcon
+	introKey: PrimitiveIntroKey
+	linkKey: PrimitiveLinkKey
+	linkHref: PrimitiveLinkHref
 }
 
 const PRIMITIVES: PrimitiveConfig[] = [
 	{
 		type: "skill",
-		label: "Skills",
+		label: "marketplaceSkills",
 		singular: "skill",
 		plural: "skills",
-		title: "Skills",
-		description: (
-			<>
-				Reusable instruction sets that Cline loads on demand for specific tasks, without staying in context for unrelated
-				work. Browse more at <VSCodeLink href="https://agentskills.io/">Agent Skills</VSCodeLink>.
-			</>
-		),
+		title: "marketplaceSkills",
 		icon: SparklesIcon,
+		introKey: "marketplaceSkillIntro",
+		linkKey: "marketplaceSkillLink",
+		linkHref: "https://agentskills.io/",
 	},
 	{
 		type: "mcp",
-		label: "MCP",
-		singular: "MCP server",
-		plural: "MCP servers",
-		title: "MCP Servers",
-		description: (
-			<>
-				Connect Cline to external APIs, local tools, and hosted services through{" "}
-				<VSCodeLink href="https://modelcontextprotocol.io/">MCP</VSCodeLink> servers.
-			</>
-		),
+		label: "marketplaceMcp",
+		singular: "marketplaceMcpServer",
+		plural: "marketplaceMcpServers",
+		title: "marketplaceMcpServersTitle",
 		icon: PlugIcon,
+		introKey: "marketplaceMcpIntro",
+		linkKey: "marketplaceMcpLink",
+		linkHref: "https://modelcontextprotocol.io/",
 	},
 	{
 		type: "plugin",
-		label: "Plugins",
+		label: "marketplacePlugins",
 		singular: "plugin",
 		plural: "plugins",
-		title: "Plugins",
-		description: (
-			<>
-				<VSCodeLink href="https://docs.cline.bot/sdk/plugins">Plugins</VSCodeLink> are extensions for capabilities more
-				complex than a single MCP server or skill, including custom tools, hooks, rules, slash commands, or bundled
-				skills.
-			</>
-		),
+		title: "marketplacePlugins",
 		icon: PuzzleIcon,
+		introKey: "marketplacePluginIntro",
+		linkKey: "marketplacePluginLink",
+		linkHref: "https://docs.cline.bot/sdk/plugins",
 	},
 ]
 
-const MARKETPLACE_SECTIONS: Array<{ type: MarketplaceSectionType; label: string }> = [
-	{ type: "installed", label: "Installed" },
-	{ type: "marketplace", label: "Marketplace" },
+const MARKETPLACE_SECTIONS: Array<{ type: MarketplaceSectionType; labelKey: "marketplaceInstalled" | "marketplaceTitle" }> = [
+	{ type: "installed", labelKey: "marketplaceInstalled" },
+	{ type: "marketplace", labelKey: "marketplaceTitle" },
 ]
 
 function isPrimitiveType(value: string): value is PrimitiveType {
@@ -113,20 +112,22 @@ function getPrimitive(type: PrimitiveType): PrimitiveConfig {
 	return PRIMITIVES.find((primitive) => primitive.type === type) ?? PRIMITIVES[0]
 }
 
-function sourceLabel(entry: MarketplaceLocalInstalledEntry): string | undefined {
-	if (entry.source === "global") return "Global"
-	if (entry.source === "workspace") return "Workspace"
-	if (entry.source === "remote") return "Remote"
+function sourceLabelKey(entry: MarketplaceLocalInstalledEntry): SurfacesStringKey | undefined {
+	if (entry.source === "global") return "marketplaceGlobal"
+	if (entry.source === "workspace") return "marketplaceWorkspace"
+	if (entry.source === "remote") return "marketplaceRemote"
 	return undefined
 }
 
-function setupSummary(entry: MarketplaceEntry): string | undefined {
+type SetupSummary = { kind: "requires"; items: string } | { kind: "uses"; items: string } | { kind: "notes"; notes: string }
+
+function setupSummary(entry: MarketplaceEntry): SetupSummary | undefined {
 	const env = entry.install?.env ?? []
 	if (env.length === 0 && !entry.install?.notes) return undefined
 	const required = env.filter((item) => item.required).map((item) => item.name)
-	if (required.length > 0) return `Requires ${required.join(", ")}`
-	if (env.length > 0) return `Uses ${env.map((item) => item.name).join(", ")}`
-	return entry.install?.notes
+	if (required.length > 0) return { kind: "requires", items: required.join(", ") }
+	if (env.length > 0) return { kind: "uses", items: env.map((item) => item.name).join(", ") }
+	return { kind: "notes", notes: entry.install?.notes ?? "" }
 }
 
 function tagId(label: string): string {
@@ -700,18 +701,22 @@ const MarketplaceCatalogSection = ({
 	filters: React.ReactNode
 	search: React.ReactNode
 	showHeader?: boolean
-}) => (
-	<section className="marketplace-section">
-		{showHeader && (
-			<div className="marketplace-section-header">
-				<h3 className="marketplace-section-title">Marketplace</h3>
-			</div>
-		)}
-		{search}
-		{filters}
-		{count > 0 ? <div className="marketplace-list">{children}</div> : <div className="marketplace-empty">{empty}</div>}
-	</section>
-)
+}) => {
+	const tr = useTranslation("surfaces")
+
+	return (
+		<section className="marketplace-section">
+			{showHeader && (
+				<div className="marketplace-section-header">
+					<h3 className="marketplace-section-title">{tr("marketplaceTitle")}</h3>
+				</div>
+			)}
+			{search}
+			{filters}
+			{count > 0 ? <div className="marketplace-list">{children}</div> : <div className="marketplace-empty">{empty}</div>}
+		</section>
+	)
+}
 
 const TagFilters = ({
 	counts,
@@ -755,6 +760,7 @@ const McpManagementPanel = ({
 	showHeader?: boolean
 	showServerList?: boolean
 }) => {
+	const tr = useTranslation("surfaces")
 	const { mcpServers, navigateToSettings, remoteConfigSettings } = useExtensionState()
 	const [showAddRemote, setShowAddRemote] = useState(false)
 	const showRemoteServers = remoteConfigSettings?.blockPersonalRemoteMCPServers !== true
@@ -764,7 +770,7 @@ const McpManagementPanel = ({
 		<section className="marketplace-section">
 			{showHeader && (
 				<div className="marketplace-section-header">
-					<h3 className="marketplace-section-title">Installed MCP Servers</h3>
+					<h3 className="marketplace-section-title">{tr("marketplaceInstalledServers")}</h3>
 				</div>
 			)}
 			{(showServerList || hasRemoteMCPServers) && (
@@ -772,7 +778,7 @@ const McpManagementPanel = ({
 					{hasRemoteMCPServers && (
 						<div className="marketplace-mcp-managed">
 							<span className="codicon codicon-lock" />
-							<span>Your organization manages some MCP servers</span>
+							<span>{tr("marketplaceOrgManaged")}</span>
 						</div>
 					)}
 					{showServerList && (
@@ -790,7 +796,7 @@ const McpManagementPanel = ({
 				{showRemoteServers && !showAddRemote && (
 					<VSCodeButton appearance="primary" onClick={() => setShowAddRemote(true)}>
 						<span className="codicon codicon-add" style={{ marginRight: "6px" }} />
-						Add Remote Server
+						{tr("marketplaceAddRemote")}
 					</VSCodeButton>
 				)}
 				{showRemoteServers && showAddRemote && (
@@ -806,14 +812,14 @@ const McpManagementPanel = ({
 					appearance="secondary"
 					onClick={() => {
 						McpServiceClient.openMcpSettings(EmptyRequest.create({})).catch((error) => {
-							console.error("Error opening MCP settings:", error)
+							console.error(tr("marketplaceFailedOpenSettings"), error)
 						})
 					}}>
 					<span className="codicon codicon-server" style={{ marginRight: "6px" }} />
-					Edit Configuration
+					{tr("marketplaceEditConfig")}
 				</VSCodeButton>
 				<div className="marketplace-mcp-advanced">
-					<VSCodeLink onClick={() => navigateToSettings("features")}>Advanced MCP Settings</VSCodeLink>
+					<VSCodeLink onClick={() => navigateToSettings("features")}>{tr("marketplaceAdvancedSettings")}</VSCodeLink>
 				</div>
 			</div>
 		</section>
@@ -833,7 +839,9 @@ const LocalInstalledRow = ({
 	toggling: boolean
 	uninstalling: boolean
 }) => {
-	const origin = sourceLabel(entry)
+	const tr = useTranslation("surfaces")
+	const originKey = sourceLabelKey(entry)
+	const origin = originKey ? tr(originKey) : undefined
 	const canUninstall = !(entry.type === "skill" && entry.path?.startsWith("remote:"))
 	return (
 		<div className="marketplace-row">
@@ -849,19 +857,27 @@ const LocalInstalledRow = ({
 			</div>
 			<div className="marketplace-action">
 				<Switch
-					aria-label={`${entry.enabled ? "Disable" : "Enable"} ${entry.name || entry.id}`}
+					aria-label={formatString(tr, "marketplaceToggleEntry", {
+						action: entry.enabled ? tr("marketplaceDisable") : tr("marketplaceEnable"),
+						name: entry.name || entry.id,
+					})}
 					checked={entry.enabled}
 					disabled={toggling}
 					onClick={() => onToggle(entry, !entry.enabled)}
-					title={`${entry.enabled ? "Disable" : "Enable"} ${entry.name || entry.id}`}
+					title={formatString(tr, "marketplaceToggleEntry", {
+						action: entry.enabled ? tr("marketplaceDisable") : tr("marketplaceEnable"),
+						name: entry.name || entry.id,
+					})}
 				/>
 				<button
-					aria-label={`Uninstall ${entry.name || entry.id}`}
+					aria-label={formatString(tr, "marketplaceUninstallEntry", { name: entry.name || entry.id })}
 					className="marketplace-icon-button marketplace-icon-button-danger"
 					disabled={uninstalling || !canUninstall}
 					onClick={() => onUninstall(entry)}
 					title={
-						canUninstall ? `Uninstall ${entry.name || entry.id}` : "Remote-managed skills cannot be uninstalled here"
+						canUninstall
+							? formatString(tr, "marketplaceUninstallEntry", { name: entry.name || entry.id })
+							: tr("marketplaceRemoteSkillsLocked")
 					}
 					type="button">
 					{uninstalling ? (
@@ -890,8 +906,9 @@ const InstalledMarketplaceRow = ({
 	togglingLocalId: string | null
 	uninstalling: boolean
 }) => {
+	const tr = useTranslation("surfaces")
 	const primaryLocalEntry = matchedLocalEntries[0]
-	const label = `Uninstall ${entry.name || entry.id}`
+	const label = formatString(tr, "marketplaceUninstallEntry", { name: entry.name || entry.id })
 	return (
 		<div className="marketplace-row">
 			<div className="marketplace-row-main">
@@ -903,9 +920,10 @@ const InstalledMarketplaceRow = ({
 					<div className="marketplace-row-description">{entry.description || entry.tagline}</div>
 				)}
 				<div className="marketplace-row-meta">
-					<span className="marketplace-pill">Marketplace</span>
+					<span className="marketplace-pill">{tr("marketplaceTitle")}</span>
 					{matchedLocalEntries.map((localEntry) => {
-						const origin = sourceLabel(localEntry)
+						const localOriginKey = sourceLabelKey(localEntry)
+						const origin = localOriginKey ? tr(localOriginKey) : undefined
 						return (
 							<span className="contents" key={localEntryKey(localEntry)}>
 								{origin && <span className="marketplace-pill">{origin}</span>}
@@ -918,11 +936,17 @@ const InstalledMarketplaceRow = ({
 			<div className="marketplace-action">
 				{primaryLocalEntry && (
 					<Switch
-						aria-label={`${primaryLocalEntry.enabled ? "Disable" : "Enable"} ${entry.name || entry.id}`}
+						aria-label={formatString(tr, "marketplaceToggleEntry", {
+							action: primaryLocalEntry.enabled ? tr("marketplaceDisable") : tr("marketplaceEnable"),
+							name: entry.name || entry.id,
+						})}
 						checked={primaryLocalEntry.enabled}
 						disabled={togglingLocalId === localEntryKey(primaryLocalEntry)}
 						onClick={() => onToggle(primaryLocalEntry, !primaryLocalEntry.enabled)}
-						title={`${primaryLocalEntry.enabled ? "Disable" : "Enable"} ${entry.name || entry.id}`}
+						title={formatString(tr, "marketplaceToggleEntry", {
+							action: primaryLocalEntry.enabled ? tr("marketplaceDisable") : tr("marketplaceEnable"),
+							name: entry.name || entry.id,
+						})}
 					/>
 				)}
 				<button
@@ -952,9 +976,10 @@ const CatalogEntryRow = ({
 	installing: boolean
 	onInstall: (entry: MarketplaceEntry) => void
 }) => {
+	const tr = useTranslation("surfaces")
 	const summary = setupSummary(entry)
 	const canInstall = installArgs(entry).length > 0 && !installing
-	const label = `Install ${entry.name || entry.id}`
+	const label = formatString(tr, "marketplaceInstallEntry", { name: entry.name || entry.id })
 	return (
 		<div className="marketplace-row">
 			<div className="marketplace-row-main">
@@ -965,7 +990,15 @@ const CatalogEntryRow = ({
 					<div className="marketplace-row-description">{entry.description || entry.tagline}</div>
 				)}
 				<div className="marketplace-row-meta">
-					{summary && <span className="marketplace-pill">{summary}</span>}
+					{summary && (
+						<span className="marketplace-pill">
+							{summary.kind === "requires"
+								? formatString(tr, "marketplaceRequires", { items: summary.items })
+								: summary.kind === "uses"
+									? formatString(tr, "marketplaceUses", { items: summary.items })
+									: summary.notes}
+						</span>
+					)}
 					{entry.author && <span>{entry.author}</span>}
 				</div>
 			</div>
@@ -989,6 +1022,7 @@ const CatalogEntryRow = ({
 }
 
 const MarketplaceView = ({ initialType = "skill", onDone }: MarketplaceViewProps) => {
+	const tr = useTranslation("surfaces")
 	const { environment, remoteConfigSettings } = useExtensionState()
 	const [activeType, setActiveType] = useState<PrimitiveType>(initialType)
 	const [activeSection, setActiveSection] = useState<MarketplaceSectionType>("installed")
@@ -1045,7 +1079,10 @@ const MarketplaceView = ({ initialType = "skill", onDone }: MarketplaceViewProps
 		}
 	}, [activeSection, mcpMarketplaceDisabled])
 
-	const primitive = getPrimitive(activeType)
+	const primitive = useMemo(() => getPrimitive(activeType), [activeType])
+	const primitiveLabel = tr(primitive.label as SurfacesStringKey)
+	const primitiveTitle = tr(primitive.title as SurfacesStringKey)
+	const primitivePlural = tr(primitive.plural as SurfacesStringKey)
 	const searchedCatalogEntries = useMemo(() => {
 		const normalizedQuery = query.trim().toLowerCase()
 		return catalogEntries.filter(
@@ -1218,14 +1255,14 @@ const MarketplaceView = ({ initialType = "skill", onDone }: MarketplaceViewProps
 	return (
 		<Tab className="marketplace-view">
 			<MarketplaceStyles />
-			<ViewHeader environment={environment} onDone={onDone} title="Customize" />
+			<ViewHeader environment={environment} onDone={onDone} title={tr("marketplaceCustomize")} />
 
 			<div className="marketplace-shell">
 				<TabList className="marketplace-nav" onValueChange={handleTabChange} value={activeType}>
 					{PRIMITIVES.map((item) => (
 						<TabTrigger className="marketplace-tab" key={item.type} value={item.type}>
 							<item.icon aria-hidden className="h-4 w-4 shrink-0" />
-							<span className="marketplace-tab-label">{item.label}</span>
+							<span className="marketplace-tab-label">{tr(item.label as SurfacesStringKey)}</span>
 						</TabTrigger>
 					))}
 				</TabList>
@@ -1233,7 +1270,7 @@ const MarketplaceView = ({ initialType = "skill", onDone }: MarketplaceViewProps
 				<TabContent className="marketplace-content">
 					<div className="marketplace-inner">
 						<TabList
-							aria-label={`${primitive.title} sections`}
+							aria-label={formatString(tr, "marketplaceSearchTitle", { title: primitiveTitle })}
 							className="marketplace-subnav"
 							onValueChange={handleSectionTabChange}
 							value={currentSection}>
@@ -1243,18 +1280,29 @@ const MarketplaceView = ({ initialType = "skill", onDone }: MarketplaceViewProps
 									disabled={mcpMarketplaceDisabled && section.type === "marketplace"}
 									key={section.type}
 									value={section.type}>
-									{section.label}
+									{tr(section.labelKey)}
 								</TabTrigger>
 							))}
 						</TabList>
 
-						<div className="marketplace-primitive-description">{primitive.description}</div>
+						<div className="marketplace-primitive-description">
+							{(() => {
+								const [beforeLink, afterLink] = splitOnPlaceholder(tr(primitive.introKey), "link")
+								return (
+									<>
+										{beforeLink}
+										<VSCodeLink href={primitive.linkHref}>{tr(primitive.linkKey)}</VSCodeLink>
+										{afterLink}
+									</>
+								)
+							})()}
+						</div>
 						{error && <div className="marketplace-error">{error}</div>}
 
 						{loading ? (
 							<div className="marketplace-loading">
 								<VSCodeProgressRing />
-								<span>Loading {primitive.plural}</span>
+								<span>{formatString(tr, "marketplaceLoadingItems", { items: primitivePlural })}</span>
 							</div>
 						) : (
 							<>
@@ -1268,9 +1316,9 @@ const MarketplaceView = ({ initialType = "skill", onDone }: MarketplaceViewProps
 									) : (
 										<Section
 											count={installedCatalogEntries.length + localOnlyInstalledEntries.length}
-											empty={`No installed ${primitive.plural}.`}
+											empty={formatString(tr, "marketplaceEmptyInstalled", { items: primitivePlural })}
 											showHeader={false}
-											title={`Installed ${primitive.title}`}>
+											title={formatString(tr, "marketplaceInstalledTitle", { title: primitiveTitle })}>
 											{installedCatalogEntries.map((entry) => (
 												<InstalledMarketplaceRow
 													entry={entry}
@@ -1302,8 +1350,8 @@ const MarketplaceView = ({ initialType = "skill", onDone }: MarketplaceViewProps
 										count={visibleCatalogEntries.length}
 										empty={
 											query || selectedTag
-												? `No ${primitive.plural} match your search.`
-												: `No marketplace ${primitive.plural}.`
+												? formatString(tr, "marketplaceEmptySearch", { items: primitivePlural })
+												: formatString(tr, "marketplaceEmptyCatalog", { items: primitivePlural })
 										}
 										filters={
 											<TagFilters
@@ -1316,14 +1364,18 @@ const MarketplaceView = ({ initialType = "skill", onDone }: MarketplaceViewProps
 										search={
 											<div className="marketplace-search">
 												<VSCodeTextField
-													aria-label={`Search ${primitive.title}`}
+													aria-label={formatString(tr, "marketplaceSearchTitle", {
+														title: primitiveTitle,
+													})}
 													onInput={(event) => setQuery((event.target as HTMLInputElement).value)}
-													placeholder={`Search ${primitive.plural}`}
+													placeholder={formatString(tr, "marketplaceSearchItems", {
+														items: primitivePlural,
+													})}
 													value={query}>
 													<span className="codicon codicon-search" slot="start" />
 													{query && (
 														<button
-															aria-label="Clear search"
+															aria-label={tr("marketplaceClearSearch")}
 															className="codicon codicon-close marketplace-clear-search"
 															onClick={() => setQuery("")}
 															slot="end"

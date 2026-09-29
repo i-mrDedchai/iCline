@@ -3,6 +3,8 @@ import { ShutdownTeamMemberRequest, SpawnTeamMemberRequest, TeamStateRequest } f
 import { RefreshCw, Users, X } from "lucide-react"
 import { useCallback, useEffect, useState } from "react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
+import { formatString } from "@/i18n/strings"
+import { useTranslation } from "@/i18n/useTranslation"
 import { TeamServiceClient } from "@/services/grpc-client"
 
 type TeamPanelProps = {
@@ -24,6 +26,7 @@ const MODEL_PROVIDER_ID = "openrouter"
  * one down. State is polled so parallel agents' progress stays visible.
  */
 export const TeamPanel = ({ onDone }: TeamPanelProps) => {
+	const tr = useTranslation("surfaces")
 	const { openRouterModels } = useExtensionState()
 	const [teamState, setTeamState] = useState<TeamState | null>(null)
 	const [isLoading, setIsLoading] = useState(true)
@@ -41,7 +44,7 @@ export const TeamPanel = ({ onDone }: TeamPanelProps) => {
 			setTeamState((prev) => (JSON.stringify(prev) === JSON.stringify(state) ? prev : state))
 			setLoadError(null)
 		} catch (err) {
-			setLoadError(err instanceof Error ? err.message : "Failed to load team state")
+			setLoadError(err instanceof Error ? err.message : tr("teamFailedLoad"))
 		} finally {
 			setIsLoading(false)
 		}
@@ -75,10 +78,10 @@ export const TeamPanel = ({ onDone }: TeamPanelProps) => {
 				setRolePrompt("")
 				setModelId("")
 			} else {
-				setActionError(result.error || "Failed to spawn teammate")
+				setActionError(result.error || tr("teamFailedSpawn"))
 			}
 		} catch (err) {
-			setActionError(err instanceof Error ? err.message : "Failed to spawn teammate")
+			setActionError(err instanceof Error ? err.message : tr("teamFailedSpawn"))
 		} finally {
 			setIsSpawning(false)
 			loadTeamState()
@@ -92,14 +95,16 @@ export const TeamPanel = ({ onDone }: TeamPanelProps) => {
 				const result = await TeamServiceClient.shutdownTeamMember(
 					ShutdownTeamMemberRequest.create({
 						agentId: member.agentId,
-						reason: "Shut down from the team panel",
+						reason: tr("teamShutdownNote"),
 					}),
 				)
 				if (!result.ok) {
-					setActionError(result.error || `Failed to shut down ${member.agentId}`)
+					setActionError(result.error || formatString(tr, "teamFailedShutdown", { id: member.agentId }))
 				}
 			} catch (err) {
-				setActionError(err instanceof Error ? err.message : `Failed to shut down ${member.agentId}`)
+				setActionError(
+					err instanceof Error ? err.message : formatString(tr, "teamFailedShutdown", { id: member.agentId }),
+				)
 			} finally {
 				loadTeamState()
 			}
@@ -110,7 +115,7 @@ export const TeamPanel = ({ onDone }: TeamPanelProps) => {
 	const modelLabelFor = useCallback(
 		(member: TeamMember): string => {
 			if (!member.modelId) {
-				return "Inherits task model"
+				return tr("teamInheritModel")
 			}
 			return openRouterModels?.[member.modelId]?.name ?? member.modelId
 		},
@@ -137,7 +142,7 @@ export const TeamPanel = ({ onDone }: TeamPanelProps) => {
 						Refresh
 					</button>
 					<button
-						aria-label="Close team panel"
+						aria-label={tr("teamClosePanel")}
 						className="flex items-center justify-center p-1 rounded bg-transparent border-none text-[var(--vscode-foreground)] hover:bg-[var(--vscode-list-hoverBackground)] cursor-pointer"
 						onClick={onDone}
 						type="button">
@@ -149,7 +154,7 @@ export const TeamPanel = ({ onDone }: TeamPanelProps) => {
 			{/* Scrollable content */}
 			<div className="flex-1 overflow-y-auto p-5">
 				{isLoading && !teamState && (
-					<p className="text-sm text-[var(--vscode-descriptionForeground)] m-0">Loading team state…</p>
+					<p className="text-sm text-[var(--vscode-descriptionForeground)] m-0">{tr("teamLoading")}</p>
 				)}
 				{loadError && <p className="text-sm m-0 mb-4 text-[var(--vscode-errorForeground)]">{loadError}</p>}
 				{teamState && !teamState.active && (
@@ -159,7 +164,7 @@ export const TeamPanel = ({ onDone }: TeamPanelProps) => {
 							border: "1px solid var(--vscode-widget-border)",
 							backgroundColor: "var(--vscode-list-hoverBackground)",
 						}}>
-						<p className="text-sm m-0">Agent teams are not active for this session.</p>
+						<p className="text-sm m-0">{tr("teamInactive")}</p>
 						<p className="text-sm text-[var(--vscode-descriptionForeground)] m-0 mt-1">
 							Start a task that uses team tools to create a team, then come back here to manage its agents.
 						</p>
@@ -183,7 +188,7 @@ export const TeamPanel = ({ onDone }: TeamPanelProps) => {
 
 						{/* Topology: lead node with its teammates */}
 						<div>
-							<h4 className="m-0 mb-2 text-sm">Topology</h4>
+							<h4 className="m-0 mb-2 text-sm">{tr("teamTopology")}</h4>
 							<div className="flex flex-col md:flex-row md:items-start gap-3">
 								{lead && (
 									<div className="flex-none w-full md:w-56 p-3 rounded border border-[var(--vscode-focusBorder)] bg-[var(--vscode-list-activeSelectionBackground)]">
@@ -216,7 +221,7 @@ export const TeamPanel = ({ onDone }: TeamPanelProps) => {
 						{/* Mailbox viewer */}
 						<div>
 							<div className="flex items-center gap-2 mb-2">
-								<h4 className="m-0 text-sm">Mailbox</h4>
+								<h4 className="m-0 text-sm">{tr("teamMailbox")}</h4>
 								{teamState.unreadMessages > 0 && (
 									<span className="text-xs px-1.5 py-0.5 rounded bg-[var(--vscode-badge-background)] text-[var(--vscode-badge-foreground)]">
 										{teamState.unreadMessages} unread
@@ -224,7 +229,7 @@ export const TeamPanel = ({ onDone }: TeamPanelProps) => {
 								)}
 							</div>
 							{teamState.mailbox.length === 0 && (
-								<p className="text-sm text-[var(--vscode-descriptionForeground)] m-0">No messages yet.</p>
+								<p className="text-sm text-[var(--vscode-descriptionForeground)] m-0">{tr("teamNoMessages")}</p>
 							)}
 							<div className="flex flex-col gap-2">
 								{teamState.mailbox.map((entry: TeamMailboxEntry) => (
@@ -252,37 +257,37 @@ export const TeamPanel = ({ onDone }: TeamPanelProps) => {
 
 						{/* Spawn form */}
 						<div>
-							<h4 className="m-0 mb-2 text-sm">Spawn teammate</h4>
+							<h4 className="m-0 mb-2 text-sm">{tr("teamSpawnTeammate")}</h4>
 							<div className="flex flex-col gap-2 max-w-xl">
 								<label className="text-xs" htmlFor="team-agent-id">
-									Agent ID
+									{tr("teamAgentIdLabel")}
 								</label>
 								<input
 									className="px-2 py-1 rounded border border-[var(--vscode-input-border,transparent)] bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)]"
 									id="team-agent-id"
 									onChange={(event) => setAgentId(event.target.value)}
-									placeholder="e.g. tester-1"
+									placeholder={tr("teamAgentIdHint")}
 									value={agentId}
 								/>
 								<label className="text-xs" htmlFor="team-role-prompt">
-									Role prompt
+									{tr("teamRoleLabel")}
 								</label>
 								<textarea
 									className="px-2 py-1 rounded border border-[var(--vscode-input-border,transparent)] bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] min-h-20"
 									id="team-role-prompt"
 									onChange={(event) => setRolePrompt(event.target.value)}
-									placeholder="What should this agent do?"
+									placeholder={tr("teamRoleHint")}
 									value={rolePrompt}
 								/>
 								<label className="text-xs" htmlFor="team-model">
-									Model
+									{tr("teamModelFieldLabel")}
 								</label>
 								<select
 									className="px-2 py-1 rounded border border-[var(--vscode-input-border,transparent)] bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)]"
 									id="team-model"
 									onChange={(event) => setModelId(event.target.value)}
 									value={modelId}>
-									<option value="">Default (inherit task model)</option>
+									<option value="">{tr("teamDefaultModel")}</option>
 									{Object.entries(openRouterModels ?? {}).map(([id, info]) => (
 										<option key={id} value={id}>
 											{(info as { name?: string }).name ?? id} ({id})
@@ -295,7 +300,7 @@ export const TeamPanel = ({ onDone }: TeamPanelProps) => {
 										disabled={!agentId.trim() || !rolePrompt.trim() || isSpawning}
 										onClick={handleSpawn}
 										type="button">
-										{isSpawning ? "Spawning…" : "Spawn"}
+										{isSpawning ? tr("teamSpawning") : tr("teamSpawn")}
 									</button>
 								</div>
 								{actionError && <p className="m-0 text-sm text-[var(--vscode-errorForeground)]">{actionError}</p>}
@@ -313,30 +318,33 @@ type MemberCardProps = {
 	modelLabel: string
 }
 
-const MemberCard = ({ member, modelLabel }: MemberCardProps) => (
-	<div>
-		<div className="flex flex-wrap items-center gap-2">
-			<span className="font-semibold break-all">{member.agentId}</span>
-			<span className="text-xs px-1.5 py-0.5 rounded bg-[var(--vscode-badge-background)] text-[var(--vscode-badge-foreground)]">
-				{member.role === "lead" ? "Lead" : "Teammate"}
-			</span>
-			<span
-				className={`text-xs px-1.5 py-0.5 rounded ${
-					STATUS_BADGE_STYLES[member.status] ??
-					"bg-[var(--vscode-badge-background)] text-[var(--vscode-badge-foreground)]"
-				}`}>
-				{member.status}
-			</span>
+const MemberCard = ({ member, modelLabel }: MemberCardProps) => {
+	const tr = useTranslation("surfaces")
+	return (
+		<div>
+			<div className="flex flex-wrap items-center gap-2">
+				<span className="font-semibold break-all">{member.agentId}</span>
+				<span className="text-xs px-1.5 py-0.5 rounded bg-[var(--vscode-badge-background)] text-[var(--vscode-badge-foreground)]">
+					{member.role === "lead" ? tr("teamLead") : tr("teamTeammate")}
+				</span>
+				<span
+					className={`text-xs px-1.5 py-0.5 rounded ${
+						STATUS_BADGE_STYLES[member.status] ??
+						"bg-[var(--vscode-badge-background)] text-[var(--vscode-badge-foreground)]"
+					}`}>
+					{member.status}
+				</span>
+			</div>
+			{member.description && (
+				<p className="m-0 mt-1 text-xs text-[var(--vscode-descriptionForeground)] break-words">{member.description}</p>
+			)}
+			<div className="flex items-center gap-1.5 mt-1 text-xs">
+				<span className="text-[var(--vscode-descriptionForeground)]">{tr("teamModelLabel")}</span>
+				<span className="font-medium break-all">{modelLabel}</span>
+			</div>
 		</div>
-		{member.description && (
-			<p className="m-0 mt-1 text-xs text-[var(--vscode-descriptionForeground)] break-words">{member.description}</p>
-		)}
-		<div className="flex items-center gap-1.5 mt-1 text-xs">
-			<span className="text-[var(--vscode-descriptionForeground)]">Model:</span>
-			<span className="font-medium break-all">{modelLabel}</span>
-		</div>
-	</div>
-)
+	)
+}
 
 function formatSentAt(sentAt: string): string {
 	const timestamp = Date.parse(sentAt)

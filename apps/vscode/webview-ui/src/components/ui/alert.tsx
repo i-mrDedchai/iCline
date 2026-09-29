@@ -24,8 +24,14 @@ const alertVariants = cva(
 const Alert = React.forwardRef<
 	HTMLDivElement,
 	React.HTMLAttributes<HTMLDivElement> &
-		VariantProps<typeof alertVariants> & { isDismissible?: boolean; title?: string; icon?: React.ReactNode }
->(({ className, variant, children, isDismissible = true, title, icon, ...props }, ref) => {
+		VariantProps<typeof alertVariants> & {
+			isDismissible?: boolean
+			title?: string
+			icon?: React.ReactNode
+			/** Screen-reader label for the dismiss button; the caller translates it. */
+			dismissLabel?: string
+		}
+>(({ className, variant, children, isDismissible = true, title, icon, dismissLabel = "Dismiss", ...props }, ref) => {
 	const [dismissed, setDismissed] = React.useState(false)
 	if (dismissed) {
 		return null
@@ -40,7 +46,7 @@ const Alert = React.forwardRef<
 				</AlertTitle>
 				{isDismissible && (
 					<Button
-						aria-label="Dismiss"
+						aria-label={dismissLabel}
 						className="opacity-100 hover:opacity-100 justify-center"
 						onClick={(e) => {
 							e.preventDefault()

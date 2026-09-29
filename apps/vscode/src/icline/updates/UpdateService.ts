@@ -33,10 +33,7 @@ const DEFAULT_ICLINE_RELEASES_URL = "https://api.github.com/repos/i-mrDedchai/iC
 const UPSTREAM_CLINE_RELEASES_URL = "https://api.github.com/repos/cline/cline/releases/latest"
 
 function iclineReleasesUrl(): string {
-	return (
-		vscode.workspace.getConfiguration("iCline").get<string>("updates.releasesUrl") ||
-		DEFAULT_ICLINE_RELEASES_URL
-	)
+	return vscode.workspace.getConfiguration("iCline").get<string>("updates.releasesUrl") || DEFAULT_ICLINE_RELEASES_URL
 }
 
 const DISMISSED_ICLINE_VERSION_KEY = "icline.updates.dismissedVersion"
@@ -67,7 +64,11 @@ export function isNewerVersion(current: string, candidate: string): boolean {
 	return false
 }
 
-async function fetchLatestRelease(url: string): Promise<{ tag_name: string; html_url: string; published_at: string; name?: string; body?: string; prerelease?: boolean } | undefined> {
+async function fetchLatestRelease(
+	url: string,
+): Promise<
+	{ tag_name: string; html_url: string; published_at: string; name?: string; body?: string; prerelease?: boolean } | undefined
+> {
 	try {
 		const response = await fetch(url, {
 			headers: {
@@ -183,8 +184,7 @@ export class UpdateService {
 		}
 
 		if (result?.icline) {
-			const showBar =
-				updatesEnabled && result.iclineUpdateAvailable && dismissedIcline !== result.icline.tag_name
+			const showBar = updatesEnabled && result.iclineUpdateAvailable && dismissedIcline !== result.icline.tag_name
 			status.icline = {
 				tagName: result.icline.tag_name,
 				name: result.icline.name,
@@ -231,14 +231,22 @@ export class UpdateService {
 		const dismissedUpstream = this.context.globalState.get<string>(DISMISSED_UPSTREAM_TAG_KEY)
 
 		if (result.iclineUpdateAvailable && result.icline && dismissedIcline !== result.icline.tag_name) {
+			// The button labels are translated once and compared against the localized
+			// text the user actually clicked.
+			const viewRelease = vscode.l10n.t("View Release")
+			const dismiss = vscode.l10n.t("Dismiss")
 			const action = await vscode.window.showInformationMessage(
-				`iCline ${result.icline.tag_name} is available (installed: ${this.currentVersion}). Download the .vsix from Releases and reinstall — VS Code does not auto-update iCline.`,
-				"View Release",
-				"Dismiss",
+				vscode.l10n.t(
+					"iCline {0} is available (installed: {1}). Download the .vsix from Releases and reinstall — VS Code does not auto-update iCline.",
+					result.icline.tag_name,
+					this.currentVersion,
+				),
+				viewRelease,
+				dismiss,
 			)
-			if (action === "View Release") {
+			if (action === viewRelease) {
 				await vscode.env.openExternal(vscode.Uri.parse(result.icline.html_url))
-			} else if (action === "Dismiss") {
+			} else if (action === dismiss) {
 				await this.context.globalState.update(DISMISSED_ICLINE_VERSION_KEY, result.icline.tag_name)
 			}
 			return
@@ -250,14 +258,20 @@ export class UpdateService {
 			result.upstreamCline &&
 			dismissedUpstream !== result.upstreamCline.tag_name
 		) {
+			const viewUpstream = vscode.l10n.t("View Upstream")
+			const dismiss = vscode.l10n.t("Dismiss")
 			const action = await vscode.window.showInformationMessage(
-				`Cline official released ${result.upstreamCline.tag_name}. Your iCline fork (${this.currentVersion}) may benefit from an upstream sync.`,
-				"View Upstream",
-				"Dismiss",
+				vscode.l10n.t(
+					"Cline official released {0}. Your iCline fork ({1}) may benefit from an upstream sync.",
+					result.upstreamCline.tag_name,
+					this.currentVersion,
+				),
+				viewUpstream,
+				dismiss,
 			)
-			if (action === "View Upstream") {
+			if (action === viewUpstream) {
 				await vscode.env.openExternal(vscode.Uri.parse(result.upstreamCline.html_url))
-			} else if (action === "Dismiss") {
+			} else if (action === dismiss) {
 				await this.context.globalState.update(DISMISSED_UPSTREAM_TAG_KEY, result.upstreamCline.tag_name)
 			}
 		}
@@ -266,18 +280,25 @@ export class UpdateService {
 	async showUpdateStatus(): Promise<void> {
 		const result = await this.checkForUpdates({ force: true })
 		const lines = [
-			`iCline version: ${result.currentVersion}`,
+			vscode.l10n.t("iCline version: {0}", result.currentVersion),
 			result.icline
-				? `Latest iCline release: ${result.icline.tag_name}${result.iclineUpdateAvailable ? " (update available)" : ""}`
-				: "Latest iCline release: unavailable (configure iCline.updates.releasesUrl)",
+				? result.iclineUpdateAvailable
+					? vscode.l10n.t("Latest iCline release: {0} (update available)", result.icline.tag_name)
+					: vscode.l10n.t("Latest iCline release: {0}", result.icline.tag_name)
+				: vscode.l10n.t("Latest iCline release: unavailable (configure iCline.updates.releasesUrl)"),
 			result.upstreamCline
-				? `Latest Cline official: ${result.upstreamCline.tag_name}${result.upstreamAhead ? " (ahead of iCline)" : ""}`
-				: "Latest Cline official: unavailable",
+				? result.upstreamAhead
+					? vscode.l10n.t("Latest Cline official: {0} (ahead of iCline)", result.upstreamCline.tag_name)
+					: vscode.l10n.t("Latest Cline official: {0}", result.upstreamCline.tag_name)
+				: vscode.l10n.t("Latest Cline official: unavailable"),
 			"",
-			"Safe update model:",
-			`• iCline updates use extension ID ${ExtensionRegistryInfo.id} — separate from saoudrizwan.claude-dev`,
-			"• Official Cline auto-update will NOT overwrite iCline",
-			"• Merge upstream with scripts/sync-upstream.ps1, then release a new iCline build",
+			vscode.l10n.t("Safe update model:"),
+			vscode.l10n.t(
+				"• iCline updates use extension ID {0} — separate from saoudrizwan.claude-dev",
+				ExtensionRegistryInfo.id,
+			),
+			vscode.l10n.t("• Official Cline auto-update will NOT overwrite iCline"),
+			vscode.l10n.t("• Merge upstream with scripts/sync-upstream.ps1, then release a new iCline build"),
 		]
 		await vscode.window.showInformationMessage(lines.join("\n"), { modal: true })
 	}
