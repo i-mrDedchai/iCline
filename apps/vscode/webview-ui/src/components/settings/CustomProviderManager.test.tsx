@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
 	createCustomProvider: vi.fn(),
 	updateCustomProvider: vi.fn(),
 	deleteCustomProvider: vi.fn(),
+	refreshOpenAiModels: vi.fn(),
 }))
 
 vi.mock("@/hooks/useProviderListings", () => ({
@@ -24,6 +25,7 @@ vi.mock("@/services/grpc-client", () => ({
 		createCustomProvider: mocks.createCustomProvider,
 		updateCustomProvider: mocks.updateCustomProvider,
 		deleteCustomProvider: mocks.deleteCustomProvider,
+		refreshOpenAiModels: mocks.refreshOpenAiModels,
 	},
 }))
 
@@ -41,6 +43,7 @@ describe("CustomProviderManager", () => {
 		mocks.createCustomProvider.mockResolvedValue({ providers: [] })
 		mocks.updateCustomProvider.mockResolvedValue({ providers: [] })
 		mocks.deleteCustomProvider.mockResolvedValue({ providers: [] })
+		mocks.refreshOpenAiModels.mockResolvedValue({ values: ["auto-m1", "auto-m2"] })
 	})
 
 	it("lists only user-created providers and hides built-ins", () => {
@@ -106,5 +109,76 @@ describe("CustomProviderManager", () => {
 
 		await waitFor(() => expect(mocks.deleteCustomProvider).toHaveBeenCalledTimes(1))
 		expect(mocks.deleteCustomProvider.mock.calls[0][0]).toMatchObject({ value: "gw-one" })
+	})
+
+	// fix.43: the form no longer makes the user type model ids from memory — it can ask the
+	// endpoint. The request must carry the form's OWN baseUrl/apiKey (not whatever provider is
+	// active), because the whole point is fetching before the provider has been saved.
+	it("fetches models from the form's endpoint and fills the model list", async () => {
+		render(<CustomProviderManager />)
+		fireEvent.click(screen.getByTestId("custom-provider-add"))
+		fillField("custom-provider-base-url", "https://api.example/v1")
+		fillField("custom-provider-api-key", "sk-test")
+		fillField("custom-provider-id", "my-gw")
+
+		fireEvent.click(screen.getByTestId("custom-provider-fetch-models"))
+
+		await waitFor(() => expect(mocks.refreshOpenAiModels).toHaveBeenCalledTimes(1))
+		expect(mocks.refreshOpenAiModels.mock.calls[0][0]).toMatchObject({
+			providerId: "my-gw",
+			baseUrl: "https://api.example/v1",
+			apiKey: "sk-test",
+		})
+		await waitFor(() => {
+			const modelsInput = screen.getByTestId("custom-provider-models") as HTMLInputElement
+			expect(modelsInput.value).toContain("auto-m1")
+			expect(modelsInput.value).toContain("auto-m2")
+		})
+	})
+
+	it("keeps the manual model list when a fetch is refused, and will not fetch without a base URL", async () => {
+		mocks.refreshOpenAiModels.mockRejectedValue(new Error("401 Unauthorized"))
+		render(<CustomProviderManager />)
+		fireEvent.click(screen.getByTestId("custom-provider-add"))
+		fillField("custom-provider-models", "hand-typed-model")
+
+		// No base URL yet: the action must explain itself instead of calling the host.
+		fireEvent.click(screen.getByTestId("custom-provider-fetch-models"))
+		expect(mocks.refreshOpenAiModels).not.toHaveBeenCalled()
+		await waitFor(() =>
+			expect(screen.getByTestId("custom-provider-models") as HTMLInputElement).toHaveProperty("value", "hand-typed-model"),
+		)
+
+		// With a base URL the host is asked, and its refusal must not wipe what the user typed.
+		fillField("custom-provider-base-url", "https://api.example/v1")
+		fireEvent.click(screen.getByTestId("custom-provider-fetch-models"))
+		await waitFor(() => expect(mocks.refreshOpenAiModels).toHaveBeenCalledTimes(1))
+		await waitFor(() =>
+			expect(screen.getByTestId("custom-provider-models") as HTMLInputElement).toHaveProperty("value", "hand-typed-model"),
+		)
+	})
+
+	// The rarely-wanted options used to make every visit long; they now cost one click, and the
+	// toggle has to genuinely unmount them or the saving is cosmetic.
+	it("hides the advanced options until the toggle asks for them", () => {
+		render(<CustomProviderManager />)
+		fireEvent.click(screen.getByTestId("custom-provider-add"))
+
+		expect(screen.queryByTestId("custom-provider-models-source-url")).toBeNull()
+		fireEvent.click(screen.getByTestId("custom-provider-advanced-toggle"))
+		expect(screen.getByTestId("custom-provider-models-source-url")).toBeTruthy()
+		expect(screen.getByTestId("custom-provider-header-add")).toBeTruthy()
+	})
+
+	// Once ids exist the default model becomes a picker, so the common path is a choice rather
+	// than a memory test — but an off-catalog id must still be typeable.
+	it("offers the model ids as a default-model dropdown while keeping free text", () => {
+		render(<CustomProviderManager />)
+		fireEvent.click(screen.getByTestId("custom-provider-add"))
+		fillField("custom-provider-models", "m-a, m-b")
+
+		const select = screen.getByTestId("custom-provider-default-model-select") as HTMLSelectElement
+		expect(Array.from(select.options).map((option) => option.value)).toEqual(["", "m-a", "m-b"])
+		expect(screen.getByTestId("custom-provider-default-model")).toBeTruthy()
 	})
 })
