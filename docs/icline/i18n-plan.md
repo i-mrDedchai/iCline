@@ -1,7 +1,19 @@
 # แผนรองรับหลายภาษา (i18n) — iCline
 
-> จัดทำ: 2026-09-29 · สถานะ: **สำรวจ + แผน** (ยังไม่ implement — รอตัดสินใจข้อ 0)
+> จัดทำ: 2026-09-29 · สถานะ: **กำลังทำ — เฟส 1 เสร็จ, เฟส 2 เริ่มแล้ว** (รอบ `fix.45`)
 > คำถามตั้งต้นของผู้ใช้: "ตอนนี้มีการ UI หรือการตั้งค่าภาษาอะไรยังไงส่วนไหนแล้วบ้าง และเราต้องเพิ่มอะไรบ้าง"
+
+### สถานะล่าสุด (2026-09-29, `fix.45`)
+
+| เฟส | สถานะ | หลักฐาน |
+|---|---|---|
+| 0 ตัดสินใจ | ⏸️ ยังไม่ตอบ | ต้องรู้จำนวนภาษาที่จะแปลจริง + คนแปล ก่อนขยายต่อ |
+| 1 แกนกลาง | ✅ **เสร็จ** | `webview-ui/src/i18n/` (`locales.ts` ครอบทั้ง 19 ภาษาแล้ว · `strings.ts` + namespace registry · `useTranslation`) · เทสต์ 22 ข้อบังคับคีย์ครบทุก locale/namespace |
+| 2 กวาด webview | 🔄 **เริ่มแล้ว — แท็บ General** | `PreferredLanguageSetting` + `GeneralSettingsSection` ผ่าน namespace `settings` (en/th) · ด่าน `i18n/hardcodedCopy.test.ts` กันข้อความ hardcode กลับมา (รายการ `MIGRATED` = checklist) |
+| 3 manifest + host | ⬜ ยังไม่เริ่ม | ด่านตรวจไฟล์ภาษาอยู่ใน `scripts/verify-vsix-contracts.mjs` แล้ว (กลุ่ม `language bundles`) — พร้อมรองรับงานเฟสนี้ |
+| 4 เสริมด่าน | 🔄 ทำไปบางส่วน | มีด่าน hardcode + ด่าน nls/l10n · ยังขาด e2e ที่สลับภาษาแล้วบังคับป้ายใน Settings เป็นไทย |
+
+**สิ่งที่ยังเป็นอังกฤษแข็ง:** แท็บอื่นของ Settings (api-config/features/terminal/remote-config/about/debug) · Chat/composer · History · MCP · Account · Team · Marketplace · และข้อความฝั่ง host (13 จุดที่เรียก `show*Message`) · manifest (commands/menus/walkthrough ฯลฯ)
 
 ---
 
