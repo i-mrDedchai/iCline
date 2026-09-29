@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react"
 import { useClickAway } from "react-use"
 import { useAutoApproveActions } from "@/hooks/useAutoApproveActions"
+import { useTranslation } from "@/i18n/useTranslation"
 import { getAsVar, VSC_TITLEBAR_INACTIVE_FOREGROUND } from "@/utils/vscStyles"
 import AutoApproveMenuItem from "./AutoApproveMenuItem"
 import { ActionMetadata } from "./types"
@@ -16,6 +17,7 @@ interface AutoApproveModalProps {
 
 const AutoApproveModal: React.FC<AutoApproveModalProps> = ({ isVisible, setIsVisible, buttonRef, ACTION_METADATA }) => {
 	const { isChecked, updateAction, teamBudget, updateTeamBudget } = useAutoApproveActions()
+	const trQuickStart = useTranslation("quickStart")
 	const modalRef = useRef<HTMLDivElement>(null)
 	const itemsContainerRef = useRef<HTMLDivElement>(null)
 	const [containerWidth, setContainerWidth] = useState(0)
@@ -67,18 +69,18 @@ const AutoApproveModal: React.FC<AutoApproveModalProps> = ({ isVisible, setIsVis
 				style={{
 					maxHeight: "60vh",
 				}}>
+				{" "}
 				<div className="mb-2.5 text-muted-foreground text-xs cursor-pointer" onClick={() => setIsVisible(false)}>
-					Let iCline take these actions without asking for approval.{" "}
+					{trQuickStart("autoApproveIntro")}{" "}
 					<a
 						className="text-link hover:text-link-hover"
 						href="https://docs.cline.bot/features/auto-approve#auto-approve"
 						rel="noopener"
 						style={{ fontSize: "inherit" }}
 						target="_blank">
-						Docs
+						{trQuickStart("autoApproveDocs")}
 					</a>
 				</div>
-
 				<div
 					className="relative mb-2 w-full"
 					ref={itemsContainerRef}
@@ -102,11 +104,10 @@ const AutoApproveModal: React.FC<AutoApproveModalProps> = ({ isVisible, setIsVis
 						<AutoApproveMenuItem action={action} isChecked={isChecked} key={action.id} onToggle={updateAction} />
 					))}
 				</div>
-
 				<div className="mt-2 pt-2.5 border-t border-[var(--vscode-panel-border)]">
-					<div className="mb-1.5 text-muted-foreground text-xs">Team budget</div>
+					<div className="mb-1.5 text-muted-foreground text-xs">{trQuickStart("autoApproveTeamBudget")}</div>
 					<div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
-						<label htmlFor="team-budget-agents">Max agents</label>
+						<label htmlFor="team-budget-agents">{trQuickStart("autoApproveMaxAgents")}</label>
 						<input
 							className="w-20 px-1.5 py-0.5 rounded border border-[var(--vscode-input-border,transparent)] bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)]"
 							id="team-budget-agents"
@@ -121,7 +122,7 @@ const AutoApproveModal: React.FC<AutoApproveModalProps> = ({ isVisible, setIsVis
 							type="number"
 							value={teamBudget.maxAgents}
 						/>
-						<label htmlFor="team-budget-tokens">Tokens per turn</label>
+						<label htmlFor="team-budget-tokens">{trQuickStart("autoApproveTokensPerTurn")}</label>
 						<input
 							className="w-24 px-1.5 py-0.5 rounded border border-[var(--vscode-input-border,transparent)] bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)]"
 							id="team-budget-tokens"
@@ -137,10 +138,7 @@ const AutoApproveModal: React.FC<AutoApproveModalProps> = ({ isVisible, setIsVis
 							value={teamBudget.maxTokensPerTurn}
 						/>
 					</div>
-					<div className="mt-1 text-muted-foreground text-xs">
-						0 = unlimited. Caps how many teammates can run at once and how many output tokens each delegated agent
-						turn may produce.
-					</div>
+					<div className="mt-1 text-muted-foreground text-xs">{trQuickStart("autoApproveBudgetHint")}</div>
 				</div>
 			</div>
 		</div>

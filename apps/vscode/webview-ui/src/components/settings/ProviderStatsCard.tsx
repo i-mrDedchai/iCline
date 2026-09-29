@@ -1,5 +1,6 @@
 import React, { useMemo } from "react"
 import { useProviderListings } from "@/hooks/useProviderListings"
+import { useTranslation } from "@/i18n/useTranslation"
 
 /**
  * Rounded summary chips for the API Configuration section: how many providers
@@ -9,6 +10,7 @@ import { useProviderListings } from "@/hooks/useProviderListings"
  */
 export const ProviderStatsCard: React.FC = () => {
 	const { providers } = useProviderListings()
+	const tr = useTranslation("settings")
 
 	const stats = useMemo(() => {
 		let totalModels = 0
@@ -48,21 +50,21 @@ export const ProviderStatsCard: React.FC = () => {
 
 	return (
 		<div data-testid="provider-stats-card" style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-			<div style={chipStyle} title="Providers available in the catalog">
+			<div style={chipStyle} title={tr("statProvidersTitle")}>
 				<span style={dotStyle("#5ec8ff")} />
 				<span style={valueStyle}>{stats.providerCount.toLocaleString()}</span>
-				<span style={labelStyle}>Providers</span>
+				<span style={labelStyle}>{tr("statProvidersLabel")}</span>
 			</div>
-			<div style={chipStyle} title="Total models across all providers' bundled catalogs">
+			<div style={chipStyle} title={tr("statModelsTitle")}>
 				<span style={dotStyle("#c39bff")} />
 				<span style={valueStyle}>{stats.totalModels.toLocaleString()}</span>
-				<span style={labelStyle}>Models</span>
+				<span style={labelStyle}>{tr("statModelsLabel")}</span>
 			</div>
 			{stats.freeModels > 0 && (
-				<div style={chipStyle} title="Models featured in the Cline free tier">
+				<div style={chipStyle} title={tr("statFreeTitle")}>
 					<span style={dotStyle("#56d364")} />
 					<span style={valueStyle}>{stats.freeModels.toLocaleString()}</span>
-					<span style={labelStyle}>Free</span>
+					<span style={labelStyle}>{tr("statFreeLabel")}</span>
 				</div>
 			)}
 		</div>

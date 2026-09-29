@@ -2,6 +2,8 @@ import { StringRequest } from "@shared/proto/cline/common"
 import { CustomProviderMutationRequest, OpenAiModelsRequest, type ProviderListing } from "@shared/proto/cline/models"
 import { type CSSProperties, useCallback, useMemo, useState } from "react"
 import { useProviderListings } from "@/hooks/useProviderListings"
+import { formatString, splitOnPlaceholder } from "@/i18n/strings"
+import { useTranslation } from "@/i18n/useTranslation"
 import { ModelsServiceClient } from "@/services/grpc-client"
 
 type HeaderRow = { key: string; value: string }
@@ -91,6 +93,7 @@ function toMutationRequest(form: FormState): CustomProviderMutationRequest {
  */
 export const CustomProviderManager = () => {
 	const { providers, refresh } = useProviderListings()
+	const tr = useTranslation("providers")
 	const customProviders = useMemo(() => providers.filter((provider) => provider.isCustom), [providers])
 
 	const [editing, setEditing] = useState<{ mode: "create" | "edit"; form: FormState } | null>(null)
@@ -125,7 +128,7 @@ export const CustomProviderManager = () => {
 
 	const fetchModelsFromEndpoint = useCallback(async () => {
 		if (!editing?.form.baseUrl?.trim()) {
-			setFetchModelStatus({ error: "Please enter a Base URL first" })
+			setFetchModelStatus({ error: tr("customProviderNeedBaseUrl") })
 			return
 		}
 
@@ -143,9 +146,14 @@ export const CustomProviderManager = () => {
 
 			const fetched = res.values || []
 			if (fetched.length === 0) {
-				setFetchModelStatus({ error: "Endpoint returned 0 models" })
+				setFetchModelStatus({ error: tr("customProviderFetchedNone") })
 			} else {
-				setFetchModelStatus({ success: `Found ${fetched.length} model${fetched.length > 1 ? "s" : ""}` })
+				setFetchModelStatus({
+					success:
+						fetched.length === 1
+							? tr("customProviderFetchedOne")
+							: formatString(tr, "customProviderFetchedMany", { count: fetched.length }),
+				})
 
 				// Merge with existing models without duplicating
 				const currentModels = editing.form.modelsText
@@ -229,7 +237,7 @@ export const CustomProviderManager = () => {
 			<div className="flex items-center justify-between pb-2 mb-2 border-b border-[var(--vscode-widget-border,var(--vscode-panel-border))]">
 				<div className="flex items-center gap-2">
 					<span className="font-semibold text-xs uppercase tracking-wider text-[var(--vscode-foreground)]">
-						Custom Providers
+						{tr("customProvidersTitle")}
 					</span>
 					{customProviders.length > 0 && (
 						<span className="text-[10px] px-1.5 py-0.5 rounded font-mono bg-[var(--vscode-badge-background)] text-[var(--vscode-badge-foreground)]">
@@ -248,7 +256,7 @@ export const CustomProviderManager = () => {
 						opacity: busy || editing ? 0.6 : 1,
 						cursor: busy || editing ? "default" : "pointer",
 					}}>
-					+ Add Provider
+					{tr("customProviderAdd")}
 				</button>
 			</div>
 
@@ -264,7 +272,16 @@ export const CustomProviderManager = () => {
 			{/* Provider List */}
 			{customProviders.length === 0 && !editing && (
 				<div className="text-xs text-[var(--vscode-descriptionForeground)] py-2 text-center border border-dashed border-[var(--vscode-widget-border,rgba(128,128,128,0.3))] rounded">
-					No custom providers configured yet. Click "+ Add Provider" to connect a custom endpoint.
+					{(() => {
+						const [before, after] = splitOnPlaceholder(tr("customProviderEmptyNotice"), "{action}")
+						return (
+							<>
+								{before}
+								{tr("customProviderAdd")}
+								{after}
+							</>
+						)
+					})()}
 				</div>
 			)}
 
@@ -280,12 +297,14 @@ export const CustomProviderManager = () => {
 									{provider.name}
 								</span>
 								<span className="text-[10px] px-1 py-0.2 rounded font-mono bg-[var(--vscode-badge-background)] text-[var(--vscode-badge-foreground)] shrink-0">
-									custom
+									{tr("customProviderBadge")}
 								</span>
 							</div>
 							<div className="text-[11px] text-[var(--vscode-descriptionForeground)] font-mono truncate mt-0.5">
 								ID: {provider.id}
-								{provider.defaultModelId ? ` · Default: ${provider.defaultModelId}` : ""}
+								{provider.defaultModelId
+									? ` · ${formatString(tr, "customProviderDefaultSuffix", { model: provider.defaultModelId })}`
+									: ""}
 							</div>
 						</div>
 
@@ -296,7 +315,7 @@ export const CustomProviderManager = () => {
 								disabled={busy}
 								onClick={() => openEdit(provider)}
 								style={{ cursor: busy ? "default" : "pointer" }}>
-								Edit
+								{tr("customProviderEdit")}
 							</button>
 
 							{confirmingDeleteId === provider.id ? (
@@ -306,7 +325,7 @@ export const CustomProviderManager = () => {
 									disabled={busy}
 									onClick={() => void remove(provider.id)}
 									style={{ cursor: busy ? "default" : "pointer" }}>
-									Confirm Delete?
+									{tr("customProviderConfirmDelete")}
 								</button>
 							) : (
 								<button
@@ -315,7 +334,7 @@ export const CustomProviderManager = () => {
 									disabled={busy}
 									onClick={() => setConfirmingDeleteId(provider.id)}
 									style={{ cursor: busy ? "default" : "pointer" }}>
-									Delete
+									{tr("customProviderDelete")}
 								</button>
 							)}
 						</div>
@@ -331,10 +350,11 @@ export const CustomProviderManager = () => {
 					<div className="flex items-center justify-between pb-2 mb-3 border-b border-[var(--vscode-widget-border,rgba(128,128,128,0.2))]">
 						<span className="font-semibold text-xs text-[var(--vscode-foreground)]">
 							{editing.mode === "create"
-								? "Add Custom Provider"
-								: `Edit Custom Provider (${editing.form.providerId})`}
+								? tr("customProviderAddTitle")
+								: formatString(tr, "customProviderEditTitle", { id: editing.form.providerId })}
 						</span>
 						<button
+							aria-label={tr("customProviderCloseForm")}
 							className="text-xs text-[var(--vscode-descriptionForeground)] hover:text-[var(--vscode-foreground)] p-1"
 							disabled={busy}
 							onClick={() => setEditing(null)}>
@@ -350,19 +370,20 @@ export const CustomProviderManager = () => {
 									<label
 										className="block text-xs font-medium mb-1 text-[var(--vscode-foreground)]"
 										htmlFor="cp-id">
-										Provider ID <span className="text-[var(--vscode-errorForeground)]">*</span>
+										{tr("customProviderIdLabel")}{" "}
+										<span className="text-[var(--vscode-errorForeground)]">*</span>
 									</label>
 									<input
 										data-testid="custom-provider-id"
 										disabled={busy}
 										id="cp-id"
 										onChange={(e) => updateForm({ providerId: e.target.value })}
-										placeholder="e.g. my-gateway (lowercase slug)"
+										placeholder={tr("customProviderIdPlaceholder")}
 										style={INPUT_STYLE}
 										value={editing.form.providerId}
 									/>
 									<span className="text-[10px] text-[var(--vscode-descriptionForeground)]">
-										Permanent unique identifier (cannot be changed later)
+										{tr("customProviderIdHint")}
 									</span>
 								</div>
 							) : null}
@@ -371,14 +392,15 @@ export const CustomProviderManager = () => {
 								<label
 									className="block text-xs font-medium mb-1 text-[var(--vscode-foreground)]"
 									htmlFor="cp-name">
-									Display Name <span className="text-[var(--vscode-errorForeground)]">*</span>
+									{tr("customProviderNameLabel")}{" "}
+									<span className="text-[var(--vscode-errorForeground)]">*</span>
 								</label>
 								<input
 									data-testid="custom-provider-name"
 									disabled={busy}
 									id="cp-name"
 									onChange={(e) => updateForm({ name: e.target.value })}
-									placeholder="e.g. My Fast Gateway"
+									placeholder={tr("customProviderNamePlaceholder")}
 									style={INPUT_STYLE}
 									value={editing.form.name}
 								/>
@@ -390,7 +412,7 @@ export const CustomProviderManager = () => {
 							<label
 								className="block text-xs font-medium mb-1 text-[var(--vscode-foreground)]"
 								htmlFor="cp-base-url">
-								Base URL <span className="text-[var(--vscode-errorForeground)]">*</span>
+								{tr("baseUrlLabel")} <span className="text-[var(--vscode-errorForeground)]">*</span>
 							</label>
 							<input
 								data-testid="custom-provider-base-url"
@@ -399,8 +421,8 @@ export const CustomProviderManager = () => {
 								onChange={(e) => updateForm({ baseUrl: e.target.value })}
 								placeholder={
 									editing.mode === "edit"
-										? "Leave blank to keep existing URL"
-										: "e.g. https://api.openai.com/v1"
+										? tr("customProviderBaseUrlKeepPlaceholder")
+										: tr("customProviderBaseUrlExamplePlaceholder")
 								}
 								style={INPUT_STYLE}
 								value={editing.form.baseUrl}
@@ -412,27 +434,31 @@ export const CustomProviderManager = () => {
 							<label
 								className="block text-xs font-medium mb-1 text-[var(--vscode-foreground)]"
 								htmlFor="cp-api-key">
-								API Key
+								{tr("apiKeyPlaceholder")}
 							</label>
 							<input
 								data-testid="custom-provider-api-key"
 								disabled={busy}
 								id="cp-api-key"
 								onChange={(e) => updateForm({ apiKey: e.target.value })}
-								placeholder={editing.mode === "edit" ? "Leave blank to keep stored key" : "Enter API Key..."}
+								placeholder={
+									editing.mode === "edit" ? tr("customProviderApiKeyKeepPlaceholder") : tr("apiKeyPlaceholder")
+								}
 								style={INPUT_STYLE}
 								type="password"
 								value={editing.form.apiKey}
-							/>
+							/>{" "}
 							<span className="text-[10px] text-[var(--vscode-descriptionForeground)]">
-								Stored securely. Write-only (leave empty to keep current).
+								{tr("customProviderApiKeyHint")}
 							</span>
 						</div>
 
 						{/* Automatic Model Discovery & Model List */}
 						<div className="p-2.5 rounded border border-[var(--vscode-widget-border,rgba(128,128,128,0.25))] bg-[var(--vscode-sideBar-background,var(--vscode-editor-background))] flex flex-col gap-2">
 							<div className="flex items-center justify-between">
-								<span className="text-xs font-semibold text-[var(--vscode-foreground)]">Model Configuration</span>
+								<span className="text-xs font-semibold text-[var(--vscode-foreground)]">
+									{tr("modelConfiguration")}
+								</span>
 								<button
 									className="px-2 py-0.5 text-xs rounded border border-[var(--vscode-button-border,transparent)] bg-[var(--vscode-button-secondaryBackground)] text-[var(--vscode-button-secondaryForeground)] hover:bg-[var(--vscode-button-secondaryHoverBackground)] flex items-center gap-1"
 									data-testid="custom-provider-fetch-models"
@@ -440,10 +466,10 @@ export const CustomProviderManager = () => {
 									onClick={() => void fetchModelsFromEndpoint()}
 									type="button">
 									{isFetchingModels ? (
-										<span>Fetching...</span>
+										<span>{tr("customProviderFetching")}</span>
 									) : (
 										<>
-											<span>⚡ Fetch models automatically</span>
+											<span>⚡ {tr("customProviderFetchModels")}</span>
 										</>
 									)}
 								</button>
@@ -461,7 +487,7 @@ export const CustomProviderManager = () => {
 								<label
 									className="block text-xs font-medium mb-1 text-[var(--vscode-foreground)]"
 									htmlFor="cp-models">
-									Models (comma-separated model IDs)
+									{tr("customProviderModelsLabel")}
 								</label>
 								<input
 									data-testid="custom-provider-models"
@@ -470,8 +496,8 @@ export const CustomProviderManager = () => {
 									onChange={(e) => updateForm({ modelsText: e.target.value })}
 									placeholder={
 										editing.mode === "edit"
-											? "Leave blank to keep existing models (or comma-separated to replace)"
-											: "e.g. gpt-5.6-sol, claude-3-5-sonnet, deepseek-r1"
+											? tr("customProviderModelsKeepPlaceholder")
+											: tr("customProviderModelsExamplePlaceholder")
 									}
 									style={INPUT_STYLE}
 									value={editing.form.modelsText}
@@ -483,7 +509,7 @@ export const CustomProviderManager = () => {
 								<label
 									className="block text-xs font-medium mb-1 text-[var(--vscode-foreground)]"
 									htmlFor="cp-default-model">
-									Default Model ID
+									{tr("customProviderDefaultModelLabel")}
 								</label>
 								{parsedModelIds.length > 0 ? (
 									<div className="flex gap-2 items-center">
@@ -494,7 +520,7 @@ export const CustomProviderManager = () => {
 											onChange={(e) => updateForm({ defaultModelId: e.target.value })}
 											style={SELECT_STYLE}
 											value={editing.form.defaultModelId}>
-											<option value="">Select default model...</option>
+											<option value="">{tr("customProviderDefaultModelOption")}</option>
 											{parsedModelIds.map((m) => (
 												<option key={m} value={m}>
 													{m}
@@ -506,7 +532,7 @@ export const CustomProviderManager = () => {
 											data-testid="custom-provider-default-model"
 											disabled={busy}
 											onChange={(e) => updateForm({ defaultModelId: e.target.value })}
-											placeholder="Or type custom ID..."
+											placeholder={tr("customProviderDefaultModelTypePlaceholder")}
 											style={INPUT_STYLE}
 											value={editing.form.defaultModelId}
 										/>
@@ -517,7 +543,7 @@ export const CustomProviderManager = () => {
 										disabled={busy}
 										id="cp-default-model"
 										onChange={(e) => updateForm({ defaultModelId: e.target.value })}
-										placeholder="e.g. gpt-5.6-sol (selected by default)"
+										placeholder={tr("customProviderDefaultModelExamplePlaceholder")}
 										style={INPUT_STYLE}
 										value={editing.form.defaultModelId}
 									/>
@@ -533,7 +559,7 @@ export const CustomProviderManager = () => {
 								onClick={() => setShowAdvanced(!showAdvanced)}
 								type="button">
 								<span>{showAdvanced ? "▼" : "▶"}</span>
-								<span>Advanced Settings (Custom Headers, Models Source URL)</span>
+								<span>{tr("customProviderAdvancedToggle")}</span>
 							</button>
 
 							{showAdvanced && (
@@ -543,19 +569,19 @@ export const CustomProviderManager = () => {
 										<label
 											className="block text-xs font-medium mb-1 text-[var(--vscode-foreground)]"
 											htmlFor="cp-source-url">
-											Models Source URL Override (Optional)
+											{tr("customProviderSourceUrlLabel")}
 										</label>
 										<input
 											data-testid="custom-provider-models-source-url"
 											disabled={busy}
 											id="cp-source-url"
 											onChange={(e) => updateForm({ modelsSourceUrl: e.target.value })}
-											placeholder="Default: {baseUrl}/models"
+											placeholder={formatString(tr, "defaultValue", { value: "{baseUrl}/models" })}
 											style={INPUT_STYLE}
 											value={editing.form.modelsSourceUrl}
 										/>
 										<span className="text-[10px] text-[var(--vscode-descriptionForeground)]">
-											Auto-derived from Base URL if left empty.
+											{tr("customProviderSourceUrlHint")}
 										</span>
 									</div>
 
@@ -563,7 +589,7 @@ export const CustomProviderManager = () => {
 									<div>
 										<div className="flex items-center justify-between mb-1.5">
 											<span className="text-xs font-medium text-[var(--vscode-foreground)]">
-												Custom Headers
+												{tr("customHeadersLabel")}
 											</span>
 											<button
 												className="px-2 py-0.5 text-xs rounded border border-[var(--vscode-button-border,transparent)] bg-[var(--vscode-button-secondaryBackground)] text-[var(--vscode-button-secondaryForeground)]"
@@ -573,7 +599,7 @@ export const CustomProviderManager = () => {
 													updateForm({ headers: [...editing.form.headers, { key: "", value: "" }] })
 												}
 												type="button">
-												+ Add Header
+												{tr("customProviderAddHeader")}
 											</button>
 										</div>
 
@@ -588,7 +614,7 @@ export const CustomProviderManager = () => {
 														)
 														updateForm({ headers })
 													}}
-													placeholder="Header Name"
+													placeholder={tr("headerNamePlaceholder")}
 													style={{ ...INPUT_STYLE, flex: 1 }}
 													value={row.key}
 												/>
@@ -601,7 +627,7 @@ export const CustomProviderManager = () => {
 														)
 														updateForm({ headers })
 													}}
-													placeholder="Value"
+													placeholder={tr("headerValuePlaceholder")}
 													style={{ ...INPUT_STYLE, flex: 1 }}
 													value={row.value}
 												/>
@@ -632,7 +658,7 @@ export const CustomProviderManager = () => {
 								disabled={busy}
 								onClick={() => setEditing(null)}
 								type="button">
-								Cancel
+								{tr("customProviderCancel")}
 							</button>
 							<button
 								className="px-3.5 py-1 text-xs font-medium rounded border border-[var(--vscode-button-border,transparent)]"
@@ -646,7 +672,7 @@ export const CustomProviderManager = () => {
 									cursor: busy ? "default" : "pointer",
 								}}
 								type="button">
-								{editing.mode === "create" ? "Create Provider" : "Save Changes"}
+								{editing.mode === "create" ? tr("customProviderCreate") : tr("customProviderSaveChanges")}
 							</button>
 						</div>
 					</div>

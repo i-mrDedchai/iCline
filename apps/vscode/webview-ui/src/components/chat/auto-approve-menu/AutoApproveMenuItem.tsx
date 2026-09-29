@@ -1,5 +1,6 @@
 import { VSCodeCheckbox } from "@vscode/webview-ui-toolkit/react"
 import styled from "styled-components"
+import { useTranslation } from "@/i18n/useTranslation"
 import { ActionMetadata } from "./types"
 
 interface AutoApproveMenuItemProps {
@@ -30,6 +31,7 @@ const CheckboxWrapper = styled.div<{ $disabled: boolean }>`
 
 const AutoApproveMenuItem = ({ action, isChecked, onToggle, showIcon = true, disabled = false }: AutoApproveMenuItemProps) => {
 	const checked = isChecked(action)
+	const trQuickStart = useTranslation("quickStart")
 
 	const onChange = async (e: React.MouseEvent) => {
 		if (disabled) {
@@ -44,8 +46,8 @@ const AutoApproveMenuItem = ({ action, isChecked, onToggle, showIcon = true, dis
 			<CheckboxWrapper $disabled={disabled} className="w-full" onClick={onChange}>
 				<VSCodeCheckbox checked={checked} disabled={disabled}>
 					<div className="w-full flex text-sm items-center justify-start text-foreground gap-2">
-						{showIcon && <span className={`codicon ${action.icon} icon`}></span>}
-						<span className="label">{action.label}</span>
+						{showIcon && <span className={`codicon ${action.icon} icon`} />}
+						<span className="label">{action.labelKey ? trQuickStart(action.labelKey) : action.label}</span>
 					</div>
 				</VSCodeCheckbox>
 			</CheckboxWrapper>

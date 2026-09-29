@@ -17,6 +17,8 @@ import { useEvent } from "react-use"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { type ClineUser, useClineAuth } from "@/context/ClineAuthContext"
 import { useExtensionState } from "@/context/ExtensionStateContext"
+import type { SettingsStringKey } from "@/i18n/namespaces/settings"
+import { useTranslation } from "@/i18n/useTranslation"
 import { cn } from "@/lib/utils"
 import { StateServiceClient } from "@/services/grpc-client"
 import { isAdminOrOwner } from "../account/helpers"
@@ -38,9 +40,9 @@ const IS_DEV = process.env.IS_DEV
 type SettingsTabID = "api-config" | "features" | "terminal" | "general" | "about" | "debug" | "remote-config"
 interface SettingsTab {
 	id: SettingsTabID
-	name: string
-	tooltipText: string
-	headerText: string
+	name: SettingsStringKey
+	tooltipText: SettingsStringKey
+	headerText: SettingsStringKey
 	icon: LucideIcon
 	hidden?: (params?: { user: ClineUser | null; activeOrganization: UserOrganization | null }) => boolean
 }
@@ -48,54 +50,54 @@ interface SettingsTab {
 const SETTINGS_TABS: SettingsTab[] = [
 	{
 		id: "api-config",
-		name: "API Configuration",
-		tooltipText: "API Configuration",
-		headerText: "API Configuration",
+		name: "tabApiConfig",
+		tooltipText: "tabApiConfigTooltip",
+		headerText: "tabApiConfig",
 		icon: SlidersHorizontal,
 	},
 	{
 		id: "features",
-		name: "Features",
-		tooltipText: "Feature Settings",
-		headerText: "Feature Settings",
+		name: "tabFeatures",
+		tooltipText: "tabFeaturesTooltip",
+		headerText: "tabFeaturesHeader",
 		icon: CheckCheck,
 	},
 	{
 		id: "terminal",
-		name: "Terminal",
-		tooltipText: "Terminal Settings",
-		headerText: "Terminal Settings",
+		name: "tabTerminal",
+		tooltipText: "tabTerminalTooltip",
+		headerText: "tabTerminalHeader",
 		icon: SquareTerminal,
 	},
 	{
 		id: "general",
-		name: "General",
-		tooltipText: "General Settings",
-		headerText: "General Settings",
+		name: "tabGeneral",
+		tooltipText: "tabGeneralTooltip",
+		headerText: "tabGeneralHeader",
 		icon: Wrench,
 	},
 	{
 		id: "remote-config",
-		name: "Remote Config",
-		tooltipText: "Remotely configured fields",
-		headerText: "Remote Config",
+		name: "tabRemoteConfig",
+		tooltipText: "tabRemoteConfigTooltip",
+		headerText: "tabRemoteConfigHeader",
 		icon: HardDriveDownload,
 		hidden: ({ activeOrganization } = { user: null, activeOrganization: null }) =>
 			!activeOrganization || !isAdminOrOwner(activeOrganization),
 	},
 	{
 		id: "about",
-		name: "About",
-		tooltipText: "About iCline & Cline",
-		headerText: "About",
+		name: "tabAbout",
+		tooltipText: "tabAboutTooltip",
+		headerText: "tabAboutHeader",
 		icon: Info,
 	},
 	// Only show in dev mode
 	{
 		id: "debug",
-		name: "Debug",
-		tooltipText: "Debug Tools",
-		headerText: "Debug",
+		name: "tabDebug",
+		tooltipText: "tabDebugTooltip",
+		headerText: "tabDebugHeader",
 		icon: FlaskConical,
 		hidden: ({ user } = { user: null, activeOrganization: null }) => !IS_DEV && !isClineInternalTester(user?.email || ""),
 	},
@@ -107,7 +109,7 @@ type SettingsViewProps = {
 }
 
 // Helper to render section header - moved outside component for better performance
-const renderSectionHeader = (tabId: string) => {
+const renderSectionHeader = (tabId: string, tr: (key: SettingsStringKey) => string) => {
 	const tab = SETTINGS_TABS.find((t) => t.id === tabId)
 	if (!tab) {
 		return null
@@ -120,7 +122,7 @@ const renderSectionHeader = (tabId: string) => {
 				<div className="flex items-center justify-between gap-3 w-full">
 					<h2 className="m-0 text-base flex items-center gap-2">
 						<tab.icon className="w-4" />
-						<span>{tab.headerText}</span>
+						<span>{tr(tab.headerText)}</span>
 					</h2>
 					<ProviderStatsCard />
 				</div>
@@ -132,13 +134,14 @@ const renderSectionHeader = (tabId: string) => {
 		<SectionHeader>
 			<div className="flex items-center gap-2">
 				<tab.icon className="w-4" />
-				<div>{tab.headerText}</div>
+				<div>{tr(tab.headerText)}</div>
 			</div>
 		</SectionHeader>
 	)
 }
 
 const SettingsView = ({ onDone, targetSection }: SettingsViewProps) => {
+	const tr = useTranslation("settings")
 	// Memoize to avoid recreation
 	// biome-ignore lint/suspicious/noExplicitAny: section components have heterogeneous prop shapes
 	const TAB_CONTENT_MAP: Record<SettingsTabID, React.FC<any>> = useMemo(
@@ -233,15 +236,15 @@ const SettingsView = ({ onDone, targetSection }: SettingsViewProps) => {
 									},
 								)}>
 								<tab.icon className="w-4 h-4" />
-								<span className="hidden sm:block">{tab.name}</span>
+								<span className="hidden sm:block">{tr(tab.name)}</span>
 							</div>
 						</TooltipTrigger>
-						<TooltipContent side="right">{tab.tooltipText}</TooltipContent>
+						<TooltipContent side="right">{tr(tab.tooltipText)}</TooltipContent>
 					</Tooltip>
 				</TabTrigger>
 			)
 		},
-		[activeTab],
+		[activeTab, tr],
 	)
 
 	// Memoized active content component
@@ -253,7 +256,7 @@ const SettingsView = ({ onDone, targetSection }: SettingsViewProps) => {
 
 		// Special props for specific components
 		// biome-ignore lint/suspicious/noExplicitAny: section props vary per tab
-		const props: any = { renderSectionHeader }
+		const props: any = { renderSectionHeader: (tabId: string) => renderSectionHeader(tabId, tr) }
 		if (activeTab === "debug") {
 			props.onResetState = handleResetState
 		} else if (activeTab === "about") {
@@ -263,11 +266,11 @@ const SettingsView = ({ onDone, targetSection }: SettingsViewProps) => {
 		}
 
 		return <Component {...props} />
-	}, [activeTab, handleResetState, settingsInitialModelTab, version, TAB_CONTENT_MAP])
+	}, [activeTab, handleResetState, settingsInitialModelTab, tr, version, TAB_CONTENT_MAP])
 
 	return (
 		<Tab>
-			<ViewHeader environment={environment} onDone={onDone} title="Settings" />
+			<ViewHeader environment={environment} onDone={onDone} title={tr("viewSettingsTitle")} />
 
 			<div className="flex flex-1 overflow-hidden">
 				<TabList

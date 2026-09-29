@@ -1,4 +1,6 @@
 import { Button } from "@/components/ui/button"
+import { formatString } from "@/i18n/strings"
+import { useTranslation } from "@/i18n/useTranslation"
 import { getEnvironmentColor } from "@/utils/environmentColors"
 import type { Environment } from "../../../../src/shared/config-types"
 
@@ -17,6 +19,7 @@ type ViewHeaderProps = {
 }
 
 const ViewHeader = ({ title, onDone, showEnvironmentSuffix, environment }: ViewHeaderProps) => {
+	const tr = useTranslation("settings")
 	const showSubtext = showEnvironmentSuffix && environment && environment !== "production"
 	const capitalizedEnv = environment ? ENV_DISPLAY_NAMES[environment] : ""
 	const titleColor = getEnvironmentColor(environment)
@@ -26,15 +29,15 @@ const ViewHeader = ({ title, onDone, showEnvironmentSuffix, environment }: ViewH
 			<div className="relative">
 				<h3 className="m-0 text-lg font-normal" style={{ color: titleColor }}>
 					{title}
-				</h3>
+				</h3>{" "}
 				{showSubtext && (
 					<span className="absolute left-0 top-8 -translate-y-1 text-xs text-description whitespace-nowrap">
-						{capitalizedEnv} environment
+						{formatString(tr, "environmentSuffix", { environment: capitalizedEnv })}
 					</span>
 				)}
 			</div>
-			<Button size="header" onClick={onDone}>
-				Done
+			<Button onClick={onDone} size="header">
+				{tr("done")}
 			</Button>
 		</div>
 	)

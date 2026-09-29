@@ -44,6 +44,17 @@ const ReasoningEffortSelector = ({
 
 	const tr = usePickerStrings()
 	const effortLevels = resolveEffortLevels({ providerId, modelId: modelId ?? "", modelInfo })
+	// fix.48: the help sentence under the dropdown is interface copy, but the
+	// level sets live in a locale-free util (`modelThinkingOptions`) that picker
+	// surfaces also import — so the selector resolves the sentence here from the
+	// set id instead of teaching the util about locales.
+	const effortHelp =
+		effortLevels.id === "adaptive-thinking"
+			? tr("settingsEffortAdaptiveDesc")
+			: effortLevels.id === "sakana"
+				? tr("settingsEffortSakanaDesc")
+				: tr("settingsEffortGenericDesc")
+	const effortLabel = effortLevels.id === "adaptive-thinking" ? tr("settingsEffortAdaptiveLabel") : tr("settingsEffortLabel")
 	const storedEffort = typeof modeFields.reasoningEffort === "string" ? modeFields.reasoningEffort.trim() : ""
 
 	/** The provider's levels, plus the stored one when that set does not contain it. */
@@ -71,7 +82,7 @@ const ReasoningEffortSelector = ({
 
 	return (
 		<div style={{ marginTop: 10, marginBottom: 5 }}>
-			<Label className="text-xs font-medium">{effortLevels.label}</Label>
+			<Label className="text-xs font-medium">{effortLabel}</Label>
 			<Select
 				onValueChange={(value) => {
 					handleModeFieldChange({ plan: "planModeReasoningEffort", act: "actModeReasoningEffort" }, value, currentMode)
@@ -96,7 +107,7 @@ const ReasoningEffortSelector = ({
 					marginBottom: 0,
 					color: "var(--vscode-descriptionForeground)",
 				}}>
-				{effortLevels.description}
+				{effortHelp}
 			</p>
 			{/* What the SDK will really send for this level (host-computed; nothing while the answer is unknown). */}
 			<ReasoningEffortNotice outcome={effortOutcome} tr={tr} />

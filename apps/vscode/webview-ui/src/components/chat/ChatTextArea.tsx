@@ -20,6 +20,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { usePlatform } from "@/context/PlatformContext"
 import { useNormalizedApiConfiguration } from "@/hooks/useNormalizedApiConfiguration"
+import { useTranslation } from "@/i18n/useTranslation"
 import { cn } from "@/lib/utils"
 import { FileServiceClient, StateServiceClient } from "@/services/grpc-client"
 import {
@@ -233,6 +234,7 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			mcpServers,
 			navigateToSettingsModelPicker,
 		} = useExtensionState()
+		const trQuickStart = useTranslation("quickStart")
 		const [isTextAreaFocused, setIsTextAreaFocused] = useState(false)
 		const [isDraggingOver, setIsDraggingOver] = useState(false)
 		const [gitCommits, setGitCommits] = useState<GitCommit[]>([])
@@ -1409,12 +1411,14 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 					onDrop={onDrop}>
 					{showDimensionError && (
 						<div className="absolute inset-2.5 bg-[rgba(var(--vscode-errorForeground-rgb),0.1)] border-2 border-error rounded-xs flex items-center justify-center z-10 pointer-events-none">
-							<span className="text-error font-bold text-xs text-center">Image dimensions exceed 7500px</span>
+							<span className="text-error font-bold text-xs text-center">
+								{trQuickStart("composerDimensionError")}
+							</span>
 						</div>
 					)}
 					{showUnsupportedFileError && (
 						<div className="absolute inset-2.5 bg-[rgba(var(--vscode-errorForeground-rgb),0.1)] border-2 border-error rounded-xs flex items-center justify-center z-10 pointer-events-none">
-							<span className="text-error font-bold text-xs">Files other than images are currently disabled</span>
+							<span className="text-error font-bold text-xs">{trQuickStart("composerUnsupportedFile")}</span>
 						</div>
 					)}
 					{showSlashCommandsMenu && (
@@ -1604,11 +1608,12 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 						{/* ButtonGroup - always in DOM but visibility controlled */}
 						<ButtonGroup className="absolute top-0 left-0 right-0 ease-in-out w-full h-5 z-10 flex items-center">
 							<Tooltip>
-								<TooltipContent>Add Context</TooltipContent>
+								{" "}
+								<TooltipContent>{trQuickStart("composerAddContext")}</TooltipContent>
 								<TooltipTrigger>
 									<VSCodeButton
 										appearance="icon"
-										aria-label="Add Context"
+										aria-label={trQuickStart("composerAddContext")}
 										className="p-0 m-0 flex items-center"
 										data-testid="context-button"
 										onClick={handleContextButtonClick}>
@@ -1620,11 +1625,12 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 							</Tooltip>
 
 							<Tooltip>
-								<TooltipContent>Add Files & Images</TooltipContent>
+								{" "}
+								<TooltipContent>{trQuickStart("composerAddFiles")}</TooltipContent>
 								<TooltipTrigger>
 									<VSCodeButton
 										appearance="icon"
-										aria-label="Add Files & Images"
+										aria-label={trQuickStart("composerAddFiles")}
 										className="p-0 m-0 flex items-center"
 										data-testid="files-button"
 										disabled={shouldDisableFilesAndImages}

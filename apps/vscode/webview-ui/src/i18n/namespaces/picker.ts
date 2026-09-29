@@ -73,6 +73,14 @@ const en = {
 	effortHigh: "High",
 	effortXhigh: "X-High",
 	effortMax: "Max",
+	// Settings Effort control help (`settings/ReasoningEffortSelector` + the
+	// `modelThinkingOptions` sets that name it): one key per set, so a language
+	// that needs different grammar per set is not forced through one sentence.
+	settingsEffortLabel: "Reasoning Effort",
+	settingsEffortAdaptiveLabel: "Adaptive Thinking",
+	settingsEffortGenericDesc: "Higher effort improves depth, but uses more tokens.",
+	settingsEffortAdaptiveDesc: "Use None to disable adaptive thinking. Higher effort increases response detail and token usage.",
+	settingsEffortSakanaDesc: "Fugu Ultra defaults to X-High. Higher effort improves depth but uses more tokens.",
 	// Effort clamp notice — shown when the SDK gateway will NOT send the level the
 	// user picked (see components/common/ReasoningEffortNotice). `{requested}` and
 	// `{applied}` are level labels.
@@ -139,6 +147,11 @@ const th: Record<PickerStringKey, string> = {
 	effortHigh: "High",
 	effortXhigh: "X-High",
 	effortMax: "Max",
+	settingsEffortLabel: "ระดับการคิด (Reasoning Effort)",
+	settingsEffortAdaptiveLabel: "การคิดแบบปรับตัว (Adaptive Thinking)",
+	settingsEffortGenericDesc: "ระดับสูงขึ้นคิดลึกขึ้น แต่ใช้โทเคนมากขึ้น",
+	settingsEffortAdaptiveDesc: "เลือก None เพื่อปิดการคิดแบบปรับตัว · ระดับสูงขึ้นให้รายละเอียดมากขึ้นแต่ใช้โทเคนมากขึ้น",
+	settingsEffortSakanaDesc: "Fugu Ultra เริ่มต้นที่ X-High · ระดับสูงขึ้นคิดลึกขึ้นแต่ใช้โทเคนมากขึ้น",
 	effortClampNearest: "{requested} → {applied} · โมเดลนี้ไม่รับ {requested} จะส่ง {applied} แทน",
 	effortClampCatalogUnknown: "{requested} → {applied} · ไม่มีข้อมูล Effort ของโมเดลนี้ จะส่ง {applied} แทน",
 	effortClampNoControl: "ไม่ส่ง {requested} · โมเดลนี้ไม่มีตัวเลือก Effort",
@@ -194,6 +207,12 @@ const ja: Record<PickerStringKey, string> = {
 	effortHigh: "High",
 	effortXhigh: "X-High",
 	effortMax: "Max",
+	settingsEffortLabel: "Reasoning Effort",
+	settingsEffortAdaptiveLabel: "Adaptive Thinking",
+	settingsEffortGenericDesc: "Effort を上げると深く考えますが、トークンを多く使います。",
+	settingsEffortAdaptiveDesc:
+		"Adaptive Thinking を無効にするには None を選びます。Effort を上げると詳細になりますが、トークンも増えます。",
+	settingsEffortSakanaDesc: "Fugu Ultra の既定は X-High です。Effort を上げると深く考えますが、トークンを多く使います。",
 	effortClampNearest: "{requested} → {applied} · このモデルは {requested} を受け付けないため {applied} を送信します",
 	effortClampCatalogUnknown: "{requested} → {applied} · このモデルの Effort 情報がないため {applied} を送信します",
 	effortClampNoControl: "{requested} は送信されません · このモデルには Effort 設定がありません",
@@ -249,6 +268,11 @@ const zhCN: Record<PickerStringKey, string> = {
 	effortHigh: "High",
 	effortXhigh: "X-High",
 	effortMax: "Max",
+	settingsEffortLabel: "推理强度 (Reasoning Effort)",
+	settingsEffortAdaptiveLabel: "自适应思考 (Adaptive Thinking)",
+	settingsEffortGenericDesc: "强度越高思考越深入，但消耗的 token 越多。",
+	settingsEffortAdaptiveDesc: "选择 None 可关闭自适应思考。强度越高回答越详细，但消耗的 token 越多。",
+	settingsEffortSakanaDesc: "Fugu Ultra 默认使用 X-High。强度越高思考越深入，但消耗的 token 越多。",
 	effortClampNearest: "{requested} → {applied} · 该模型不接受 {requested}，因此发送 {applied}",
 	effortClampCatalogUnknown: "{requested} → {applied} · 没有该模型的 Effort 数据，因此发送 {applied}",
 	effortClampNoControl: "不会发送 {requested} · 该模型没有 Effort 控制",

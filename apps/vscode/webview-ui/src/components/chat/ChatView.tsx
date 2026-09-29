@@ -10,6 +10,7 @@ import { useMount } from "react-use"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useShowNavbar } from "@/context/PlatformContext"
 import { useNormalizedApiConfiguration } from "@/hooks/useNormalizedApiConfiguration"
+import { useTranslation } from "@/i18n/useTranslation"
 import { FileServiceClient, UiServiceClient } from "@/services/grpc-client"
 import { Navbar } from "../menu/Navbar"
 import AutoApproveBar from "./auto-approve-menu/AutoApproveBar"
@@ -44,7 +45,10 @@ const MAX_IMAGES_AND_FILES_PER_MESSAGE = CHAT_CONSTANTS.MAX_IMAGES_AND_FILES_PER
 const QUICK_WINS_HISTORY_THRESHOLD = 3
 
 // iCline quick-start mode resolution (kept visible alongside task history)
-import { resolveQuickStartMode as resolveQuickStartModeIcline, QUICK_START_HISTORY_THRESHOLD } from "@/components/welcome/icline/quickStartMode"
+import {
+	QUICK_START_HISTORY_THRESHOLD,
+	resolveQuickStartMode as resolveQuickStartModeIcline,
+} from "@/components/welcome/icline/quickStartMode"
 
 const sameUserMessage = (left: ClineMessage, right: ClineMessage) => {
 	const leftImages = left.images ?? []
@@ -365,10 +369,11 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 	// Use scroll behavior hook
 	const scrollBehavior = useScrollBehavior(displayMessages, visibleMessages, groupedMessages, expandedRows, setExpandedRows)
 
+	const trQuickStart = useTranslation("quickStart")
 	const placeholderText = useMemo(() => {
-		const text = task ? "Type a message..." : "Type your task here..."
+		const text = task ? trQuickStart("composerReplyPlaceholder") : trQuickStart("composerNewTaskPlaceholder")
 		return text
-	}, [task])
+	}, [task, trQuickStart])
 
 	return (
 		<ChatLayout isHidden={isHidden}>
@@ -386,16 +391,16 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 						task={task}
 					/>
 				) : (
-				<WelcomeSection
-					hideAnnouncement={hideAnnouncement}
-					quickStartMode={quickStartMode}
-					shouldShowQuickWins={shouldShowQuickWins}
-					showAnnouncement={showAnnouncement}
-					showHistoryView={showHistoryView}
-					taskHistory={taskHistory}
-					telemetrySetting={telemetrySetting}
-					version={version}
-				/>
+					<WelcomeSection
+						hideAnnouncement={hideAnnouncement}
+						quickStartMode={quickStartMode}
+						shouldShowQuickWins={shouldShowQuickWins}
+						showAnnouncement={showAnnouncement}
+						showHistoryView={showHistoryView}
+						taskHistory={taskHistory}
+						telemetrySetting={telemetrySetting}
+						version={version}
+					/>
 				)}
 				{task && (
 					<MessagesArea

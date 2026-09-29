@@ -1,6 +1,7 @@
 import { StringRequest } from "@shared/proto/cline/common"
 import { type CSSProperties, memo, useMemo, useState } from "react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
+import { useTranslation } from "@/i18n/useTranslation"
 import { backgroundTaskBadge, backgroundTaskNotice } from "@/icline/backgroundTaskBadge"
 import { sliceRecentTasks, useRecentColumnCount } from "@/icline/recentGrid"
 import { formatRecentTimestamp, formatRecentTimestampTitle } from "@/icline/recentTime"
@@ -12,6 +13,7 @@ type HistoryPreviewProps = {
 
 const HistoryPreview = ({ showHistoryView }: HistoryPreviewProps) => {
 	const { taskHistory, backgroundTask, queuedTask } = useExtensionState()
+	const trQuickStart = useTranslation("quickStart")
 	// The grid measures itself: three rows stay three rows, and how many sessions fit per row
 	// is the pane's decision (see `@/icline/recentGrid`). A callback ref into state, because the
 	// grid only exists once there is history — which is after the first paint.
@@ -212,16 +214,17 @@ const HistoryPreview = ({ showHistoryView }: HistoryPreviewProps) => {
 							fontSize: "0.85em",
 							textTransform: "uppercase",
 						}}>
-						Recent
+						{" "}
+						{trQuickStart("historyRecent")}
 					</span>
 				</div>
 				{recentTasks.length > 0 && (
 					<button
-						aria-label="View all history"
+						aria-label={trQuickStart("historyViewAllAriaLabel")}
 						className="history-view-all-btn"
 						onClick={() => showHistoryView()}
 						type="button">
-						View All
+						{trQuickStart("historyViewAll")}
 						<span className="codicon codicon-chevron-right" />
 					</button>
 				)}
@@ -241,7 +244,7 @@ const HistoryPreview = ({ showHistoryView }: HistoryPreviewProps) => {
 									<div className="history-task-content">
 										{item.isFavorited && (
 											<span
-												aria-label="Favorited"
+												aria-label={trQuickStart("historyFavorited")}
 												className="codicon codicon-star-full"
 												style={{
 													color: "var(--vscode-button-background)",
@@ -250,7 +253,9 @@ const HistoryPreview = ({ showHistoryView }: HistoryPreviewProps) => {
 											/>
 										)}
 										<div className="history-task-description ph-no-capture">{item.task}</div>
-										{item.isLegacy && <span className="history-cost-chip">Legacy</span>}
+										{item.isLegacy && (
+											<span className="history-cost-chip">{trQuickStart("historyLegacy")}</span>
+										)}
 										{item.id === backgroundTask?.taskId && badge && (
 											<span className="history-badge-live" title={badge.description}>
 												<span aria-hidden className={`codicon ${badge.icon}`} />

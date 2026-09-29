@@ -1,11 +1,12 @@
 import { EmptyRequest } from "@shared/proto/cline/common"
 import ClineLogoSanta from "@/assets/ClineLogoSanta"
 import ClineLogoVariable from "@/assets/ClineLogoVariable"
-import { useExtensionState } from "@/context/ExtensionStateContext"
-import { UiServiceClient } from "@/services/grpc-client"
 import IclineWelcomeBrand from "@/components/welcome/icline/IclineWelcomeBrand"
 import ProviderModelChip from "@/components/welcome/icline/ProviderModelChip"
 import type { QuickStartMode } from "@/components/welcome/icline/quickStartMode"
+import { useExtensionState } from "@/context/ExtensionStateContext"
+import { useTranslation } from "@/i18n/useTranslation"
+import { UiServiceClient } from "@/services/grpc-client"
 
 interface HomeHeaderProps {
 	shouldShowQuickWins?: boolean
@@ -14,6 +15,7 @@ interface HomeHeaderProps {
 
 const HomeHeader = ({ shouldShowQuickWins = false, quickStartMode }: HomeHeaderProps) => {
 	const { environment, mode } = useExtensionState()
+	const trQuickStart = useTranslation("quickStart")
 
 	const handleTakeATour = async () => {
 		try {
@@ -29,7 +31,7 @@ const HomeHeader = ({ shouldShowQuickWins = false, quickStartMode }: HomeHeaderP
 	if (quickStartMode === "icline") {
 		return (
 			<div className="flex flex-col items-center mb-5">
-				<IclineWelcomeBrand heading="What can we build today?" subheading="Autonomous coding agent · in your IDE" />
+				<IclineWelcomeBrand heading={trQuickStart("heroHeading")} subheading={trQuickStart("heroSubheading")} />
 				<ProviderModelChip mode={mode} />
 			</div>
 		)
