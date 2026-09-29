@@ -1,24 +1,18 @@
 /**
- * Picker-scoped i18n (iCline UI Guidelines, กฎที่ 1): every user-visible string in the
- * Quick Picker goes through this map — no hardcoded copy inside the component.
+ * The `picker` namespace (iCline UI Guidelines, กฎที่ 1): every user-visible string in
+ * the Quick Picker goes through this table — no hardcoded copy inside the component.
  *
- * Scope is deliberately narrow: the guideline's fix.9 boundary is the picker plus the
- * reusable tooltip, and the Effort-clamp notice that the picker's Options panel shares
- * with the Settings Effort control (`components/common/ReasoningEffortNotice`). Other
- * iCline surfaces stay on their current inline copy until a later round, so this module
- * owns only picker-adjacent strings.
+ * Scope is deliberately narrow, and stays narrow now that the strings live in the
+ * shared `@/i18n` core: the guideline's fix.9 boundary is the picker plus the
+ * reusable tooltip, and the Effort-clamp notice that the picker's Options panel
+ * shares with the Settings Effort control (`components/common/ReasoningEffortNotice`).
+ * Surfaces outside that boundary add their OWN namespace next to this one rather
+ * than growing this table (see `../strings.ts` for the registry).
  *
- * Locale resolution order (see `resolvePickerLocale`):
- *   1. an explicit `preferredLanguage` naming Thai → `th`
- *   2. otherwise the language VS Code itself is running in → `th` when it is Thai
- *   3. otherwise English
- * Step 2 is what makes `auto` behave the way the lockup asks for (default follows the
- * VS Code display language) without inventing a second language setting.
+ * English is the source of truth for the key set; every other locale must cover it,
+ * which `../i18n.test.ts` enforces across all namespaces at once.
  */
-import { PICKER_LOCALES, type PickerLocale, resolvePickerLocale } from "./pickerLocale"
-
-export type { PickerLocale }
-export { PICKER_LOCALES, resolvePickerLocale }
+import type { TranslatedLocale } from "../locales"
 
 /** English is the source of truth for the key set; `th` must cover every key. */
 const en = {
@@ -155,30 +149,5 @@ const th: Record<PickerStringKey, string> = {
 	commitFailed: "เปิดใช้งานโมเดลนี้ไม่สำเร็จ",
 }
 
-export const PICKER_STRINGS: Record<PickerLocale, Record<PickerStringKey, string>> = { en, th }
-
-export type PickerTranslator = (key: PickerStringKey) => string
-
-/** Unknown keys fall back to English, then to the key itself (never blank copy). */
-export function createPickerTranslator(locale: PickerLocale): PickerTranslator {
-	const table = PICKER_STRINGS[locale] ?? en
-	return (key) => table[key] ?? en[key] ?? key
-}
-
-/**
- * Fill `{name}` placeholders in a translated string. Missing values are left as the
- * literal placeholder rather than rendering "undefined" — a visibly incomplete
- * sentence is easier to fix than a plausible wrong one.
- */
-export function formatPickerString(tr: PickerTranslator, key: PickerStringKey, values: Record<string, string | number>): string {
-	return tr(key).replace(/\{(\w+)\}/g, (placeholder, name: string) =>
-		values[name] !== undefined ? String(values[name]) : placeholder,
-	)
-}
-
-/** Reads the two locale inputs the webview actually has, then resolves. */
-export function resolvePickerLocaleFromEnvironment(preferredLanguage?: string): PickerLocale {
-	const systemLanguage =
-		typeof navigator !== "undefined" && typeof navigator.language === "string" ? navigator.language : undefined
-	return resolvePickerLocale({ preferredLanguage, systemLanguage })
-}
+/** The picker's copy, one entry per locale the core knows how to render. */
+export const pickerStrings: Record<TranslatedLocale, Record<PickerStringKey, string>> = { en, th }

@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react"
 import { describe, expect, it } from "vitest"
 import type { ReasoningEffortOutcome } from "@/hooks/useReasoningEffortOutcome"
-import { createPickerTranslator } from "@/icline/i18n/pickerStrings"
+import { createPickerTranslator } from "@/i18n/picker"
 import { effortClampNotice, ReasoningEffortNotice } from "./ReasoningEffortNotice"
 
 const en = createPickerTranslator("en")

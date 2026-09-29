@@ -11,7 +11,7 @@
  */
 
 import { Building2 } from "lucide-react"
-import { formatPickerString, type PickerTranslator } from "@/icline/i18n/pickerStrings"
+import { formatPickerString, type PickerTranslator } from "@/i18n/picker"
 import type { OrgProviderBlock } from "@/icline/orgProviderPolicy"
 
 interface OrgProviderPolicyNoticeProps {

@@ -11,8 +11,8 @@
  * what the icons mean and which are backed by real metadata.
  */
 import { Brain, Database, Eye, type LucideIcon, Music, Sparkles, Video } from "lucide-react"
+import type { PickerStringKey, PickerTranslator } from "@/i18n/picker"
 import { BalloonTooltip } from "@/icline/BalloonTooltip"
-import type { PickerStringKey, PickerTranslator } from "@/icline/i18n/pickerStrings"
 import { CAPABILITY_COLORS, type CapabilityId, type ModelStatus } from "@/icline/pickerCapabilities"
 import { cn } from "@/lib/utils"
 

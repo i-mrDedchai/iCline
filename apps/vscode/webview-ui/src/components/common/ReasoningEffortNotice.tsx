@@ -15,7 +15,7 @@
 
 import { TriangleAlert } from "lucide-react"
 import type { ReasoningEffortOutcome } from "@/hooks/useReasoningEffortOutcome"
-import { formatPickerString, type PickerStringKey, type PickerTranslator } from "@/icline/i18n/pickerStrings"
+import { formatPickerString, type PickerStringKey, type PickerTranslator } from "@/i18n/picker"
 import { effortLevelForValue } from "@/utils/modelThinkingOptions"
 
 /** Reasons the gateway does not send the requested level. Mirrors the host's union. */

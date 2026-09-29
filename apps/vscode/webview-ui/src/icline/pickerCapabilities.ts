@@ -14,6 +14,8 @@
  *    effort badge — so the row and the hover Options panel can never disagree with
  *    each other or with Settings.
  */
+
+import type { PickerStringKey } from "@/i18n/picker"
 import {
 	effortBadge,
 	isOffEffortLevel,
@@ -23,7 +25,6 @@ import {
 	resolveEffortLevels,
 	resolveModelThinkingOptions,
 } from "@/utils/modelThinkingOptions"
-import type { PickerStringKey } from "./i18n/pickerStrings"
 
 /** Structural subset of `ModelInfo` this module reads (see the shared policy). */
 export type ModelCapabilityLike = ModelThinkingInfo & { supportsImages?: boolean }

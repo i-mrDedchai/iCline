@@ -42,7 +42,8 @@ export type LanguageDisplay =
 
 export const DEFAULT_LANGUAGE_SETTINGS: LanguageKey = "en"
 
-const languageOptions: { key: LanguageKey; display: LanguageDisplay }[] = [
+/** Every language the picker offers, in the order it shows them. */
+export const LANGUAGE_OPTIONS: ReadonlyArray<{ key: LanguageKey; display: LanguageDisplay }> = [
 	{ key: "en", display: "English" },
 	{ key: "ar", display: "Arabic - العربية" },
 	{ key: "pt-BR", display: "Portuguese - Português (Brasil)" },
@@ -64,13 +65,19 @@ const languageOptions: { key: LanguageKey; display: LanguageDisplay }[] = [
 	{ key: "tr", display: "Turkish - Türkçe" },
 ]
 
-export function getLanguageKey(display: LanguageDisplay | undefined): LanguageKey {
+/**
+ * The key for a display name the picker actually offers, or undefined when the
+ * string is not one of ours. Distinct from `getLanguageKey`, which folds an
+ * unknown value into English: a caller that must tell "chose English" apart from
+ * "chose something we cannot place" needs this one.
+ */
+export function findLanguageKey(display: string | undefined): LanguageKey | undefined {
 	if (!display) {
-		return DEFAULT_LANGUAGE_SETTINGS
+		return undefined
 	}
-	const languageOption = languageOptions.find((option) => option.display === display)
-	if (languageOption) {
-		return languageOption.key
-	}
-	return DEFAULT_LANGUAGE_SETTINGS
+	return LANGUAGE_OPTIONS.find((option) => option.display === display)?.key
+}
+
+export function getLanguageKey(display: LanguageDisplay | undefined): LanguageKey {
+	return findLanguageKey(display) ?? DEFAULT_LANGUAGE_SETTINGS
 }
