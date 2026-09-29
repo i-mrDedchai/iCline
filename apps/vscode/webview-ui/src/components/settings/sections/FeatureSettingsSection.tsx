@@ -5,8 +5,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useExtensionState } from "@/context/ExtensionStateContext"
+import type { StringKey } from "@/i18n/strings"
+import { useTranslation } from "@/i18n/useTranslation"
 import Section from "../Section"
 import { updateSetting } from "../utils/settingsHandlers"
+
+/** A key in the `settings` namespace, so a misspelled label is a type error. */
+type FeatureStringKey = StringKey<"settings">
 
 // Reusable checkbox component for feature settings
 interface FeatureCheckboxProps {
@@ -20,11 +25,16 @@ interface FeatureCheckboxProps {
 	isVisible?: boolean
 }
 
-// Interface for feature toggle configuration
+/**
+ * A feature toggle row. `labelKey`/`descriptionKey` rather than the copy itself: the
+ * tables here are module-level, so translated strings cannot be resolved until a
+ * component looks up the current locale — and naming the keys makes a toggle added
+ * without copy fail to compile.
+ */
 interface FeatureToggle {
 	id: string
-	label: string
-	description: ReactNode
+	labelKey: FeatureStringKey
+	descriptionKey: FeatureStringKey
 	settingKey: keyof UpdateSettingsRequest
 	stateKey: string
 }
@@ -32,24 +42,22 @@ interface FeatureToggle {
 const agentFeatures: FeatureToggle[] = [
 	{
 		id: "auto-compact",
-		label: "Auto Compact",
-		description: "Automatically compress conversation history.",
+		labelKey: "featureAutoCompactLabel",
+		descriptionKey: "featureAutoCompactDescription",
 		stateKey: "useAutoCondense",
 		settingKey: "useAutoCondense",
 	},
 	{
 		id: "sub-agents",
-		label: "Sub-agents",
-		description:
-			"Let the agent delegate tasks to focused sub-agents that run their own tool loop and report back. Each spawn asks for approval.",
+		labelKey: "featureSubAgentsLabel",
+		descriptionKey: "featureSubAgentsDescription",
 		stateKey: "subagentsEnabled",
 		settingKey: "subagentsEnabled",
 	},
 	{
 		id: "agent-teams",
-		label: "Agent Teams",
-		description:
-			"Let the agent build and coordinate teams of teammates: shared tasks, mailbox messaging, mission logs and team outcomes. Team actions ask for approval.",
+		labelKey: "featureAgentTeamsLabel",
+		descriptionKey: "featureAgentTeamsDescription",
 		stateKey: "agentTeamsEnabled",
 		settingKey: "agentTeamsEnabled",
 	},
@@ -58,29 +66,29 @@ const agentFeatures: FeatureToggle[] = [
 const editorFeatures: FeatureToggle[] = [
 	{
 		id: "show-feature-tips",
-		label: "Feature Tips",
-		description: "Show rotating tips during the thinking phase to help you discover Cline features.",
+		labelKey: "featureTipsLabel",
+		descriptionKey: "featureTipsDescription",
 		stateKey: "showFeatureTips",
 		settingKey: "showFeatureTips",
 	},
 	{
 		id: "background-edit",
-		label: "Background Edit",
-		description: "Allow edits without stealing editor focus",
+		labelKey: "featureBackgroundEditLabel",
+		descriptionKey: "featureBackgroundEditDescription",
 		stateKey: "backgroundEditEnabled",
 		settingKey: "backgroundEditEnabled",
 	},
 	{
 		id: "checkpoints",
-		label: "Checkpoints",
-		description: "Save progress at key points for easy rollback",
+		labelKey: "featureCheckpointsLabel",
+		descriptionKey: "featureCheckpointsDescription",
 		stateKey: "enableCheckpointsSetting",
 		settingKey: "enableCheckpointsSetting",
 	},
 	{
 		id: "worktrees",
-		label: "Worktrees",
-		description: "Enables git worktree management for running parallel Cline tasks.",
+		labelKey: "featureWorktreesLabel",
+		descriptionKey: "featureWorktreesDescription",
 		stateKey: "worktreesEnabled",
 		settingKey: "worktreesEnabled",
 	},
@@ -89,9 +97,8 @@ const editorFeatures: FeatureToggle[] = [
 const experimentalFeatures: FeatureToggle[] = [
 	{
 		id: "yolo",
-		label: "Yolo Mode",
-		description:
-			"Execute tasks without user's confirmation. Auto-switches from Plan to Act mode and disables the ask question tool. Use with extreme caution.",
+		labelKey: "featureYoloLabel",
+		descriptionKey: "featureYoloDescription",
 		stateKey: "yoloModeToggled",
 		settingKey: "yoloModeToggled",
 	},
@@ -100,8 +107,8 @@ const experimentalFeatures: FeatureToggle[] = [
 const advancedFeatures: FeatureToggle[] = [
 	{
 		id: "hooks",
-		label: "Hooks",
-		description: "Enable lifecycle and tool hooks during task execution.",
+		labelKey: "featureHooksLabel",
+		descriptionKey: "featureHooksDescription",
 		stateKey: "hooksEnabled",
 		settingKey: "hooksEnabled",
 	},
@@ -178,6 +185,7 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 		backgroundEditEnabled,
 		showFeatureTips,
 	} = useExtensionState()
+	const tr = useTranslation("settings")
 
 	const isYoloRemoteLocked = remoteConfigSettings?.yoloModeToggled !== undefined
 
@@ -206,23 +214,27 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 				<div className="mb-5 flex flex-col gap-3">
 					{/* Core features */}
 					<div>
-						<div className="text-xs font-medium text-foreground/80 uppercase tracking-wider mb-3">Agent</div>
+						<div className="text-xs font-medium text-foreground/80 uppercase tracking-wider mb-3">
+							{tr("featureGroupAgent")}
+						</div>
 						<div
 							className="relative p-3 pt-0 my-3 rounded-md border border-editor-widget-border/50"
 							id="agent-features">
 							{agentFeatures.map((feature) => (
 								<FeatureRow
 									checked={featureState[feature.stateKey]}
-									description={feature.description}
+									description={tr(feature.descriptionKey)}
 									isVisible={featureVisibility[feature.stateKey] ?? true}
 									key={feature.id}
-									label={feature.label}
+									label={tr(feature.labelKey)}
 									onChange={(checked) => updateSetting(feature.settingKey, checked)}
 								/>
 							))}
 							<div className="space-y-2 py-3">
-								<Label className="text-sm font-medium text-foreground">Auto Compact Strategy</Label>
-								<p className="text-xs text-muted-foreground">Controls how auto compaction rewrites context.</p>
+								<Label className="text-sm font-medium text-foreground">
+									{tr("featureCompactionStrategyLabel")}
+								</Label>
+								<p className="text-xs text-muted-foreground">{tr("featureCompactionStrategyHint")}</p>
 								<Select
 									disabled={!useAutoCondense}
 									onValueChange={(value) => updateSetting("compactionStrategy", value)}
@@ -231,8 +243,8 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 										<SelectValue />
 									</SelectTrigger>
 									<SelectContent>
-										<SelectItem value="basic">Basic</SelectItem>
-										<SelectItem value="agentic">Agentic</SelectItem>
+										<SelectItem value="basic">{tr("featureCompactionStrategyBasic")}</SelectItem>
+										<SelectItem value="agentic">{tr("featureCompactionStrategyAgentic")}</SelectItem>
 									</SelectContent>
 								</Select>
 							</div>
@@ -241,17 +253,19 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 
 					{/* Editor features */}
 					<div>
-						<div className="text-xs font-medium text-foreground/80 uppercase tracking-wider mb-3">Editor</div>
+						<div className="text-xs font-medium text-foreground/80 uppercase tracking-wider mb-3">
+							{tr("featureGroupEditor")}
+						</div>
 						<div
 							className="relative p-3 pt-0 my-3 rounded-md border border-editor-widget-border/50"
 							id="optional-features">
 							{editorFeatures.map((feature) => (
 								<FeatureRow
 									checked={featureState[feature.stateKey]}
-									description={feature.description}
+									description={tr(feature.descriptionKey)}
 									isVisible={featureVisibility[feature.stateKey] ?? true}
 									key={feature.id}
-									label={feature.label}
+									label={tr(feature.labelKey)}
 									onChange={(checked) => updateSetting(feature.settingKey, checked)}
 								/>
 							))}
@@ -260,21 +274,23 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 
 					{/* Experimental features */}
 					<div>
-						<div className="text-xs font-medium uppercase tracking-wider mb-3 text-warning/80">Experimental</div>
+						<div className="text-xs font-medium uppercase tracking-wider mb-3 text-warning/80">
+							{tr("featureGroupExperimental")}
+						</div>
 						<div
 							className="relative p-3 pt-0 my-3 rounded-md border border-editor-widget-border/50 w-full"
 							id="experimental-features">
 							{experimentalFeatures.map((feature) => (
 								<FeatureRow
 									checked={featureState[feature.stateKey]}
-									description={feature.description}
+									description={tr(feature.descriptionKey)}
 									disabled={feature.id === "yolo" && isYoloRemoteLocked}
 									isRemoteLocked={feature.id === "yolo" && isYoloRemoteLocked}
 									isVisible={featureVisibility[feature.stateKey] ?? true}
 									key={feature.id}
-									label={feature.label}
+									label={tr(feature.labelKey)}
 									onChange={(checked) => updateSetting(feature.settingKey, checked)}
-									remoteTooltip="This setting is managed by your organization's remote configuration"
+									remoteTooltip={tr("telemetryManaged")}
 								/>
 							))}
 						</div>
@@ -283,32 +299,34 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 
 				{/* Advanced */}
 				<div>
-					<div className="text-xs font-medium text-foreground/80 uppercase tracking-wider mb-3">Advanced</div>
+					<div className="text-xs font-medium text-foreground/80 uppercase tracking-wider mb-3">
+						{tr("featureGroupAdvanced")}
+					</div>
 					<div className="relative p-3 my-3 rounded-md border border-editor-widget-border/50" id="advanced-features">
 						<div className="space-y-3">
 							{advancedFeatures.map((feature) => (
 								<FeatureRow
 									checked={featureState[feature.stateKey]}
-									description={feature.description}
+									description={tr(feature.descriptionKey)}
 									isVisible={featureVisibility[feature.stateKey] ?? true}
 									key={feature.id}
-									label={feature.label}
+									label={tr(feature.labelKey)}
 									onChange={(checked) => updateSetting(feature.settingKey, checked)}
 								/>
 							))}
 
 							{/* MCP Display Mode */}
 							<div className="space-y-2">
-								<Label className="text-sm font-medium text-foreground">MCP Display Mode</Label>
-								<p className="text-xs text-muted-foreground">Controls how MCP responses are displayed</p>
+								<Label className="text-sm font-medium text-foreground">{tr("featureMcpDisplayModeLabel")}</Label>
+								<p className="text-xs text-muted-foreground">{tr("featureMcpDisplayModeHint")}</p>
 								<Select onValueChange={(v) => updateSetting("mcpDisplayMode", v)} value={mcpDisplayMode}>
 									<SelectTrigger className="w-full">
 										<SelectValue />
 									</SelectTrigger>
 									<SelectContent>
-										<SelectItem value="plain">Plain Text</SelectItem>
-										<SelectItem value="rich">Rich Display</SelectItem>
-										<SelectItem value="markdown">Markdown</SelectItem>
+										<SelectItem value="plain">{tr("featureMcpDisplayModePlain")}</SelectItem>
+										<SelectItem value="rich">{tr("featureMcpDisplayModeRich")}</SelectItem>
+										<SelectItem value="markdown">{tr("featureMcpDisplayModeMarkdown")}</SelectItem>
 									</SelectContent>
 								</Select>
 							</div>

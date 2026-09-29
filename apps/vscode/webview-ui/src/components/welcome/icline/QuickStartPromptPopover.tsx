@@ -2,11 +2,13 @@ import { MoreHorizontalIcon, PencilIcon, PlayIcon, RotateCcwIcon } from "lucide-
 import { memo, useCallback, useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { formatString } from "@/i18n/strings"
+import { useTranslation } from "@/i18n/useTranslation"
 import {
 	getQuickStartPrompt,
+	type QuickStartPromptOverrides,
 	resetQuickStartPromptOverride,
 	saveQuickStartPromptOverride,
-	type QuickStartPromptOverrides,
 } from "@/icline/quickStartPromptStorage"
 
 interface QuickStartPromptPopoverProps {
@@ -26,6 +28,7 @@ const QuickStartPromptPopover = ({
 	onOverridesChange,
 	onStart,
 }: QuickStartPromptPopoverProps) => {
+	const tr = useTranslation("quickStart")
 	const [open, setOpen] = useState(false)
 	const [draft, setDraft] = useState(defaultPrompt)
 
@@ -62,7 +65,7 @@ const QuickStartPromptPopover = ({
 		<Popover onOpenChange={setOpen} open={open}>
 			<PopoverTrigger asChild>
 				<button
-					aria-label={`Edit prompt for ${taskTitle}`}
+					aria-label={formatString(tr, "popoverEditAriaLabel", { task: taskTitle })}
 					className="shrink-0 flex items-center justify-center size-7 rounded-md border border-(--vscode-panel-border) text-(--vscode-descriptionForeground) hover:text-(--vscode-foreground) hover:bg-(--vscode-list-hoverBackground) transition-colors"
 					onClick={(event) => event.stopPropagation()}
 					type="button">
@@ -76,9 +79,7 @@ const QuickStartPromptPopover = ({
 				side="top">
 				<div>
 					<div className="text-sm font-medium text-(--vscode-editor-foreground)">{taskTitle}</div>
-					<div className="text-xs text-(--vscode-descriptionForeground) mt-0.5">
-						Edit the prompt, save for next time, or start immediately.
-					</div>
+					<div className="text-xs text-(--vscode-descriptionForeground) mt-0.5">{tr("popoverHint")}</div>
 				</div>
 				<textarea
 					className="w-full min-h-36 max-h-56 resize-y rounded-md border border-(--vscode-panel-border) bg-(--vscode-input-background) text-(--vscode-input-foreground) text-xs leading-relaxed p-2 outline-none focus:border-(--vscode-focusBorder)"
@@ -90,14 +91,14 @@ const QuickStartPromptPopover = ({
 				<div className="flex flex-wrap gap-2 justify-end">
 					<Button onClick={handleReset} size="sm" type="button" variant="secondary">
 						<RotateCcwIcon className="size-3.5" />
-						Reset
+						{tr("popoverReset")}
 					</Button>
 					<Button onClick={handleSave} size="sm" type="button" variant="secondary">
-						Save
+						{tr("popoverSave")}
 					</Button>
 					<Button onClick={handleStart} size="sm" type="button" variant="default">
 						<PlayIcon className="size-3.5" />
-						Start
+						{tr("popoverStart")}
 					</Button>
 				</div>
 			</PopoverContent>
