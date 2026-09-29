@@ -14,6 +14,8 @@ vi.mock("@cline/core", () => ({
 	addLocalProvider: mocks.addLocalProvider,
 	updateLocalProvider: mocks.updateLocalProvider,
 	deleteLocalProvider: mocks.deleteLocalProvider,
+	deriveEndpointModelsUrl: (baseUrl?: string) =>
+		baseUrl && baseUrl.startsWith("http") ? `${baseUrl.replace(/\/+$/, "")}/models` : undefined,
 }))
 
 vi.mock("@/sdk/provider-migration", () => ({
@@ -123,9 +125,9 @@ describe("custom provider mutations", () => {
 			createCustomProvider(controller, { providerId: "gw-one", name: "x", baseUrl: "", models: ["m"] } as never),
 		).rejects.toThrow("baseUrl is required")
 		// Without explicit models a source URL is required (core refuses an
-		// empty model list).
+		// empty model list). baseUrl that cannot derive a models URL also fails.
 		await expect(
-			createCustomProvider(controller, { providerId: "gw-one", name: "x", baseUrl: "https://x", models: [] } as never),
+			createCustomProvider(controller, { providerId: "gw-one", name: "x", baseUrl: "not-a-url", models: [] } as never),
 		).rejects.toThrow(/at least one model/)
 		expect(mocks.addLocalProvider).not.toHaveBeenCalled()
 	})

@@ -1,4 +1,4 @@
-import { updateLocalProvider } from "@cline/core"
+import { deriveEndpointModelsUrl, updateLocalProvider } from "@cline/core"
 import type { CustomProviderMutationRequest, ProviderListingsResponse } from "@shared/proto/cline/models"
 import { getProviderSettingsManager } from "@/sdk/provider-migration"
 import type { Controller } from "../index"
@@ -17,16 +17,22 @@ export async function updateCustomProvider(
 	const providerId = requireCustomProviderId(request.providerId)
 	await assertListedCustomProvider(controller, providerId)
 
+	const baseUrl = request.baseUrl?.trim() || undefined
+	let modelsSourceUrl = request.modelsSourceUrl
+	if (modelsSourceUrl === undefined && baseUrl) {
+		modelsSourceUrl = deriveEndpointModelsUrl(baseUrl)
+	}
+
 	await updateLocalProvider(getProviderSettingsManager(), {
 		providerId,
 		name: request.name?.trim() || undefined,
-		baseUrl: request.baseUrl?.trim() || undefined,
+		baseUrl,
 		apiKey: request.apiKey?.trim() || undefined,
 		headers: Object.keys(request.headers ?? {}).length > 0 ? request.headers : undefined,
 		timeoutMs: request.timeoutMs,
 		models: request.models.length > 0 ? request.models : undefined,
 		defaultModelId: request.defaultModelId?.trim() || undefined,
-		modelsSourceUrl: request.modelsSourceUrl,
+		modelsSourceUrl,
 	})
 
 	return finishCustomProviderMutation(controller, providerId)

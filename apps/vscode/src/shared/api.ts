@@ -161,6 +161,7 @@ export interface ModelInfo {
 	}[]
 	temperature?: number
 	apiFormat?: ApiFormat // The API format used by this model
+	contextWindowSource?: string
 }
 
 export interface OpenAiCompatibleModelInfo extends ModelInfo {

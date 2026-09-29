@@ -234,6 +234,35 @@ describe("refreshOpenAiModels", () => {
 		expect(mocks.setModelsCache).not.toHaveBeenCalled()
 	})
 
+	it("prefers explicit request baseUrl and apiKey over stored config when provided", async () => {
+		mocks.readProviderConfig.mockReturnValue({
+			baseUrl: "http://stored.example/v1",
+			apiKey: "stored-key",
+		})
+		mocks.axiosGet.mockResolvedValue({
+			data: { data: [{ id: "custom-fetched-model" }] },
+		})
+
+		const response = await refreshOpenAiModels(
+			makeController(),
+			OpenAiModelsRequest.create({
+				providerId: "new-custom-gw",
+				baseUrl: "http://ephemeral.example/v1/",
+				apiKey: "ephemeral-key",
+			}),
+		)
+
+		expect(response.values).toEqual(["custom-fetched-model"])
+		expect(mocks.axiosGet).toHaveBeenCalledWith(
+			"http://ephemeral.example/v1/models",
+			expect.objectContaining({
+				headers: {
+					Authorization: "Bearer ephemeral-key",
+				},
+			}),
+		)
+	})
+
 	it("clears the custom provider's bucket when the request fails", async () => {
 		mocks.readProviderConfig.mockReturnValue({ baseUrl: "http://localhost:1234/v1" })
 		mocks.axiosGet.mockRejectedValue(new Error("401 Unauthorized"))

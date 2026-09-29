@@ -63,6 +63,7 @@ export function fromProtobufModelInfo(protoInfo: OpenRouterModelInfo): ModelInfo
 		tiers: protoInfo.tiers.length > 0 ? protoInfo.tiers : undefined,
 		temperature: protoInfo.temperature,
 		apiFormat: protoInfo.apiFormat,
+		contextWindowSource: protoInfo.contextWindowSource as ModelInfo["contextWindowSource"],
 	}
 }
 
@@ -87,6 +88,7 @@ export function toProtobufModelInfo(modelInfo: ModelInfo): OpenRouterModelInfo {
 		tiers: modelInfo.tiers || [],
 		temperature: modelInfo.temperature,
 		apiFormat: modelInfo.apiFormat,
+		contextWindowSource: modelInfo.contextWindowSource,
 	})
 }
 

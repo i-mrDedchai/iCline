@@ -1,4 +1,4 @@
-import { addLocalProvider } from "@cline/core"
+import { addLocalProvider, deriveEndpointModelsUrl } from "@cline/core"
 import type { CustomProviderMutationRequest, ProviderListingsResponse } from "@shared/proto/cline/models"
 import { getProviderSettingsManager } from "@/sdk/provider-migration"
 import type { Controller } from "../index"
@@ -26,7 +26,11 @@ export async function createCustomProvider(
 	if (!baseUrl) {
 		throw new Error("baseUrl is required")
 	}
-	if (request.models.length === 0 && !request.modelsSourceUrl?.trim()) {
+
+	// Auto-derive modelsSourceUrl from baseUrl if not explicitly provided
+	const derivedModelsSourceUrl = request.modelsSourceUrl?.trim() || deriveEndpointModelsUrl(baseUrl)
+
+	if (request.models.length === 0 && !derivedModelsSourceUrl) {
 		throw new Error("at least one model id (or a models source URL) is required")
 	}
 
@@ -39,7 +43,7 @@ export async function createCustomProvider(
 		timeoutMs: request.timeoutMs,
 		models: request.models.length > 0 ? request.models : undefined,
 		defaultModelId: request.defaultModelId?.trim() || undefined,
-		modelsSourceUrl: request.modelsSourceUrl?.trim() || undefined,
+		modelsSourceUrl: derivedModelsSourceUrl,
 	})
 
 	return finishCustomProviderMutation(controller, providerId)

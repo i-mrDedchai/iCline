@@ -595,12 +595,30 @@ function resolveSelection(selection: ModelSelection, stateModelInfoHint?: ModelI
 		crossInfo,
 	)
 	const modelInfoSource = catalogModelInfo ? "catalog" : stateModelInfoHint ? "state" : crossInfo ? "catalog" : "fallback"
+
+	// Determine contextWindowSource
+	let contextWindowSource: ModelInfo["contextWindowSource"]
+	if (overrides?.contextWindow !== undefined) {
+		contextWindowSource = "override"
+	} else if (catalogModelInfo?.contextWindow !== undefined) {
+		contextWindowSource = "gateway"
+	} else if (crossInfo?.contextWindow !== undefined) {
+		contextWindowSource = "catalog"
+	} else if (baseModelInfo.contextWindow !== undefined) {
+		contextWindowSource = "fallback"
+	}
+
+	const resolvedModelInfo = sanitizeResolvedModelInfo(applyModelOverrides(baseModelInfo, overrides))
+	if (contextWindowSource) {
+		resolvedModelInfo.contextWindowSource = contextWindowSource
+	}
+
 	return {
 		...selection,
 		overrides,
 		modelInfoSource,
 		baseModelInfo,
-		modelInfo: sanitizeResolvedModelInfo(applyModelOverrides(baseModelInfo, overrides)),
+		modelInfo: resolvedModelInfo,
 	}
 }
 

@@ -137,6 +137,7 @@ message OpenRouterModelInfo {
   optional double temperature = 14;
   optional bool supports_reasoning = 15;
   optional ApiFormat api_format = 16;
+  optional string context_window_source = 17;
 }
 
 // User-authored per-model metadata stored in models.json.

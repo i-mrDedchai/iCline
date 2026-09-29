@@ -223,7 +223,29 @@ export const ModelInfoView = ({
 				{modelInfo.contextWindow !== undefined && modelInfo.contextWindow > 0 && (
 					<InfoItem>
 						<InfoLabel>Context: </InfoLabel>
-						<InfoValue>{formatCompactContext(modelInfo.contextWindow)}</InfoValue>
+						<InfoValue>
+							{formatCompactContext(modelInfo.contextWindow)}
+							{modelInfo.contextWindowSource && (
+								<span
+									data-testid="context-window-source"
+									style={{
+										marginLeft: 4,
+										fontSize: 10,
+										opacity: 0.75,
+										border: "1px solid var(--vscode-badge-border, currentColor)",
+										borderRadius: 3,
+										padding: "0 3px",
+									}}>
+									{modelInfo.contextWindowSource === "gateway"
+										? "gateway"
+										: modelInfo.contextWindowSource === "override"
+											? "override"
+											: modelInfo.contextWindowSource === "catalog"
+												? "catalog"
+												: "default"}
+								</span>
+							)}
+						</InfoValue>
 					</InfoItem>
 				)}
 				{/* Subscription-included models (price 0 + description mentions subscription)

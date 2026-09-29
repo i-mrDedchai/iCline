@@ -1,6 +1,6 @@
 import { StringRequest } from "@shared/proto/cline/common"
-import { CustomProviderMutationRequest, type ProviderListing } from "@shared/proto/cline/models"
-import { useCallback, useMemo, useState } from "react"
+import { CustomProviderMutationRequest, OpenAiModelsRequest, type ProviderListing } from "@shared/proto/cline/models"
+import { type CSSProperties, useCallback, useMemo, useState } from "react"
 import { useProviderListings } from "@/hooks/useProviderListings"
 import { ModelsServiceClient } from "@/services/grpc-client"
 
@@ -28,9 +28,31 @@ const EMPTY_FORM: FormState = {
 	headers: [],
 }
 
+const INPUT_STYLE: CSSProperties = {
+	width: "100%",
+	background: "var(--vscode-input-background)",
+	color: "var(--vscode-input-foreground)",
+	border: "1px solid var(--vscode-input-border, var(--vscode-widget-border, rgba(128, 128, 128, 0.4)))",
+	borderRadius: 3,
+	padding: "5px 8px",
+	fontSize: 12,
+	outline: "none",
+	boxSizing: "border-box",
+}
+
+const SELECT_STYLE: CSSProperties = {
+	width: "100%",
+	background: "var(--vscode-dropdown-background, var(--vscode-input-background))",
+	color: "var(--vscode-dropdown-foreground, var(--vscode-input-foreground))",
+	border: "1px solid var(--vscode-dropdown-border, var(--vscode-input-border, var(--vscode-widget-border, rgba(128, 128, 128, 0.4))))",
+	borderRadius: 3,
+	padding: "5px 8px",
+	fontSize: 12,
+	outline: "none",
+	boxSizing: "border-box",
+}
+
 function toFormState(provider: ProviderListing): FormState {
-	// The listing carries no secrets or model ids: the API key is write-only
-	// and models stay untouched when left blank on update.
 	return {
 		...EMPTY_FORM,
 		providerId: provider.id,
@@ -58,14 +80,14 @@ function toMutationRequest(form: FormState): CustomProviderMutationRequest {
 		headers,
 		models,
 		defaultModelId: form.defaultModelId.trim() || undefined,
-		modelsSourceUrl: form.modelsSourceUrl.trim(),
+		modelsSourceUrl: form.modelsSourceUrl.trim() || undefined,
 	})
 }
 
 /**
  * Settings card for multi custom-provider management (add / edit / delete).
- * Every mutation rejects visibly on failure — an error never masquerades as
- * an empty list (the fix.40 lesson).
+ * Redesigned with compact modern layout, clear VS Code input boundaries,
+ * automatic model discovery, and collapsible advanced options.
  */
 export const CustomProviderManager = () => {
 	const { providers, refresh } = useProviderListings()
@@ -76,21 +98,81 @@ export const CustomProviderManager = () => {
 	const [busy, setBusy] = useState(false)
 	const [error, setError] = useState<string | null>(null)
 
+	// Auto-fetch model state
+	const [isFetchingModels, setIsFetchingModels] = useState(false)
+	const [fetchModelStatus, setFetchModelStatus] = useState<{ success?: string; error?: string } | null>(null)
+	const [showAdvanced, setShowAdvanced] = useState(false)
+
 	const openCreate = useCallback(() => {
 		setError(null)
+		setFetchModelStatus(null)
 		setConfirmingDeleteId(null)
+		setShowAdvanced(false)
 		setEditing({ mode: "create", form: { ...EMPTY_FORM } })
 	}, [])
 
 	const openEdit = useCallback((provider: ProviderListing) => {
 		setError(null)
+		setFetchModelStatus(null)
 		setConfirmingDeleteId(null)
+		setShowAdvanced(false)
 		setEditing({ mode: "edit", form: toFormState(provider) })
 	}, [])
 
 	const updateForm = useCallback((patch: Partial<FormState>) => {
 		setEditing((current) => (current ? { ...current, form: { ...current.form, ...patch } } : current))
 	}, [])
+
+	const fetchModelsFromEndpoint = useCallback(async () => {
+		if (!editing?.form.baseUrl?.trim()) {
+			setFetchModelStatus({ error: "Please enter a Base URL first" })
+			return
+		}
+
+		setIsFetchingModels(true)
+		setFetchModelStatus(null)
+
+		try {
+			const res = await ModelsServiceClient.refreshOpenAiModels(
+				OpenAiModelsRequest.create({
+					providerId: editing.form.providerId.trim() || "openai-compatible",
+					baseUrl: editing.form.baseUrl.trim(),
+					apiKey: editing.form.apiKey.trim() || undefined,
+				}),
+			)
+
+			const fetched = res.values || []
+			if (fetched.length === 0) {
+				setFetchModelStatus({ error: "Endpoint returned 0 models" })
+			} else {
+				setFetchModelStatus({ success: `Found ${fetched.length} model${fetched.length > 1 ? "s" : ""}` })
+
+				// Merge with existing models without duplicating
+				const currentModels = editing.form.modelsText
+					.split(/[\n,]/)
+					.map((id) => id.trim())
+					.filter(Boolean)
+				const merged = Array.from(new Set([...currentModels, ...fetched]))
+				const defaultModel = editing.form.defaultModelId.trim() || fetched[0] || ""
+
+				updateForm({
+					modelsText: merged.join(", "),
+					defaultModelId: defaultModel,
+				})
+			}
+		} catch (err) {
+			setFetchModelStatus({ error: err instanceof Error ? err.message : String(err) })
+		} finally {
+			setIsFetchingModels(false)
+		}
+	}, [
+		editing?.form.apiKey,
+		editing?.form.baseUrl,
+		editing?.form.defaultModelId,
+		editing?.form.modelsText,
+		editing?.form.providerId,
+		updateForm,
+	])
 
 	const submit = useCallback(async () => {
 		if (!editing) {
@@ -132,244 +214,441 @@ export const CustomProviderManager = () => {
 		[refresh],
 	)
 
+	// Available model IDs from the current form for the dropdown
+	const parsedModelIds = useMemo(() => {
+		if (!editing) return []
+		return editing.form.modelsText
+			.split(/[\n,]/)
+			.map((id) => id.trim())
+			.filter(Boolean)
+	}, [editing])
+
 	return (
-		<div className="mb-2.5" data-testid="custom-provider-manager">
-			<div className="flex items-center justify-between mb-1">
-				<span style={{ fontWeight: 500 }}>Custom providers</span>
+		<div className="mb-4" data-testid="custom-provider-manager">
+			{/* Section Header */}
+			<div className="flex items-center justify-between pb-2 mb-2 border-b border-[var(--vscode-widget-border,var(--vscode-panel-border))]">
+				<div className="flex items-center gap-2">
+					<span className="font-semibold text-xs uppercase tracking-wider text-[var(--vscode-foreground)]">
+						Custom Providers
+					</span>
+					{customProviders.length > 0 && (
+						<span className="text-[10px] px-1.5 py-0.5 rounded font-mono bg-[var(--vscode-badge-background)] text-[var(--vscode-badge-foreground)]">
+							{customProviders.length}
+						</span>
+					)}
+				</div>
 				<button
+					className="px-2.5 py-1 text-xs font-medium rounded transition-colors"
 					data-testid="custom-provider-add"
 					disabled={busy || editing !== null}
 					onClick={openCreate}
 					style={{
 						background: "var(--vscode-button-background)",
 						color: "var(--vscode-button-foreground)",
-						padding: "2px 10px",
-						minHeight: 24,
-						border: "1px solid var(--vscode-button-border, transparent)",
+						opacity: busy || editing ? 0.6 : 1,
 						cursor: busy || editing ? "default" : "pointer",
 					}}>
-					Add provider
+					+ Add Provider
 				</button>
 			</div>
 
 			{error && (
 				<div
+					className="p-2 mb-3 text-xs rounded border border-[var(--vscode-inputValidation-errorBorder,var(--vscode-errorForeground))] bg-[var(--vscode-inputValidation-errorBackground,rgba(255,0,0,0.1))] text-[var(--vscode-errorForeground)]"
 					data-testid="custom-provider-error"
-					role="alert"
-					style={{ color: "var(--vscode-errorForeground)", marginBottom: 6 }}>
+					role="alert">
 					{error}
 				</div>
 			)}
 
+			{/* Provider List */}
 			{customProviders.length === 0 && !editing && (
-				<div className="text-description text-sm mb-1">No custom providers yet — add one to use your own gateway.</div>
+				<div className="text-xs text-[var(--vscode-descriptionForeground)] py-2 text-center border border-dashed border-[var(--vscode-widget-border,rgba(128,128,128,0.3))] rounded">
+					No custom providers configured yet. Click "+ Add Provider" to connect a custom endpoint.
+				</div>
 			)}
 
-			{customProviders.map((provider) => (
-				<div
-					className="flex items-center gap-2 mb-1"
-					data-testid={`custom-provider-row-${provider.id}`}
-					key={provider.id}
-					style={{ borderBottom: "1px solid var(--vscode-widget-border, transparent)", paddingBottom: 4 }}>
-					<div className="flex-1" style={{ minWidth: 0 }}>
-						<div style={{ fontWeight: 500 }}>{provider.name}</div>
-						<div className="text-description text-sm" style={{ fontFamily: "monospace" }}>
-							{provider.id}
-							{provider.defaultModelId ? ` · ${provider.defaultModelId}` : ""}
+			<div className="flex flex-col gap-1.5 mb-2">
+				{customProviders.map((provider) => (
+					<div
+						className="flex items-center justify-between p-2 rounded border border-[var(--vscode-widget-border,rgba(128,128,128,0.25))] bg-[var(--vscode-editor-background)] hover:border-[var(--vscode-focusBorder,rgba(128,128,128,0.5))] transition-colors"
+						data-testid={`custom-provider-row-${provider.id}`}
+						key={provider.id}>
+						<div className="flex-1 min-w-0 pr-2">
+							<div className="flex items-center gap-1.5">
+								<span className="font-medium text-xs text-[var(--vscode-foreground)] truncate">
+									{provider.name}
+								</span>
+								<span className="text-[10px] px-1 py-0.2 rounded font-mono bg-[var(--vscode-badge-background)] text-[var(--vscode-badge-foreground)] shrink-0">
+									custom
+								</span>
+							</div>
+							<div className="text-[11px] text-[var(--vscode-descriptionForeground)] font-mono truncate mt-0.5">
+								ID: {provider.id}
+								{provider.defaultModelId ? ` · Default: ${provider.defaultModelId}` : ""}
+							</div>
+						</div>
+
+						<div className="flex items-center gap-1 shrink-0">
+							<button
+								className="px-2 py-0.5 text-xs rounded border border-[var(--vscode-button-border,transparent)] bg-[var(--vscode-button-secondaryBackground)] text-[var(--vscode-button-secondaryForeground)] hover:bg-[var(--vscode-button-secondaryHoverBackground)]"
+								data-testid={`custom-provider-edit-${provider.id}`}
+								disabled={busy}
+								onClick={() => openEdit(provider)}
+								style={{ cursor: busy ? "default" : "pointer" }}>
+								Edit
+							</button>
+
+							{confirmingDeleteId === provider.id ? (
+								<button
+									className="px-2 py-0.5 text-xs rounded border border-red-500/50 bg-red-500/10 text-[var(--vscode-errorForeground)] font-medium"
+									data-testid={`custom-provider-delete-confirm-${provider.id}`}
+									disabled={busy}
+									onClick={() => void remove(provider.id)}
+									style={{ cursor: busy ? "default" : "pointer" }}>
+									Confirm Delete?
+								</button>
+							) : (
+								<button
+									className="px-2 py-0.5 text-xs rounded text-[var(--vscode-errorForeground)] hover:bg-[var(--vscode-inputValidation-errorBackground,rgba(255,0,0,0.1))]"
+									data-testid={`custom-provider-delete-${provider.id}`}
+									disabled={busy}
+									onClick={() => setConfirmingDeleteId(provider.id)}
+									style={{ cursor: busy ? "default" : "pointer" }}>
+									Delete
+								</button>
+							)}
 						</div>
 					</div>
-					<button
-						data-testid={`custom-provider-edit-${provider.id}`}
-						disabled={busy}
-						onClick={() => openEdit(provider)}
-						style={{ cursor: busy ? "default" : "pointer" }}>
-						Edit
-					</button>
-					{confirmingDeleteId === provider.id ? (
-						<button
-							data-testid={`custom-provider-delete-confirm-${provider.id}`}
-							disabled={busy}
-							onClick={() => void remove(provider.id)}
-							style={{ color: "var(--vscode-errorForeground)", cursor: busy ? "default" : "pointer" }}>
-							Confirm delete?
-						</button>
-					) : (
-						<button
-							data-testid={`custom-provider-delete-${provider.id}`}
-							disabled={busy}
-							onClick={() => setConfirmingDeleteId(provider.id)}
-							style={{ color: "var(--vscode-errorForeground)", cursor: busy ? "default" : "pointer" }}>
-							Delete
-						</button>
-					)}
-				</div>
-			))}
+				))}
+			</div>
 
+			{/* Add / Edit Form Modal Card */}
 			{editing && (
 				<div
-					className="mb-2.5"
-					data-testid="custom-provider-form"
-					style={{ border: "1px solid var(--vscode-widget-border)", padding: 10 }}>
-					<div style={{ fontWeight: 500, marginBottom: 6 }}>
-						{editing.mode === "create" ? "Add custom provider" : `Edit ${editing.form.providerId}`}
+					className="p-3 mb-3 rounded-md border border-[var(--vscode-focusBorder,var(--vscode-widget-border))] bg-[var(--vscode-editor-background)] shadow-sm"
+					data-testid="custom-provider-form">
+					<div className="flex items-center justify-between pb-2 mb-3 border-b border-[var(--vscode-widget-border,rgba(128,128,128,0.2))]">
+						<span className="font-semibold text-xs text-[var(--vscode-foreground)]">
+							{editing.mode === "create"
+								? "Add Custom Provider"
+								: `Edit Custom Provider (${editing.form.providerId})`}
+						</span>
+						<button
+							className="text-xs text-[var(--vscode-descriptionForeground)] hover:text-[var(--vscode-foreground)] p-1"
+							disabled={busy}
+							onClick={() => setEditing(null)}>
+							✕
+						</button>
 					</div>
 
-					{editing.mode === "create" && (
-						<label className="block mb-1">
-							<span style={{ fontWeight: 500 }}>Provider ID</span>
+					<div className="flex flex-col gap-2.5">
+						{/* Provider ID & Name */}
+						<div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+							{editing.mode === "create" ? (
+								<div>
+									<label
+										className="block text-xs font-medium mb-1 text-[var(--vscode-foreground)]"
+										htmlFor="cp-id">
+										Provider ID <span className="text-[var(--vscode-errorForeground)]">*</span>
+									</label>
+									<input
+										data-testid="custom-provider-id"
+										disabled={busy}
+										id="cp-id"
+										onChange={(e) => updateForm({ providerId: e.target.value })}
+										placeholder="e.g. my-gateway (lowercase slug)"
+										style={INPUT_STYLE}
+										value={editing.form.providerId}
+									/>
+									<span className="text-[10px] text-[var(--vscode-descriptionForeground)]">
+										Permanent unique identifier (cannot be changed later)
+									</span>
+								</div>
+							) : null}
+
+							<div className={editing.mode === "create" ? "" : "md:col-span-2"}>
+								<label
+									className="block text-xs font-medium mb-1 text-[var(--vscode-foreground)]"
+									htmlFor="cp-name">
+									Display Name <span className="text-[var(--vscode-errorForeground)]">*</span>
+								</label>
+								<input
+									data-testid="custom-provider-name"
+									disabled={busy}
+									id="cp-name"
+									onChange={(e) => updateForm({ name: e.target.value })}
+									placeholder="e.g. My Fast Gateway"
+									style={INPUT_STYLE}
+									value={editing.form.name}
+								/>
+							</div>
+						</div>
+
+						{/* Base URL */}
+						<div>
+							<label
+								className="block text-xs font-medium mb-1 text-[var(--vscode-foreground)]"
+								htmlFor="cp-base-url">
+								Base URL <span className="text-[var(--vscode-errorForeground)]">*</span>
+							</label>
 							<input
-								data-testid="custom-provider-id"
+								data-testid="custom-provider-base-url"
 								disabled={busy}
-								onChange={(event) => updateForm({ providerId: event.target.value })}
-								placeholder="e.g. my-gateway (lowercase, fixed after creation)"
-								style={{ width: "100%", marginBottom: 6 }}
-								value={editing.form.providerId}
+								id="cp-base-url"
+								onChange={(e) => updateForm({ baseUrl: e.target.value })}
+								placeholder={
+									editing.mode === "edit"
+										? "Leave blank to keep existing URL"
+										: "e.g. https://api.openai.com/v1 or https://cleanapis.com/v1"
+								}
+								style={INPUT_STYLE}
+								value={editing.form.baseUrl}
 							/>
-						</label>
-					)}
+						</div>
 
-					<label className="block mb-1">
-						<span style={{ fontWeight: 500 }}>Name</span>
-						<input
-							data-testid="custom-provider-name"
-							disabled={busy}
-							onChange={(event) => updateForm({ name: event.target.value })}
-							placeholder="Display name"
-							style={{ width: "100%", marginBottom: 6 }}
-							value={editing.form.name}
-						/>
-					</label>
+						{/* API Key */}
+						<div>
+							<label
+								className="block text-xs font-medium mb-1 text-[var(--vscode-foreground)]"
+								htmlFor="cp-api-key">
+								API Key
+							</label>
+							<input
+								data-testid="custom-provider-api-key"
+								disabled={busy}
+								id="cp-api-key"
+								onChange={(e) => updateForm({ apiKey: e.target.value })}
+								placeholder={editing.mode === "edit" ? "Leave blank to keep stored key" : "Enter API Key..."}
+								style={INPUT_STYLE}
+								type="password"
+								value={editing.form.apiKey}
+							/>
+							<span className="text-[10px] text-[var(--vscode-descriptionForeground)]">
+								Stored securely. Write-only (leave empty to keep current).
+							</span>
+						</div>
 
-					<label className="block mb-1">
-						<span style={{ fontWeight: 500 }}>Base URL</span>
-						<input
-							data-testid="custom-provider-base-url"
-							disabled={busy}
-							onChange={(event) => updateForm({ baseUrl: event.target.value })}
-							placeholder={
-								editing.mode === "edit" ? "Leave blank to keep the current URL" : "https://gateway.example/v1"
-							}
-							style={{ width: "100%", marginBottom: 6 }}
-							value={editing.form.baseUrl}
-						/>
-					</label>
-
-					<label className="block mb-1">
-						<span style={{ fontWeight: 500 }}>API key</span>
-						<input
-							data-testid="custom-provider-api-key"
-							disabled={busy}
-							onChange={(event) => updateForm({ apiKey: event.target.value })}
-							placeholder={editing.mode === "edit" ? "Leave blank to keep the stored key" : "Enter API key..."}
-							style={{ width: "100%", marginBottom: 6 }}
-							type="password"
-							value={editing.form.apiKey}
-						/>
-					</label>
-
-					<label className="block mb-1">
-						<span style={{ fontWeight: 500 }}>Models</span>
-						<input
-							data-testid="custom-provider-models"
-							disabled={busy}
-							onChange={(event) => updateForm({ modelsText: event.target.value })}
-							placeholder={
-								editing.mode === "edit"
-									? "Leave blank to keep current models (comma-separated to replace)"
-									: "Comma-separated model ids, e.g. gpt-5.6-sol"
-							}
-							style={{ width: "100%", marginBottom: 6 }}
-							value={editing.form.modelsText}
-						/>
-					</label>
-
-					<label className="block mb-1">
-						<span style={{ fontWeight: 500 }}>Default model</span>
-						<input
-							data-testid="custom-provider-default-model"
-							disabled={busy}
-							onChange={(event) => updateForm({ defaultModelId: event.target.value })}
-							placeholder="Model id selected by default"
-							style={{ width: "100%", marginBottom: 6 }}
-							value={editing.form.defaultModelId}
-						/>
-					</label>
-
-					<label className="block mb-1">
-						<span style={{ fontWeight: 500 }}>Models source URL (optional)</span>
-						<input
-							data-testid="custom-provider-models-source-url"
-							disabled={busy}
-							onChange={(event) => updateForm({ modelsSourceUrl: event.target.value })}
-							placeholder="e.g. https://gateway.example/v1/models — fetches the model list + limits"
-							style={{ width: "100%", marginBottom: 6 }}
-							value={editing.form.modelsSourceUrl}
-						/>
-					</label>
-
-					<div className="mb-1">
-						<span style={{ fontWeight: 500 }}>Custom headers</span>
-						{editing.form.headers.map((row, index) => (
-							<div className="flex items-center gap-2 mb-1" key={index}>
-								<input
-									data-testid={`custom-provider-header-key-${index}`}
-									disabled={busy}
-									onChange={(event) => {
-										const headers = editing.form.headers.map((current, i) =>
-											i === index ? { ...current, key: event.target.value } : current,
-										)
-										updateForm({ headers })
-									}}
-									placeholder="Header name"
-									style={{ flex: 1 }}
-									value={row.key}
-								/>
-								<input
-									data-testid={`custom-provider-header-value-${index}`}
-									disabled={busy}
-									onChange={(event) => {
-										const headers = editing.form.headers.map((current, i) =>
-											i === index ? { ...current, value: event.target.value } : current,
-										)
-										updateForm({ headers })
-									}}
-									placeholder="Value"
-									style={{ flex: 1 }}
-									value={row.value}
-								/>
+						{/* Automatic Model Discovery & Model List */}
+						<div className="p-2.5 rounded border border-[var(--vscode-widget-border,rgba(128,128,128,0.25))] bg-[var(--vscode-sideBar-background,var(--vscode-editor-background))] flex flex-col gap-2">
+							<div className="flex items-center justify-between">
+								<span className="text-xs font-semibold text-[var(--vscode-foreground)]">Model Configuration</span>
 								<button
-									data-testid={`custom-provider-header-remove-${index}`}
-									disabled={busy}
-									onClick={() => updateForm({ headers: editing.form.headers.filter((_, i) => i !== index) })}>
-									✕
+									className="px-2 py-0.5 text-xs rounded border border-[var(--vscode-button-border,transparent)] bg-[var(--vscode-button-secondaryBackground)] text-[var(--vscode-button-secondaryForeground)] hover:bg-[var(--vscode-button-secondaryHoverBackground)] flex items-center gap-1"
+									data-testid="custom-provider-fetch-models"
+									disabled={busy || isFetchingModels}
+									onClick={() => void fetchModelsFromEndpoint()}
+									type="button">
+									{isFetchingModels ? (
+										<span>Fetching...</span>
+									) : (
+										<>
+											<span>⚡ Fetch models automatically</span>
+										</>
+									)}
 								</button>
 							</div>
-						))}
-						<button
-							data-testid="custom-provider-header-add"
-							disabled={busy}
-							onClick={() => updateForm({ headers: [...editing.form.headers, { key: "", value: "" }] })}>
-							Add header
-						</button>
-					</div>
 
-					<div className="flex items-center gap-2" style={{ marginTop: 8 }}>
-						<button
-							data-testid="custom-provider-save"
-							disabled={busy}
-							onClick={() => void submit()}
-							style={{
-								background: "var(--vscode-button-background)",
-								color: "var(--vscode-button-foreground)",
-								padding: "2px 12px",
-								minHeight: 24,
-								cursor: busy ? "default" : "pointer",
-							}}>
-							{editing.mode === "create" ? "Create provider" : "Save changes"}
-						</button>
-						<button data-testid="custom-provider-cancel" disabled={busy} onClick={() => setEditing(null)}>
-							Cancel
-						</button>
+							{fetchModelStatus?.success && (
+								<div className="text-[11px] text-green-500 font-medium">✓ {fetchModelStatus.success}</div>
+							)}
+							{fetchModelStatus?.error && (
+								<div className="text-[11px] text-[var(--vscode-errorForeground)]">⚠ {fetchModelStatus.error}</div>
+							)}
+
+							{/* Models input */}
+							<div>
+								<label
+									className="block text-xs font-medium mb-1 text-[var(--vscode-foreground)]"
+									htmlFor="cp-models">
+									Models (comma-separated model IDs)
+								</label>
+								<input
+									data-testid="custom-provider-models"
+									disabled={busy}
+									id="cp-models"
+									onChange={(e) => updateForm({ modelsText: e.target.value })}
+									placeholder={
+										editing.mode === "edit"
+											? "Leave blank to keep existing models (or comma-separated to replace)"
+											: "e.g. gpt-5.6-sol, claude-3-5-sonnet, deepseek-r1"
+									}
+									style={INPUT_STYLE}
+									value={editing.form.modelsText}
+								/>
+							</div>
+
+							{/* Default Model */}
+							<div>
+								<label
+									className="block text-xs font-medium mb-1 text-[var(--vscode-foreground)]"
+									htmlFor="cp-default-model">
+									Default Model ID
+								</label>
+								{parsedModelIds.length > 0 ? (
+									<div className="flex gap-2 items-center">
+										<select
+											className="flex-1"
+											data-testid="custom-provider-default-model-select"
+											disabled={busy}
+											onChange={(e) => updateForm({ defaultModelId: e.target.value })}
+											style={SELECT_STYLE}
+											value={editing.form.defaultModelId}>
+											<option value="">Select default model...</option>
+											{parsedModelIds.map((m) => (
+												<option key={m} value={m}>
+													{m}
+												</option>
+											))}
+										</select>
+										<input
+											className="flex-1"
+											data-testid="custom-provider-default-model"
+											disabled={busy}
+											onChange={(e) => updateForm({ defaultModelId: e.target.value })}
+											placeholder="Or type custom ID..."
+											style={INPUT_STYLE}
+											value={editing.form.defaultModelId}
+										/>
+									</div>
+								) : (
+									<input
+										data-testid="custom-provider-default-model"
+										disabled={busy}
+										id="cp-default-model"
+										onChange={(e) => updateForm({ defaultModelId: e.target.value })}
+										placeholder="e.g. gpt-5.6-sol (selected by default)"
+										style={INPUT_STYLE}
+										value={editing.form.defaultModelId}
+									/>
+								)}
+							</div>
+						</div>
+
+						{/* Collapsible Advanced Section */}
+						<div>
+							<button
+								className="text-xs font-medium text-[var(--vscode-descriptionForeground)] hover:text-[var(--vscode-foreground)] flex items-center gap-1 p-0 bg-transparent border-0 cursor-pointer"
+								data-testid="custom-provider-advanced-toggle"
+								onClick={() => setShowAdvanced(!showAdvanced)}
+								type="button">
+								<span>{showAdvanced ? "▼" : "▶"}</span>
+								<span>Advanced Settings (Custom Headers, Models Source URL)</span>
+							</button>
+
+							{showAdvanced && (
+								<div className="mt-2 p-2.5 rounded border border-[var(--vscode-widget-border,rgba(128,128,128,0.2))] flex flex-col gap-2.5">
+									{/* Models Source URL */}
+									<div>
+										<label
+											className="block text-xs font-medium mb-1 text-[var(--vscode-foreground)]"
+											htmlFor="cp-source-url">
+											Models Source URL Override (Optional)
+										</label>
+										<input
+											data-testid="custom-provider-models-source-url"
+											disabled={busy}
+											id="cp-source-url"
+											onChange={(e) => updateForm({ modelsSourceUrl: e.target.value })}
+											placeholder="Default: {baseUrl}/models"
+											style={INPUT_STYLE}
+											value={editing.form.modelsSourceUrl}
+										/>
+										<span className="text-[10px] text-[var(--vscode-descriptionForeground)]">
+											Auto-derived from Base URL if left empty.
+										</span>
+									</div>
+
+									{/* Custom Headers */}
+									<div>
+										<div className="flex items-center justify-between mb-1.5">
+											<span className="text-xs font-medium text-[var(--vscode-foreground)]">
+												Custom Headers
+											</span>
+											<button
+												className="px-2 py-0.5 text-xs rounded border border-[var(--vscode-button-border,transparent)] bg-[var(--vscode-button-secondaryBackground)] text-[var(--vscode-button-secondaryForeground)]"
+												data-testid="custom-provider-header-add"
+												disabled={busy}
+												onClick={() =>
+													updateForm({ headers: [...editing.form.headers, { key: "", value: "" }] })
+												}
+												type="button">
+												+ Add Header
+											</button>
+										</div>
+
+										{editing.form.headers.map((row, index) => (
+											<div className="flex items-center gap-2 mb-1.5" key={index}>
+												<input
+													data-testid={`custom-provider-header-key-${index}`}
+													disabled={busy}
+													onChange={(event) => {
+														const headers = editing.form.headers.map((current, i) =>
+															i === index ? { ...current, key: event.target.value } : current,
+														)
+														updateForm({ headers })
+													}}
+													placeholder="Header Name"
+													style={{ ...INPUT_STYLE, flex: 1 }}
+													value={row.key}
+												/>
+												<input
+													data-testid={`custom-provider-header-value-${index}`}
+													disabled={busy}
+													onChange={(event) => {
+														const headers = editing.form.headers.map((current, i) =>
+															i === index ? { ...current, value: event.target.value } : current,
+														)
+														updateForm({ headers })
+													}}
+													placeholder="Value"
+													style={{ ...INPUT_STYLE, flex: 1 }}
+													value={row.value}
+												/>
+												<button
+													className="px-2 py-1 text-xs text-[var(--vscode-errorForeground)] hover:bg-[var(--vscode-inputValidation-errorBackground,rgba(255,0,0,0.1))] rounded"
+													data-testid={`custom-provider-header-remove-${index}`}
+													disabled={busy}
+													onClick={() =>
+														updateForm({
+															headers: editing.form.headers.filter((_, i) => i !== index),
+														})
+													}
+													type="button">
+													✕
+												</button>
+											</div>
+										))}
+									</div>
+								</div>
+							)}
+						</div>
+
+						{/* Form Actions */}
+						<div className="flex items-center justify-end gap-2 pt-2 border-t border-[var(--vscode-widget-border,rgba(128,128,128,0.2))]">
+							<button
+								className="px-3 py-1 text-xs rounded border border-[var(--vscode-button-border,transparent)] bg-[var(--vscode-button-secondaryBackground)] text-[var(--vscode-button-secondaryForeground)] hover:bg-[var(--vscode-button-secondaryHoverBackground)]"
+								data-testid="custom-provider-cancel"
+								disabled={busy}
+								onClick={() => setEditing(null)}
+								type="button">
+								Cancel
+							</button>
+							<button
+								className="px-3.5 py-1 text-xs font-medium rounded border border-[var(--vscode-button-border,transparent)]"
+								data-testid="custom-provider-save"
+								disabled={busy}
+								onClick={() => void submit()}
+								style={{
+									background: "var(--vscode-button-background)",
+									color: "var(--vscode-button-foreground)",
+									opacity: busy ? 0.6 : 1,
+									cursor: busy ? "default" : "pointer",
+								}}
+								type="button">
+								{editing.mode === "create" ? "Create Provider" : "Save Changes"}
+							</button>
+						</div>
 					</div>
 				</div>
 			)}

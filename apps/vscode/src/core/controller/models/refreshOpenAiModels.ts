@@ -55,11 +55,14 @@ export async function refreshOpenAiModels(controller: Controller, request: OpenA
 	const providerId = parseProviderId(request.providerId || "openai")
 	try {
 		const providerConfig = controller.getProviderConfigStore().read(providerId)
+		// Request's explicit baseUrl / apiKey takes precedence (e.g. during custom
+		// provider creation/editing in the settings form before it is saved).
 		// Trailing slashes would produce "<baseUrl>//models", which many
 		// servers reject even though chat completions still work (the AI SDK
 		// normalizes the base URL for those).
-		const baseUrl = providerConfig.baseUrl?.trim().replace(/\/+$/, "")
-		const apiKey = providerConfig.apiKey
+		const rawBaseUrl = request.baseUrl?.trim() || providerConfig.baseUrl?.trim()
+		const baseUrl = rawBaseUrl?.replace(/\/+$/, "")
+		const apiKey = request.apiKey?.trim() || providerConfig.apiKey
 
 		if (!baseUrl || !URL.canParse(baseUrl)) {
 			writeLiveModelsCache(providerId, [])
