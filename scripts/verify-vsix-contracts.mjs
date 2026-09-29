@@ -33,7 +33,10 @@
  *
  * Auditing a build from an earlier round: pass --no-local, or the byte check
  * compares that round's bundles against the current checkout and reports the
- * (expected) difference as a failure.
+ * (expected) difference as a failure. The byte check also skips itself when the
+ * local build's label differs from the packed one — a plain `bun run build`
+ * bakes the checked-in label ("dev build 6") while the pack bakes the fix label,
+ * so any rebuild after a pack makes the two bundles genuinely different.
  */
 
 import { execFileSync } from "node:child_process"
@@ -271,6 +274,11 @@ function newestVsix(distDir) {
 	return join(distDir, candidates[0].name)
 }
 
+/** Every `dev build N · fix.M` label a bundle carries. */
+function bundleLabels(source) {
+	return new Set(source.match(/dev build \d+(?: · fix\.\d+)?/g) ?? [])
+}
+
 /** Mirrors sync-icline-docs.mjs so the label check cannot drift from the generator. */
 function expectedLabel(version) {
 	const devMatch = version.match(/^(.+)-dev\.(\d+)(?:-fix\.(\d+))?$/)
@@ -337,38 +345,15 @@ function run(options) {
 			litter.length === 0 ? `${files.length} entries` : litter.map((f) => relative(temp, f)).join(", "),
 		)
 
-		// --- bytes against the local build ---------------------------------
-		if (options.localCheck) {
-			const pairs = [
-				{ group: "bytes", entry: hostPath, local: join(localRoot, "dist", "extension.js"), label: "extension.js" },
-				{
-					group: "bytes",
-					entry: webviewPath,
-					local: join(localRoot, "webview-ui", "build", "assets", "index.js"),
-					label: "webview index.js",
-				},
-			]
-			for (const pair of pairs) {
-				if (!existsSync(pair.entry) || !existsSync(pair.local)) {
-					add(pair.group, true, `${pair.label} byte match`, "skipped (bundle or local build missing)")
-					continue
-				}
-				const packed = sha1(pair.entry)
-				const local = sha1(pair.local)
-				add(
-					pair.group,
-					packed === local,
-					`${pair.label} byte match`,
-					`${packed.slice(0, 8)}… ${packed === local ? "=" : "≠"} local ${local.slice(0, 8)}…`,
-				)
-			}
-		}
-
 		// --- version label --------------------------------------------------
+		// Read before the byte check: whether the two builds are even comparable
+		// depends on the label each one baked in.
+		const localWebviewPath = join(localRoot, "webview-ui", "build", "assets", "index.js")
+		const localLabels = existsSync(localWebviewPath) ? bundleLabels(readFileSync(localWebviewPath, "utf8")) : new Set()
 		if (version && existsSync(webviewPath)) {
 			const source = readFileSync(webviewPath, "utf8")
 			const expected = expectedLabel(version)
-			const labels = new Set(source.match(/dev build \d+(?: · fix\.\d+)?/g) ?? [])
+			const labels = bundleLabels(source)
 			add(
 				"version label",
 				labels.has(expected),
@@ -382,6 +367,43 @@ function run(options) {
 				"no stale label from an earlier build",
 				stale.length === 0 ? `derived from ${VERSION_LABEL_SOURCE}` : stale.join(", "),
 			)
+		}
+
+		// --- bytes against the local build ---------------------------------
+		// The pack injects the fix label into the build metadata, so a plain
+		// `bun run build` of the very same tree produces a DIFFERENT bundle than the
+		// one that was packed. Comparing anyway would report every correct artifact
+		// as stale from the moment anyone rebuilds, so only compare like with like.
+		if (options.localCheck) {
+			const target = version ? expectedLabel(version) : undefined
+			const comparable = target !== undefined && localLabels.size > 0 && localLabels.has(target) && localLabels.size === 1
+			if (!comparable) {
+				const seen = localLabels.size > 0 ? [...localLabels].join(", ") : "no label (bundle missing?)"
+				add(
+					"bytes",
+					true,
+					"byte match",
+					`skipped — the local build is labelled ${seen}, the pack labels itself ${target ?? "?"}`,
+				)
+			} else {
+				for (const pair of [
+					{ entry: hostPath, local: join(localRoot, "dist", "extension.js"), label: "extension.js" },
+					{ entry: webviewPath, local: localWebviewPath, label: "webview index.js" },
+				]) {
+					if (!existsSync(pair.entry) || !existsSync(pair.local)) {
+						add("bytes", true, `${pair.label} byte match`, "skipped (bundle or local build missing)")
+						continue
+					}
+					const packed = sha1(pair.entry)
+					const local = sha1(pair.local)
+					add(
+						"bytes",
+						packed === local,
+						`${pair.label} byte match`,
+						`${packed.slice(0, 8)}… ${packed === local ? "=" : "≠"} local ${local.slice(0, 8)}…`,
+					)
+				}
+			}
 		}
 
 		// --- contract table -------------------------------------------------
