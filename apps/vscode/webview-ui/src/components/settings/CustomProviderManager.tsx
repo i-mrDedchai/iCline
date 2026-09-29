@@ -400,7 +400,7 @@ export const CustomProviderManager = () => {
 								placeholder={
 									editing.mode === "edit"
 										? "Leave blank to keep existing URL"
-										: "e.g. https://api.openai.com/v1 or https://cleanapis.com/v1"
+										: "e.g. https://api.openai.com/v1"
 								}
 								style={INPUT_STYLE}
 								value={editing.form.baseUrl}
