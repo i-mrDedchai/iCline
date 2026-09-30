@@ -1,7 +1,25 @@
 # ดัชนีรอบ fix ย่อยทั้งหมดของ 0.1.18 (dev.5 + dev.6)
 
-นับจริงจากหลักฐาน ไม่ประมาณ: **dev.5 = 35 รอบ + dev.6 = 52 รอบ = 87 รอบ**
+นับจริงจากหลักฐาน ไม่ประมาณ: **dev.4 (43 commits ไม่เลขรอบ) + dev.5 = 35 รอบ + dev.6 = 52 รอบ = 87 รอบเลข + ยุคฐาน dev.4**
 (ที่นับตกก่อนหน้าว่า "ราว 40" คือมองแค่ dev.6 ช่วงกลาง — ผิดไปกว่าครึ่ง)
+
+## dev.1–dev.3 — ไม่เคยมีตัวตน
+
+เวอร์ชันกระโดด `0.1.17` → `0.1.18-dev.4` ตรง ๆ (2026-07-18, `932f7ae4b`)
+`git log -S'"version": "0.1.18-dev.{1,2,3}"'` ว่างเปล่า ไม่มี tag —
+เลข dev เริ่มที่ 4 ตั้งแต่ต้น ไม่ใช่หายไป
+
+## dev.4 — ยุคฐาน migration (2026-07-18 → 09-14, 43 commits, ไม่มีเลข fix)
+
+ธรรมเนียม `fix.N` ยังไม่เกิด (ค้น `dev.4-fix` ทั้ง repo = 0) — งานเรียกชื่อ
+commit ธรรมดา หลักฐาน: seed `[0.1.18] Unreleased` ใน commit bump เอง,
+tag `pre-upstream-sync-0.1.18-dev.4` + `v0.1.18-dev.5`, สร้างไฟล์
+[smoke-test-tracker](smoke-test-tracker.md) (`b5b4ce1ff`), ปิดแผน sync
+(`upstream-sync-plan` COMPLETE) เนื้องาน = 12 bullets ท้าย CHANGELOG:
+merge upstream v4.0.0 SDK (`292c501a3` + 16 post-sync), กู้ proto RPCs /
+history export-import / branding / picker / OAuth UI / ฟิลด์ Jan-Sakana-
+ZenMux ผ่าน proto, provider Sakana + Jan, guardrails re-injection,
+ZenMux dynamic list, upstream features, sync plan, update bar, provider docs
 
 วิธีนับ: หมายเลขรอบ `fix.N` ต่อด้วยหลักฐาน (section ใน
 [smoke-test-tracker](smoke-test-tracker.md) / commit `(fix.N)` / VSIX
@@ -13,7 +31,7 @@
 Grok 4.6 500k / ของ dev.6 = ประมาณ token รูป base64) — อ้างอิงต้องระบุ dev
 ด้วยป้าย VSIX (`0.1.18-dev.5-fix.N` vs `0.1.18-dev.6-fix.N`) เสมอ
 
-## dev.5 — fix.1–fix.35 (2026-09-14 → ปิด 2026-09-18)
+## dev.5 — fix.1–fix.35 (2026-09-14 → ปิด 2026-09-18, ชน dev.4 ที่ bump `18a4fddfa`)
 
 | รอบ | เนื้อหา | หลักฐาน |
 |---|---|---|
