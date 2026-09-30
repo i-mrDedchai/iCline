@@ -79,7 +79,7 @@ Settings ทุกแท็บ, หน้า welcome และการ์ด Qu
 
 ## ✨ ทำไมต้องใช้ iCline?
 
-| | Cline official | iCline |
+| | Cline official (4.1.18 @ 2026-09-16) | iCline |
 |---|---|---|
 | Extension ID | `saoudrizwan.claude-dev` | `i-mrdedchai.iCline` |
 | Verified publisher | `saoudrizwan` | `i-mrdedchai` ✅ |
@@ -102,15 +102,9 @@ Settings ทุกแท็บ, หน้า welcome และการ์ด Qu
 
 ### ⚡ เมนูด่วนเลือก Provider & Model (บนแชท)
 
-สลับ Provider และโมเดลได้ **โดยไม่ต้องออกจากหน้าแชท** — ค้นหาได้ทุก Provider ยุบ/ขยายรายการโมเดล ตั้ง **Thinking / Effort รายโมเดล** เมื่อ hover และ refresh รายการโมเดลแบบ dynamic
+สลับ Provider และโมเดลได้ **โดยไม่ต้องออกจากหน้าแชท** — ค้นหาได้ทุก Provider ยุบ/ขยายรายการโมเดล ตั้ง **Thinking / Effort รายโมเดล** เมื่อ hover และ refresh รายการโมเดลแบบ dynamic (ดูภาพโฉมใหม่ใน **มีอะไรใหม่ใน 0.1.18** ด้านบน)
 
-![เมนูด่วนเลือก Provider และ Model บนช่องแชท iCline](assets/docs/Preview-Settings-iCline-menu-Providers-Models.jpg)
-
-รายการ Provider เต็มและการตั้งค่าโมเดลแบบละเอียดยังอยู่ที่ **Settings → API Configuration** (รวมสถิติและการ์ด Custom providers):
-
-![สถิติ Provider และ Model พร้อม Custom providers](assets/docs/0.1.18-Providers+models-Stats+Customer-Providers.jpg)
-
-![iCline Settings — Providers และ Models (0.1.17)](assets/docs/Preview-Settings-iCline-Providers-Models.jpg)
+รายการ Provider เต็มและการตั้งค่าโมเดลแบบละเอียดยังอยู่ที่ **Settings → API Configuration** (รวมสถิติและการ์ด Custom providers)
 
 ---
 

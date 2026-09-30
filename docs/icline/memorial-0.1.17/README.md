@@ -23,8 +23,10 @@ Image memorial: the v0.1.17 image set stays untouched in
 `Preview-Settings-iCline-menu-Providers-Models.jpg` (`sha1 8f27e523…`),
 `Preview-Settings-iCline-Providers-Models.jpg` (`sha1 55893eb9…`).
 Every v0.1.18 screenshot is **added** under a `0.1.18-*` name (see
-`../readme-0.1.18-screenshots.md`); old images keep their names, their hashes,
-and their references.
+`../readme-0.1.18-screenshots.md`); old images keep their names and their
+hashes on disk. Their original references survive inside these frozen copies;
+the live READMEs moved on to the new images on 2026-09-30 (maintainer call:
+the new shots supersede the old ones).
 
 Rules going forward:
 

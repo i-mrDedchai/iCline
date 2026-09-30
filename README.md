@@ -59,7 +59,7 @@ code --install-extension dist/i-mrdedchai.iCline-<version>.vsix --force
 
 ## iCline vs Cline official
 
-| | Cline official | iCline |
+| | Cline official (4.1.18 @ 2026-09-16) | iCline |
 |---|---|---|
 | Extension ID | `saoudrizwan.claude-dev` | `i-mrdedchai.iCline` |
 | ⚡ Quick Provider & Model picker on chat | ❌ | ✅ |
@@ -72,7 +72,7 @@ code --install-extension dist/i-mrdedchai.iCline-<version>.vsix --force
 | Dual-channel safe updates | ❌ | ✅ |
 
 <p align="center">
-  <img src="apps/vscode/assets/docs/Preview-Settings-iCline-menu-Providers-Models.jpg" alt="iCline quick model picker on chat" width="640" />
+  <img src="apps/vscode/assets/docs/0.1.18-NewDesign-QuickPicker+Effort.png" alt="iCline quick model picker on chat (0.1.18 new design)" width="640" />
 </p>
 
 See **[apps/vscode/README.md](apps/vscode/README.md)** for screenshots and full feature list.

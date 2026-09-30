@@ -59,7 +59,7 @@ code --install-extension dist/i-mrdedchai.iCline-0.1.18.vsix --force
 
 ## iCline vs Cline official
 
-| | Cline official | iCline |
+| | Cline official (4.1.18 @ 2026-09-16) | iCline |
 |---|---|---|
 | Extension ID | `saoudrizwan.claude-dev` | `i-mrdedchai.iCline` |
 | ⚡ เมนูด่วนเลือก Provider / Model บนแชท | ❌ | ✅ |
@@ -72,7 +72,7 @@ code --install-extension dist/i-mrdedchai.iCline-0.1.18.vsix --force
 | อัปเดตแบบ dual-channel ปลอดภัย | ❌ | ✅ |
 
 <p align="center">
-  <img src="apps/vscode/assets/docs/Preview-Settings-iCline-menu-Providers-Models.jpg" alt="เมนูด่วนเลือก Provider และ Model บนแชท iCline" width="640" />
+  <img src="apps/vscode/assets/docs/0.1.18-NewDesign-QuickPicker+Effort.png" alt="เมนูด่วนเลือก Provider และ Model บนแชท iCline (โฉมใหม่ 0.1.18)" width="640" />
 </p>
 
 ดูภาพและรายละเอียดเต็มที่ **[apps/vscode/README.th.md](apps/vscode/README.th.md)**

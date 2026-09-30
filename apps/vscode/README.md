@@ -89,7 +89,7 @@ No wholesale merge: security fast-lane (js-yaml CVE-2026-84375), abort-aware ret
 
 ## ✨ Why iCline?
 
-| | Cline official | iCline |
+| | Cline official (4.1.18 @ 2026-09-16) | iCline |
 |---|---|---|
 | Extension ID | `saoudrizwan.claude-dev` | `i-mrdedchai.iCline` |
 | Verified publisher | `saoudrizwan` | `i-mrdedchai` ✅ |
@@ -112,25 +112,13 @@ No wholesale merge: security fast-lane (js-yaml CVE-2026-84375), abort-aware ret
 
 ### ⚡ Quick Provider & Model picker (chat)
 
-| | Cline official | iCline |
+| | Cline official (4.1.18 @ 2026-09-16) | iCline |
 |---|---|---|
 | ⚡ Quick Provider & Model picker on chat | ❌ | ✅ |
 
 Switch providers and models **without leaving the chat** — search all providers, collapse/expand model lists, set **Thinking / Effort per model** on hover, and refresh dynamic catalogs.
 
-<p align="center">
-  <img src="assets/docs/Preview-Settings-iCline-menu-Providers-Models.jpg" alt="iCline quick model picker on the chat input" width="720" />
-</p>
-
-The full provider catalog and deep model settings remain in **Settings → API Configuration** (stats chips and the Custom providers card included):
-
-<p align="center">
-  <img src="assets/docs/0.1.18-Providers+models-Stats+Customer-Providers.jpg" alt="iCline provider and model stats with custom providers" width="720" />
-</p>
-
-<p align="center">
-  <img src="assets/docs/Preview-Settings-iCline-Providers-Models.jpg" alt="iCline Settings — Providers and Models (0.1.17)" width="720" />
-</p>
+The full provider catalog and deep model settings remain in **Settings → API Configuration** (stats chips and the Custom providers card included — see the 0.1.18 screenshots in **New in 0.1.18** above).
 
 ---
 

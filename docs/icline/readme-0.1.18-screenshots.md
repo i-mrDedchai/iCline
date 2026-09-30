@@ -23,8 +23,9 @@ by GitHub raw and passed through by the vsce rewrite).
 
 ## The 5 additive screenshots (landed 2026-09-30, exact names)
 
-In `apps/vscode/assets/docs/` (old `Preview-Settings-*` memorial images
-untouched, June 21 hashes unchanged):
+In `apps/vscode/assets/docs/` (old `Preview-Settings-*` files stay on disk
+with June 21 hashes unchanged — but as of 2026-09-30 no live README
+references them anymore; they survive only in `memorial-0.1.17/`):
 
 | # | File | Shows | Used in |
 |---|---|---|---|
@@ -42,10 +43,9 @@ paths visible in any shot.
 
 - [x] Files at the exact names above (JPG + PNG, no spaces).
 - [x] Image blocks live in `apps/vscode/README.marketplace.md` (5 images).
-- [x] Image blocks live in `apps/vscode/README.md` (5 images + 2 memorial kept).
-- [x] Image blocks live in `apps/vscode/README.th.md` (same files, TH captions).
-- [x] Root `README.md` / `README.th.md`: no image changes (they point at the
-      two `Preview-Settings-*` memorial images, which stay).
+- [x] Image blocks live in `apps/vscode/README.md` (5 images; 2 memorial refs removed 2026-09-30 — superseded).
+- [x] Image blocks live in `apps/vscode/README.th.md` (same files, TH captions; memorial refs removed).
+- [x] Root `README.md` / `README.th.md`: picker shot swapped to the 0.1.18 new-design PNG (same subject, updated).
 - [ ] `npm run sync:docs` NOT needed for this (version unchanged); but before
       the Stable bump, confirm the `icline:version` markers still render.
 - [ ] Verify at pack time: `tar -xOf dist/*.vsix extension/readme.md` shows
