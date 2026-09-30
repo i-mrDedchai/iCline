@@ -4,9 +4,9 @@
 
 | ฟิลด์ | ค่า |
 |-------|-----|
-| **Stable version** | `0.1.17` |
-| **Released** | 2026-06-22 (stores) · GitHub Release 2026-06-23 |
-| **GitHub** | https://github.com/i-mrDedchai/iCline/releases/tag/v0.1.17 |
+| **Stable version** | `0.1.18` |
+| **Released** | GitHub Release 2026-09-30 · stores PENDING (maintainer credentials) |
+| **GitHub** | https://github.com/i-mrDedchai/iCline/releases/tag/v0.1.18 |
 | **Marketplace** | https://marketplace.visualstudio.com/items?itemName=i-mrdedchai.iCline |
 | **Open VSX** | https://open-vsx.org/extension/i-mrdedchai/iCline |
 | **Extension ID** | `i-mrdedchai.iCline` |
@@ -14,18 +14,18 @@
 ## วิธีรู้ว่าเวอร์ชันนี้ “พร้อมใช้งานสาธารณะ”
 
 1. มีไฟล์นี้ (`releases/STABLE.md`) ชี้เวอร์ชันล่าสุด
-2. GitHub Release `v0.1.17` **ไม่มี**ป้าย Pre-release และมี VSIX แนบ
-3. Marketplace + Open VSX แสดง `0.1.17`
-4. `node scripts/release-parity.mjs verify --version 0.1.17` ผ่านทุกช่องทาง
-5. มีบันทึกอนุมัติใน `releases/approvals/` (ถ้าข้าม smoke checklist)
+2. GitHub Release `v0.1.18` **ไม่มี**ป้าย Pre-release และมี VSIX แนบ
+3. Marketplace + Open VSX แสดง `0.1.18` (PENDING — รอ publish)
+4. `node scripts/release-parity.mjs verify --version 0.1.18` ผ่านทุกช่องทาง (stores pending)
+5. smoke โดย maintainer ครบ (fix.51/52 + release VSIX — ไม่ข้าม checklist)
 
-## สรุปการเปลี่ยนแปลงหลัก (0.1.17)
+## สรุปการเปลี่ยนแปลงหลัก (0.1.18)
 
-- แก้ Marketplace icon ให้มองเห็นชัดบนหน้า store
-- แก้ README screenshots บน VS Marketplace และ Open VSX
-- ลบแถว store/distribution ออกจาก comparison table
+- UI ครบ 4 ภาษา (EN/TH/JA/ZH-CN) ทุกแท็บ Settings + welcome/history/MCP/Team/Account
+- แท็บ Appearance + Custom providers CRUD + Sub-agents/Agent Teams + Team budget
+- Self-healing runs (mid-stream retry, truncation continuation) + selective upstream ports
+- VSIX gate 88/88 · smoke fix.51/52 + release ผ่านโดย maintainer
 
-## สรุปรอบก่อน (0.1.16)
+## สรุปรอบก่อน (0.1.17)
 
-- Welcome home Phase 1, Quick Start editor, History export/import
-- iCline branding ในแชท, VS Marketplace + Open VSX verified publisher
+- Marketplace icon/screenshots, comparison table cleanup (2026-06-22)
