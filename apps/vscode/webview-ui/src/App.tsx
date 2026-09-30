@@ -1,5 +1,6 @@
 import type { Boolean, EmptyRequest } from "@shared/proto/cline/common"
 import { useCallback, useEffect } from "react"
+import { useAppearanceVars } from "./appearance/useAppearance"
 import AccountView from "./components/account/AccountView"
 import ChatView from "./components/chat/ChatView"
 import HistoryView from "./components/history/HistoryView"
@@ -44,6 +45,7 @@ const AppContent = () => {
 	} = useExtensionState()
 
 	const { clineUser, organizations, activeOrganization } = useClineAuth()
+	const appearanceVars = useAppearanceVars()
 
 	const showUpdateAnnouncementModal = useCallback(() => {
 		setShowAnnouncement(true)
@@ -80,7 +82,7 @@ const AppContent = () => {
 	}
 
 	return (
-		<div className="flex h-screen w-full flex-col">
+		<div className="flex h-screen w-full flex-col" style={appearanceVars}>
 			{showSettings && <SettingsView onDone={hideSettings} targetSection={settingsTargetSection} />}
 			{showHistory && <HistoryView onDone={hideHistory} />}
 			{showMarketplace && <MarketplaceView initialType={mcpTab ? "mcp" : undefined} onDone={closeMarketplaceView} />}

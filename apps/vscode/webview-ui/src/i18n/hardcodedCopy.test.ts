@@ -133,6 +133,10 @@ const MIGRATED = [
 	"components/account/CreditsHistoryTable.tsx",
 	"components/onboarding/OnboardingView.tsx",
 	"components/browser/BrowserSettingsMenu.tsx",
+	// Appearance tab: the three accent rows render every label, hint, choice name
+	// and aria-label from the `appearance` namespace; the swatch dots carry the
+	// color, so their names stay short on purpose.
+	"components/settings/sections/AppearanceSection.tsx",
 ]
 
 /**

@@ -8,6 +8,7 @@ import {
 	HardDriveDownload,
 	Info,
 	type LucideIcon,
+	Palette,
 	SlidersHorizontal,
 	SquareTerminal,
 	Wrench,
@@ -28,6 +29,7 @@ import { ProviderStatsCard } from "./ProviderStatsCard"
 import SectionHeader from "./SectionHeader"
 import AboutSection from "./sections/AboutSection"
 import ApiConfigurationSection from "./sections/ApiConfigurationSection"
+import AppearanceSection from "./sections/AppearanceSection"
 import DebugSection from "./sections/DebugSection"
 import FeatureSettingsSection from "./sections/FeatureSettingsSection"
 import GeneralSettingsSection from "./sections/GeneralSettingsSection"
@@ -37,7 +39,7 @@ import TerminalSettingsSection from "./sections/TerminalSettingsSection"
 const IS_DEV = process.env.IS_DEV
 
 // Tab definitions
-type SettingsTabID = "api-config" | "features" | "terminal" | "general" | "about" | "debug" | "remote-config"
+type SettingsTabID = "api-config" | "features" | "terminal" | "general" | "appearance" | "about" | "debug" | "remote-config"
 interface SettingsTab {
 	id: SettingsTabID
 	name: SettingsStringKey
@@ -75,6 +77,13 @@ const SETTINGS_TABS: SettingsTab[] = [
 		tooltipText: "tabGeneralTooltip",
 		headerText: "tabGeneralHeader",
 		icon: Wrench,
+	},
+	{
+		id: "appearance",
+		name: "tabAppearance",
+		tooltipText: "tabAppearanceTooltip",
+		headerText: "tabAppearanceHeader",
+		icon: Palette,
 	},
 	{
 		id: "remote-config",
@@ -148,6 +157,7 @@ const SettingsView = ({ onDone, targetSection }: SettingsViewProps) => {
 		() => ({
 			"api-config": ApiConfigurationSection,
 			general: GeneralSettingsSection,
+			appearance: AppearanceSection,
 			features: FeatureSettingsSection,
 			terminal: TerminalSettingsSection,
 			"remote-config": RemoteConfigSection,
