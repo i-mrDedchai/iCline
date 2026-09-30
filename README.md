@@ -25,7 +25,7 @@ Standalone Cline fork for VS Code — no official Cline required. Supports Grok,
 
 ## News
 
-- **v0.1.18 (upcoming)** — full UI in your language (EN / TH / JA / ZH-CN), Settings → Appearance tab with theme-accented Completed/reply surfaces, mid-stream-cut retry, selective upstream ports with security fix (js-yaml CVE-2026-84375), honest About sync-point. Details: [apps/vscode/CHANGELOG.md](apps/vscode/CHANGELOG.md)
+- **v0.1.18 Stable (2026-09-30)** — full UI in your language (EN / TH / JA / ZH-CN), Settings → Appearance tab with theme-accented Completed/reply surfaces, mid-stream-cut retry, selective upstream ports with security fix (js-yaml CVE-2026-84375), honest About sync-point. [Release v0.1.18](https://github.com/i-mrDedchai/iCline/releases/tag/v0.1.18) · Open VSX live, Marketplace verifying. Details: [apps/vscode/CHANGELOG.md](apps/vscode/CHANGELOG.md)
 - **Open VSX namespace claimed** — publisher `i-mrdedchai` verified ([Eclipse Foundation #11300](https://github.com/EclipseFdn/open-vsx.org/issues/11300) closed as completed)
 - **Open VSX traction** — **116+ installs** within ~12 hours of listing (and growing)
 - **v0.1.17 Stable** — marketplace icon/screenshot fixes, store comparison table cleanup
