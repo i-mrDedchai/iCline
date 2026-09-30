@@ -6,7 +6,7 @@ import {
 	toGatewayRequestMessages,
 } from "./compat";
 import { ClineNotSubscribedError } from "./errors";
-import { DEFAULT_GATEWAY_MAX_OUTPUT_TOKENS } from "./gateway";
+import { DEFAULT_GATEWAY_MAX_OUTPUT_FRACTION } from "./gateway";
 import type { Message } from "./types";
 
 const streamTextSpy = vi.fn();
@@ -391,7 +391,7 @@ describe("createGatewayApiHandler.createMessage", () => {
 		});
 	});
 
-	it("uses the default maxOutputTokens without expanding to catalog maxTokens", async () => {
+	it("defaults maxOutputTokens to a fraction of the catalog maxTokens", async () => {
 		streamTextSpy.mockReturnValue({
 			fullStream: (async function* () {
 				yield { type: "finish", finishReason: "stop" };
@@ -427,7 +427,7 @@ describe("createGatewayApiHandler.createMessage", () => {
 			| undefined;
 		expect(call).toHaveProperty(
 			"maxOutputTokens",
-			DEFAULT_GATEWAY_MAX_OUTPUT_TOKENS,
+			Math.floor(202_800 * DEFAULT_GATEWAY_MAX_OUTPUT_FRACTION),
 		);
 	});
 
