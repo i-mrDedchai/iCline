@@ -117,7 +117,7 @@ Grok 4.6 500k / ของ dev.6 = ประมาณ token รูป base64) —
 | fix.49a | customize + MCP + history (ไฟล์ fix.49 ป้าย a) | tracker + VSIX + CHANGELOG |
 | fix.50 | standalone screens + host l10n + manifest | tracker + VSIX + CHANGELOG |
 | fix.51 | Appearance + colors + stream retry (smoke ผ่าน) | VSIX + CHANGELOG |
-| fix.52 | Wave-3 mini selective ports (smoke อยู่ระหว่างตรวจ) | VSIX + CHANGELOG |
+| fix.52 | Wave-3 mini selective ports (✅ smoke ผ่าน 2026-09-30) | VSIX + CHANGELOG |
 
 VSIX dev.6 ครบทุกเลข fix.1–fix.21 ใน `dist/` + บันทึกแพ็ก fix.22–52 —
 เลขไหนไม่มี section ของตัวเอง หมายถึงผลที่ผู้ใช้เห็นถูกเล่าในบรรทัดรอบใกล้เคียง
