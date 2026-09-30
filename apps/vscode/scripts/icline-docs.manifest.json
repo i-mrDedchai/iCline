@@ -64,8 +64,8 @@
 		"sakana": "Sakana.ai"
 	},
 	"upstreamCline": {
-		"syncedVersion": "v4.0.0 SDK (main@402b9994d)",
-		"syncedAt": "2026-07-21",
+		"syncedVersion": "4.1.18 SDK (main@173837314)",
+		"syncedAt": "2026-09-16",
 		"repo": "https://github.com/cline/cline"
 	},
 	"featureHighlights": [

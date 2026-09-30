@@ -5,6 +5,15 @@
 **Last synced:** `v3.89.2` (2026-06-21)
 **Gap:** 100 commits (50 to v4.0.0 + 50 since v4.0.0)
 
+## 0. Sync doctrine (standing — every session follows this, no exceptions)
+
+1. **Never a 1:1 merge.** A past 1:1 sync broke iCline nearly beyond recovery. Upstream code is never merged wholesale; waves are selective by design.
+2. **Port features and ideas, not diffs.** Pick what benefits iCline, adapt it to our architecture/branding/providers (Sakana/Jan/ZenMux/Grok, harness guardrails, i18n), and feel free to do it *better* than upstream.
+3. **Skip what we already solved.** Where iCline fixed the same pain first (or differently), do not import the upstream twin — record the skip with its reason so nobody re-litigates it.
+4. **Security fast-lane.** CVE fixes (e.g. js-yaml) port promptly, outside wave batching.
+5. **Every wave logs port/skip decisions** (commit message + tracker row): what was taken, what was skipped, why. That log is how future sessions know without asking.
+6. **About stays honest.** Each wave updates `upstreamCline` in `apps/vscode/scripts/icline-docs.manifest.json` and re-runs `sync:docs`, so the About page always names the true sync point.
+
 > ✅ **Status: SYNC COMPLETE — Phase 0-7 DONE**
 > - Round 1 merge: commit `a7993a802`
 > - Round 2 merge (16 post-sync commits): commit `292c501a3`
