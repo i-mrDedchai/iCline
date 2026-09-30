@@ -16,23 +16,52 @@
 
 ## 🆕 มีอะไรใหม่ใน 0.1.18
 
-- 🌐 **UI ทั้งหมดอ่านเป็นภาษาของคุณ** — Settings ทุกแท็บ, หน้า welcome และการ์ด Quick Start, หน้าประวัติทั้งหมด (ค้นหา, จัดเรียง/กรอง, export/import), โมดัล Customize (Rules / Hooks / Skills), หน้า MCP server, แผง Team, แค็ตตาล็อก Marketplace, หน้าจอ Account, ตัวช่วย Onboarding, ตั้งค่า Browser รวมถึงข้อความแจ้งเตือนของ extension และข้อความ manifest — รองรับ**อังกฤษ ไทย ญี่ปุ่น และจีนตัวย่อ** prompt ยังเป็นภาษาอังกฤษ (เพราะสั่งโมเดล) และการเปลี่ยนภาษาหน้าจอไม่เปลี่ยนภาษาที่ agent ตอบ
-- 🎨 **แท็บ Settings → Appearance** — แผง Task Completed มี token สีของตัวเอง (`--color-completed` แยกจาก `success` จึงปรับสีโดยไม่กระทบ diff count หรือ badge) และการ์ด final-reply มี `--color-reply` ทั้งคู่ตาม theme ของ editor เลือก accent ได้ 3 กลุ่ม เก็บเป็น choice id `iCline.appearance.*`
-- 🛡️ **รันงานรอดเมื่อสตรีมขาดกลางคัน** — ถ้า upstream stream จบก่อน terminal chunk จะ retry แทนการจบงาน และเพดาน output ปรับตามงบของโมเดล (`max(32k, 30% ของ budget)`) งาน reasoning ใหญ่ๆ จึงไม่ล้น
-- 🧬 **พอร์ต upstream แบบเลือกเฉพาะที่ บันทึกตรงไปตรงมา** — ไม่ merge ทั้งก้อน: ช่องโหว่ fast-lane (js-yaml CVE-2026-84375), backoff ที่เคารพ abort, แยก `content-filter` จากความล้มเหลวชั่วคราว, compaction summarizer ใช้ credential จริง ทุก port *และ* skip บันทึกใน [Changelog](https://github.com/i-mrDedchai/iCline/blob/main/apps/vscode/CHANGELOG.md) และหน้า Settings → About แสดง sync-point ตรงกับ upstream จริง (`4.1.18 SDK (main@173837314)` / `2026-09-16`)
+### 🌐 UI ทั้งหมดอ่านเป็นภาษาของคุณ
 
-<!-- ภาพใหม่ 0.1.18 (เพิ่มเท่านั้น — ห้ามแตะภาพเก่าใน assets/docs/):
-  เอา comment ออกทีละบล็อกเมื่อได้ไฟล์ภาพแล้ว ใช้ภาพชุดเดียวกับเวอร์ชันอังกฤษได้
-  <p align="center">
-    <img src="assets/docs/0.1.18-Appearance-Settings.jpg" alt="iCline Settings — แท็บ Appearance" width="720" />
-  </p>
-  <p align="center">
-    <img src="assets/docs/0.1.18-Task-Completed.jpg" alt="แผง Task Completed ของ iCline ตามสี theme" width="720" />
-  </p>
-  <p align="center">
-    <img src="assets/docs/0.1.18-Settings-Thai.jpg" alt="iCline Settings ภาษาไทย" width="720" />
-  </p>
-  Spec: docs/icline/readme-0.1.18-screenshots.md -->
+Settings ทุกแท็บ, หน้า welcome และการ์ด Quick Start, หน้าประวัติทั้งหมด (ค้นหา, จัดเรียง/กรอง, export/import), โมดัล Customize (Rules / Hooks / Skills), หน้า MCP server, แผง Team, แค็ตตาล็อก Marketplace, หน้าจอ Account, ตัวช่วย Onboarding, ตั้งค่า Browser รวมถึงข้อความแจ้งเตือนของ extension และข้อความ manifest — รองรับ**อังกฤษ ไทย ญี่ปุ่น และจีนตัวย่อ** prompt ยังเป็นภาษาอังกฤษ (เพราะสั่งโมเดล) และการเปลี่ยนภาษาหน้าจอไม่เปลี่ยนภาษาที่ agent ตอบ วิธีเพิ่มภาษาใหม่ (3 จุด) ดูที่ `docs/icline/i18n-contributing.md`
+
+![iCline Settings และ webview 4 ภาษา อังกฤษ จีน ญี่ปุ่น ไทย](assets/docs/0.1.18-Settings+Webview-EN+CH+JP+TH.png)
+
+### 🎨 แท็บ Settings → Appearance
+
+แผง Task Completed มี token สีของตัวเอง (`--color-completed` แยกจาก `success` จึงปรับสีโดยไม่กระทบ diff count หรือ badge) และการ์ด final-reply มี `--color-reply` ทั้งคู่ตาม theme ของ editor เลือก accent ได้ 3 กลุ่ม เก็บเป็น choice id `iCline.appearance.*`
+
+![iCline Settings — แท็บ Appearance](assets/docs/0.1.18-Appearance-Settings.jpg)
+
+### ⚡ เมนูด่วนโฉมใหม่ — ตั้ง Effort รายโมเดล
+
+สลับ Provider และโมเดลโดยไม่ต้องออกจากหน้าแชท โฉมใหม่ พร้อมตั้ง **Thinking / Effort รายโมเดล** เมื่อ hover บนยอดสถิติ provider/model แบบ live
+
+![เมนูด่วนเลือก Provider และ Model โฉมใหม่พร้อม Effort](assets/docs/0.1.18-NewDesign-QuickPicker+Effort.png)
+
+### 🏢 จัดการ Custom provider ครบวงจร
+
+การ์ด **Custom providers** ใน Settings รวม gateway ที่สร้างเองทั้งหมด — สร้าง (id slug, ชื่อ, base URL, API key, รายการ model, model หลัก, URL แหล่ง models, header เพิ่มเติม), แก้ไข (API key เขียนอย่างเดียว), ลบแบบยืนยันสองขั้น **Fetch models automatically** ถาม `/models` ของ endpoint (Bearer ก่อน, `x-api-key` เฉพาะ retry) แล้วรวมผลไม่ซ้ำ ลบ provider ที่ใช้อยู่มี fallback ปลอดภัย (พิสูจน์บน VS Code จริง) แถว Context มี badge บอกที่มาของตัวเลข — endpoint ประกาศเอง, override ที่เขียนมือ, เสียงส่วนใหญ่ของ catalog, หรือค่า fallback — แยก 444K ที่ประกาศจริงออกจาก 1.05M ที่เดาได้ชัดเจน
+
+![สถิติ Provider และ Model พร้อม Custom providers](assets/docs/0.1.18-Providers+models-Stats+Customer-Providers.jpg)
+
+### 👥 Sub-agent และ Agent Team
+
+สวิตช์ opt-in ใต้ Settings → Agent (ค่าเริ่มต้นปิดทั้งคู่): sub-agent `spawn_agent` และชุด Agent Teams เต็ม (mailbox, mission log, ผลลัพธ์ร่วม, state คงอยู่) **แผง team** แสดง topology พร้อม model ของแต่ละ agent, mailbox ใหม่สุดก่อน, spawn/shutdown ด้วยเมาส์ (เลือก model ราย agent ได้) การอนุมัติ **Team reads / Team writes** แยกตามสิทธิ์โดยไม่ขยายสิทธิ์ของ lead และ **Team budget** (จำนวน agent + token สูงสุดต่อ turn, ค่าเริ่มต้น 4 ตัว) กันใช้เกิน agent ที่ delegate ได้เครื่องมือจริงของ session (รวม terminal) พร้อม policy และ approval callback
+
+![iCline Sub-agent และ Agent Team](assets/docs/0.1.18-Sub-agents+Agent-Teams.jpg)
+
+### 🛡️ รันงานที่รอดเมื่อเจอปัญหา
+
+- สตรีมขาดก่อน terminal chunk จะ **retry** แทนการจบงาน
+- turn ที่โดนตัดด้วย output limit **ต่อแบบมีแถวบอก** ("turn truncated, continuing" พิสูจน์บน VS Code จริง) พร้อมงบ thinking ที่จำกัดเพื่อให้ recovery ไปถึง file write เพดาน output ปรับตามงบโมเดล (`max(32k, 30% ของ budget)`)
+- turn เงียบจะบอกตัวเอง — hint ให้ retry, เตือน stall ทุก 10 นาที, แจ้ง interrupted-turn เมื่อ resume ประวัติที่ค้างกลาง tool
+- rebuild ที่เลื่อนไว้ (provider / MCP / mode / toggle) รอ turn จบแทนการฆ่างานกลาง tool สลับสวิตช์ Sub-agent/Team ตอนไม่มี session มีผลกับงานถัดไป
+- ซ่อมชื่อ tool (`edit` → `editor`…), retry แก้ไขที่ whitespace เพี้ยน, size rejection ทุกครั้งพกวิธีส่งใหม่
+
+### 🧬 พอร์ต upstream แบบเลือกเฉพาะที่ บันทึกตรงไปตรงมา
+
+ไม่ merge ทั้งก้อน: ช่องโหว่ fast-lane (js-yaml CVE-2026-84375), backoff ที่เคารพ abort, แยก `content-filter` จากความล้มเหลวชั่วคราว, compaction summarizer ใช้ credential จริง ทุก port *และ* skip บันทึกใน [Changelog](https://github.com/i-mrDedchai/iCline/blob/main/apps/vscode/CHANGELOG.md) และหน้า Settings → About แสดง sync-point ตรงกับ upstream จริง (`4.1.18 SDK (main@173837314)` / `2026-09-16`)
+
+### 🩺 สำหรับ power user
+
+- `scripts/diagnose-chat-history.mjs` สแกน `~/.cline/data/sessions` หา turn ขาดกลาง, ผล tool หาย, truncation, refusal (EN + TH) และ parse error พร้อมรายงาน `--json`/Markdown
+- คำสั่งคู่ขนานได้ terminal แยกกัน (พิสูจน์แล้ว) คำสั่งที่ detach จอง terminal ไว้จนงานเสร็จ
 
 ---
 
@@ -66,6 +95,10 @@
 | 🔄 Dual-channel updates (iCline + upstream) | ❌ | ✅ |
 | 🌐 UI ครบทุกภาษา (EN / TH / JA / ZH-CN) | ❌ | ✅ |
 | 🎨 แท็บ Appearance (สีตาม theme) | ❌ | ✅ |
+| 🏢 จัดการ Custom provider (สร้าง/แก้/ลบ, fetch model) | ❌ | ✅ |
+| 🏷️ แถว Context บอกที่มาตัวเลข (ประกาศ/override/catalog) | ❌ | ✅ |
+| 👥 Sub-agent และ Agent Team (แผง team, budget, อนุมัติแยก) | ❌ | ✅ |
+| 🛡️ รันงานซ่อมตัวเอง (retry สตรีมขาด, ต่อ truncation) | ❌ | ✅ |
 
 ### ⚡ เมนูด่วนเลือก Provider & Model (บนแชท)
 
@@ -73,9 +106,11 @@
 
 ![เมนูด่วนเลือก Provider และ Model บนช่องแชท iCline](assets/docs/Preview-Settings-iCline-menu-Providers-Models.jpg)
 
-รายการ Provider เต็มและการตั้งค่าโมเดลแบบละเอียดยังอยู่ที่ **Settings → API Configuration**:
+รายการ Provider เต็มและการตั้งค่าโมเดลแบบละเอียดยังอยู่ที่ **Settings → API Configuration** (รวมสถิติและการ์ด Custom providers):
 
-![iCline Settings — Providers และ Models](assets/docs/Preview-Settings-iCline-Providers-Models.jpg)
+![สถิติ Provider และ Model พร้อม Custom providers](assets/docs/0.1.18-Providers+models-Stats+Customer-Providers.jpg)
+
+![iCline Settings — Providers และ Models (0.1.17)](assets/docs/Preview-Settings-iCline-Providers-Models.jpg)
 
 ---
 
@@ -163,6 +198,20 @@ code --install-extension dist/i-mrdedchai.iCline-0.1.18-dev.6.vsix --force
 ### 🎨 แท็บ Appearance
 - สี accent ตาม theme สำหรับแผง Task Completed (`--color-completed`) และการ์ด final-reply (`--color-reply`)
 - เก็บเป็น choice id `iCline.appearance.*` ค่าที่ไม่รู้จักจะ fallback เป็นค่า token
+
+### 🏢 Custom provider
+- สร้าง แก้ไข ลบ gateway ของตัวเองจากการ์ด Custom providers (API key เขียนอย่างเดียว, ลบแบบยืนยันสองขั้น)
+- Fetch model อัตโนมัติจาก `/models` ของ endpoint ลบ provider ที่ใช้อยู่มี fallback ปลอดภัย
+- แถว Context บอกที่มาตัวเลข: endpoint ประกาศ, override ที่เขียนมือ, เสียงส่วนใหญ่ catalog, หรือ fallback
+
+### 👥 Sub-agent และ Agent Team
+- สวิตช์ opt-in ใต้ Settings → Agent (ค่าเริ่มต้นปิด) แผง team มี model ราย agent, mailbox, spawn/shutdown
+- อนุมัติ Team reads / Team writes แยกกัน Team budget (จำนวน agent + token สูงสุดต่อ turn)
+- agent ที่ delegate ได้เครื่องมือจริงของ session (รวม terminal), policy และ approval callback
+
+### 🛡️ รันงานซ่อมตัวเอง
+- retry สตรีมขาดกลางคัน ต่อ truncation แบบมีแถวบอกพร้อมงบ thinking ที่จำกัด
+- แจ้ง turn เงียบ / stall / resume ค้าง rebuild รอ turn จบ
 
 ---
 

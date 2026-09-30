@@ -18,17 +18,46 @@ Standalone Cline fork for VS Code — extension ID **`i-mrdedchai.iCline`**. **N
 
 ## 🆕 New in 0.1.18
 
-- 🌐 **The whole UI reads in your language** — Settings (all tabs), welcome home, history, MCP servers, Team panel, Marketplace, Account, onboarding and notifications in **English, Thai, Japanese and Simplified Chinese**. Interface language never changes how the agent talks.
-- 🎨 **Settings → Appearance tab** — accent colors for the Task Completed panel and the final-reply card that follow your editor theme, instead of fixed hex colors.
-- 🛡️ **Runs survive mid-stream cuts** — an upstream stream that dies before its terminal chunk is now retried instead of ending the run.
-- 🧬 **Selective upstream ports, honestly logged** — security fix included (js-yaml CVE-2026-84375); every port/skip is recorded in the changelog, and About shows the exact upstream sync-point.
+### 🌐 The whole UI reads in your language
 
-<!-- 0.1.18 screenshots (additive — old images in assets/docs/ stay untouched):
-  uncomment each line when the file lands.
-  <img src="assets/docs/0.1.18-Appearance-Settings.jpg" alt="iCline Settings — Appearance tab" width="720" />
-  <img src="assets/docs/0.1.18-Task-Completed.jpg" alt="iCline Task Completed panel with theme accent" width="720" />
-  <img src="assets/docs/0.1.18-Settings-Thai.jpg" alt="iCline Settings in Thai" width="720" />
-  Spec: docs/icline/readme-0.1.18-screenshots.md -->
+Settings (all tabs), welcome home, history, Customize modal, MCP servers, Team panel, Marketplace, Account, onboarding, Browser settings — plus the extension's own notifications and manifest strings — in **English, Thai, Japanese and Simplified Chinese**. Interface language never changes how the agent talks.
+
+![iCline Settings and webview in English, Chinese, Japanese and Thai](assets/docs/0.1.18-Settings+Webview-EN+CH+JP+TH.png)
+
+### 🎨 Settings → Appearance tab
+
+Accent colors for the Task Completed panel and the final-reply card that follow your editor theme, instead of fixed hex colors.
+
+![iCline Settings — Appearance tab](assets/docs/0.1.18-Appearance-Settings.jpg)
+
+### ⚡ Quick picker, new design — with per-model Effort
+
+Switch providers and models without leaving the chat, now with a refreshed design and **Thinking / Effort per model** on hover.
+
+![iCline quick provider and model picker, new design with Effort](assets/docs/0.1.18-NewDesign-QuickPicker+Effort.png)
+
+### 🏢 Custom providers, managed end to end
+
+Create, edit and delete your own gateways from the **Custom providers** card — with live provider/model stats, **Fetch models automatically** from the endpoint's `/models`, and a Context row that says where its number came from (gateway declaration, your override, catalog majority, or fallback).
+
+![iCline provider and model stats with custom providers](assets/docs/0.1.18-Providers+models-Stats+Customer-Providers.jpg)
+
+### 👥 Sub-agents & Agent Teams
+
+Opt-in multi-agent work under Settings → Agent: `spawn_agent` sub-agents and the full Agent Teams suite (mailbox, mission logs, shared outcomes), a visual **team panel** (topology, per-agent model, mailbox, spawn/shutdown), granular **Team reads / Team writes** approvals, and a **Team budget** (max agents + tokens per turn) so teams can't burn unboundedly.
+
+![iCline Sub-agents and Agent Teams](assets/docs/0.1.18-Sub-agents+Agent-Teams.jpg)
+
+### 🛡️ Runs that survive trouble
+
+- A stream that dies mid-turn is **retried** instead of ending the run
+- A turn cut by the output limit **continues visibly** ("turn truncated, continuing" row) with a bounded thinking budget so recovery turns reach a file write
+- Quiet turns announce themselves — retry hints, 10-minute stall warnings, interrupted-turn notices on resume
+- Deferred rebuilds (provider / MCP / mode / toggles) wait for the turn instead of killing tasks mid-tool
+
+### 🧬 Selective upstream ports, honestly logged
+
+No wholesale merge: security fast-lane (js-yaml CVE-2026-84375), abort-aware retry backoff, `content-filter` kept distinct from transient failures, compaction on live credentials. Every port *and* skip is recorded in the [Changelog](https://github.com/i-mrDedchai/iCline/blob/main/apps/vscode/CHANGELOG.md), and Settings → About shows the exact upstream sync-point.
 
 ---
 
@@ -60,6 +89,10 @@ Standalone Cline fork for VS Code — extension ID **`i-mrdedchai.iCline`**. **N
 | 🔄 Dual-channel updates (iCline + upstream) | ❌ | ✅ |
 | 🌐 Full UI in your language (EN / TH / JA / ZH-CN) | ❌ | ✅ |
 | 🎨 Appearance tab (theme-accented surfaces) | ❌ | ✅ |
+| 🏢 Custom provider management (create / edit / delete, fetch models) | ❌ | ✅ |
+| 🏷️ Context row with number source (declared / override / catalog) | ❌ | ✅ |
+| 👥 Sub-agents & Agent Teams (panel, budget, granular approvals) | ❌ | ✅ |
+| 🛡️ Self-healing runs (mid-stream retry, truncation continuation) | ❌ | ✅ |
 
 ### ⚡ Quick Provider & Model picker (chat)
 
@@ -96,6 +129,9 @@ The full provider catalog and deep model settings remain in **Settings → API C
 - 🔄 Dual-channel update notifications (iCline + Cline upstream)
 - 🌐 **Full UI localization** — every Settings tab, welcome, history, MCP, Team, Account, onboarding in EN / TH / JA / ZH-CN
 - 🎨 **Appearance tab** — theme-following accents for the Completed panel and final-reply card
+- 🏢 **Custom providers** — create / edit / delete gateways, fetch their models, see where each Context number came from
+- 👥 **Sub-agents & Agent Teams** — opt-in multi-agent with team panel, Team reads/writes approvals and Team budget
+- 🛡️ **Self-healing runs** — mid-stream retry, visible truncation continuation, quiet-turn and stall notices
 
 ## Install & updates
 

@@ -16,23 +16,62 @@
 
 ## 🆕 New in 0.1.18
 
-- 🌐 **The whole UI reads in your language** — all seven Settings tabs, the welcome home and Quick Start cards, the full history view (search, sort/filter, export/import), the Customize modal (Rules / Hooks / Skills), MCP server surfaces, the Team panel, the Marketplace catalog, the Account screens, the Onboarding wizard, Browser settings, plus the extension's own notifications and manifest strings — in **English, Thai, Japanese and Simplified Chinese**. Prompts stay English (they instruct the model), and changing the interface language never changes how the agent talks. See `docs/icline/i18n-contributing.md` to add a language in three edits.
-- 🎨 **Settings → Appearance tab** — the Task Completed panel gets its own `--color-completed` token (apart from `success`, so tuning it never repaints diff counts or badges) and the transient final-reply card gets `--color-reply`, both following the editor theme. Three accent rows (Completed box, final-reply card, brand chrome) as swatch radiogroups, stored as `iCline.appearance.*` choice ids.
-- 🛡️ **Runs survive mid-stream cuts** — an upstream stream that ends before its terminal chunk is now retried instead of ending the run; the default output cap scales as `max(32k, 30% of the model's advertised budget)` so large-budget reasoning turns fit.
-- 🧬 **Selective upstream ports, honestly logged** — no wholesale merge: security fast-lane (js-yaml CVE-2026-84375), abort-aware retry backoff, `content-filter` kept distinct from transient failures, compaction summarizer on live credentials. Every port *and* skip is recorded in the [Changelog](https://github.com/i-mrDedchai/iCline/blob/main/apps/vscode/CHANGELOG.md), and Settings → About shows the exact upstream sync-point (`4.1.18 SDK (main@173837314)` / `2026-09-16`).
+### 🌐 The whole UI reads in your language
 
-<!-- 0.1.18 screenshots (additive — old images in assets/docs/ stay untouched):
-  uncomment each block when the file lands.
-  <p align="center">
-    <img src="assets/docs/0.1.18-Appearance-Settings.jpg" alt="iCline Settings — Appearance tab" width="720" />
-  </p>
-  <p align="center">
-    <img src="assets/docs/0.1.18-Task-Completed.jpg" alt="iCline Task Completed panel with theme accent" width="720" />
-  </p>
-  <p align="center">
-    <img src="assets/docs/0.1.18-Settings-Thai.jpg" alt="iCline Settings in Thai" width="720" />
-  </p>
-  Spec: docs/icline/readme-0.1.18-screenshots.md -->
+All seven Settings tabs, the welcome home and Quick Start cards, the full history view (search, sort/filter, export/import), the Customize modal (Rules / Hooks / Skills), MCP server surfaces, the Team panel, the Marketplace catalog, the Account screens, the Onboarding wizard, Browser settings, plus the extension's own notifications and manifest strings — in **English, Thai, Japanese and Simplified Chinese**. Prompts stay English (they instruct the model), and changing the interface language never changes how the agent talks. See `docs/icline/i18n-contributing.md` to add a language in three edits.
+
+<p align="center">
+  <img src="assets/docs/0.1.18-Settings+Webview-EN+CH+JP+TH.png" alt="iCline Settings and webview in English, Chinese, Japanese and Thai" width="720" />
+</p>
+
+### 🎨 Settings → Appearance tab
+
+The Task Completed panel gets its own `--color-completed` token (apart from `success`, so tuning it never repaints diff counts or badges) and the transient final-reply card gets `--color-reply`, both following the editor theme. Three accent rows (Completed box, final-reply card, brand chrome) as swatch radiogroups, stored as `iCline.appearance.*` choice ids.
+
+<p align="center">
+  <img src="assets/docs/0.1.18-Appearance-Settings.jpg" alt="iCline Settings — Appearance tab" width="720" />
+</p>
+
+### ⚡ Quick picker, new design — with per-model Effort
+
+Switch providers and models without leaving the chat, now with a refreshed design and **Thinking / Effort per model** on hover, over live provider/model stats.
+
+<p align="center">
+  <img src="assets/docs/0.1.18-NewDesign-QuickPicker+Effort.png" alt="iCline quick provider and model picker, new design with Effort" width="720" />
+</p>
+
+### 🏢 Custom providers, managed end to end
+
+A **Custom providers** card in Settings lists every user-created gateway — create (id slug, display name, base URL, API key, model ids, default model, models-source URL, custom headers), edit in place (API key is write-only), delete behind two-step confirmation. **Fetch models automatically** asks the endpoint's `/models` (Bearer-first, `x-api-key`-only-on-retry) and merges results without duplicating; deleting the active provider falls back safely instead of leaving a mode pointed at nothing (proven in real VS Code). The Context row carries a source badge — gateway declaration, hand-written override, cross-catalog majority, or built-in fallback — so a 444K declaration is visibly distinct from a 1.05M guess.
+
+<p align="center">
+  <img src="assets/docs/0.1.18-Providers+models-Stats+Customer-Providers.jpg" alt="iCline provider and model stats with custom providers" width="720" />
+</p>
+
+### 👥 Sub-agents & Agent Teams
+
+Two opt-in switches under Settings → Agent (both default off): `spawn_agent` sub-agents and the full 18-tool Agent Teams suite (mailbox, mission logs, shared outcomes, persisted team state). A visual **team panel** shows the topology with each agent's own model, the mailbox newest-first, and mouse-driven spawn/shutdown (per-agent model picker). **Team reads / Team writes** approvals split delegated calls by mutability without widening what the lead itself may do; a **Team budget** (max agents + tokens per turn, default 4 teammates) bounds multi-agent spend. Delegated agents inherit the session's real tools — including the terminal — plus its policies and approval callback.
+
+<p align="center">
+  <img src="assets/docs/0.1.18-Sub-agents+Agent-Teams.jpg" alt="iCline Sub-agents and Agent Teams" width="720" />
+</p>
+
+### 🛡️ Runs that survive trouble
+
+- A stream that dies before its terminal chunk is **retried** instead of ending the run
+- A turn cut by the output limit **continues visibly** ("turn truncated, continuing" row, proven end to end in real VS Code), with a bounded thinking budget so recovery turns reach a file write; the default output cap scales as `max(32k, 30% of the model's advertised budget)`
+- Quiet turns announce themselves — empty-turn retry hints, 10-minute stall warnings, interrupted-turn notices when resuming history that ended mid-tool
+- Deferred rebuilds (provider / MCP / mode / feature toggles) wait for the turn instead of killing tasks mid-tool; toggling Sub-agents / Teams with no active session applies to the next task
+- Tool-name repair (`edit` → `editor`…), whitespace-drifted edit retry, and size rejections that always carry the re-send recipe
+
+### 🧬 Selective upstream ports, honestly logged
+
+No wholesale merge: security fast-lane (js-yaml CVE-2026-84375), abort-aware retry backoff, `content-filter` kept distinct from transient failures, compaction summarizer on live credentials. Every port *and* skip is recorded in the [Changelog](https://github.com/i-mrDedchai/iCline/blob/main/apps/vscode/CHANGELOG.md), and Settings → About shows the exact upstream sync-point (`4.1.18 SDK (main@173837314)` / `2026-09-16`).
+
+### 🩺 For power users
+
+- `scripts/diagnose-chat-history.mjs` scans `~/.cline/data/sessions` for turn-cut-mid-run, missing tool results, output-limit truncations, refusals (EN + TH) and parse errors, with `--json`/Markdown reports
+- Parallel commands get distinct terminals (proven), detached commands keep their terminal reserved until done
 
 ---
 
@@ -66,6 +105,10 @@
 | 🔄 Dual-channel updates (iCline + upstream) | ❌ | ✅ |
 | 🌐 Full UI in your language (EN / TH / JA / ZH-CN) | ❌ | ✅ |
 | 🎨 Appearance tab (theme-accented surfaces) | ❌ | ✅ |
+| 🏢 Custom provider management (create / edit / delete, fetch models) | ❌ | ✅ |
+| 🏷️ Context row with number source (declared / override / catalog) | ❌ | ✅ |
+| 👥 Sub-agents & Agent Teams (panel, budget, granular approvals) | ❌ | ✅ |
+| 🛡️ Self-healing runs (mid-stream retry, truncation continuation) | ❌ | ✅ |
 
 ### ⚡ Quick Provider & Model picker (chat)
 
@@ -79,10 +122,14 @@ Switch providers and models **without leaving the chat** — search all provider
   <img src="assets/docs/Preview-Settings-iCline-menu-Providers-Models.jpg" alt="iCline quick model picker on the chat input" width="720" />
 </p>
 
-The full provider catalog and deep model settings remain in **Settings → API Configuration**:
+The full provider catalog and deep model settings remain in **Settings → API Configuration** (stats chips and the Custom providers card included):
 
 <p align="center">
-  <img src="assets/docs/Preview-Settings-iCline-Providers-Models.jpg" alt="iCline Settings — Providers and Models" width="720" />
+  <img src="assets/docs/0.1.18-Providers+models-Stats+Customer-Providers.jpg" alt="iCline provider and model stats with custom providers" width="720" />
+</p>
+
+<p align="center">
+  <img src="assets/docs/Preview-Settings-iCline-Providers-Models.jpg" alt="iCline Settings — Providers and Models (0.1.17)" width="720" />
 </p>
 
 ---
@@ -171,6 +218,20 @@ code --install-extension dist/i-mrdedchai.iCline-0.1.18-dev.6.vsix --force
 ### 🎨 Appearance tab
 - Theme-following accents for the Task Completed panel (`--color-completed`) and final-reply card (`--color-reply`)
 - Stored as `iCline.appearance.*` choice ids; unknown ids fall back to token defaults
+
+### 🏢 Custom providers
+- Create, edit and delete your own gateways from the Custom providers card (write-only API key, two-step delete)
+- Fetch models automatically from the endpoint's `/models`; safe fallback when the active provider is deleted
+- Context row shows where its number came from: gateway declaration, your override, catalog majority, or fallback
+
+### 👥 Sub-agents & Agent Teams
+- Opt-in switches under Settings → Agent (default off); visual team panel with per-agent models, mailbox, spawn/shutdown
+- Team reads / Team writes approvals; Team budget (max agents + tokens per turn)
+- Delegated agents get the session's real tools (incl. terminal), policies and approval callback
+
+### 🛡️ Self-healing runs
+- Mid-stream retry, visible truncation continuation with bounded thinking budget
+- Quiet-turn / stall / interrupted-resume notices; rebuilds that wait for the turn
 
 ---
 

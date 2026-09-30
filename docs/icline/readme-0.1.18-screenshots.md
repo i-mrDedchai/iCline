@@ -1,8 +1,16 @@
 # v0.1.18 README screenshots — spec & checklist
 
-Status 2026-09-30: text is in place, images pending from maintainer.
-The maintainer captures the images; the agent slots them in; the maintainer
-re-reviews everything before the real release. No push/merge until approved.
+Status 2026-09-30: all 5 images landed from the maintainer and are slotted
+into Details + full READMEs (EN/TH). Maintainer re-reviews everything before
+the real release. No push/merge until approved.
+
+Format note (approved): **PNG is allowed** alongside JPG — use PNG where
+transparency matters (e.g. the QuickPicker+Effort shot). Keep each file small
+(this batch totals ~672K); `assets/docs/**` ships inside the VSIX
+(`.vscodeignore` re-includes it) while the store listing hotlinks GitHub
+`raw/main` via `--baseImagesUrl`, so weight counts twice. Exact filenames are
+kept as delivered (including `+` — legal in path segments, served literally
+by GitHub raw and passed through by the vsce rewrite).
 
 ## The memorial rule (never ask again)
 
@@ -13,32 +21,34 @@ re-reviews everything before the real release. No push/merge until approved.
   READMEs (they render nothing), and are uncommented when the file lands —
   never commit a visible `<img>` whose file does not exist yet.
 
-## The 3 additive EN screenshots (maintainer to capture)
+## The 5 additive screenshots (landed 2026-09-30, exact names)
 
-All from the fix.52 build (`0.1.18-dev.6-fix.52`), default light theme unless
-noted, ~720px wide JPG, no API keys / tokens / personal paths visible.
-Drop the files in `apps/vscode/assets/docs/` with exactly these names:
+In `apps/vscode/assets/docs/` (old `Preview-Settings-*` memorial images
+untouched, June 21 hashes unchanged):
 
-| # | File (exact name) | What to capture | Why |
+| # | File | Shows | Used in |
 |---|---|---|---|
-| 1 | `0.1.18-Appearance-Settings.jpg` | Settings → **Appearance** tab, all three accent rows visible | New tab, headline feature |
-| 2 | `0.1.18-Task-Completed.jpg` | **Task Completed** panel after a real run (theme accent visible, not the old fixed color) | Proves the `--color-completed` token |
-| 3 | `0.1.18-Settings-Thai.jpg` | Any Settings tab with **ภาษาไทย** active | Proves the i18n rounds (biggest dev.6 work) |
+| 1 | `0.1.18-Settings+Webview-EN+CH+JP+TH.png` | Settings + webview in 4 languages | i18n sections (Details + full EN/TH) |
+| 2 | `0.1.18-Appearance-Settings.jpg` | Settings → **Appearance** tab | Appearance sections (Details + full EN/TH) |
+| 3 | `0.1.18-NewDesign-QuickPicker+Effort.png` | Quick picker new design + per-model Effort | Picker sections (Details + full EN/TH) |
+| 4 | `0.1.18-Providers+models-Stats+Customer-Providers.jpg` | Provider/model stats + Custom providers | Provider sections (Details + full EN/TH) |
+| 5 | `0.1.18-Sub-agents+Agent-Teams.jpg` | Sub-agents & Agent Teams | Team sections (Details + full EN/TH) |
 
-The Thai READMEs reuse the same three files (existing TH docs already share
-the EN-named images) — no separate TH captures needed.
+The Thai READMEs reuse the same files (existing TH docs already share the
+EN-named images) — no separate TH captures. No API keys / tokens / personal
+paths visible in any shot.
 
-## Slot-in checklist (agent, when images arrive)
+## Slot-in checklist (done 2026-09-30)
 
-- [ ] Files land at the exact names above (JPG, no spaces).
-- [ ] Uncomment the three image blocks in `apps/vscode/README.marketplace.md`.
-- [ ] Uncomment the three image blocks in `apps/vscode/README.md`.
-- [ ] Uncomment the three image blocks in `apps/vscode/README.th.md` (same files).
-- [ ] Root `README.md` / `README.th.md`: no image changes needed (they point at
-      the two `Preview-Settings-*` memorial images, which stay).
+- [x] Files at the exact names above (JPG + PNG, no spaces).
+- [x] Image blocks live in `apps/vscode/README.marketplace.md` (5 images).
+- [x] Image blocks live in `apps/vscode/README.md` (5 images + 2 memorial kept).
+- [x] Image blocks live in `apps/vscode/README.th.md` (same files, TH captions).
+- [x] Root `README.md` / `README.th.md`: no image changes (they point at the
+      two `Preview-Settings-*` memorial images, which stay).
 - [ ] `npm run sync:docs` NOT needed for this (version unchanged); but before
       the Stable bump, confirm the `icline:version` markers still render.
-- [ ] Verify: `tar -xOf dist/*.vsix extension/readme.md` shows
+- [ ] Verify at pack time: `tar -xOf dist/*.vsix extension/readme.md` shows
       `github.com/.../raw/main/apps/vscode/assets/docs/` URLs (baseline in
       `icline-marketplace.md` § README screenshots baseline).
 - [ ] Images must be on `main` before publish (`raw/main` serves from main).
