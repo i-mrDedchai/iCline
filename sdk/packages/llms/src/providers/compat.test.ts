@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	_testing,
 	createGatewayApiHandler,
+	createGatewayApiHandlerAsync,
 	toGatewayRequestMessages,
 } from "./compat";
 import { ClineNotSubscribedError } from "./errors";
@@ -709,6 +710,66 @@ describe("createGatewayApiHandler.createMessage", () => {
 				method: "POST",
 			}),
 		).rejects.toBeInstanceOf(ClineNotSubscribedError);
+	});
+});
+
+describe("createGatewayApiHandlerAsync", () => {
+	beforeEach(() => {
+		streamTextSpy.mockReset();
+		openaiCompatibleFactorySpy.mockReset();
+		openaiCompatibleSpy.mockClear();
+	});
+
+	it("honors setAbortSignal on requests, not just the construction-time signal", async () => {
+		// Hold the vendor stream open so the abort lands mid-flight: aborting
+		// after a full drain would prove nothing (the pipeline unwatches then).
+		let release!: () => void;
+		const gate = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		streamTextSpy.mockReturnValue({
+			fullStream: (async function* () {
+				yield { type: "text", text: "hi" };
+				await gate;
+			})(),
+			usage: Promise.resolve({ inputTokens: 1, outputTokens: 1 }),
+		});
+
+		const handler = await createGatewayApiHandlerAsync({
+			providerId: "openai-compatible",
+			clientType: "openai-compatible",
+			modelId: "custom-model",
+			apiKey: "test-key",
+		});
+
+		const controller = new AbortController();
+		handler.setAbortSignal?.(controller.signal);
+
+		const pull = handler.createMessage("", [{ role: "user", content: "Hello" }])[
+			Symbol.asyncIterator
+		]();
+		const pending = pull.next();
+		pending.catch(() => {});
+		// Let the pipeline reach the vendor call.
+		await new Promise((resolve) => setTimeout(resolve, 20));
+
+		const call = streamTextSpy.mock.calls.at(-1)?.[0] as
+			| { abortSignal?: AbortSignal }
+			| undefined;
+		// Our stream path hands the vendor the idle watchdog's signal (caller
+		// abort + idle deadline as one cancel), not the raw caller signal — so
+		// pin the behavior, not identity: aborting the live signal must abort
+		// the vendor call with the caller's reason.
+		expect(streamTextSpy).toHaveBeenCalled();
+		expect(call?.abortSignal?.aborted).toBe(false);
+		const reason = new Error("user cancel");
+		controller.abort(reason);
+		expect(call?.abortSignal?.aborted).toBe(true);
+		expect(call?.abortSignal?.reason).toBe(reason);
+
+		release();
+		await pending.catch(() => {});
+		await pull.return?.().catch(() => {});
 	});
 });
 

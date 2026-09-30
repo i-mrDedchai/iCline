@@ -143,6 +143,22 @@ describe("createRetryEmptyResponseMiddleware", () => {
 		expect(parts.filter((p) => p.type === "finish")).toHaveLength(1);
 	});
 
+	it("stops retrying when the user aborts during the empty-response backoff sleep", async () => {
+		const abort = new AbortController();
+		const doStream = vi.fn(async () => streamOf(emptyParts));
+		setTimeout(() => abort.abort(), 20);
+
+		const startedAt = Date.now();
+		const { error } = await collectWithError(
+			await run(doStream, { retryDelayMs: 30_000 }, abort.signal),
+		);
+
+		expect(doStream).toHaveBeenCalledTimes(1);
+		expect(error).toBe(abort.signal.reason);
+		// Resolved by the abort, not by waiting out the 30s backoff.
+		expect(Date.now() - startedAt).toBeLessThan(5_000);
+	});
+
 	it("does not retry a tool-call-only turn (it is not empty)", async () => {
 		const doStream = vi.fn(async () => streamOf(toolCallParts));
 		const parts = await collect(await run(doStream));

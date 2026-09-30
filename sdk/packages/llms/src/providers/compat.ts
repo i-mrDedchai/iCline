@@ -603,7 +603,7 @@ function resolveModelInfo(config: ProviderConfig): ModelInfo {
 }
 
 class GatewayApiHandler implements ApiHandler {
-	private abortSignal: AbortSignal | undefined;
+	protected abortSignal: AbortSignal | undefined;
 
 	constructor(private readonly config: ProviderConfig) {
 		this.abortSignal = config.abortSignal;
@@ -693,14 +693,16 @@ export async function createGatewayApiHandlerAsync(
 			systemPrompt: string,
 			messages: Message[],
 			tools?: ToolDefinition[],
-		): ApiStream {
-			const request = buildGatewayRequest(
-				config,
-				systemPrompt,
-				messages,
-				tools,
-				config.abortSignal,
-			);
+		): ApiStream {				const request = buildGatewayRequest(
+					config,
+					systemPrompt,
+					messages,
+					tools,
+					// `this.abortSignal`, not `config.abortSignal`: the field starts as
+					// the config value but stays live through `setAbortSignal`, which
+					// the captured config value would silently ignore.
+					this.abortSignal,
+				);
 			const id = `gw_${nanoid(10)}`;
 			const stream = (async function* () {
 				for await (const event of await gateway.stream(request)) {
