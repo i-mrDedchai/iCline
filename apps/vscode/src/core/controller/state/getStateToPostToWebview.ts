@@ -39,6 +39,9 @@ export async function getStateToPostToWebview(controller: {
 	const autoApprovalSettings = stateManager.getGlobalSettingsKey("autoApprovalSettings")
 	const browserSettings = stateManager.getGlobalSettingsKey("browserSettings")
 	const preferredLanguage = stateManager.getGlobalSettingsKey("preferredLanguage")
+	const appearanceCompletedAccent = stateManager.getGlobalSettingsKey("appearanceCompletedAccent")
+	const appearanceReplyAccent = stateManager.getGlobalSettingsKey("appearanceReplyAccent")
+	const appearanceBrandAccent = stateManager.getGlobalSettingsKey("appearanceBrandAccent")
 	const mode = stateManager.getGlobalSettingsKey("mode")
 	const yoloModeToggled = stateManager.getGlobalSettingsKey("yoloModeToggled")
 	const useAutoCondense = stateManager.getGlobalSettingsKey("useAutoCondense")
@@ -135,6 +138,9 @@ export async function getStateToPostToWebview(controller: {
 		autoApprovalSettings,
 		browserSettings,
 		preferredLanguage,
+		appearanceCompletedAccent,
+		appearanceReplyAccent,
+		appearanceBrandAccent,
 		mode,
 		yoloModeToggled,
 		useAutoCondense,

@@ -110,9 +110,20 @@ export async function updateSettings(controller: Controller, request: UpdateSett
 			const mode = request.mode === PlanActMode.PLAN ? "plan" : "act"
 			controller.stateManager.setGlobalState("mode", mode)
 		}
-
 		if (request.preferredLanguage !== undefined) {
 			controller.stateManager.setGlobalState("preferredLanguage", request.preferredLanguage)
+		}
+
+		if (request.appearanceCompletedAccent !== undefined) {
+			controller.stateManager.setGlobalState("appearanceCompletedAccent", request.appearanceCompletedAccent)
+		}
+
+		if (request.appearanceReplyAccent !== undefined) {
+			controller.stateManager.setGlobalState("appearanceReplyAccent", request.appearanceReplyAccent)
+		}
+
+		if (request.appearanceBrandAccent !== undefined) {
+			controller.stateManager.setGlobalState("appearanceBrandAccent", request.appearanceBrandAccent)
 		}
 
 		// Update terminal timeout setting

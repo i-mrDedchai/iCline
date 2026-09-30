@@ -289,6 +289,13 @@ const USER_SETTINGS_FIELDS = {
 	agentTeamsEnabled: { default: false as boolean },
 	worktreesEnabled: { default: false as boolean },
 	preferredLanguage: { default: "English" as string },
+	// Appearance accents (Settings → Appearance tab). Stored as choice ids,
+	// not colors: the webview resolves an id to a CSS value through the
+	// appearance catalog, so an unknown id degrades to the token default.
+	// "theme" means "follow the editor theme" (the pre-Appearance behavior).
+	appearanceCompletedAccent: { default: "theme" as string },
+	appearanceReplyAccent: { default: "theme" as string },
+	appearanceBrandAccent: { default: "theme" as string },
 	mode: { default: "act" as Mode },
 	focusChainSettings: { default: DEFAULT_FOCUS_CHAIN_SETTINGS as FocusChainSettings },
 	customPrompt: { default: undefined as "compact" | undefined },

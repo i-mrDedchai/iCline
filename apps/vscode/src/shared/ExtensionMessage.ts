@@ -64,6 +64,14 @@ export interface ExtensionState {
 	browserSettings: BrowserSettings
 	remoteBrowserHost?: string
 	preferredLanguage?: string
+	/**
+	 * Appearance accents (Settings → Appearance tab). Choice ids, not colors —
+	 * the webview resolves them through the appearance catalog; "theme" (or an
+	 * unknown id) means "follow the editor theme", the pre-Appearance behavior.
+	 */
+	appearanceCompletedAccent?: string
+	appearanceReplyAccent?: string
+	appearanceBrandAccent?: string
 	mode: Mode
 	clineMessages: ClineMessage[]
 	checkpointRestoreInput?: {

@@ -320,6 +320,9 @@ message Settings {
   optional OpenRouterModelInfo act_mode_zenmux_model_info = 200;
   optional string act_mode_sakana_model_id = 201;
   optional OpenRouterModelInfo act_mode_sakana_model_info = 202;
+  optional string appearance_completed_accent = 203;
+  optional string appearance_reply_accent = 204;
+  optional string appearance_brand_accent = 205;
 }
 
 message State {
@@ -464,6 +467,9 @@ message UpdateSettingsRequest {
   optional bool show_feature_tips = 42;
   optional string compaction_strategy = 44;
   optional bool agent_teams_enabled = 45;
+  optional string appearance_completed_accent = 46;
+  optional string appearance_reply_accent = 47;
+  optional string appearance_brand_accent = 48;
 }
 
 message UpdateTerminalConnectionTimeoutRequest {
