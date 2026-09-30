@@ -71,6 +71,16 @@
 	--color-error-icon: var(--vscode-problemsErrorIcon-foreground, #c42b2b);
 	--color-description: var(--vscode-descriptionForeground);
 	--color-success: var(--vscode-charts-green);
+	/* The accent of the "Task Completed" box only. Kept apart from `success` so the
+	   finished-task panel can be tuned without repainting every green in the app
+	   (diff `+N` counts, check marks, connected-server badges). Follows the theme
+	   rather than a fixed hex, so contrast stays correct in light and dark. */
+	--color-completed: var(--vscode-charts-blue);
+	/* The accent of the final-reply card (the `COMPLETED` header the last assistant
+	   message gets). A separate token from `completed` on purpose: one panel means
+	   "the task finished", the other means "this is the closing answer", and the
+	   card is transient — it loses its tint as soon as the next turn starts. */
+	--color-reply: var(--vscode-charts-purple);
 	--color-warning: var(--vscode-charts-yellow);
 	--font-base:
 		var(--vscode-font-family), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell,

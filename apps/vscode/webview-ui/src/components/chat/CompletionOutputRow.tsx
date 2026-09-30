@@ -17,14 +17,14 @@ export const CompletionOutputRow = memo(
 	({ headClassNames, text, quoteButtonState, handleQuoteClick }: CompletionOutputRowProps) => {
 		return (
 			<div>
-				<div className="rounded-sm border border-success/20 overflow-visible bg-success/10 p-2 pt-3">
+				<div className="rounded-sm border border-completed/20 overflow-visible bg-completed/10 p-2 pt-3">
 					{/* Title */}
 					<div className={cn(headClassNames, "justify-between px-1")}>
 						<div className="flex gap-2 items-center">
-							<CheckIcon className="size-3 text-success" />
-							<span className="text-success font-bold">Task Completed</span>
+							<CheckIcon className="size-3 text-completed" />
+							<span className="text-completed font-bold">Task Completed</span>
 						</div>
-						<CopyButton className="text-success" textToCopy={text} />
+						<CopyButton className="text-completed" textToCopy={text} />
 					</div>
 					{/* Content */}
 					<div className="w-full relative border-t-1 border-description/20 rounded-b-sm">

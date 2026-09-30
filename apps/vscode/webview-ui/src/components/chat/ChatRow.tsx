@@ -862,11 +862,14 @@ export const ChatRowContent = memo(
 						// top-right) — official-parity for text-only endings
 						// (deepseek/glm answer conversationally without
 						// attempt_completion). Streaming/older rows stay plain.
+						// The accent is the `reply` theme token, not a fixed hex: the card's
+						// fill, its border and its label must be one colour, and all three
+						// must follow the editor theme like the rest of the chat.
 						const isFinalReply = isLast && message.partial !== true && Boolean(message.text)
 						const cardStyle: React.CSSProperties = {
 							borderRadius: 10,
-							border: "1px solid rgba(99,102,241,0.3)",
-							background: "rgba(99,102,241,0.07)",
+							border: "1px solid color-mix(in srgb, var(--color-reply) 30%, transparent)",
+							background: "color-mix(in srgb, var(--color-reply) 10%, transparent)",
 							padding: "8px 12px",
 						}
 						return (
@@ -884,7 +887,7 @@ export const ChatRowContent = memo(
 												fontSize: 11,
 												fontWeight: 600,
 												letterSpacing: "0.4px",
-												color: "var(--vscode-charts-blue, #4c8dff)",
+												color: "var(--color-reply, var(--vscode-charts-purple, #b180d7))",
 											}}>
 											<span>COMPLETED</span>
 										</div>
