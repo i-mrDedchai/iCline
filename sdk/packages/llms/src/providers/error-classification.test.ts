@@ -447,6 +447,18 @@ describe("isRetryableProviderError", () => {
 		it("retries OpenRouter's bare mid-stream 'Provider returned error' string", () => {
 			expect(isRetryableProviderError("Provider returned error")).toBe(true);
 		});
+
+		it("retries a gateway-cut stream reported as unfinished (cline free tier, smoke 2026-09-30)", () => {
+			expect(
+				isRetryableProviderError("Upstream stream ended before terminal chunk"),
+			).toBe(true);
+		});
+
+		it("retries the 'stream ended without a finish chunk' wording too", () => {
+			expect(
+				isRetryableProviderError("The model stream ended without a finish chunk."),
+			).toBe(true);
+		});
 	});
 
 	describe("not retryable", () => {
@@ -477,6 +489,12 @@ describe("isRetryableProviderError", () => {
 			expect(isRetryableProviderError("fetch failed: socket closed")).toBe(
 				false,
 			);
+		});
+
+		it("does not retry a credential-shaped message just for naming a stream", () => {
+			expect(
+				isRetryableProviderError("Upstream request failed: invalid API key"),
+			).toBe(false);
 		});
 
 		it("returns false for undefined", () => {

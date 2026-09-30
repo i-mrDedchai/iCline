@@ -322,13 +322,22 @@ const RETRYABLE_STATUSES = new Set([
 ]);
 
 /**
- * The sole message fallback. OpenRouter forwards an upstream failure mid-stream
- * as a bare "Provider returned error" string with no HTTP status and no typed
- * error to inspect, so there is nothing else to key on. Every other decision
- * comes from the AI SDK's typed `isRetryable` flag or the HTTP status — not
- * from matching free-form message text.
+ * Message fallbacks for statusless gateway failures. Gateways forward an
+ * upstream failure mid-stream as a bare string with no HTTP status and no
+ * typed error to inspect, so there is nothing else to key on. Every other
+ * decision comes from the AI SDK's typed `isRetryable` flag or the HTTP
+ * status — not from matching free-form message text. Keep this list to
+ * failure *shapes* (a stream that died), never to failure *reasons*.
  */
-const PROVIDER_RETURNED_ERROR_PATTERN = /provider returned error/i;
+const RETRYABLE_MESSAGE_PATTERNS = [
+	/provider returned error/i,
+	// A gateway whose own upstream died mid-stream reports the cut stream
+	// instead of a finish chunk (smoke 2026-09-30: the cline gateway's
+	// free-tier route ended a turn with "Upstream stream ended before
+	// terminal chunk"). Re-running the turn is safe — nothing the model
+	// produced is lost, the next attempt simply restarts the turn.
+	/\bstream ended (before|without)\b.{0,80}\b(terminal|finish) chunk\b/i,
+];
 
 /**
  * Retryability taken from a real AI SDK error instance via its own typed
@@ -371,7 +380,7 @@ function isRetryableTypedError(
  * Structural retryability for a value that is not a typed AI SDK error: a
  * flattened message, a gateway-forwarded JSON payload, or the final attempt
  * inside a RetryError. HTTP status decides first; message text only for the
- * one documented statusless provider quirk.
+ * documented statusless failure shapes.
  */
 function isRetryableFromSignals(value: unknown): boolean {
 	const signals: ErrorSignals = {
@@ -407,9 +416,9 @@ function isRetryableFromSignals(value: unknown): boolean {
 	if (statuses.some((status) => status >= 400 && status < 500)) {
 		return false;
 	}
-	// No typed error and no status: the one provider quirk we special-case.
+	// No typed error and no status: only the documented failure shapes retry.
 	return signals.messages.some((message) =>
-		PROVIDER_RETURNED_ERROR_PATTERN.test(message),
+		RETRYABLE_MESSAGE_PATTERNS.some((pattern) => pattern.test(message)),
 	);
 }
 
@@ -419,9 +428,9 @@ function isRetryableFromSignals(value: unknown): boolean {
  * (credential rejections, context-window overflow, other client-side 4xx
  * errors). Prefers the AI SDK's own typed `isRetryable` signal; for
  * non-instances (already-flattened messages or gateway-forwarded JSON) it
- * falls back to the HTTP status, and finally to the single documented
- * "Provider returned error" provider quirk. Accepts either a raw structured
- * error or a flattened message string.
+ * falls back to the HTTP status, and finally to the documented statusless
+ * failure-shape messages. Accepts either a raw structured error or a
+ * flattened message string.
  */
 export function isRetryableProviderError(error: unknown): boolean {
 	// Prefer the AI SDK's own typed retryability signal.

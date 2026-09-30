@@ -1254,8 +1254,9 @@ export class AgentRuntime {
 	 * Run a model turn, retrying transient provider/API failures with backoff.
 	 *
 	 * A turn whose model stream fails with a retryable provider error (rate
-	 * limit, 5xx, network hiccup, or OpenRouter's generic "Provider returned
-	 * error") is re-issued up to {@link PROVIDER_ERROR_MAX_RETRIES} times, with
+	 * limit, 5xx, network hiccup, OpenRouter's generic "Provider returned
+	 * error", or a gateway-cut stream that never sent a finish chunk) is
+	 * re-issued up to {@link PROVIDER_ERROR_MAX_RETRIES} times, with
 	 * exponential backoff between attempts, before the error is allowed to
 	 * propagate and end the run. Non-retryable errors (auth, context-window
 	 * overflow, other client errors) and any attempt that already produced
