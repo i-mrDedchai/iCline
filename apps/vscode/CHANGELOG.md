@@ -156,7 +156,7 @@ Upstream sync + smoke-test restoration on the v4.0.0 SDK architecture (dev build
 - 📦 **Publish baseline** — shared README image rewrite in `scripts/marketplace-images.mjs`; documented in `icline-marketplace.md` (never use `--no-rewrite-relative-links` for store publishes)
 
 ### Known Limitations
-- ModelThinkingStatusIcons (reasoning effort indicators in chat textarea) temporarily removed — to be re-implemented on the new SDK hooks.
+- ModelThinkingStatusIcons (reasoning effort indicators in chat textarea) temporarily removed — to be re-implemented on the new SDK hooks. *(Update: superseded — re-implemented as `ModelStatusIcons`, serving both the composer chip and the Quick Picker rows; see the 🏷️ fix.15 entry above. Original entry kept as history.)
 - Mistake-limit telemetry (upstream v4.0.10) not ported — it is a legacy/stable-only feature not present in `upstream/main`; `consecutiveMistakeCount` handling already exists in `sdk-interaction-coordinator.ts`.
 - Jan C3+C5 fix verified by typecheck + code reading; runtime test with a real Jan server pending user smoke test.
 
