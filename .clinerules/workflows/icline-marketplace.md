@@ -52,6 +52,7 @@ npm run publish:marketplace:prerelease   # beta
 | Package | **Always** `vsce package` with `--baseImagesUrl` + `--githubBranch main` (`scripts/marketplace-images.mjs`) |
 | Never | `--no-rewrite-relative-links` for store publishes — breaks Open VSX listing images |
 | Verify | `tar -xOf dist/*.vsix extension/readme.md` must show `github.com/.../raw/main/apps/vscode/assets/docs/` |
+| Memorial | Never replace/rename/delete images under `apps/vscode/assets/docs/` — new release images are always **additive** with a version-prefixed name (e.g. `0.1.18-*.jpg`). Per-release checklist: `docs/icline/readme-0.1.18-screenshots.md`; frozen v0.1.17 copies: `docs/icline/memorial-0.1.17/` |
 
 Investigation: `บันทึกแชท/2026-06/2026-06-23_01_openvsx-readme-images-root-cause.md`
 

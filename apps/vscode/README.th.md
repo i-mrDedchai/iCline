@@ -14,6 +14,28 @@
 
 ---
 
+## 🆕 มีอะไรใหม่ใน 0.1.18
+
+- 🌐 **UI ทั้งหมดอ่านเป็นภาษาของคุณ** — Settings ทุกแท็บ, หน้า welcome และการ์ด Quick Start, หน้าประวัติทั้งหมด (ค้นหา, จัดเรียง/กรอง, export/import), โมดัล Customize (Rules / Hooks / Skills), หน้า MCP server, แผง Team, แค็ตตาล็อก Marketplace, หน้าจอ Account, ตัวช่วย Onboarding, ตั้งค่า Browser รวมถึงข้อความแจ้งเตือนของ extension และข้อความ manifest — รองรับ**อังกฤษ ไทย ญี่ปุ่น และจีนตัวย่อ** prompt ยังเป็นภาษาอังกฤษ (เพราะสั่งโมเดล) และการเปลี่ยนภาษาหน้าจอไม่เปลี่ยนภาษาที่ agent ตอบ
+- 🎨 **แท็บ Settings → Appearance** — แผง Task Completed มี token สีของตัวเอง (`--color-completed` แยกจาก `success` จึงปรับสีโดยไม่กระทบ diff count หรือ badge) และการ์ด final-reply มี `--color-reply` ทั้งคู่ตาม theme ของ editor เลือก accent ได้ 3 กลุ่ม เก็บเป็น choice id `iCline.appearance.*`
+- 🛡️ **รันงานรอดเมื่อสตรีมขาดกลางคัน** — ถ้า upstream stream จบก่อน terminal chunk จะ retry แทนการจบงาน และเพดาน output ปรับตามงบของโมเดล (`max(32k, 30% ของ budget)`) งาน reasoning ใหญ่ๆ จึงไม่ล้น
+- 🧬 **พอร์ต upstream แบบเลือกเฉพาะที่ บันทึกตรงไปตรงมา** — ไม่ merge ทั้งก้อน: ช่องโหว่ fast-lane (js-yaml CVE-2026-84375), backoff ที่เคารพ abort, แยก `content-filter` จากความล้มเหลวชั่วคราว, compaction summarizer ใช้ credential จริง ทุก port *และ* skip บันทึกใน [Changelog](https://github.com/i-mrDedchai/iCline/blob/main/apps/vscode/CHANGELOG.md) และหน้า Settings → About แสดง sync-point ตรงกับ upstream จริง (`4.1.18 SDK (main@173837314)` / `2026-09-16`)
+
+<!-- ภาพใหม่ 0.1.18 (เพิ่มเท่านั้น — ห้ามแตะภาพเก่าใน assets/docs/):
+  เอา comment ออกทีละบล็อกเมื่อได้ไฟล์ภาพแล้ว ใช้ภาพชุดเดียวกับเวอร์ชันอังกฤษได้
+  <p align="center">
+    <img src="assets/docs/0.1.18-Appearance-Settings.jpg" alt="iCline Settings — แท็บ Appearance" width="720" />
+  </p>
+  <p align="center">
+    <img src="assets/docs/0.1.18-Task-Completed.jpg" alt="แผง Task Completed ของ iCline ตามสี theme" width="720" />
+  </p>
+  <p align="center">
+    <img src="assets/docs/0.1.18-Settings-Thai.jpg" alt="iCline Settings ภาษาไทย" width="720" />
+  </p>
+  Spec: docs/icline/readme-0.1.18-screenshots.md -->
+
+---
+
 ## ❓ คำถามที่พบบ่อย
 
 ### ต้องติดตั้ง Cline official ก่อนไหม?
@@ -42,6 +64,8 @@
 | 🌐 ZenMux (100+ models) | ❌ | ✅ |
 | 🛡️ Harness guardrails (verify-before-claim) | ❌ | ✅ |
 | 🔄 Dual-channel updates (iCline + upstream) | ❌ | ✅ |
+| 🌐 UI ครบทุกภาษา (EN / TH / JA / ZH-CN) | ❌ | ✅ |
+| 🎨 แท็บ Appearance (สีตาม theme) | ❌ | ✅ |
 
 ### ⚡ เมนูด่วนเลือก Provider & Model (บนแชท)
 
@@ -130,6 +154,15 @@ code --install-extension dist/i-mrdedchai.iCline-0.1.18-dev.6.vsix --force
 - ตรวจ **iCline release** จาก GitHub Releases
 - แจ้งเตือน **Cline upstream** เวอร์ชันใหม่ (ไม่ auto-merge)
 - คำสั่ง: `iCline: Check for Updates (iCline & Cline upstream)`
+
+### 🌐 UI ครบทุกภาษา
+- Settings ทุกแท็บ, welcome, history, โมดัล Customize, MCP, Team, Marketplace, Account, onboarding — EN / TH / JA / ZH-CN
+- ข้อความแจ้งเตือนและ manifest (หน้า Extensions, command palette) แปลผ่าน `vscode.l10n`
+- prompt ยังเป็นอังกฤษ เปลี่ยนภาษาหน้าจอไม่เปลี่ยนภาษาที่ agent ตอบ
+
+### 🎨 แท็บ Appearance
+- สี accent ตาม theme สำหรับแผง Task Completed (`--color-completed`) และการ์ด final-reply (`--color-reply`)
+- เก็บเป็น choice id `iCline.appearance.*` ค่าที่ไม่รู้จักจะ fallback เป็นค่า token
 
 ---
 

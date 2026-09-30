@@ -14,6 +14,28 @@
 
 ---
 
+## 🆕 New in 0.1.18
+
+- 🌐 **The whole UI reads in your language** — all seven Settings tabs, the welcome home and Quick Start cards, the full history view (search, sort/filter, export/import), the Customize modal (Rules / Hooks / Skills), MCP server surfaces, the Team panel, the Marketplace catalog, the Account screens, the Onboarding wizard, Browser settings, plus the extension's own notifications and manifest strings — in **English, Thai, Japanese and Simplified Chinese**. Prompts stay English (they instruct the model), and changing the interface language never changes how the agent talks. See `docs/icline/i18n-contributing.md` to add a language in three edits.
+- 🎨 **Settings → Appearance tab** — the Task Completed panel gets its own `--color-completed` token (apart from `success`, so tuning it never repaints diff counts or badges) and the transient final-reply card gets `--color-reply`, both following the editor theme. Three accent rows (Completed box, final-reply card, brand chrome) as swatch radiogroups, stored as `iCline.appearance.*` choice ids.
+- 🛡️ **Runs survive mid-stream cuts** — an upstream stream that ends before its terminal chunk is now retried instead of ending the run; the default output cap scales as `max(32k, 30% of the model's advertised budget)` so large-budget reasoning turns fit.
+- 🧬 **Selective upstream ports, honestly logged** — no wholesale merge: security fast-lane (js-yaml CVE-2026-84375), abort-aware retry backoff, `content-filter` kept distinct from transient failures, compaction summarizer on live credentials. Every port *and* skip is recorded in the [Changelog](https://github.com/i-mrDedchai/iCline/blob/main/apps/vscode/CHANGELOG.md), and Settings → About shows the exact upstream sync-point (`4.1.18 SDK (main@173837314)` / `2026-09-16`).
+
+<!-- 0.1.18 screenshots (additive — old images in assets/docs/ stay untouched):
+  uncomment each block when the file lands.
+  <p align="center">
+    <img src="assets/docs/0.1.18-Appearance-Settings.jpg" alt="iCline Settings — Appearance tab" width="720" />
+  </p>
+  <p align="center">
+    <img src="assets/docs/0.1.18-Task-Completed.jpg" alt="iCline Task Completed panel with theme accent" width="720" />
+  </p>
+  <p align="center">
+    <img src="assets/docs/0.1.18-Settings-Thai.jpg" alt="iCline Settings in Thai" width="720" />
+  </p>
+  Spec: docs/icline/readme-0.1.18-screenshots.md -->
+
+---
+
 ## ❓ FAQ
 
 ### Do I need official Cline installed first?
@@ -42,6 +64,8 @@
 | 🌐 ZenMux (100+ models) | ❌ | ✅ |
 | 🛡️ Harness guardrails (verify-before-claim) | ❌ | ✅ |
 | 🔄 Dual-channel updates (iCline + upstream) | ❌ | ✅ |
+| 🌐 Full UI in your language (EN / TH / JA / ZH-CN) | ❌ | ✅ |
+| 🎨 Appearance tab (theme-accented surfaces) | ❌ | ✅ |
 
 ### ⚡ Quick Provider & Model picker (chat)
 
@@ -138,6 +162,15 @@ code --install-extension dist/i-mrdedchai.iCline-0.1.18-dev.6.vsix --force
 - Checks **iCline releases** on GitHub
 - Notifies about new **Cline upstream** versions (no auto-merge)
 - Command: `iCline: Check for Updates (iCline & Cline upstream)`
+
+### 🌐 Full UI localization
+- Every Settings tab, welcome, history, Customize modal, MCP, Team, Marketplace, Account, onboarding — EN / TH / JA / ZH-CN
+- Extension notifications and manifest strings (Extensions view, command palette) localized via `vscode.l10n`
+- Prompts stay English; interface language never changes how the agent talks
+
+### 🎨 Appearance tab
+- Theme-following accents for the Task Completed panel (`--color-completed`) and final-reply card (`--color-reply`)
+- Stored as `iCline.appearance.*` choice ids; unknown ids fall back to token defaults
 
 ---
 

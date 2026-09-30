@@ -25,6 +25,7 @@
 
 ## ข่าวล่าสุด
 
+- **v0.1.18 (กำลังมา)** — UI ครบทุกภาษา (EN / TH / JA / ZH-CN), แท็บ Settings → Appearance สีตาม theme, retry เมื่อสตรีมขาดกลางคัน, พอร์ต upstream แบบเลือกเฉพาะที่พร้อมแพตช์ช่องโหว่ (js-yaml CVE-2026-84375), หน้า About แสดง sync-point ตรงจริง รายละเอียด: [apps/vscode/CHANGELOG.md](apps/vscode/CHANGELOG.md)
 - **Claim namespace Open VSX สำเร็จ** — publisher `i-mrdedchai` ยืนยันแล้ว ([Eclipse Foundation #11300](https://github.com/EclipseFdn/open-vsx.org/issues/11300) ปิดเป็น completed)
 - **ยอดติดตั้ง Open VSX** — **116+ installs** ภายใน ~12 ชม. หลังขึ้นลิสต์ (และยังเพิ่มอยู่)
 - **v0.1.17 Stable** — แก้ไอคอน/สกรีนช็อตบน store, เก็บกวาดตารางเปรียบเทียบ

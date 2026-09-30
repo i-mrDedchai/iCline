@@ -94,6 +94,8 @@ npm run sync:docs
 
 Before any `-PublishMarketplace` run, confirm packaged README uses **GitHub absolute** image URLs. `package-vsix.mjs` applies `--baseImagesUrl` automatically — see `icline-marketplace.md` § README screenshots baseline.
 
+Screenshot + memorial checklist lives at `docs/icline/readme-0.1.18-screenshots.md` (one file per release: which images, exact filenames, slot-in steps). Old images are never replaced — new ones are always additive with a version-prefixed name; v0.1.17 text+image hashes are frozen in `docs/icline/memorial-0.1.17/`.
+
 ### 3. Dev build + local install
 
 ```powershell

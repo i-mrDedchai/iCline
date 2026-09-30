@@ -16,6 +16,22 @@ Standalone Cline fork for VS Code — extension ID **`i-mrdedchai.iCline`**. **N
 
 ---
 
+## 🆕 New in 0.1.18
+
+- 🌐 **The whole UI reads in your language** — Settings (all tabs), welcome home, history, MCP servers, Team panel, Marketplace, Account, onboarding and notifications in **English, Thai, Japanese and Simplified Chinese**. Interface language never changes how the agent talks.
+- 🎨 **Settings → Appearance tab** — accent colors for the Task Completed panel and the final-reply card that follow your editor theme, instead of fixed hex colors.
+- 🛡️ **Runs survive mid-stream cuts** — an upstream stream that dies before its terminal chunk is now retried instead of ending the run.
+- 🧬 **Selective upstream ports, honestly logged** — security fix included (js-yaml CVE-2026-84375); every port/skip is recorded in the changelog, and About shows the exact upstream sync-point.
+
+<!-- 0.1.18 screenshots (additive — old images in assets/docs/ stay untouched):
+  uncomment each line when the file lands.
+  <img src="assets/docs/0.1.18-Appearance-Settings.jpg" alt="iCline Settings — Appearance tab" width="720" />
+  <img src="assets/docs/0.1.18-Task-Completed.jpg" alt="iCline Task Completed panel with theme accent" width="720" />
+  <img src="assets/docs/0.1.18-Settings-Thai.jpg" alt="iCline Settings in Thai" width="720" />
+  Spec: docs/icline/readme-0.1.18-screenshots.md -->
+
+---
+
 ## ❓ FAQ
 
 ### Do I need official Cline installed first?
@@ -42,6 +58,8 @@ Standalone Cline fork for VS Code — extension ID **`i-mrdedchai.iCline`**. **N
 | 🌐 ZenMux (100+ models) | ❌ | ✅ |
 | 🛡️ Harness guardrails (verify-before-claim) | ❌ | ✅ |
 | 🔄 Dual-channel updates (iCline + upstream) | ❌ | ✅ |
+| 🌐 Full UI in your language (EN / TH / JA / ZH-CN) | ❌ | ✅ |
+| 🎨 Appearance tab (theme-accented surfaces) | ❌ | ✅ |
 
 ### ⚡ Quick Provider & Model picker (chat)
 
@@ -76,6 +94,8 @@ The full provider catalog and deep model settings remain in **Settings → API C
 - 🌐 **ZenMux** — 100+ models, multi-protocol
 - 🛡️ Agent harness guardrails (verify-before-claim, post-write verification)
 - 🔄 Dual-channel update notifications (iCline + Cline upstream)
+- 🌐 **Full UI localization** — every Settings tab, welcome, history, MCP, Team, Account, onboarding in EN / TH / JA / ZH-CN
+- 🎨 **Appearance tab** — theme-following accents for the Completed panel and final-reply card
 
 ## Install & updates
 
