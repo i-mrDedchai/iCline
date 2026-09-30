@@ -75,8 +75,8 @@ No wholesale merge: security fast-lane (js-yaml CVE-2026-84375), abort-aware ret
 
 ## ✨ Why iCline?
 
-| | Cline official (4.1.18 @ 2026-09-16) | iCline |
-|---|---|---|
+| | Cline official (4.1.18 @ 2026-09-16) | iCline (0.1.18 @ 2026-09-30) |
+|---|:-:|:-:|
 | Extension ID | `saoudrizwan.claude-dev` | `i-mrdedchai.iCline` |
 | ⚡ Quick Provider & Model picker on chat | ❌ | ✅ |
 | 🏠 Welcome Quick Starts (12 templates, editable prompts) | ❌ | ✅ |

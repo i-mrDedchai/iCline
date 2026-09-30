@@ -25,7 +25,7 @@
 
 ## ข่าวล่าสุด
 
-- **v0.1.18 Stable (2026-09-30)** — UI ครบทุกภาษา (EN / TH / JA / ZH-CN), แท็บ Settings → Appearance สีตาม theme, retry เมื่อสตรีมขาดกลางคัน, พอร์ต upstream แบบเลือกเฉพาะที่พร้อมแพตช์ช่องโหว่ (js-yaml CVE-2026-84375), หน้า About แสดง sync-point ตรงจริง [Release v0.1.18](https://github.com/i-mrDedchai/iCline/releases/tag/v0.1.18) · Open VSX live แล้ว, Marketplace อยู่ระหว่างตรวจ รายละเอียด: [apps/vscode/CHANGELOG.md](apps/vscode/CHANGELOG.md)
+- **v0.1.18 Stable (2026-09-30)** — UI ครบทุกภาษา (EN / TH / JA / ZH-CN), แท็บ Settings → Appearance สีตาม theme, retry เมื่อสตรีมขาดกลางคัน, พอร์ต upstream แบบเลือกเฉพาะที่พร้อมแพตช์ช่องโหว่ (js-yaml CVE-2026-84375), หน้า About แสดง sync-point ตรงจริง [Release v0.1.18](https://github.com/i-mrDedchai/iCline/releases/tag/v0.1.18) · ขึ้นทั้งสอง store แล้ว รายละเอียด: [apps/vscode/CHANGELOG.md](apps/vscode/CHANGELOG.md)
 - **Claim namespace Open VSX สำเร็จ** — publisher `i-mrdedchai` ยืนยันแล้ว ([Eclipse Foundation #11300](https://github.com/EclipseFdn/open-vsx.org/issues/11300) ปิดเป็น completed)
 - **ยอดติดตั้ง Open VSX** — **116+ installs** ภายใน ~12 ชม. หลังขึ้นลิสต์ (และยังเพิ่มอยู่)
 - **v0.1.17 Stable** — แก้ไอคอน/สกรีนช็อตบน store, เก็บกวาดตารางเปรียบเทียบ
@@ -59,17 +59,26 @@ code --install-extension dist/i-mrdedchai.iCline-0.1.18.vsix --force
 
 ## iCline vs Cline official
 
-| | Cline official (4.1.18 @ 2026-09-16) | iCline |
-|---|---|---|
+| | Cline official (4.1.18 @ 2026-09-16) | iCline (0.1.18 @ 2026-09-30) |
+|---|:-:|:-:|
 | Extension ID | `saoudrizwan.claude-dev` | `i-mrdedchai.iCline` |
+| Verified publisher | `saoudrizwan` | `i-mrdedchai` ✅ |
+| VS Marketplace · Open VSX | Marketplace only | ✅ ทั้งสอง |
 | ⚡ เมนูด่วนเลือก Provider / Model บนแชท | ❌ | ✅ |
 | 🏠 Quick Start 12 แบบ (แก้ prompt ได้) | ❌ | ✅ |
 | 📦 Export / Import history (`.zip`) | ❌ | ✅ |
 | 🏷️ branding iCline ในแชท agent | ❌ | ✅ |
-| xAI OAuth & subscription models | ❌ | ✅ |
-| ZenMux provider | ❌ | ✅ |
-| Harness guardrails (verify-before-claim) | ❌ | ✅ |
-| อัปเดตแบบ dual-channel ปลอดภัย | ❌ | ✅ |
+| 🔐 xAI OAuth (SuperGrok / X Premium) | ❌ | ✅ |
+| ⚡ Composer 2.5 Fast, Grok Build | ❌ | ✅ |
+| 🌐 ZenMux (100+ models) | ❌ | ✅ |
+| 🛡️ Harness guardrails (verify-before-claim) | ❌ | ✅ |
+| 🔄 Dual-channel updates (iCline + upstream) | ❌ | ✅ |
+| 🌐 UI ครบทุกภาษา (EN / TH / JA / ZH-CN) | ❌ | ✅ |
+| 🎨 แท็บ Appearance (สีตาม theme) | ❌ | ✅ |
+| 🏢 จัดการ Custom provider (สร้าง/แก้/ลบ, fetch model) | ❌ | ✅ |
+| 🏷️ แถว Context บอกที่มาตัวเลข (ประกาศ/override/catalog) | ❌ | ✅ |
+| 👥 Sub-agent และ Agent Team (แผง team, budget, อนุมัติแยก) | ❌ | ✅ |
+| 🛡️ รันงานซ่อมตัวเอง (retry สตรีมขาด, ต่อ truncation) | ❌ | ✅ |
 
 <p align="center">
   <img src="apps/vscode/assets/docs/0.1.18-NewDesign-QuickPicker+Effort.png" alt="เมนูด่วนเลือก Provider และ Model บนแชท iCline (โฉมใหม่ 0.1.18)" width="640" />

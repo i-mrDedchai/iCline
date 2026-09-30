@@ -25,7 +25,7 @@ Standalone Cline fork for VS Code — no official Cline required. Supports Grok,
 
 ## News
 
-- **v0.1.18 Stable (2026-09-30)** — full UI in your language (EN / TH / JA / ZH-CN), Settings → Appearance tab with theme-accented Completed/reply surfaces, mid-stream-cut retry, selective upstream ports with security fix (js-yaml CVE-2026-84375), honest About sync-point. [Release v0.1.18](https://github.com/i-mrDedchai/iCline/releases/tag/v0.1.18) · Open VSX live, Marketplace verifying. Details: [apps/vscode/CHANGELOG.md](apps/vscode/CHANGELOG.md)
+- **v0.1.18 Stable (2026-09-30)** — full UI in your language (EN / TH / JA / ZH-CN), Settings → Appearance tab with theme-accented Completed/reply surfaces, mid-stream-cut retry, selective upstream ports with security fix (js-yaml CVE-2026-84375), honest About sync-point. [Release v0.1.18](https://github.com/i-mrDedchai/iCline/releases/tag/v0.1.18) · live on both stores. Details: [apps/vscode/CHANGELOG.md](apps/vscode/CHANGELOG.md)
 - **Open VSX namespace claimed** — publisher `i-mrdedchai` verified ([Eclipse Foundation #11300](https://github.com/EclipseFdn/open-vsx.org/issues/11300) closed as completed)
 - **Open VSX traction** — **116+ installs** within ~12 hours of listing (and growing)
 - **v0.1.17 Stable** — marketplace icon/screenshot fixes, store comparison table cleanup
@@ -59,17 +59,26 @@ code --install-extension dist/i-mrdedchai.iCline-<version>.vsix --force
 
 ## iCline vs Cline official
 
-| | Cline official (4.1.18 @ 2026-09-16) | iCline |
-|---|---|---|
+| | Cline official (4.1.18 @ 2026-09-16) | iCline (0.1.18 @ 2026-09-30) |
+|---|:-:|:-:|
 | Extension ID | `saoudrizwan.claude-dev` | `i-mrdedchai.iCline` |
+| Verified publisher | `saoudrizwan` | `i-mrdedchai` ✅ |
+| VS Marketplace · Open VSX | Marketplace only | ✅ both |
 | ⚡ Quick Provider & Model picker on chat | ❌ | ✅ |
 | 🏠 Welcome Quick Starts (12 templates, editable prompts) | ❌ | ✅ |
 | 📦 History export / import (`.zip`) | ❌ | ✅ |
 | 🏷️ iCline branding in agent chat | ❌ | ✅ |
-| xAI OAuth & subscription models | ❌ | ✅ |
-| ZenMux provider | ❌ | ✅ |
-| Harness guardrails (verify-before-claim) | ❌ | ✅ |
-| Dual-channel safe updates | ❌ | ✅ |
+| 🔐 xAI OAuth (SuperGrok / X Premium) | ❌ | ✅ |
+| ⚡ Composer 2.5 Fast, Grok Build | ❌ | ✅ |
+| 🌐 ZenMux (100+ models) | ❌ | ✅ |
+| 🛡️ Harness guardrails (verify-before-claim) | ❌ | ✅ |
+| 🔄 Dual-channel updates (iCline + upstream) | ❌ | ✅ |
+| 🌐 Full UI in your language (EN / TH / JA / ZH-CN) | ❌ | ✅ |
+| 🎨 Appearance tab (theme-accented surfaces) | ❌ | ✅ |
+| 🏢 Custom provider management (create / edit / delete, fetch models) | ❌ | ✅ |
+| 🏷️ Context row with number source (declared / override / catalog) | ❌ | ✅ |
+| 👥 Sub-agents & Agent Teams (panel, budget, granular approvals) | ❌ | ✅ |
+| 🛡️ Self-healing runs (mid-stream retry, truncation continuation) | ❌ | ✅ |
 
 <p align="center">
   <img src="apps/vscode/assets/docs/0.1.18-NewDesign-QuickPicker+Effort.png" alt="iCline quick model picker on chat (0.1.18 new design)" width="640" />

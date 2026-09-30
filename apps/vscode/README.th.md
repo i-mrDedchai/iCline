@@ -79,8 +79,8 @@ Settings ทุกแท็บ, หน้า welcome และการ์ด Qu
 
 ## ✨ ทำไมต้องใช้ iCline?
 
-| | Cline official (4.1.18 @ 2026-09-16) | iCline |
-|---|---|---|
+| | Cline official (4.1.18 @ 2026-09-16) | iCline (0.1.18 @ 2026-09-30) |
+|---|:-:|:-:|
 | Extension ID | `saoudrizwan.claude-dev` | `i-mrdedchai.iCline` |
 | Verified publisher | `saoudrizwan` | `i-mrdedchai` ✅ |
 | VS Marketplace · Open VSX | Marketplace only | ✅ ทั้งสอง |

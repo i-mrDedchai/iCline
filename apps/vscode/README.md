@@ -89,8 +89,8 @@ No wholesale merge: security fast-lane (js-yaml CVE-2026-84375), abort-aware ret
 
 ## ✨ Why iCline?
 
-| | Cline official (4.1.18 @ 2026-09-16) | iCline |
-|---|---|---|
+| | Cline official (4.1.18 @ 2026-09-16) | iCline (0.1.18 @ 2026-09-30) |
+|---|:-:|:-:|
 | Extension ID | `saoudrizwan.claude-dev` | `i-mrdedchai.iCline` |
 | Verified publisher | `saoudrizwan` | `i-mrdedchai` ✅ |
 | VS Marketplace · Open VSX | Marketplace only | ✅ both |
@@ -112,8 +112,8 @@ No wholesale merge: security fast-lane (js-yaml CVE-2026-84375), abort-aware ret
 
 ### ⚡ Quick Provider & Model picker (chat)
 
-| | Cline official (4.1.18 @ 2026-09-16) | iCline |
-|---|---|---|
+| | Cline official (4.1.18 @ 2026-09-16) | iCline (0.1.18 @ 2026-09-30) |
+|---|:-:|:-:|
 | ⚡ Quick Provider & Model picker on chat | ❌ | ✅ |
 
 Switch providers and models **without leaving the chat** — search all providers, collapse/expand model lists, set **Thinking / Effort per model** on hover, and refresh dynamic catalogs.
