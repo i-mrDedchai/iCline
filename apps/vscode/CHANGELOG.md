@@ -1,6 +1,8 @@
 # Changelog
 
-## [0.1.18] - Unreleased
+## [0.1.19] - Unreleased
+
+## [0.1.18] - 2026-09-30
 
 Upstream sync + smoke-test restoration on the v4.0.0 SDK architecture (dev builds use VSIX labels only; notes accumulate here until Stable).
 
