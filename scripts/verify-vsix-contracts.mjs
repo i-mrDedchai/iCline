@@ -719,19 +719,39 @@ function run(options) {
 			const source = readFileSync(webviewPath, "utf8")
 			const expected = expectedLabel(version)
 			const labels = bundleLabels(source)
-			add(
-				"version label",
-				labels.has(expected),
-				`label is "${expected}"`,
-				labels.size === 0 ? "no label found" : [...labels].join(", "),
-			)
-			const stale = [...labels].filter((label) => label !== expected)
-			add(
-				"version label",
-				stale.length === 0,
-				"no stale label from an earlier build",
-				stale.length === 0 ? `derived from ${VERSION_LABEL_SOURCE}` : stale.join(", "),
-			)
+			const isRelease = !/-dev\.\d+/.test(version) && !/-fix\.\d+/.test(version)
+			if (isRelease) {
+				// Release builds bake no "dev build N" label — About renders
+				// `iCline v${releaseVersion}` at runtime from split parts, so the
+				// bundle carries no contiguous label string. Pin the shipped
+				// manifest version instead, plus absence of any dev label.
+				add(
+					"version label",
+					manifest?.version === version,
+					`manifest version is "${version}"`,
+					manifest ? `manifest version ${manifest.version ?? "missing"}` : "manifest missing",
+				)
+				add(
+					"version label",
+					labels.size === 0,
+					"no dev-build label in a release bundle",
+					labels.size === 0 ? "none found" : [...labels].join(", "),
+				)
+			} else {
+				add(
+					"version label",
+					labels.has(expected),
+					`label is "${expected}"`,
+					labels.size === 0 ? "no label found" : [...labels].join(", "),
+				)
+				const stale = [...labels].filter((label) => label !== expected)
+				add(
+					"version label",
+					stale.length === 0,
+					"no stale label from an earlier build",
+					stale.length === 0 ? `derived from ${VERSION_LABEL_SOURCE}` : stale.join(", "),
+				)
+			}
 		}
 
 		// --- bytes against the local build ---------------------------------
