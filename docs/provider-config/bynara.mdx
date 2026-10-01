@@ -1,0 +1,40 @@
+---
+title: "NaraRouter (Bynara)"
+description: "Use the NaraRouter multi-model gateway with iCline via its OpenAI-compatible API."
+---
+
+**Website:** [https://router.bynara.id/](https://router.bynara.id/)
+
+NaraRouter (Bynara) is a multi-model AI gateway: one API key unlocks many models through a single **OpenAI-compatible** endpoint (`https://router.bynara.id/v1`), so iCline talks to it like any OpenAI-compatible provider — no plugin or custom protocol needed.
+
+### Prerequisites
+
+1.  **Create an account:** Sign up at [router.bynara.id](https://router.bynara.id/) (email + password, or continue with Google).
+2.  **Generate an API key:** Open the dashboard and create a key. The free-tier quota is active instantly.
+
+### Configuration in iCline
+
+> See [Authorization & Model Selection](/getting-started/authorizing-with-cline#menu) for the general auth flow.
+
+1.  **Open iCline Settings:** Click the ⚙️ icon in the iCline panel.
+2.  **Select Provider:** Choose **NaraRouter** from the **API Provider** dropdown.
+3.  **API Key:** Paste the key from your NaraRouter dashboard.
+4.  **Model:** iCline fetches the live model list from the gateway's `/v1/models` endpoint once the key is saved. Pick one from the dropdown, or type a model ID manually if you know it.
+
+### Tips and Notes
+
+-   **Base URL is fixed** — `https://router.bynara.id/v1`. There is nothing to customize, unlike self-hosted gateways.
+-   **Context window** — when the gateway's `/v1/models` response lacks size info for a model, iCline falls back to a 128K context window. Adjust the `Context Window` field in model config if you know the model's real limit.
+-   **Anthropic-compatible endpoint** — NaraRouter also exposes an Anthropic-compatible surface, but iCline uses the OpenAI-compatible one; you do not need it.
+-   **Billing** — usage bills against your NaraRouter account (free-tier quota refreshes daily). The TaskHeader cost indicator reflects the per-token prices iCline knows; gateway-side pricing wins when the catalog declares it.
+
+### Troubleshooting
+
+-   **Model dropdown is empty** — the API key is missing or invalid. Re-paste it from the dashboard and check the free-tier quota is active.
+-   **`401 unauthorized`** — same cause: the gateway requires a valid `Bearer` key on every call, including `/v1/models`.
+-   **Tool calls don't fire** — the model you picked doesn't support OpenAI-style function calling. Switch to a model with documented tool support.
+
+### References
+
+-   [NaraRouter home](https://router.bynara.id/)
+-   [OpenAI API reference](https://platform.openai.com/docs/api-reference) (NaraRouter implements this spec)

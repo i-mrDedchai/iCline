@@ -112,6 +112,9 @@ const GENERIC_PROVIDER_PRESENTATION_OVERRIDES: Record<string, GenericProviderPre
 	},
 	"zai-coding-plan": {},
 	// iCline-specific providers
+	bynara: {
+		signupUrl: "https://router.bynara.id/",
+	},
 	sakana: {
 		signupUrl: "https://console.sakana.ai/get-started",
 	},

@@ -96,6 +96,10 @@ Before any `-PublishMarketplace` run, confirm packaged README uses **GitHub abso
 
 Screenshot + memorial checklist lives at `docs/icline/readme-0.1.18-screenshots.md` (one file per release: which images, exact filenames, slot-in steps). Old images are never replaced — new ones are always additive with a version-prefixed name; v0.1.17 text+image hashes are frozen in `docs/icline/memorial-0.1.17/`.
 
+### 2c. SDK dist freshness (pack gate — lesson of 0.1.19-dev.3)
+
+The extension bundles `@cline/*` from `sdk/packages/*/dist` (git-ignored build artifacts), never from `src`. Any edit under `sdk/packages/*/src` packed without an SDK rebuild ships a VSIX silently missing the change. `npm run package` runs `scripts/ensure-sdk-dist.mjs` first: it rebuilds via root `build:sdk` only when a dist is older than its src (no-op otherwise) and aborts the pack fail-closed when it cannot verify. If the guard ever fails, do not pack around it — fix the build instead.
+
 ### 3. Dev build + local install
 
 ```powershell

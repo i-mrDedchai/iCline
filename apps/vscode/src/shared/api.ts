@@ -54,6 +54,7 @@ export type ApiProvider =
 	| "zenmux"
 	| "sakana"
 	| "jan"
+	| "bynara"
 
 export const DEFAULT_API_PROVIDER = "openrouter" as ApiProvider
 
@@ -72,6 +73,9 @@ export const ZENMUX_API_BASE_URLS: Record<ZenmuxApiProtocol, string> = {
 
 /** Sakana Fugu API — https://console.sakana.ai/get-started */
 export const SAKANA_API_BASE_URL = "https://api.sakana.ai/v1"
+
+/** NaraRouter gateway — OpenAI-compatible, https://router.bynara.id/ */
+export const BYNARA_API_BASE_URL = "https://router.bynara.id/v1"
 
 export type SakanaBillingMode = "pay_as_you_go" | "subscription"
 

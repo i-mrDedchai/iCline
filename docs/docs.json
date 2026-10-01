@@ -85,6 +85,7 @@
 													"provider-config/aws-bedrock/cli-profile"
 												]
 											},
+										"provider-config/bynara",
 										"provider-config/deepseek",
 										"provider-config/google-gemini",
 										"provider-config/jan",

@@ -63,6 +63,7 @@ const KNOWN_API_PROVIDERS = {
 	zenmux: true,
 	sakana: true,
 	jan: true,
+	bynara: true,
 } satisfies Record<ApiProvider, true>
 
 const normalizeProviderId = (raw: string): string => raw.trim().toLowerCase()

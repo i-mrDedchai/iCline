@@ -61,7 +61,8 @@
 	"providers": {
 		"xai": "xAI · Grok (OAuth & Subscription)",
 		"zenmux": "ZenMux",
-		"sakana": "Sakana.ai"
+		"sakana": "Sakana.ai",
+		"bynara": "NaraRouter"
 	},
 	"upstreamCline": {
 		"syncedVersion": "4.1.18 SDK (main@173837314)",
@@ -78,6 +79,7 @@
 		"🌐 ZenMux — 100+ models, live catalog fetch, PAYG & Subscription keys",
 		"🐟 Sakana.ai Fugu — PAYG & Subscription, Responses + Chat Completions API",
 		"🏠 Jan — local API server with live model discovery",
+		"🌐 NaraRouter (Bynara) — multi-model gateway, OpenAI-compatible, live /models discovery",
 		"🛡️ Agent harness — verify-before-claim, post-write verification",
 		"🔄 Dual-channel updates — iCline releases + Cline upstream notifications",
 		"🆕 Upstream v4.0.0 SDK — Claude Sonnet 5, GPT-5.6, ClinePass, DeepSeek reasoning, Kimi K3"

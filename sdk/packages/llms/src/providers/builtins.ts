@@ -1153,6 +1153,23 @@ const OPENAI_COMPATIBLE_SPEC_OVERRIDES: BuiltinSpecOverride[] = [
 		// wired into the new SDK RPC routing).
 		modelsSourceUrl: "https://zenmux.ai/api/v1/models",
 	},
+	{
+		// NaraRouter is iCline-only (not on models.dev): a multi-model AI
+		// gateway speaking plain OpenAI-compatible chat completions, so the
+		// generic settings form + live /models discovery own the UI — no
+		// dedicated handler, no custom protocol, no static model list.
+		id: "bynara",
+		name: "NaraRouter",
+		description: "NaraRouter multi-model AI gateway (OpenAI-compatible)",
+		family: "openai-compatible",
+		defaultModelId: "",
+		apiKeyEnv: ["BYNARA_API_KEY"],
+		docsUrl: "https://router.bynara.id/",
+		defaults: { baseUrl: "https://router.bynara.id/v1" },
+		// Live model list from the gateway's OpenAI-compatible /models
+		// endpoint (Bearer auth; answers 401 without a key).
+		modelsSourceUrl: "https://router.bynara.id/v1/models",
+	},
 ];
 
 /**

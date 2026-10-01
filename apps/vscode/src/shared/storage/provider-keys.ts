@@ -66,6 +66,10 @@ const NON_SDK_PROVIDER_DEFAULTS: Partial<Record<ApiProvider, string>> = {
 	hicap: "",
 	// iCline-specific providers
 	jan: "",
+	// NaraRouter serves a live, account-dependent catalog like Jan: no remote
+	// default to nominate, so an empty commit keeps asking for a model id
+	// instead of silently pinning the "default" placeholder.
+	bynara: "",
 	sakana: "fugu",
 	zenmux: openRouterDefaultModelId,
 }
