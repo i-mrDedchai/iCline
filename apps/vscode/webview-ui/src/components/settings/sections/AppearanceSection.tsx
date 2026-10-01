@@ -190,10 +190,10 @@ const IconPalette = ({
 	return (
 		<div
 			aria-label={tr(titleKey)}
-			className="absolute left-0 top-full mt-1 z-50 rounded-md border border-[var(--vscode-panel-border)] bg-[var(--vscode-menu-background)] p-3 shadow-lg"
+			className="absolute right-0 top-full mt-1 z-50 rounded-md border border-[var(--vscode-panel-border)] bg-[var(--vscode-menu-background)] p-3 shadow-lg"
 			ref={ref}
 			role="dialog"
-			style={{ width: 264 }}>
+			style={{ width: "min(264px, 70vw)" }}>
 			<div className="text-sm mb-1">{tr(titleKey)}</div>
 			<div className="text-xs mb-2 text-description" style={{ minHeight: 18 }}>
 				{hoverName ?? " "}
@@ -321,9 +321,16 @@ const AppearanceSection = ({ renderSectionHeader }: AppearanceSectionProps) => {
 					const accent = resolveAppearanceAccent(row.token, row.current)
 					return (
 						<div className="mb-4" key={row.token}>
-							<div className="block mb-1 text-base font-medium">{tr(row.labelKey)}</div>
+							<div className="block mb-1 text-base font-medium">{tr(row.labelKey)}</div>{" "}
 							<div className="flex flex-col gap-2 min-[480px]:flex-row min-[480px]:items-start">
 								<div className="flex-1 min-w-0">
+									{" "}
+									{/* The row wraps left-aligned when the pane is too narrow for
+								all 8 (e2e: real webview is narrower than 8 slots) — wrap is
+								fine, spread is not: never space-between, so a wrapped row
+								still hugs the left instead of pinning stragglers to the
+								edges. The slider below keeps the full 8-slot width as its
+								own cap, so its thumb travel never moves with wrapping. */}
 									<div
 										aria-label={tr(row.labelKey)}
 										className="flex items-center gap-2 flex-wrap justify-start"
@@ -363,34 +370,39 @@ const AppearanceSection = ({ renderSectionHeader }: AppearanceSectionProps) => {
 											)
 										})}
 									</div>
-									<div className="mt-2 flex items-center gap-2">
-										<label
-											className="text-xs text-description shrink-0"
-											htmlFor={`appearance-opacity-${row.token}`}>
+									{/* Label on its own line: at real webview widths the long
+									translated label eats the whole row (e2e: the track got
+									~90px of a 217px parent), so the slider gets a full row
+									to itself — track + readout share it. */}
+									<div className="mt-2" style={{ maxWidth: 408 }}>
+										<label className="text-xs text-description" htmlFor={`appearance-opacity-${row.token}`}>
 											{tr("opacityLabel")}
 										</label>
-										<input
-											aria-label={tr("opacityLabel")}
-											className="flex-1 min-w-0"
-											id={`appearance-opacity-${row.token}`}
-											max={100}
-											min={0}
-											onChange={(event) => updateSetting(row.opacityKey, Number(event.target.value))}
-											type="range"
-											value={row.opacity ?? 50}
-										/>
-										<span
-											className="text-xs text-description shrink-0"
-											style={{ minWidth: 40, textAlign: "right" }}>
-											{`${row.opacity ?? 50}%`}
-										</span>
+										<div className="mt-1 flex items-center gap-2">
+											<input
+												aria-label={tr("opacityLabel")}
+												className="flex-1 min-w-0"
+												id={`appearance-opacity-${row.token}`}
+												max={100}
+												min={0}
+												onChange={(event) => updateSetting(row.opacityKey, Number(event.target.value))}
+												style={{ width: "100%", minWidth: 0 }}
+												type="range"
+												value={row.opacity ?? 50}
+											/>
+											<span
+												className="text-xs text-description shrink-0"
+												style={{ minWidth: 40, textAlign: "right" }}>
+												{`${row.opacity ?? 50}%`}
+											</span>
+										</div>
 									</div>
 									{row.saturatedNote && (
 										<p className="text-xs text-description mt-1">{tr("brandSaturatedNote")}</p>
 									)}
 									<p className="text-sm text-description mt-1">{tr(row.hintKey)}</p>
 								</div>
-								<div className="shrink-0 w-full min-[480px]:w-40">
+								<div className="shrink-0 w-full min-[480px]:w-44">
 									<AccentPreview
 										accent={accent}
 										icon={row.icon}
