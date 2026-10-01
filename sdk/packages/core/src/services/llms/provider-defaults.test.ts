@@ -1064,6 +1064,77 @@ describe("custom endpoint model metadata (/models of the provider)", () => {
 		});
 	});
 
+	describe("gateway static catalog union (NaraRouter dev.4-fix.1)", () => {
+		const bynaraPayload = () => ({
+			object: "list",
+			data: [
+				{
+					id: "mimo-v2.5-free",
+					name: "Mimo v2.5 Free",
+					context_window: 1000000,
+					vision: true,
+				},
+				{
+					id: "brand-new-model",
+					name: "Brand New Model",
+					context_window: 200000,
+					reasoning: true,
+				},
+			],
+		})
+
+		it("keyless fetch failure degrades to the static snapshot, not an empty picker", async () => {
+			const fetchMock = vi.fn(async () => ({
+				ok: false,
+				status: 401,
+				json: async () => ({}),
+			}))
+			vi.stubGlobal("fetch", fetchMock)
+
+			const resolved = await resolveProviderConfig("bynara", undefined, undefined)
+
+			const models = resolved?.knownModels ?? {}
+			// Full static snapshot survives the failed live fetch.
+			expect(Object.keys(models)).toHaveLength(56)
+			// Snapshot capabilities and converted prices ride along.
+			expect(models["glm-5.3-flash"]?.capabilities).toEqual(
+				expect.arrayContaining(["streaming", "tools", "images", "reasoning"]),
+			)
+			expect(models["glm-5.3-flash"]?.pricing?.input).toBeGreaterThan(0)
+			expect(models["mimo-v2.5-free"]?.contextWindow).toBe(1000000)
+		})
+
+		it("keyed live entries keep endpoint capabilities and snapshot prices", async () => {
+			const fetchMock = vi.fn(async () => ({
+				ok: true,
+				json: async () => bynaraPayload(),
+			}))
+			vi.stubGlobal("fetch", fetchMock)
+
+			const resolved = await resolveProviderConfig("bynara", undefined, {
+				providerId: "bynara",
+				modelId: "mimo-v2.5-free",
+				apiKey: "sk-test",
+			})
+
+			const models = resolved?.knownModels ?? {}
+			// Live ids join the snapshot (static 56 + 1 new).
+			expect(Object.keys(models)).toHaveLength(57)
+			// Endpoint-declared flags thread through: no "No capability data".
+			expect(models["brand-new-model"]?.capabilities).toEqual(
+				expect.arrayContaining(["streaming", "tools", "reasoning"]),
+			)
+			// Overlapping live entry keeps fresh scalars...,
+				expect(models["mimo-v2.5-free"]?.contextWindow).toBe(1000000)
+			// ...but its silence on pricing never revokes snapshot prices.
+				expect(models["mimo-v2.5-free"]?.pricing?.input).toBeGreaterThan(0)
+			// Snapshot capabilities unite with live ones on overlap.
+			expect(models["mimo-v2.5-free"]?.capabilities).toEqual(
+				expect.arrayContaining(["streaming", "tools", "images"]),
+			)
+		})
+	})
+
 	it("does not fetch anything for providers without a configured endpoint", async () => {
 		const fetchMock = vi.fn();
 		vi.stubGlobal("fetch", fetchMock);

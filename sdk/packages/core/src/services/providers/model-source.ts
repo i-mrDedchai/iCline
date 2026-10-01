@@ -4,6 +4,14 @@ export interface ModelSourceEntry {
 	contextWindow?: number;
 	maxInputTokens?: number;
 	maxTokens?: number;
+	/**
+	 * Capability flags straight from the endpoint payload (`vision` /
+	 * `reasoning` booleans, e.g. NaraRouter). Only ever set when the
+	 * endpoint positively declares them — absent stays absent so one
+	 * gateway's silence can never revoke another source's claim.
+	 */
+	vision?: boolean;
+	reasoning?: boolean;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -40,6 +48,8 @@ function readEntryMetadata(entry: Record<string, unknown>): {
 	contextWindow?: number;
 	maxInputTokens?: number;
 	maxTokens?: number;
+	vision?: boolean;
+	reasoning?: boolean;
 } {
 	const topProvider = isRecord(entry.top_provider) ? entry.top_provider : undefined;
 	const limits = isRecord(entry.limits) ? entry.limits : undefined;
@@ -68,6 +78,8 @@ function readEntryMetadata(entry: Record<string, unknown>): {
 			topProvider?.max_completion_tokens,
 			limits?.output,
 		]),
+		...(entry.vision === true ? { vision: true as const } : {}),
+		...(entry.reasoning === true ? { reasoning: true as const } : {}),
 	};
 }
 
@@ -93,6 +105,8 @@ function readEntry(item: unknown): ModelSourceEntry | undefined {
 		...(metadata.contextWindow !== undefined ? { contextWindow: metadata.contextWindow } : {}),
 		...(metadata.maxInputTokens !== undefined ? { maxInputTokens: metadata.maxInputTokens } : {}),
 		...(metadata.maxTokens !== undefined ? { maxTokens: metadata.maxTokens } : {}),
+		...(metadata.vision === true ? { vision: true as const } : {}),
+		...(metadata.reasoning === true ? { reasoning: true as const } : {}),
 	};
 }
 

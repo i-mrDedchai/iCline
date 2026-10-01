@@ -1174,6 +1174,10 @@ const OPENAI_COMPATIBLE_SPEC_OVERRIDES: BuiltinSpecOverride[] = [
 		// Live model list from the gateway's OpenAI-compatible /models
 		// endpoint (Bearer auth; answers 401 without a key).
 		modelsSourceUrl: "https://router.bynara.id/v1/models",
+		// The static snapshot is a real catalog, not an installed-list:
+		// union it with live instead of letting an empty fetch blank the
+		// picker (see mergeKnownModels).
+		modelsSourceAuthoritative: false,
 	},
 ];
 
@@ -1468,6 +1472,7 @@ function toModelCollection(spec: BuiltinSpec): ModelCollection {
 			protocol: spec.protocol ?? inferProtocol(spec),
 			baseUrl: spec.defaults?.baseUrl,
 			modelsSourceUrl: spec.modelsSourceUrl,
+			modelsSourceAuthoritative: spec.modelsSourceAuthoritative,
 			docsUrl: spec.docsUrl,
 			defaultModelId,
 			capabilities,

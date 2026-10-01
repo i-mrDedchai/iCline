@@ -22,12 +22,21 @@ describe("bynara snapshot catalog", () => {
 			if (info.contextWindow !== undefined) {
 				expect(info.contextWindow).toBeGreaterThan(0)
 			}
-			// Pricing is USD per 1M: only gateway-declared zero (honestly
-			// free) may appear — paid tiers stay absent ("unknown"), because
-			// the gateway bills in IDR and no FX rate is guessed.
+			// Pricing is USD per 1M converted from the gateway's IDR book
+			// (see file header for the rate): finite and non-negative —
+			// never absent-shaped-as-free, never guessed per-model.
 			if (info.pricing) {
-				expect(info.pricing.input).toBe(0)
-				expect(info.pricing.output).toBe(0)
+				for (const value of [
+					info.pricing.input,
+					info.pricing.output,
+					info.pricing.cacheRead,
+					info.pricing.cacheWrite,
+				]) {
+					if (value !== undefined) {
+						expect(Number.isFinite(value)).toBe(true)
+						expect(value).toBeGreaterThanOrEqual(0)
+					}
+				}
 			}
 		}
 	})

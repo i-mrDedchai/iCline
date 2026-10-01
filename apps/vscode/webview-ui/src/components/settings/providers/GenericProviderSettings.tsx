@@ -1,4 +1,5 @@
 import { Mode } from "@shared/storage/types"
+import { useCallback } from "react"
 import { type ProviderId } from "@/context/ExtensionStateContext"
 import { useProviderConfig } from "@/hooks/useProviderConfig"
 import { useProviderModelSelection } from "@/hooks/useProviderModelSelection"
@@ -44,8 +45,20 @@ export const GenericProviderSettings = ({
 	isPopup,
 	currentMode,
 }: GenericProviderSettingsProps) => {
-	const { models, defaultModelId, isLoading, isStale, error } = useProviderModels(providerId)
+	const { models, defaultModelId, isLoading, isStale, error, refresh } = useProviderModels(providerId)
 	const { config, write, commitSelection } = useProviderConfig(providerId)
+	// Credential/endpoint writes change what the model list resolves to (a
+	// saved key unlocks the live endpoint list), so re-resolve after the
+	// host persists — otherwise the picker stays on the pre-save list until
+	// the next mount or manual expand (NaraRouter dev.4-fix.1). Reasoning
+	// writes keep the plain path: they never affect the list.
+	const writeAndRefresh = useCallback(
+		async (patch: Parameters<typeof write>[0]) => {
+			await write(patch)
+			await refresh()
+		},
+		[write, refresh],
+	)
 	const { selectedModel, commitModelSelection } = useProviderModelSelection(providerId, currentMode, {
 		models,
 		defaultModelId,
@@ -62,11 +75,11 @@ export const GenericProviderSettings = ({
 	const { savedApiKeyMask, handleApiKeyChange } = useProviderApiKeyField({
 		apiKeyLength: config?.apiKeyLength,
 		providerName,
-		write,
+		write: writeAndRefresh,
 	})
 	const tr = useTranslation("providers")
 	const handleBaseUrlChange = (value: string) => {
-		void write({ baseUrl: value }).catch((err) => console.error(`Failed to update ${providerName} base URL:`, err))
+		void writeAndRefresh({ baseUrl: value }).catch((err) => console.error(`Failed to update ${providerName} base URL:`, err))
 	}
 
 	return (

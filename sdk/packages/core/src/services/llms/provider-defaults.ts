@@ -202,6 +202,38 @@ function enrichKnownModelsFromCrossCatalog(
 	return changed ? next : knownModels;
 }
 
+/**
+ * Union a bundled/static catalog with a live endpoint list for providers
+ * whose snapshot is a real catalog (`modelsSourceAuthoritative: false`).
+ * Fresh live scalars (name, context) win per id, but capability and pricing
+ * facts the live entry is silent about are filled from the snapshot instead
+ * of being dropped by the wholesale overwrite — otherwise every keyed fetch
+ * would strip the thinking/effort badges the snapshot provides.
+ */
+function fillEndpointModelsWithStatic(
+	staticModels: Record<string, ModelInfo>,
+	liveModels: Record<string, ModelInfo>,
+): Record<string, ModelInfo> {
+	const merged: Record<string, ModelInfo> = { ...staticModels }
+	for (const [modelId, live] of Object.entries(liveModels)) {
+		const base = staticModels[modelId]
+		if (!base) {
+			merged[modelId] = live
+			continue
+		}
+		const capabilities = [...new Set([...(base.capabilities ?? []), ...(live.capabilities ?? [])])]
+		merged[modelId] = {
+			...base,
+			...live,
+			...(capabilities.length > 0 ? { capabilities } : {}),
+			// The live endpoint list carries no pricing; never let its
+			// silence revoke the snapshot's declared prices.
+			...(live.pricing === undefined && base.pricing !== undefined ? { pricing: base.pricing } : {}),
+		}
+	}
+	return merged
+}
+
 async function mergeKnownModels(
 	providerId: string,
 	defaultKnownModels: Record<string, ModelInfo> = {},
@@ -229,10 +261,19 @@ async function mergeKnownModels(
 	// returns nothing. Falling back to the bundled (cloud) catalog here would
 	// auto-select a model the user never installed (e.g. Ollama silently
 	// defaulting to a cloud nemotron model when the local server is down).
-	const hasPublicModelSource = Boolean(
-		Llms.MODEL_COLLECTIONS_BY_PROVIDER_ID[providerId]?.provider.modelsSourceUrl,
-	);
+	const provider = Llms.MODEL_COLLECTIONS_BY_PROVIDER_ID[providerId]?.provider
+	const hasPublicModelSource = Boolean(provider?.modelsSourceUrl)
 	if (hasPublicModelSource) {
+		// Gateways with a real static catalog (NaraRouter) union it with the
+		// live list: a failed/empty fetch degrades to the snapshot instead
+		// of blanking the picker, and live silence never strips snapshot
+		// capabilities or prices (see fillEndpointModelsWithStatic).
+		if (provider?.modelsSourceAuthoritative === false) {
+			return Llms.sortModelsByReleaseDate({
+				...fillEndpointModelsWithStatic(defaultKnownModels, publicModels),
+				...userKnownModels,
+			})
+		}
 		return Llms.sortModelsByReleaseDate({
 			...publicModels,
 			...userKnownModels,
@@ -811,14 +852,15 @@ async function getPublicProviderModels(
 	const inFlight = PUBLIC_MODELS_IN_FLIGHT.get(cacheKey);
 	if (inFlight) {
 		return inFlight;
-	}
-
-	const request = fetchModelsFromSource(sourceUrl, providerId, {
-		apiKey: resolveAuthToken(config),
-	})
+	}	const request = fetchModelsFromSource(sourceUrl, providerId, {
+			apiKey: resolveAuthToken(config),
+		})
 		.then((entries) => {
 			// Provider-declared limits (context window etc.) ride along: what the
 			// endpoint publishes about its models is the provider's own statement.
+			// Capability flags too (NaraRouter declares vision/reasoning per
+			// model): without them every live entry degrades to
+			// streaming+tools and the pickers report "No capability data".
 			const data = Object.fromEntries(
 				entries.map((entry) => [
 					entry.id,
@@ -827,6 +869,8 @@ async function getPublicProviderModels(
 						contextWindow: entry.contextWindow,
 						maxInputTokens: entry.maxInputTokens,
 						maxTokens: entry.maxTokens,
+						supportsImages: entry.vision === true ? true : undefined,
+						supportsReasoning: entry.reasoning === true ? true : undefined,
 					}),
 				]),
 			);

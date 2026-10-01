@@ -11,10 +11,12 @@ import type { ModelInfo } from "../catalog/types"
  * Base capabilities are always streaming + tools (same convention as the
  * SDK's private-source builder).
  *
- * Pricing: the gateway bills in IDR (input/output_idr_per_1m), while
- * ModelInfo.pricing is USD - no FX rate is baked in here. Models the
+ * Pricing is USD per 1M tokens converted from the gateway's IDR prices
+ * (input/output/cache_read_idr_per_1m) at ~16,500 IDR/USD, the approximate
+ * market rate on 2026-10-02, rounded to 3 significant figures. Models the
  * gateway declares at exactly 0 carry { input: 0, output: 0 } (honestly
- * free); everything else omits pricing ("unknown", never guessed).
+ * free). Treat the paid figures as gateway-rate approximations, not
+ * bank-grade FX.
  *
  * This snapshot is what the Settings dropdown and Quick Picker show with
  * NO key saved. A keyed fetch of the same /v1/models endpoint enriches /
@@ -31,6 +33,7 @@ export function buildBynaraModels(): Record<string, ModelInfo> {
 			contextWindow: 512000,
 			maxInputTokens: 512000,
 			capabilities: ["streaming","tools","images","reasoning"],
+			pricing: { input: 0.00606, output: 0.0121, cacheRead: 0.000606 },
 			status: "active",
 		},
 		"agnes-3-flash": {
@@ -39,6 +42,7 @@ export function buildBynaraModels(): Record<string, ModelInfo> {
 			contextWindow: 512000,
 			maxInputTokens: 512000,
 			capabilities: ["streaming","tools","images","reasoning"],
+			pricing: { input: 0.0121, output: 0.0242, cacheRead: 0.00121 },
 			status: "active",
 		},
 		"claude-fable-5.1": {
@@ -47,6 +51,7 @@ export function buildBynaraModels(): Record<string, ModelInfo> {
 			contextWindow: 1000000,
 			maxInputTokens: 1000000,
 			capabilities: ["streaming","tools","images"],
+			pricing: { input: 3.22, output: 16.1, cacheRead: 0.262 },
 			status: "active",
 		},
 		"claude-opus-4.8": {
@@ -55,6 +60,7 @@ export function buildBynaraModels(): Record<string, ModelInfo> {
 			contextWindow: 1000000,
 			maxInputTokens: 1000000,
 			capabilities: ["streaming","tools","images"],
+			pricing: { input: 1.61, output: 8.04, cacheRead: 0.282 },
 			status: "active",
 		},
 		"claude-opus-5": {
@@ -63,6 +69,7 @@ export function buildBynaraModels(): Record<string, ModelInfo> {
 			contextWindow: 1000000,
 			maxInputTokens: 1000000,
 			capabilities: ["streaming","tools","images"],
+			pricing: { input: 1.61, output: 8.04, cacheRead: 0.282 },
 			status: "active",
 		},
 		"claude-opus-5.5": {
@@ -71,6 +78,7 @@ export function buildBynaraModels(): Record<string, ModelInfo> {
 			contextWindow: 1000000,
 			maxInputTokens: 1000000,
 			capabilities: ["streaming","tools","images"],
+			pricing: { input: 1.09, output: 4.32, cacheRead: 0.23 },
 			status: "active",
 		},
 		"claude-sonnet-5": {
@@ -79,6 +87,7 @@ export function buildBynaraModels(): Record<string, ModelInfo> {
 			contextWindow: 1000000,
 			maxInputTokens: 1000000,
 			capabilities: ["streaming","tools","images"],
+			pricing: { input: 0.651, output: 3.25, cacheRead: 0.126 },
 			status: "active",
 		},
 		"claude-sonnet-5.5": {
@@ -87,6 +96,7 @@ export function buildBynaraModels(): Record<string, ModelInfo> {
 			contextWindow: 1000000,
 			maxInputTokens: 1000000,
 			capabilities: ["streaming","tools","images"],
+			pricing: { input: 0.654, output: 3.27, cacheRead: 0.0957 },
 			status: "active",
 		},
 		"deepseek-v4-flash-alibaba": {
@@ -95,6 +105,7 @@ export function buildBynaraModels(): Record<string, ModelInfo> {
 			contextWindow: 1000000,
 			maxInputTokens: 1000000,
 			capabilities: ["streaming","tools","images"],
+			pricing: { input: 0.138, output: 0.218, cacheRead: 0.0642 },
 			status: "active",
 		},
 		"deepseek-v4-flash-vision-exp": {
@@ -103,6 +114,7 @@ export function buildBynaraModels(): Record<string, ModelInfo> {
 			contextWindow: 1000000,
 			maxInputTokens: 1000000,
 			capabilities: ["streaming","tools","images"],
+			pricing: { input: 0.0474, output: 0.142, cacheRead: 0.00536 },
 			status: "active",
 		},
 		"deepseek-v4-pro-alibaba": {
@@ -111,6 +123,7 @@ export function buildBynaraModels(): Record<string, ModelInfo> {
 			contextWindow: 1000000,
 			maxInputTokens: 1000000,
 			capabilities: ["streaming","tools"],
+			pricing: { input: 1.96, output: 2.75, cacheRead: 0.271 },
 			status: "active",
 		},
 		"deepseek-v4.1-flash": {
@@ -119,6 +132,7 @@ export function buildBynaraModels(): Record<string, ModelInfo> {
 			contextWindow: 1000000,
 			maxInputTokens: 1000000,
 			capabilities: ["streaming","tools","images","reasoning"],
+			pricing: { input: 0.0503, output: 0.189, cacheRead: 0.00428 },
 			status: "active",
 		},
 		"gemini-3.1-pro-high": {
@@ -127,6 +141,7 @@ export function buildBynaraModels(): Record<string, ModelInfo> {
 			contextWindow: 1000000,
 			maxInputTokens: 1000000,
 			capabilities: ["streaming","tools","images"],
+			pricing: { input: 0.107, output: 0.642, cacheRead: 0.0168 },
 			status: "active",
 		},
 		"gemini-3.8-flash-high": {
@@ -135,6 +150,7 @@ export function buildBynaraModels(): Record<string, ModelInfo> {
 			contextWindow: 1000000,
 			maxInputTokens: 1000000,
 			capabilities: ["streaming","tools","images"],
+			pricing: { input: 0.0401, output: 0.201, cacheRead: 0.00644 },
 			status: "active",
 		},
 		"glm-5.2": {
@@ -143,6 +159,7 @@ export function buildBynaraModels(): Record<string, ModelInfo> {
 			contextWindow: 1000000,
 			maxInputTokens: 1000000,
 			capabilities: ["streaming","tools","reasoning"],
+			pricing: { input: 0.192, output: 0.64, cacheRead: 0.048 },
 			status: "active",
 		},
 		"glm-5.3": {
@@ -151,6 +168,7 @@ export function buildBynaraModels(): Record<string, ModelInfo> {
 			contextWindow: 1000000,
 			maxInputTokens: 1000000,
 			capabilities: ["streaming","tools","reasoning"],
+			pricing: { input: 0.448, output: 1.41, cacheRead: 0.0832 },
 			status: "active",
 		},
 		"glm-5.3-flash": {
@@ -159,6 +177,7 @@ export function buildBynaraModels(): Record<string, ModelInfo> {
 			contextWindow: 1000000,
 			maxInputTokens: 1000000,
 			capabilities: ["streaming","tools","images","reasoning"],
+			pricing: { input: 0.0323, output: 0.108, cacheRead: 0.0108 },
 			status: "active",
 		},
 		"gpt-5.6-luna": {
@@ -167,6 +186,7 @@ export function buildBynaraModels(): Record<string, ModelInfo> {
 			contextWindow: 1000000,
 			maxInputTokens: 1000000,
 			capabilities: ["streaming","tools","images"],
+			pricing: { input: 0.0216, output: 0.13, cacheRead: 0.00649 },
 			status: "active",
 		},
 		"gpt-5.6-sol": {
@@ -175,6 +195,7 @@ export function buildBynaraModels(): Record<string, ModelInfo> {
 			contextWindow: 1000000,
 			maxInputTokens: 1000000,
 			capabilities: ["streaming","tools","images"],
+			pricing: { input: 0.621, output: 4.27, cacheRead: 0.177 },
 			status: "active",
 		},
 		"gpt-5.6-terra": {
@@ -183,6 +204,7 @@ export function buildBynaraModels(): Record<string, ModelInfo> {
 			contextWindow: 1000000,
 			maxInputTokens: 1000000,
 			capabilities: ["streaming","tools","images","reasoning"],
+			pricing: { input: 0.322, output: 1.93, cacheRead: 0.0928 },
 			status: "active",
 		},
 		"gpt-6-astra": {
@@ -191,6 +213,7 @@ export function buildBynaraModels(): Record<string, ModelInfo> {
 			contextWindow: 1000000,
 			maxInputTokens: 1000000,
 			capabilities: ["streaming","tools","images"],
+			pricing: { input: 1.54, output: 6.48, cacheRead: 0.215 },
 			status: "active",
 		},
 		"gpt-6-luna": {
@@ -199,6 +222,7 @@ export function buildBynaraModels(): Record<string, ModelInfo> {
 			contextWindow: 1000000,
 			maxInputTokens: 1000000,
 			capabilities: ["streaming","tools","images"],
+			pricing: { input: 0.0154, output: 0.0541, cacheRead: 0.00324 },
 			status: "active",
 		},
 		"gpt-6-sol": {
@@ -207,6 +231,7 @@ export function buildBynaraModels(): Record<string, ModelInfo> {
 			contextWindow: 1000000,
 			maxInputTokens: 1000000,
 			capabilities: ["streaming","tools","images"],
+			pricing: { input: 0.327, output: 1.63, cacheRead: 0.0448 },
 			status: "active",
 		},
 		"gpt-6.1-sol": {
@@ -215,6 +240,7 @@ export function buildBynaraModels(): Record<string, ModelInfo> {
 			contextWindow: 1000000,
 			maxInputTokens: 1000000,
 			capabilities: ["streaming","tools","images"],
+			pricing: { input: 0.327, output: 1.63, cacheRead: 0.0388 },
 			status: "active",
 		},
 		"jev": {
@@ -232,6 +258,7 @@ export function buildBynaraModels(): Record<string, ModelInfo> {
 			contextWindow: 262000,
 			maxInputTokens: 262000,
 			capabilities: ["streaming","tools","images","reasoning"],
+			pricing: { input: 0.227, output: 1.03, cacheRead: 0.119 },
 			status: "active",
 		},
 		"kimi-k3": {
@@ -240,6 +267,7 @@ export function buildBynaraModels(): Record<string, ModelInfo> {
 			contextWindow: 1000000,
 			maxInputTokens: 1000000,
 			capabilities: ["streaming","tools","images","reasoning"],
+			pricing: { input: 0.965, output: 4.83, cacheRead: 0.157 },
 			status: "active",
 		},
 		"laguna-s-2.1": {
@@ -275,6 +303,7 @@ export function buildBynaraModels(): Record<string, ModelInfo> {
 			contextWindow: 1000000,
 			maxInputTokens: 1000000,
 			capabilities: ["streaming","tools","reasoning"],
+			pricing: { input: 0.407, output: 3.25, cacheRead: 0.0407 },
 			status: "active",
 		},
 		"mimo-v2.5": {
@@ -283,6 +312,7 @@ export function buildBynaraModels(): Record<string, ModelInfo> {
 			contextWindow: 1000000,
 			maxInputTokens: 1000000,
 			capabilities: ["streaming","tools","images"],
+			pricing: { input: 0.0225, output: 0.0451, cacheRead: 0.000935 },
 			status: "active",
 		},
 		"mimo-v2.5-free": {
@@ -291,6 +321,7 @@ export function buildBynaraModels(): Record<string, ModelInfo> {
 			contextWindow: 1000000,
 			maxInputTokens: 1000000,
 			capabilities: ["streaming","tools","images"],
+			pricing: { input: 0.0149, output: 0.0299, cacheRead: 0.000299 },
 			status: "active",
 		},
 		"mimo-v2.6-flash": {
@@ -299,6 +330,7 @@ export function buildBynaraModels(): Record<string, ModelInfo> {
 			contextWindow: 1000000,
 			maxInputTokens: 1000000,
 			capabilities: ["streaming","tools","images"],
+			pricing: { input: 0.0453, output: 0.0906, cacheRead: 0.00212 },
 			status: "active",
 		},
 		"mimo-v2.6-flash-free": {
@@ -307,6 +339,7 @@ export function buildBynaraModels(): Record<string, ModelInfo> {
 			contextWindow: 1000000,
 			maxInputTokens: 1000000,
 			capabilities: ["streaming","tools","images"],
+			pricing: { input: 0.0453, output: 0.0906, cacheRead: 0.00212 },
 			status: "active",
 		},
 		"mimo-v2.6-pro": {
@@ -315,6 +348,7 @@ export function buildBynaraModels(): Record<string, ModelInfo> {
 			contextWindow: 1000000,
 			maxInputTokens: 1000000,
 			capabilities: ["streaming","tools","images","reasoning"],
+			pricing: { input: 0.142, output: 0.283, cacheRead: 0.00238 },
 			status: "active",
 		},
 		"minimax-m3": {
@@ -323,6 +357,7 @@ export function buildBynaraModels(): Record<string, ModelInfo> {
 			contextWindow: 1000000,
 			maxInputTokens: 1000000,
 			capabilities: ["streaming","tools","images"],
+			pricing: { input: 0.161, output: 0.642, cacheRead: 0.0321 },
 			status: "active",
 		},
 		"muse-spark-1.2": {
@@ -331,6 +366,7 @@ export function buildBynaraModels(): Record<string, ModelInfo> {
 			contextWindow: 1000000,
 			maxInputTokens: 1000000,
 			capabilities: ["streaming","tools","images"],
+			pricing: { input: 0.269, output: 0.915, cacheRead: 0.0323 },
 			status: "active",
 		},
 		"muse-spark-1.2-contributor": {
@@ -339,6 +375,7 @@ export function buildBynaraModels(): Record<string, ModelInfo> {
 			contextWindow: 1000000,
 			maxInputTokens: 1000000,
 			capabilities: ["streaming","tools","images"],
+			pricing: { input: 0.0214, output: 0.0427, cacheRead: 0.00164 },
 			status: "active",
 		},
 		"muse-spark-1.3": {
@@ -347,6 +384,7 @@ export function buildBynaraModels(): Record<string, ModelInfo> {
 			contextWindow: 1000000,
 			maxInputTokens: 1000000,
 			capabilities: ["streaming","tools","images"],
+			pricing: { input: 0.269, output: 0.915, cacheRead: 0.0323 },
 			status: "active",
 		},
 		"muse-spark-1.3-contributor": {
@@ -355,6 +393,7 @@ export function buildBynaraModels(): Record<string, ModelInfo> {
 			contextWindow: 1000000,
 			maxInputTokens: 1000000,
 			capabilities: ["streaming","tools","images"],
+			pricing: { input: 0.0214, output: 0.0427, cacheRead: 0.00164 },
 			status: "active",
 		},
 		"muse-spark-1.3-contributor-free": {
@@ -363,6 +402,7 @@ export function buildBynaraModels(): Record<string, ModelInfo> {
 			contextWindow: 1000000,
 			maxInputTokens: 1000000,
 			capabilities: ["streaming","tools","images","reasoning"],
+			pricing: { input: 0.0214, output: 0.0427, cacheRead: 0.00103 },
 			status: "active",
 		},
 		"nemotron-3-super-free": {
@@ -398,6 +438,7 @@ export function buildBynaraModels(): Record<string, ModelInfo> {
 			contextWindow: 1000000,
 			maxInputTokens: 1000000,
 			capabilities: ["streaming","tools"],
+			pricing: { input: 0.0686, output: 0.817, cacheRead: 0.0481 },
 			status: "active",
 		},
 		"qwen3.8-flash": {
@@ -406,6 +447,7 @@ export function buildBynaraModels(): Record<string, ModelInfo> {
 			contextWindow: 1000000,
 			maxInputTokens: 1000000,
 			capabilities: ["streaming","tools","images","reasoning"],
+			pricing: { input: 0.0402, output: 0.126, cacheRead: 0.00776 },
 			status: "active",
 		},
 		"qwen3.8-max": {
@@ -414,6 +456,7 @@ export function buildBynaraModels(): Record<string, ModelInfo> {
 			contextWindow: 1000000,
 			maxInputTokens: 1000000,
 			capabilities: ["streaming","tools","images"],
+			pricing: { input: 0.644, output: 1.93, cacheRead: 0.0805 },
 			status: "active",
 		},
 		"qwen3.8-max-alibaba": {
@@ -422,6 +465,7 @@ export function buildBynaraModels(): Record<string, ModelInfo> {
 			contextWindow: 1000000,
 			maxInputTokens: 1000000,
 			capabilities: ["streaming","tools","images"],
+			pricing: { input: 2.18, output: 6.54, cacheRead: 0.218 },
 			status: "active",
 		},
 		"space-bunny-alpha": {
@@ -448,6 +492,7 @@ export function buildBynaraModels(): Record<string, ModelInfo> {
 			contextWindow: 1000000,
 			maxInputTokens: 1000000,
 			capabilities: ["streaming","tools","images","reasoning"],
+			pricing: { input: 0.108, output: 0.325, cacheRead: 0.0103 },
 			status: "active",
 		},
 		"stepfun-3.7-flash": {
@@ -456,6 +501,7 @@ export function buildBynaraModels(): Record<string, ModelInfo> {
 			contextWindow: 262000,
 			maxInputTokens: 262000,
 			capabilities: ["streaming","tools","images","reasoning"],
+			pricing: { input: 0.0439, output: 0.252, cacheRead: 0.00878 },
 			status: "active",
 		},
 		"deepseek-v4-flash": {
@@ -464,6 +510,7 @@ export function buildBynaraModels(): Record<string, ModelInfo> {
 			contextWindow: 1000000,
 			maxInputTokens: 1000000,
 			capabilities: ["streaming","tools"],
+			pricing: { input: 0.0208, output: 0.0577, cacheRead: 0.00634 },
 			status: "active",
 		},
 		"deepseek-v4-pro": {
@@ -472,6 +519,7 @@ export function buildBynaraModels(): Record<string, ModelInfo> {
 			contextWindow: 1000000,
 			maxInputTokens: 1000000,
 			capabilities: ["streaming","tools","reasoning"],
+			pricing: { input: 0.358, output: 1.07, cacheRead: 0.0725 },
 			status: "active",
 		},
 		"mimo-v2.5-pro": {
@@ -480,6 +528,7 @@ export function buildBynaraModels(): Record<string, ModelInfo> {
 			contextWindow: 1000000,
 			maxInputTokens: 1000000,
 			capabilities: ["streaming","tools"],
+			pricing: { input: 0.0933, output: 0.187, cacheRead: 0.0012 },
 			status: "active",
 		},
 	}

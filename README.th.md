@@ -14,7 +14,7 @@
 
 <!-- icline:version -->
 <p align="center">
-  <strong>เวอร์ชัน</strong> <code>0.1.19-dev.4</code> ·
+  <strong>เวอร์ชัน</strong> <code>0.1.19-dev.4-fix.1</code> ·
   <a href="https://github.com/i-mrDedchai/iCline/releases">Releases</a> ·
   <a href="https://github.com/i-mrDedchai/iCline/blob/main/apps/vscode/CHANGELOG.md">Changelog</a> ·
   Extension ID <code>i-mrdedchai.iCline</code>

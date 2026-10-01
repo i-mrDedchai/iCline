@@ -62,6 +62,29 @@ describe("extractModelsFromPayload", () => {
 		]);
 	});
 
+	it("reads endpoint capability flags (NaraRouter vision/reasoning)", () => {
+		expect(
+			extractModelsFromPayload(
+				{
+					data: [
+						{ id: "plain", name: "Plain" },
+						{ id: "seeing", vision: true },
+						{ id: "thinking", reasoning: true },
+						{ id: "both", vision: true, reasoning: true },
+						{ id: "silent", vision: false, reasoning: 0 },
+					],
+				},
+				"p",
+			),
+		).toEqual([
+				{ id: "plain", name: "Plain" },
+				{ id: "seeing", vision: true },
+				{ id: "thinking", reasoning: true },
+				{ id: "both", vision: true, reasoning: true },
+				{ id: "silent" },
+		])
+	})
+
 	it("reads models-map and provider-scoped shapes", () => {
 		expect(
 			extractModelsFromPayload(

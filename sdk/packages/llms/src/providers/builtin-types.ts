@@ -47,6 +47,16 @@ export interface BuiltinSpec {
 	env?: readonly ("browser" | "node")[];
 	apiKeyEnv?: readonly string[];
 	modelsSourceUrl?: string;
+	/**
+	 * Who wins when BOTH a bundled/static catalog (modelsFactory) and a live
+	 * `modelsSourceUrl` exist. Default (true): the live source is
+	 * authoritative — bundled models are dropped (Ollama / LM Studio / Jan
+	 * semantics: live = what is actually installed, bundled would lie).
+	 * Set false for gateways whose static snapshot is a real catalog:
+	 * live + static union instead, so a failed/empty fetch degrades to the
+	 * snapshot instead of an empty picker (NaraRouter).
+	 */
+	modelsSourceAuthoritative?: boolean;
 	docsUrl?: string;
 	defaults?: GatewayProviderSettings;
 	/**

@@ -23,6 +23,7 @@ export enum BUILT_IN_PROVIDER {
 	OPENCODE = "opencode",
 	// iCline additions (not in upstream's generated catalog)
 	JAN = "jan",
+	BYNARA = "bynara",
 	// Cloud providers
 	BEDROCK = "bedrock",
 	VERTEX = "vertex",
