@@ -3,6 +3,7 @@ import type { Mode } from "@shared/storage/types"
 import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
 import type React from "react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useTranslation } from "@/i18n/useTranslation"
 import { useExtensionState } from "../../../../../context/ExtensionStateContext"
 import { ButtonActionType, getButtonConfigFromState } from "../../shared/buttonConfig"
 import type { ChatState, MessageHandlers } from "../../types/chatTypes"
@@ -21,6 +22,7 @@ interface ActionButtonsProps {
 export const ActionButtons: React.FC<ActionButtonsProps> = ({ task, messages, chatState, mode, messageHandlers }) => {
 	const { inputValue, selectedImages, selectedFiles, setSendingDisabled } = chatState
 	const { turnState, foregroundCommandRunning } = useExtensionState()
+	const trQuickStart = useTranslation("quickStart")
 
 	// Tracks the ask the user last acted on. Clicking a footer button latches this so the
 	// buttons disable immediately (and survive the trailing bookkeeping re-renders before the
@@ -50,7 +52,7 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({ task, messages, ch
 	// message) changes on every new ask, making it the reliable signal that a fresh decision is
 	// due even when the config object is identical. Folding the config's button text in also
 	// covers a same-anchor transition between different button sets.
-	const askIdentity = `${turnState?.anchorTs ?? lastMessage?.ts ?? ""}:${buttonConfig.primaryText ?? ""}:${buttonConfig.secondaryText ?? ""}`
+	const askIdentity = `${turnState?.anchorTs ?? lastMessage?.ts ?? ""}:${buttonConfig.primaryKey ?? buttonConfig.primaryText ?? ""}:${buttonConfig.secondaryKey ?? buttonConfig.secondaryText ?? ""}`
 
 	// The buttons are "processing" only while the user's click is being handled for the current
 	// ask. Because the latch is keyed on the ask identity, a new ask (even one reusing the same
@@ -116,7 +118,11 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({ task, messages, ch
 		return null
 	}
 
-	const { primaryText, secondaryText, primaryAction, secondaryAction, enableButtons } = buttonConfig
+	const { primaryAction, secondaryAction, enableButtons } = buttonConfig
+	// Translated labels — the English `*Text` stays as the fallback so a missing
+	// table entry renders English, never a raw key.
+	const primaryText = buttonConfig.primaryKey ? trQuickStart(buttonConfig.primaryKey) : buttonConfig.primaryText
+	const secondaryText = buttonConfig.secondaryKey ? trQuickStart(buttonConfig.secondaryKey) : buttonConfig.secondaryText
 	const hasButtons = primaryText || secondaryText
 	const isStreaming = task.partial === true
 	const canInteract = enableButtons && !isProcessing

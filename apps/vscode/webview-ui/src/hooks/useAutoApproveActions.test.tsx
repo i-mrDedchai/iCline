@@ -78,6 +78,42 @@ describe("team auto-approve switches", () => {
 		)
 	})
 
+	it("lists the notifications row in the auto-approve menu", () => {
+		const notifications = ACTION_METADATA.find((action) => action.id === "enableNotifications")
+
+		expect(notifications?.label).toBe("Show notifications")
+		expect(notifications?.labelKey).toBe("autoApproveAction_enableNotifications")
+	})
+
+	it("reads notifications from the top-level setting, not actions", () => {
+		vi.mocked(useExtensionState).mockReturnValue({
+			autoApprovalSettings: { ...makeSettings({}), enableNotifications: true },
+		} as any)
+
+		const { result } = renderHook(() => useAutoApproveActions())
+		const notifications = ACTION_METADATA.find((action) => action.id === "enableNotifications")!
+
+		expect(result.current.isChecked(notifications)).toBe(true)
+	})
+
+	it("persists a notifications toggle with a bumped version", async () => {
+		vi.mocked(useExtensionState).mockReturnValue({
+			autoApprovalSettings: { ...makeSettings({}), enableNotifications: false },
+		} as any)
+
+		const { result } = renderHook(() => useAutoApproveActions())
+		const notifications = ACTION_METADATA.find((action) => action.id === "enableNotifications")!
+
+		await result.current.updateAction(notifications, true)
+
+		expect(StateServiceClient.updateAutoApprovalSettings).toHaveBeenCalledWith(
+			expect.objectContaining({
+				version: 4,
+				enableNotifications: true,
+			}),
+		)
+	})
+
 	it("persists a team switch toggle with a bumped version", async () => {
 		vi.mocked(useExtensionState).mockReturnValue({
 			autoApprovalSettings: makeSettings({ teamReads: true, teamWrites: false }),

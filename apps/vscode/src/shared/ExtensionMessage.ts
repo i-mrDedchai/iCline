@@ -72,6 +72,20 @@ export interface ExtensionState {
 	appearanceCompletedAccent?: string
 	appearanceReplyAccent?: string
 	appearanceBrandAccent?: string
+	/**
+	 * Appearance surface opacity (0–100, 50 = the pre-opacity look). The webview
+	 * multiplies each surface's own fill/border ratios by value/50.
+	 */
+	appearanceCompletedOpacity?: number
+	appearanceReplyOpacity?: number
+	appearanceBrandOpacity?: number
+	/**
+	 * Appearance icons: emoji/character before the completed-box and
+	 * final-reply titles. "none" hides the slot, "check" renders the legacy
+	 * lucide check. Anything else renders as-is.
+	 */
+	appearanceCompletedIcon?: string
+	appearanceReplyIcon?: string
 	mode: Mode
 	clineMessages: ClineMessage[]
 	checkpointRestoreInput?: {

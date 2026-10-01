@@ -25,6 +25,7 @@ export function useMessageHandlers(messages: ClineMessage[], chatState: ChatStat
 		enableButtons,
 		setEnableButtons,
 		setPendingUserMessage,
+		pushInputHistory,
 		clineAsk,
 		lastMessage,
 	} = chatState
@@ -63,6 +64,10 @@ export function useMessageHandlers(messages: ClineMessage[], chatState: ChatStat
 			}
 
 			if (hasContent) {
+				// Record the raw composer text (not the quote-prefixed send) so Up
+				// recalls exactly what was typed. Approval-button sends bypass this
+				// choke point and are deliberately not recorded.
+				pushInputHistory(text)
 				console.log("[ChatView] handleSendMessage - Sending message:", messageToSend)
 				let messageSent = false
 				const trackPromptSubmitted = (hasActiveTask: boolean) => {
@@ -266,6 +271,7 @@ export function useMessageHandlers(messages: ClineMessage[], chatState: ChatStat
 			enableButtons,
 			setEnableButtons,
 			setPendingUserMessage,
+			pushInputHistory,
 			chatState,
 		],
 	)

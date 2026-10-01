@@ -296,6 +296,18 @@ const USER_SETTINGS_FIELDS = {
 	appearanceCompletedAccent: { default: "theme" as string },
 	appearanceReplyAccent: { default: "theme" as string },
 	appearanceBrandAccent: { default: "theme" as string },
+	// Appearance surface opacity (Settings → Appearance tab). 0–100, 50 means
+	// "exactly the pre-opacity look": the webview multiplies the surface's own
+	// fill/border ratios by value/50, so below 50 fades the tint and above 50
+	// deepens it (clamped at fully opaque). Copy stays full-strength always.
+	appearanceCompletedOpacity: { default: 50 as number },
+	appearanceReplyOpacity: { default: 50 as number },
+	appearanceBrandOpacity: { default: 50 as number },
+	// Appearance icons (Settings → Appearance tab). An emoji/character shown
+	// before the completed-box and final-reply titles; "none" hides the slot,
+	// "check" renders the legacy lucide check. Anything else renders as-is.
+	appearanceCompletedIcon: { default: "🎉" as string },
+	appearanceReplyIcon: { default: "⭐" as string },
 	mode: { default: "act" as Mode },
 	focusChainSettings: { default: DEFAULT_FOCUS_CHAIN_SETTINGS as FocusChainSettings },
 	customPrompt: { default: undefined as "compact" | undefined },

@@ -1,6 +1,8 @@
 import { ClineMessage } from "@shared/ExtensionMessage"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { pushInputHistoryEntry } from "@/components/chat/inputHistory"
 import { readComposerDraft, writeComposerDraftAttachments, writeComposerDraftText } from "@/icline/composerDraftStorage"
+import { readInputHistory, writeInputHistory } from "@/icline/inputHistoryStorage"
 import { ChatState, PendingUserMessage } from "../types/chatTypes"
 
 /**
@@ -26,6 +28,14 @@ export function useChatState(messages: ClineMessage[]): ChatState {
 	const [secondaryButtonText, setSecondaryButtonText] = useState<string | undefined>("Reject")
 	const [expandedRows, setExpandedRows] = useState<Record<number, boolean>>({})
 	const [pendingUserMessage, setPendingUserMessage] = useState<PendingUserMessage | undefined>(undefined)
+	// What the user sent this session, oldest first. Survives new tasks on
+	// purpose: resending an earlier message must not require finding it in
+	// a long transcript. Recorded in `handleSendMessage`, the single choke
+	// point for every composer send path.
+	const [inputHistory, setInputHistory] = useState<string[]>(readInputHistory)
+	const pushInputHistory = useCallback((text: string) => {
+		setInputHistory((prev) => pushInputHistoryEntry(prev, text))
+	}, [])
 
 	// Refs
 	const textAreaRef = useRef<HTMLTextAreaElement>(null)
@@ -41,6 +51,13 @@ export function useChatState(messages: ClineMessage[]): ChatState {
 	useEffect(() => {
 		writeComposerDraftAttachments(selectedImages, selectedFiles)
 	}, [selectedImages, selectedFiles])
+
+	// The sent history follows the same slot out to storage: a recalled message
+	// must still be there after the webview is replaced. Writes are idempotent,
+	// so the mount-time write-back of what was just read is a no-op.
+	useEffect(() => {
+		writeInputHistory(inputHistory)
+	}, [inputHistory])
 
 	// Derived state
 	const lastMessage = useMemo(() => messages.at(-1), [messages])
@@ -96,6 +113,8 @@ export function useChatState(messages: ClineMessage[]): ChatState {
 		setExpandedRows,
 		pendingUserMessage,
 		setPendingUserMessage,
+		inputHistory,
+		pushInputHistory,
 
 		// Refs
 		textAreaRef,

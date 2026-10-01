@@ -12,6 +12,12 @@ import DynamicTextArea from "react-textarea-autosize"
 import styled from "styled-components"
 import ContextMenu from "@/components/chat/ContextMenu"
 import { CHAT_CONSTANTS } from "@/components/chat/chat-view/constants"
+import {
+	type ComposerHistoryNav,
+	INITIAL_HISTORY_NAV,
+	recallInputHistory,
+	shouldRecallOnArrow,
+} from "@/components/chat/inputHistory"
 import { QuickModelPicker } from "@/components/chat/QuickModelPicker"
 import SlashCommandMenu from "@/components/chat/SlashCommandMenu"
 import Thumbnails from "@/components/common/Thumbnails"
@@ -72,6 +78,7 @@ const DEFAULT_CONTEXT_MENU_OPTION = getContextMenuOptionIndex(ContextMenuOptionT
 
 interface ChatTextAreaProps {
 	inputValue: string
+	inputHistory: string[]
 	activeQuote: string | null
 	setInputValue: (value: string) => void
 	sendingDisabled: boolean
@@ -207,6 +214,7 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 	(
 		{
 			inputValue,
+			inputHistory,
 			setInputValue,
 			sendingDisabled,
 			placeholderText,
@@ -257,6 +265,9 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 		const [justDeletedSpaceAfterSlashCommand, setJustDeletedSpaceAfterSlashCommand] = useState(false)
 		const [intendedCursorPosition, setIntendedCursorPosition] = useState<number | null>(null)
 		const contextMenuContainerRef = useRef<HTMLDivElement>(null)
+		// Sent-history browsing cursor for Up/Down recall. A ref, not state: the
+		// recalled text itself re-renders through setInputValue.
+		const historyNavRef = useRef<ComposerHistoryNav>({ ...INITIAL_HISTORY_NAV })
 
 		const [shownTooltipMode, setShownTooltipMode] = useState<Mode | null>(null)
 		const [pendingInsertions, setPendingInsertions] = useState<string[]>([])
@@ -592,6 +603,26 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 
 				// Safari does not support InputEvent.isComposing (always false), so we need to fallback to keyCode === 229 for it
 				const isComposing = isSafari ? event.nativeEvent.keyCode === 229 : (event.nativeEvent?.isComposing ?? false)
+				// Sent-history recall (shell-style): Up walks older messages, Down walks
+				// back to the stashed draft. Menus above already consumed their arrows.
+				// Multi-line composers keep native caret movement off the boundary lines,
+				// and IME composition is never hijacked.
+				if ((event.key === "ArrowUp" || event.key === "ArrowDown") && !isComposing && inputHistory.length > 0) {
+					const direction = event.key === "ArrowUp" ? -1 : 1
+					const textArea = event.currentTarget
+					const caret = textArea.selectionStart ?? 0
+					if (shouldRecallOnArrow(textArea.value, caret, direction)) {
+						const recalled = recallInputHistory(inputHistory, historyNavRef.current, textArea.value, direction)
+						if (recalled) {
+							event.preventDefault()
+							historyNavRef.current = recalled.nav
+							setInputValue(recalled.value)
+							setCursorPosition(recalled.value.length)
+							setIntendedCursorPosition(recalled.value.length)
+							return
+						}
+					}
+				}
 				if (event.key === "Enter" && !event.shiftKey && !isComposing) {
 					event.preventDefault()
 
@@ -683,8 +714,17 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 				slashCommandsQuery,
 				handleSlashCommandsSelect,
 				sendingDisabled,
+				inputHistory,
 			],
 		)
+
+		// A send empties the composer from the parent: browsing ends with it, so
+		// the next Up starts from the newest entry instead of a stale index.
+		useEffect(() => {
+			if (inputValue === "") {
+				historyNavRef.current = { ...INITIAL_HISTORY_NAV }
+			}
+		}, [inputValue])
 
 		// Effect to set cursor position after state updates
 		useLayoutEffect(() => {
@@ -727,6 +767,8 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 
 		const handleInputChange = useCallback(
 			(e: React.ChangeEvent<HTMLTextAreaElement>) => {
+				// Typing abandons history browsing: the live text is the draft again.
+				historyNavRef.current = { ...INITIAL_HISTORY_NAV }
 				const newValue = e.target.value
 				const newCursorPosition = e.target.selectionStart
 				setInputValue(newValue)

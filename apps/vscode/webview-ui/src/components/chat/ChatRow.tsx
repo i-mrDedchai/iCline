@@ -13,6 +13,7 @@ import { Mode } from "@shared/storage/types"
 import deepEqual from "fast-deep-equal"
 import {
 	BellIcon,
+	CheckIcon,
 	ChevronDownIcon,
 	ChevronRightIcon,
 	CircleXIcon,
@@ -34,6 +35,7 @@ import {
 } from "lucide-react"
 import { MouseEvent, memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useSize } from "react-use"
+import { DEFAULT_REPLY_ICON } from "@/appearance/appearance"
 import { canRestoreWorkspaceFromMessage } from "@/components/chat/chat-view/utils/messageUtils"
 import { OptionsButtons } from "@/components/chat/OptionsButtons"
 import { WithCopyButton } from "@/components/common/CopyButton"
@@ -41,6 +43,8 @@ import McpResponseDisplay from "@/components/mcp/chat-display/McpResponseDisplay
 import McpResourceRow from "@/components/mcp/configuration/tabs/installed/server-row/McpResourceRow"
 import McpToolRow from "@/components/mcp/configuration/tabs/installed/server-row/McpToolRow"
 import { useExtensionState } from "@/context/ExtensionStateContext"
+import { formatString, splitOnPlaceholder } from "@/i18n/strings"
+import { useTranslation } from "@/i18n/useTranslation"
 import { AGENT_DISPLAY_NAME } from "@/icline/agent-display-name"
 import { cn } from "@/lib/utils"
 import { FileServiceClient, UiServiceClient } from "@/services/grpc-client"
@@ -95,6 +99,32 @@ interface ChatRowContentProps extends Omit<ChatRowProps, "onHeightChange" | "onL
 }
 
 export const ProgressIndicator = () => <LoaderCircleIcon className="size-2 mr-2 animate-spin" />
+
+// Approval titles that interleave a name (MCP server, search pattern) in a
+// <code> run: the sentence is translated with the name's placeholder left as a
+// literal and split here, so every language keeps its own word order around it.
+// `formatString` deliberately leaves placeholders without a value untouched,
+// which is what makes the split possible.
+const ApprovalCodeTitle = ({
+	sentence,
+	name,
+	token,
+	className,
+}: {
+	sentence: string
+	name: string
+	token: string
+	className?: string
+}) => {
+	const [before, after] = splitOnPlaceholder(sentence, token)
+	return (
+		<span className={className ?? "ph-no-capture font-bold text-foreground break-words"}>
+			{before}
+			<code className="break-all">{name}</code>
+			{after}
+		</span>
+	)
+}
 const InvisibleSpacer = () => <div aria-hidden className="h-px" />
 
 const ChatRow = memo(
@@ -149,8 +179,18 @@ export const ChatRowContent = memo(
 		reasoningContent,
 		responseStarted,
 	}: ChatRowContentProps) => {
-		const { backgroundEditEnabled, mcpServers, vscodeTerminalExecutionMode, clineMessages, showFeatureTips } =
-			useExtensionState()
+		const {
+			backgroundEditEnabled,
+			mcpServers,
+			vscodeTerminalExecutionMode,
+			clineMessages,
+			showFeatureTips,
+			appearanceReplyIcon,
+		} = useExtensionState()
+		const trQuickStart = useTranslation("quickStart")
+		// Icon before the final-reply COMPLETED header (Settings → Appearance).
+		// "none" hides the slot, "check" keeps the legacy lucide check.
+		const replyIcon = appearanceReplyIcon ?? DEFAULT_REPLY_ICON
 		const [quoteButtonState, setQuoteButtonState] = useState<QuoteButtonState>({
 			visible: false,
 			top: 0,
@@ -299,17 +339,21 @@ export const ChatRowContent = memo(
 				case "error":
 					return [
 						<span className="codicon codicon-error text-error mb-[-1.5px]" />,
-						<span className="text-error font-bold">Error</span>,
+						<span className="text-error font-bold">{trQuickStart("approvalError")}</span>,
 					]
 				case "mistake_limit_reached":
 					return [
 						<CircleXIcon className="text-error size-2" />,
-						<span className="text-error font-bold">{AGENT_DISPLAY_NAME} is having trouble...</span>,
+						<span className="text-error font-bold">
+							{formatString(trQuickStart, "approvalTrouble", { agent: AGENT_DISPLAY_NAME })}
+						</span>,
 					]
 				case "command":
 					return [
 						<TerminalIcon className="text-foreground size-2" />,
-						<span className="font-bold text-foreground">{AGENT_DISPLAY_NAME} wants to execute this command:</span>,
+						<span className="font-bold text-foreground">
+							{formatString(trQuickStart, "approvalExecuteCommand", { agent: AGENT_DISPLAY_NAME })}
+						</span>,
 					]
 				case "use_mcp_server":
 					const mcpServerUse = JSON.parse(message.text || "{}") as ClineAskUseMcpServer
@@ -319,16 +363,21 @@ export const ChatRowContent = memo(
 						) : (
 							<span className="codicon codicon-server text-foreground mb-[-1.5px]" />
 						),
-						<span className="ph-no-capture font-bold text-foreground break-words">
-							{AGENT_DISPLAY_NAME} wants to{" "}
-							{mcpServerUse.type === "use_mcp_tool" ? "use a tool" : "access a resource"} on the{" "}
-							<code className="break-all">{mcpServerUse.serverName}</code> MCP server:
-						</span>,
+						<ApprovalCodeTitle
+							name={mcpServerUse.serverName}
+							sentence={formatString(trQuickStart, "approvalMcpServer", {
+								agent: AGENT_DISPLAY_NAME,
+								action: trQuickStart(
+									mcpServerUse.type === "use_mcp_tool" ? "approvalMcpUseTool" : "approvalMcpUseResource",
+								),
+							})}
+							token="server"
+						/>,
 					]
 				case "completion_result":
 					return [
 						<span className="codicon codicon-check text-success mb-[-1.5px]" />,
-						<span className="text-success font-bold">Task Completed</span>,
+						<span className="text-success font-bold">{trQuickStart("approvalTaskCompleted")}</span>,
 					]
 				case "api_req_started":
 					// API request rows no longer render the request payload/cost accordion.
@@ -337,7 +386,9 @@ export const ChatRowContent = memo(
 				case "followup":
 					return [
 						<span className="codicon codicon-question text-foreground mb-[-1.5px]" />,
-						<span className="font-bold text-foreground">{AGENT_DISPLAY_NAME} has a question:</span>,
+						<span className="font-bold text-foreground">
+							{formatString(trQuickStart, "approvalQuestion", { agent: AGENT_DISPLAY_NAME })}
+						</span>,
 					]
 				default:
 					return [null, null]
@@ -351,6 +402,7 @@ export const ChatRowContent = memo(
 			apiReqCancelReason,
 			isMcpServerResponding,
 			message.text,
+			trQuickStart,
 		])
 
 		const tool = useMemo(() => {
@@ -415,14 +467,14 @@ export const ChatRowContent = memo(
 					const content = tool?.content || ""
 					const isApplyingPatch = content?.startsWith("%%bash") && !content.endsWith("*** End Patch\nEOF")
 					const editToolTitle = isApplyingPatch
-						? `${AGENT_DISPLAY_NAME} is creating patches to edit this file:`
-						: `${AGENT_DISPLAY_NAME} wants to edit this file:`
+						? formatString(trQuickStart, "approvalEditPatch", { agent: AGENT_DISPLAY_NAME })
+						: formatString(trQuickStart, "approvalEditFile", { agent: AGENT_DISPLAY_NAME })
 					return (
 						<div>
 							<div className={HEADER_CLASSNAMES}>
 								<PencilIcon className="size-2" />
 								{tool.operationIsLocatedInWorkspace === false &&
-									toolIcon("sign-out", "yellow", -90, "This file is outside of your workspace")}
+									toolIcon("sign-out", "yellow", -90, trQuickStart("approvalOutsideWorkspace"))}
 								<span style={{ fontWeight: "bold" }}>{editToolTitle}</span>
 							</div>
 							{backgroundEditEnabled && tool.path && (tool.diff || tool.content) ? (
@@ -449,8 +501,10 @@ export const ChatRowContent = memo(
 							<div className={HEADER_CLASSNAMES}>
 								<SquareMinusIcon className="size-2" />
 								{tool.operationIsLocatedInWorkspace === false &&
-									toolIcon("sign-out", "yellow", -90, "This file is outside of your workspace")}
-								<span style={{ fontWeight: "bold" }}>{AGENT_DISPLAY_NAME} wants to delete this file:</span>
+									toolIcon("sign-out", "yellow", -90, trQuickStart("approvalOutsideWorkspace"))}
+								<span style={{ fontWeight: "bold" }}>
+									{formatString(trQuickStart, "approvalDeleteFile", { agent: AGENT_DISPLAY_NAME })}
+								</span>
 							</div>
 							<CodeAccordian
 								// isLoading={message.partial}
@@ -467,8 +521,10 @@ export const ChatRowContent = memo(
 							<div className={HEADER_CLASSNAMES}>
 								<FilePlus2Icon className="size-2" />
 								{tool.operationIsLocatedInWorkspace === false &&
-									toolIcon("sign-out", "yellow", -90, "This file is outside of your workspace")}
-								<span className="font-bold">{AGENT_DISPLAY_NAME} wants to create a new file:</span>
+									toolIcon("sign-out", "yellow", -90, trQuickStart("approvalOutsideWorkspace"))}
+								<span className="font-bold">
+									{formatString(trQuickStart, "approvalCreateFile", { agent: AGENT_DISPLAY_NAME })}
+								</span>
 							</div>
 							{backgroundEditEnabled && tool.path && tool.content ? (
 								<DiffEditRow patch={tool.content} path={tool.path} startLineNumbers={tool.startLineNumbers} />
@@ -490,8 +546,10 @@ export const ChatRowContent = memo(
 							<div className={HEADER_CLASSNAMES}>
 								{isImage ? <ImageUpIcon className="size-2" /> : <FileCode2Icon className="size-2" />}
 								{tool.operationIsLocatedInWorkspace === false &&
-									toolIcon("sign-out", "yellow", -90, "This file is outside of your workspace")}
-								<span className="font-bold">{AGENT_DISPLAY_NAME} wants to read this file:</span>
+									toolIcon("sign-out", "yellow", -90, trQuickStart("approvalOutsideWorkspace"))}
+								<span className="font-bold">
+									{formatString(trQuickStart, "approvalReadFile", { agent: AGENT_DISPLAY_NAME })}
+								</span>
 							</div>
 							<div className="bg-code rounded-sm overflow-hidden border border-editor-group-border">
 								<div
@@ -529,11 +587,11 @@ export const ChatRowContent = memo(
 							<div className={HEADER_CLASSNAMES}>
 								{toolIcon("folder-opened")}
 								{tool.operationIsLocatedInWorkspace === false &&
-									toolIcon("sign-out", "yellow", -90, "This is outside of your workspace")}
+									toolIcon("sign-out", "yellow", -90, trQuickStart("approvalOutsideWorkspaceHere"))}
 								<span style={{ fontWeight: "bold" }}>
 									{message.type === "ask"
-										? `${AGENT_DISPLAY_NAME} wants to view the top level files in this directory:`
-										: `${AGENT_DISPLAY_NAME} viewed the top level files in this directory:`}
+										? formatString(trQuickStart, "approvalViewDir", { agent: AGENT_DISPLAY_NAME })
+										: formatString(trQuickStart, "approvalViewedDir", { agent: AGENT_DISPLAY_NAME })}
 								</span>
 							</div>
 							<CodeAccordian
@@ -551,11 +609,11 @@ export const ChatRowContent = memo(
 							<div className={HEADER_CLASSNAMES}>
 								{toolIcon("folder-opened")}
 								{tool.operationIsLocatedInWorkspace === false &&
-									toolIcon("sign-out", "yellow", -90, "This is outside of your workspace")}
+									toolIcon("sign-out", "yellow", -90, trQuickStart("approvalOutsideWorkspaceHere"))}
 								<span style={{ fontWeight: "bold" }}>
 									{message.type === "ask"
-										? `${AGENT_DISPLAY_NAME} wants to recursively view all files in this directory:`
-										: `${AGENT_DISPLAY_NAME} recursively viewed all files in this directory:`}
+										? formatString(trQuickStart, "approvalListRecursive", { agent: AGENT_DISPLAY_NAME })
+										: formatString(trQuickStart, "approvalListedRecursive", { agent: AGENT_DISPLAY_NAME })}
 								</span>
 							</div>
 							<CodeAccordian
@@ -573,11 +631,11 @@ export const ChatRowContent = memo(
 							<div className={HEADER_CLASSNAMES}>
 								{toolIcon("file-code")}
 								{tool.operationIsLocatedInWorkspace === false &&
-									toolIcon("sign-out", "yellow", -90, "This file is outside of your workspace")}
+									toolIcon("sign-out", "yellow", -90, trQuickStart("approvalOutsideWorkspace"))}
 								<span style={{ fontWeight: "bold" }}>
 									{message.type === "ask"
-										? `${AGENT_DISPLAY_NAME} wants to view source code definition names used in this directory:`
-										: `${AGENT_DISPLAY_NAME} viewed source code definition names used in this directory:`}
+										? formatString(trQuickStart, "approvalListDefinitions", { agent: AGENT_DISPLAY_NAME })
+										: formatString(trQuickStart, "approvalListedDefinitions", { agent: AGENT_DISPLAY_NAME })}
 								</span>
 							</div>
 							<CodeAccordian
@@ -594,11 +652,13 @@ export const ChatRowContent = memo(
 							<div className={HEADER_CLASSNAMES}>
 								{toolIcon("search")}
 								{tool.operationIsLocatedInWorkspace === false &&
-									toolIcon("sign-out", "yellow", -90, "This is outside of your workspace")}
-								<span className="font-bold">
-									{AGENT_DISPLAY_NAME} wants to search this directory for{" "}
-									<code className="break-all">{tool.regex}</code>:
-								</span>
+									toolIcon("sign-out", "yellow", -90, trQuickStart("approvalOutsideWorkspaceHere"))}
+								<ApprovalCodeTitle
+									className="font-bold"
+									name={tool.regex ?? ""}
+									sentence={formatString(trQuickStart, "approvalSearchDir", { agent: AGENT_DISPLAY_NAME })}
+									token="pattern"
+								/>
 							</div>
 							<SearchResultsDisplay
 								content={tool.content!}
@@ -614,7 +674,9 @@ export const ChatRowContent = memo(
 						<div>
 							<div className={HEADER_CLASSNAMES}>
 								<FoldVerticalIcon className="size-2" />
-								<span className="font-bold">{AGENT_DISPLAY_NAME} is condensing the conversation:</span>
+								<span className="font-bold">
+									{formatString(trQuickStart, "approvalCondensing", { agent: AGENT_DISPLAY_NAME })}
+								</span>
 							</div>
 							<div className="bg-code overflow-hidden border border-editor-group-border rounded-[3px]">
 								<div
@@ -656,11 +718,11 @@ export const ChatRowContent = memo(
 							<div className={HEADER_CLASSNAMES}>
 								<Link2Icon className="size-2" />
 								{tool.operationIsLocatedInWorkspace === false &&
-									toolIcon("sign-out", "yellow", -90, "This URL is external")}
+									toolIcon("sign-out", "yellow", -90, trQuickStart("approvalUrlExternal"))}
 								<span className="font-bold">
 									{message.type === "ask"
-										? `${AGENT_DISPLAY_NAME} wants to fetch content from this URL:`
-										: `${AGENT_DISPLAY_NAME} fetched content from this URL:`}
+										? formatString(trQuickStart, "approvalFetchUrl", { agent: AGENT_DISPLAY_NAME })
+										: formatString(trQuickStart, "approvalFetchedUrl", { agent: AGENT_DISPLAY_NAME })}
 								</span>
 							</div>
 							<div
@@ -685,11 +747,11 @@ export const ChatRowContent = memo(
 							<div className={HEADER_CLASSNAMES}>
 								<SearchIcon className="size-2 rotate-90" />
 								{tool.operationIsLocatedInWorkspace === false &&
-									toolIcon("sign-out", "yellow", -90, "This search is external")}
+									toolIcon("sign-out", "yellow", -90, trQuickStart("approvalSearchExternal"))}
 								<span className="font-bold">
 									{message.type === "ask"
-										? `${AGENT_DISPLAY_NAME} wants to search the web for:`
-										: `${AGENT_DISPLAY_NAME} searched the web for:`}
+										? formatString(trQuickStart, "approvalWebSearch", { agent: AGENT_DISPLAY_NAME })
+										: formatString(trQuickStart, "approvalWebSearched", { agent: AGENT_DISPLAY_NAME })}
 								</span>
 							</div>
 							<div className="bg-code border border-editor-group-border overflow-hidden rounded-xs select-text py-[9px] px-2.5">
@@ -704,7 +766,9 @@ export const ChatRowContent = memo(
 						<div>
 							<div className={HEADER_CLASSNAMES}>
 								<LightbulbIcon className="size-2" />
-								<span className="font-bold">{AGENT_DISPLAY_NAME} loaded the skill:</span>
+								<span className="font-bold">
+									{formatString(trQuickStart, "approvalSkillLoaded", { agent: AGENT_DISPLAY_NAME })}
+								</span>
 							</div>
 							<div className="bg-code border border-editor-group-border overflow-hidden rounded-xs py-[9px] px-2.5">
 								<span className="ph-no-capture font-medium">{tool.path}</span>
@@ -866,10 +930,13 @@ export const ChatRowContent = memo(
 						// fill, its border and its label must be one colour, and all three
 						// must follow the editor theme like the rest of the chat.
 						const isFinalReply = isLast && message.partial !== true && Boolean(message.text)
+						// Fill/border alphas are precomputed on the webview root
+						// (`useAppearanceVars` × the opacity slider); the label below
+						// keeps the raw accent so copy never fades with the tint.
 						const cardStyle: React.CSSProperties = {
 							borderRadius: 10,
-							border: "1px solid color-mix(in srgb, var(--color-reply) 30%, transparent)",
-							background: "color-mix(in srgb, var(--color-reply) 10%, transparent)",
+							border: "1px solid var(--color-reply-border)",
+							background: "var(--color-reply-bg)",
 							padding: "8px 12px",
 						}
 						return (
@@ -889,7 +956,15 @@ export const ChatRowContent = memo(
 												letterSpacing: "0.4px",
 												color: "var(--color-reply, var(--vscode-charts-purple, #b180d7))",
 											}}>
-											<span>COMPLETED</span>
+											{replyIcon !== "none" &&
+												(replyIcon === "check" ? (
+													<CheckIcon className="size-2.5" />
+												) : (
+													<span aria-hidden className="text-[11px] leading-none">
+														{replyIcon}
+													</span>
+												))}
+											<span>{trQuickStart("approvalReplyCompleted")}</span>
 										</div>
 									)}
 									<div className="flex items-center">
@@ -923,7 +998,11 @@ export const ChatRowContent = memo(
 									reasoningContent={message.text}
 									showChevron={!isReasoningStreaming || hasReasoningText}
 									showTitle={true}
-									title={isReasoningStreaming ? "Thinking..." : "Thought"}
+									title={
+										isReasoningStreaming
+											? trQuickStart("reasoningThinking")
+											: trQuickStart("reasoningThought")
+									}
 								/>
 								{isReasoningStreaming && showFeatureTips !== false && <FeatureTip />}
 							</div>
@@ -1179,7 +1258,7 @@ export const ChatRowContent = memo(
 								<div className={HEADER_CLASSNAMES}>
 									<FilePlus2Icon className="size-2" />
 									<span className="text-foreground font-bold">
-										{AGENT_DISPLAY_NAME} wants to start a new task:
+										{formatString(trQuickStart, "approvalNewTask", { agent: AGENT_DISPLAY_NAME })}
 									</span>
 								</div>
 								<NewTaskPreview context={message.text || ""} />
@@ -1191,7 +1270,7 @@ export const ChatRowContent = memo(
 								<div className={HEADER_CLASSNAMES}>
 									<FilePlus2Icon className="size-2" />
 									<span className="text-foreground font-bold">
-										{AGENT_DISPLAY_NAME} wants to condense your conversation:
+										{formatString(trQuickStart, "approvalCondenseAsk", { agent: AGENT_DISPLAY_NAME })}
 									</span>
 								</div>
 								<NewTaskPreview context={message.text || ""} />
@@ -1203,7 +1282,7 @@ export const ChatRowContent = memo(
 								<div className={HEADER_CLASSNAMES}>
 									<FilePlus2Icon className="size-2" />
 									<span className="text-foreground font-bold">
-										{AGENT_DISPLAY_NAME} wants to create a Github issue:
+										{formatString(trQuickStart, "approvalCreateIssue", { agent: AGENT_DISPLAY_NAME })}
 									</span>
 								</div>
 								<ReportBugPreview data={message.text || ""} />

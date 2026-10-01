@@ -126,6 +126,26 @@ export async function updateSettings(controller: Controller, request: UpdateSett
 			controller.stateManager.setGlobalState("appearanceBrandAccent", request.appearanceBrandAccent)
 		}
 
+		if (request.appearanceCompletedOpacity !== undefined) {
+			controller.stateManager.setGlobalState("appearanceCompletedOpacity", request.appearanceCompletedOpacity)
+		}
+
+		if (request.appearanceReplyOpacity !== undefined) {
+			controller.stateManager.setGlobalState("appearanceReplyOpacity", request.appearanceReplyOpacity)
+		}
+
+		if (request.appearanceBrandOpacity !== undefined) {
+			controller.stateManager.setGlobalState("appearanceBrandOpacity", request.appearanceBrandOpacity)
+		}
+
+		if (request.appearanceCompletedIcon !== undefined) {
+			controller.stateManager.setGlobalState("appearanceCompletedIcon", request.appearanceCompletedIcon)
+		}
+
+		if (request.appearanceReplyIcon !== undefined) {
+			controller.stateManager.setGlobalState("appearanceReplyIcon", request.appearanceReplyIcon)
+		}
+
 		// Update terminal timeout setting
 		if (request.shellIntegrationTimeout !== undefined) {
 			controller.stateManager.setGlobalState("shellIntegrationTimeout", Number(request.shellIntegrationTimeout))

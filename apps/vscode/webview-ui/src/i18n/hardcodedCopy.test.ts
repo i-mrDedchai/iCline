@@ -103,6 +103,9 @@ const MIGRATED = [
 	"components/chat/auto-approve-menu/AutoApproveBar.tsx",
 	"components/chat/auto-approve-menu/AutoApproveModal.tsx",
 	"components/chat/auto-approve-menu/AutoApproveMenuItem.tsx",
+	// fix.1: the footer action row (Start New Task / Approve / Cancel) resolves
+	// every label from `quickStart` with the English config text as fallback.
+	"components/chat/chat-view/components/layout/ActionButtons.tsx",
 	// fix.49a: the Customize modal (Rules / Hooks / Skills) plus the MCP server
 	// surfaces and the full history view with its row items — one screen each.
 	"components/cline-rules/ClineRulesToggleModal.tsx",

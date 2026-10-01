@@ -2,6 +2,12 @@
 
 ## [0.1.19] - Unreleased
 
+### Added
+- ⌨️ **Composer sent-history with Up/Down recall and reload persistence** — shell-style: Up walks older, Down walks back to the stashed draft, typing resets navigation, multi-line carets gate recall to boundary lines, IME and @/slash menus keep priority. History (cap 50, trimmed, de-duped) persists in localStorage across reloads.
+- 🌐 **Footer action buttons, completion surfaces and the final-reply header read in your language** — every `buttonConfig` label (Start New Task / Resume / Cancel / Approve / …) resolves from `quickStart`, the Task Completed panel title and the final-reply COMPLETED header are translated (4 locales), English stays as fallback.
+- 🔔 **Notifications toggle in the auto-approve menu** — the existing `enableNotifications` setting finally has a checkbox row (default off), persisted with a bumped version like every other switch.
+- 🎨 **Appearance: live previews, opacity sliders, icon picker, yellow/orange accents** — each accent row shows a live miniature of its real surface (same fill/border ratios as the chat UI); a 0–100 surface-opacity slider (50 = the previous look, text always stays full-strength) fades or deepens the tint; the Completed box and final-reply card get a floating 12-icon/emoji picker with translated names (defaults 🎉/⭐, "none" hides the slot, "check" keeps the legacy tick); yellow and orange join the accent catalog. Five settings (`appearance*Opacity/Icon`, opacity default 50) travel host→webview as persisted globals.
+
 ## [0.1.18] - 2026-09-30
 
 Upstream sync + smoke-test restoration on the v4.0.0 SDK architecture (dev builds use VSIX labels only; notes accumulate here until Stable).

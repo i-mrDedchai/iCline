@@ -76,11 +76,18 @@
 	   (diff `+N` counts, check marks, connected-server badges). Follows the theme
 	   rather than a fixed hex, so contrast stays correct in light and dark. */
 	--color-completed: var(--vscode-charts-blue);
+	/* Precomputed tints (slider 50 = these exact ratios). The webview root
+	   overrides them at runtime from the Appearance settings; these static
+	   values only cover the first paint before extension state arrives. */
+	--color-completed-bg: color-mix(in srgb, var(--vscode-charts-blue) 10%, transparent);
+	--color-completed-border: color-mix(in srgb, var(--vscode-charts-blue) 20%, transparent);
 	/* The accent of the final-reply card (the `COMPLETED` header the last assistant
 	   message gets). A separate token from `completed` on purpose: one panel means
 	   "the task finished", the other means "this is the closing answer", and the
 	   card is transient — it loses its tint as soon as the next turn starts. */
 	--color-reply: var(--vscode-charts-purple);
+	--color-reply-bg: color-mix(in srgb, var(--vscode-charts-purple) 10%, transparent);
+	--color-reply-border: color-mix(in srgb, var(--vscode-charts-purple) 30%, transparent);
 	--color-warning: var(--vscode-charts-yellow);
 	--font-base:
 		var(--vscode-font-family), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell,

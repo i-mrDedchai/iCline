@@ -1,5 +1,8 @@
 import { CheckIcon } from "lucide-react"
 import { memo } from "react"
+import { DEFAULT_COMPLETED_ICON } from "@/appearance/appearance"
+import { useExtensionState } from "@/context/ExtensionStateContext"
+import { useTranslation } from "@/i18n/useTranslation"
 import { cn } from "@/lib/utils"
 import { CopyButton } from "../common/CopyButton"
 import { QuoteButtonState } from "./ChatRow"
@@ -15,14 +18,27 @@ interface CompletionOutputRowProps {
 
 export const CompletionOutputRow = memo(
 	({ headClassNames, text, quoteButtonState, handleQuoteClick }: CompletionOutputRowProps) => {
+		// Icon + tint from Settings → Appearance. The title keeps the raw accent
+		// so copy never fades with the tint; "none" hides the icon slot and
+		// "check" keeps the legacy lucide check.
+		const { appearanceCompletedIcon } = useExtensionState()
+		const trQuickStart = useTranslation("quickStart")
+		const completedIcon = appearanceCompletedIcon ?? DEFAULT_COMPLETED_ICON
 		return (
 			<div>
-				<div className="rounded-sm border border-completed/20 overflow-visible bg-completed/10 p-2 pt-3">
+				<div className="rounded-sm border border-(--color-completed-border) overflow-visible bg-(--color-completed-bg) p-2 pt-3">
 					{/* Title */}
 					<div className={cn(headClassNames, "justify-between px-1")}>
 						<div className="flex gap-2 items-center">
-							<CheckIcon className="size-3 text-completed" />
-							<span className="text-completed font-bold">Task Completed</span>
+							{completedIcon !== "none" &&
+								(completedIcon === "check" ? (
+									<CheckIcon className="size-3 text-completed" />
+								) : (
+									<span aria-hidden className="text-completed text-sm leading-none">
+										{completedIcon}
+									</span>
+								))}
+							<span className="text-completed font-bold">{trQuickStart("approvalTaskCompleted")}</span>
 						</div>
 						<CopyButton className="text-completed" textToCopy={text} />
 					</div>

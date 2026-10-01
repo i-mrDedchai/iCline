@@ -1,7 +1,7 @@
 # iCline
 
 <!-- icline:version -->
-> 📦 **เวอร์ชันปัจจุบัน:** `0.1.18` · [Releases](https://github.com/i-mrDedchai/iCline/releases) · [Changelog](https://github.com/i-mrDedchai/iCline/blob/main/apps/vscode/CHANGELOG.md) · [Repo](https://github.com/i-mrDedchai/iCline)
+> 📦 **เวอร์ชันปัจจุบัน:** `0.1.19-dev.2` · [Releases](https://github.com/i-mrDedchai/iCline/releases) · [Changelog](https://github.com/i-mrDedchai/iCline/blob/main/apps/vscode/CHANGELOG.md) · [Repo](https://github.com/i-mrDedchai/iCline)
 <!-- /icline:version -->
 
 <!-- icline:repo -->
@@ -132,7 +132,7 @@ Settings ทุกแท็บ, หน้า welcome และการ์ด Qu
 ดาวน์โหลด `.vsix` ล่าสุดจาก [GitHub Releases](https://github.com/i-mrDedchai/iCline/releases) แล้วรัน:
 
 ```bash
-code --install-extension i-mrdedchai.iCline-0.1.18.vsix --force
+code --install-extension i-mrdedchai.iCline-0.1.19-dev.2.vsix --force
 ```
 
 หรือ build เอง:
@@ -141,7 +141,7 @@ code --install-extension i-mrdedchai.iCline-0.1.18.vsix --force
 cd apps/vscode
 npm install
 npm run package:vsix
-code --install-extension dist/i-mrdedchai.iCline-0.1.18.vsix --force
+code --install-extension dist/i-mrdedchai.iCline-0.1.19-dev.2.vsix --force
 ```
 
 ---

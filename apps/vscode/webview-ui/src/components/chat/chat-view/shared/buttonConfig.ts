@@ -1,5 +1,6 @@
 import type { ClineMessage, ClineSayTool, TurnState } from "@shared/ExtensionMessage"
 import type { Mode } from "@shared/storage/types"
+import type { QuickStartStringKey } from "@/i18n/namespaces/quickStart"
 
 /**
  * Button action types that determine the behavior
@@ -20,8 +21,12 @@ export type ButtonActionType =
 export interface ButtonConfig {
 	sendingDisabled: boolean
 	enableButtons: boolean
+	/** English fallback — the component prefers the key below when set. */
 	primaryText?: string
 	secondaryText?: string
+	/** `quickStart` keys the footer resolves for the current UI language. */
+	primaryKey?: QuickStartStringKey
+	secondaryKey?: QuickStartStringKey
 	primaryAction?: ButtonActionType
 	secondaryAction?: ButtonActionType
 }
@@ -37,6 +42,8 @@ export const BUTTON_CONFIGS: Record<string, ButtonConfig> = {
 		enableButtons: true,
 		primaryText: "Retry",
 		secondaryText: "Start New Task",
+		primaryKey: "actionRetry",
+		secondaryKey: "actionStartNewTask",
 		primaryAction: "retry",
 		secondaryAction: "new_task",
 	},
@@ -45,6 +52,8 @@ export const BUTTON_CONFIGS: Record<string, ButtonConfig> = {
 		enableButtons: true,
 		primaryText: "Proceed Anyways",
 		secondaryText: "Start New Task",
+		primaryKey: "actionProceedAnyways",
+		secondaryKey: "actionStartNewTask",
 		primaryAction: "proceed",
 		secondaryAction: "new_task",
 	},
@@ -55,6 +64,8 @@ export const BUTTON_CONFIGS: Record<string, ButtonConfig> = {
 		enableButtons: true,
 		primaryText: "Approve",
 		secondaryText: "Reject",
+		primaryKey: "actionApprove",
+		secondaryKey: "actionReject",
 		primaryAction: "approve",
 		secondaryAction: "reject",
 	},
@@ -63,6 +74,8 @@ export const BUTTON_CONFIGS: Record<string, ButtonConfig> = {
 		enableButtons: true,
 		primaryText: "Save",
 		secondaryText: "Reject",
+		primaryKey: "actionSave",
+		secondaryKey: "actionReject",
 		primaryAction: "approve",
 		secondaryAction: "reject",
 	},
@@ -73,6 +86,8 @@ export const BUTTON_CONFIGS: Record<string, ButtonConfig> = {
 		enableButtons: true,
 		primaryText: "Run Command",
 		secondaryText: "Reject",
+		primaryKey: "actionRunCommand",
+		secondaryKey: "actionReject",
 		primaryAction: "approve",
 		secondaryAction: "reject",
 	},
@@ -81,6 +96,8 @@ export const BUTTON_CONFIGS: Record<string, ButtonConfig> = {
 		enableButtons: true,
 		primaryText: "Proceed While Running",
 		secondaryText: undefined,
+		primaryKey: "actionProceedWhileRunning",
+		secondaryKey: undefined,
 		primaryAction: "proceed",
 		secondaryAction: undefined,
 	},
@@ -91,6 +108,8 @@ export const BUTTON_CONFIGS: Record<string, ButtonConfig> = {
 		enableButtons: true,
 		primaryText: "Approve",
 		secondaryText: "Reject",
+		primaryKey: "actionApprove",
+		secondaryKey: "actionReject",
 		primaryAction: "approve",
 		secondaryAction: "reject",
 	},
@@ -99,6 +118,8 @@ export const BUTTON_CONFIGS: Record<string, ButtonConfig> = {
 		enableButtons: true,
 		primaryText: "Approve",
 		secondaryText: "Reject",
+		primaryKey: "actionApprove",
+		secondaryKey: "actionReject",
 		primaryAction: "approve",
 		secondaryAction: "reject",
 	},
@@ -107,6 +128,8 @@ export const BUTTON_CONFIGS: Record<string, ButtonConfig> = {
 		enableButtons: true,
 		primaryText: "Approve",
 		secondaryText: "Reject",
+		primaryKey: "actionApprove",
+		secondaryKey: "actionReject",
 		primaryAction: "approve",
 		secondaryAction: "reject",
 	},
@@ -133,6 +156,8 @@ export const BUTTON_CONFIGS: Record<string, ButtonConfig> = {
 		enableButtons: true,
 		primaryText: "Start New Task",
 		secondaryText: undefined,
+		primaryKey: "actionStartNewTask",
+		secondaryKey: undefined,
 		primaryAction: "new_task",
 		secondaryAction: undefined,
 	},
@@ -141,6 +166,8 @@ export const BUTTON_CONFIGS: Record<string, ButtonConfig> = {
 		enableButtons: true,
 		primaryText: "Resume Task",
 		secondaryText: undefined,
+		primaryKey: "actionResumeTask",
+		secondaryKey: undefined,
 		primaryAction: "proceed",
 		secondaryAction: undefined,
 	},
@@ -149,6 +176,8 @@ export const BUTTON_CONFIGS: Record<string, ButtonConfig> = {
 		enableButtons: true,
 		primaryText: "Start New Task",
 		secondaryText: undefined,
+		primaryKey: "actionStartNewTask",
+		secondaryKey: undefined,
 		primaryAction: "new_task",
 		secondaryAction: undefined,
 	},
@@ -157,6 +186,8 @@ export const BUTTON_CONFIGS: Record<string, ButtonConfig> = {
 		enableButtons: true,
 		primaryText: "Start New Task with Context",
 		secondaryText: undefined,
+		primaryKey: "actionStartNewTaskWithContext",
+		secondaryKey: undefined,
 		primaryAction: "new_task",
 		secondaryAction: undefined,
 	},
@@ -167,6 +198,8 @@ export const BUTTON_CONFIGS: Record<string, ButtonConfig> = {
 		enableButtons: true,
 		primaryText: "Condense Conversation",
 		secondaryText: undefined,
+		primaryKey: "actionCondenseConversation",
+		secondaryKey: undefined,
 		primaryAction: "utility",
 		secondaryAction: undefined,
 	},
@@ -175,6 +208,8 @@ export const BUTTON_CONFIGS: Record<string, ButtonConfig> = {
 		enableButtons: true,
 		primaryText: "Report GitHub issue",
 		secondaryText: undefined,
+		primaryKey: "actionReportIssue",
+		secondaryKey: undefined,
 		primaryAction: "utility",
 		secondaryAction: undefined,
 	},
@@ -185,6 +220,8 @@ export const BUTTON_CONFIGS: Record<string, ButtonConfig> = {
 		enableButtons: true,
 		primaryText: undefined,
 		secondaryText: "Cancel",
+		primaryKey: undefined,
+		secondaryKey: "editCancel",
 		primaryAction: undefined,
 		secondaryAction: "cancel",
 	},
@@ -196,6 +233,8 @@ export const BUTTON_CONFIGS: Record<string, ButtonConfig> = {
 		enableButtons: true,
 		primaryText: "Proceed While Running",
 		secondaryText: "Cancel",
+		primaryKey: "actionProceedWhileRunning",
+		secondaryKey: "editCancel",
 		primaryAction: "proceed_while_running",
 		secondaryAction: "cancel",
 	},
@@ -214,6 +253,8 @@ export const BUTTON_CONFIGS: Record<string, ButtonConfig> = {
 		enableButtons: true,
 		primaryText: undefined,
 		secondaryText: "Cancel",
+		primaryKey: undefined,
+		secondaryKey: "editCancel",
 		primaryAction: undefined,
 		secondaryAction: "cancel",
 	},

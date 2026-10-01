@@ -42,6 +42,11 @@ export async function getStateToPostToWebview(controller: {
 	const appearanceCompletedAccent = stateManager.getGlobalSettingsKey("appearanceCompletedAccent")
 	const appearanceReplyAccent = stateManager.getGlobalSettingsKey("appearanceReplyAccent")
 	const appearanceBrandAccent = stateManager.getGlobalSettingsKey("appearanceBrandAccent")
+	const appearanceCompletedOpacity = stateManager.getGlobalSettingsKey("appearanceCompletedOpacity")
+	const appearanceReplyOpacity = stateManager.getGlobalSettingsKey("appearanceReplyOpacity")
+	const appearanceBrandOpacity = stateManager.getGlobalSettingsKey("appearanceBrandOpacity")
+	const appearanceCompletedIcon = stateManager.getGlobalSettingsKey("appearanceCompletedIcon")
+	const appearanceReplyIcon = stateManager.getGlobalSettingsKey("appearanceReplyIcon")
 	const mode = stateManager.getGlobalSettingsKey("mode")
 	const yoloModeToggled = stateManager.getGlobalSettingsKey("yoloModeToggled")
 	const useAutoCondense = stateManager.getGlobalSettingsKey("useAutoCondense")
@@ -141,6 +146,11 @@ export async function getStateToPostToWebview(controller: {
 		appearanceCompletedAccent,
 		appearanceReplyAccent,
 		appearanceBrandAccent,
+		appearanceCompletedOpacity,
+		appearanceReplyOpacity,
+		appearanceBrandOpacity,
+		appearanceCompletedIcon,
+		appearanceReplyIcon,
 		mode,
 		yoloModeToggled,
 		useAutoCondense,

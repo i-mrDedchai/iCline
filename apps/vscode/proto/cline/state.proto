@@ -323,6 +323,11 @@ message Settings {
   optional string appearance_completed_accent = 203;
   optional string appearance_reply_accent = 204;
   optional string appearance_brand_accent = 205;
+  optional int32 appearance_completed_opacity = 206;
+  optional int32 appearance_reply_opacity = 207;
+  optional int32 appearance_brand_opacity = 208;
+  optional string appearance_completed_icon = 209;
+  optional string appearance_reply_icon = 210;
 }
 
 message State {
@@ -470,6 +475,11 @@ message UpdateSettingsRequest {
   optional string appearance_completed_accent = 46;
   optional string appearance_reply_accent = 47;
   optional string appearance_brand_accent = 48;
+  optional int32 appearance_completed_opacity = 49;
+  optional int32 appearance_reply_opacity = 50;
+  optional int32 appearance_brand_opacity = 51;
+  optional string appearance_completed_icon = 52;
+  optional string appearance_reply_icon = 53;
 }
 
 message UpdateTerminalConnectionTimeoutRequest {

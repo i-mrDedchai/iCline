@@ -75,6 +75,8 @@ function makeChatState(messages: ClineMessage[], overrides: Partial<ChatState> =
 		setExpandedRows: vi.fn(),
 		pendingUserMessage: undefined,
 		setPendingUserMessage: vi.fn(),
+		inputHistory: [],
+		pushInputHistory: vi.fn(),
 		textAreaRef: { current: null },
 		lastMessage: last,
 		secondLastMessage: messages.at(-2),

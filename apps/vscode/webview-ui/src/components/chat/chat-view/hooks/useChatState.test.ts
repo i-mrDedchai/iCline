@@ -6,6 +6,7 @@ import {
 	writeComposerDraftAttachments,
 	writeComposerDraftText,
 } from "@/icline/composerDraftStorage"
+import { clearInputHistory, readInputHistory } from "@/icline/inputHistoryStorage"
 import { useChatState } from "./useChatState"
 
 /**
@@ -16,6 +17,7 @@ import { useChatState } from "./useChatState"
 describe("useChatState — the composer draft", () => {
 	beforeEach(() => {
 		clearComposerDraft()
+		clearInputHistory()
 	})
 
 	const typeInto = (state: ReturnType<typeof useChatState>, text: string) => act(() => state.setInputValue(text))
@@ -82,6 +84,20 @@ describe("useChatState — the composer draft", () => {
 		// The replacement webview opens on an empty composer, not on the sent message.
 		const replacement = renderHook(() => useChatState([]))
 		expect(replacement.result.current.inputValue).toBe("")
+	})
+
+	it("keeps the sent history across a webview replacement", () => {
+		const first = renderHook(() => useChatState([]))
+		act(() => {
+			first.result.current.pushInputHistory("first question")
+			first.result.current.pushInputHistory("second question")
+		})
+		first.unmount()
+
+		expect(readInputHistory()).toEqual(["first question", "second question"])
+
+		const replacement = renderHook(() => useChatState([]))
+		expect(replacement.result.current.inputHistory).toEqual(["first question", "second question"])
 	})
 
 	it("follows the composer when a send fails and the text comes back", () => {

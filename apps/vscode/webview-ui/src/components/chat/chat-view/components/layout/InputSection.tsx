@@ -38,6 +38,7 @@ export const InputSection: React.FC<InputSectionProps> = ({
 		textAreaRef,
 		handleFocusChange,
 		lastMessage,
+		inputHistory,
 	} = chatState
 
 	const { isAtBottom, scrollToBottomAuto } = scrollBehavior
@@ -62,6 +63,7 @@ export const InputSection: React.FC<InputSectionProps> = ({
 
 			<ChatTextArea
 				activeQuote={activeQuote}
+				inputHistory={inputHistory}
 				inputValue={inputValue}
 				onFocusChange={handleFocusChange}
 				onHeightChange={() => {

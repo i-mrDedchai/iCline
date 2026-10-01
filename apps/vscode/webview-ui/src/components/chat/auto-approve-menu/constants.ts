@@ -65,6 +65,14 @@ export const ACTION_METADATA: ActionMetadata[] = [
 		shortKey: "autoApproveShort_teamWrites",
 		icon: "codicon-organization",
 	},
+	{
+		id: "enableNotifications",
+		label: "Show notifications",
+		labelKey: "autoApproveAction_enableNotifications",
+		shortName: "Notifications",
+		shortKey: "autoApproveShort_enableNotifications",
+		icon: "codicon-bell",
+	},
 ]
 
 /**
@@ -84,7 +92,7 @@ export const AUTO_APPROVE_LABEL_KEYS: Record<ActionMetadata["id"], QuickStartStr
 	useMcp: "autoApproveAction_useMcp",
 	teamReads: "autoApproveAction_teamReads",
 	teamWrites: "autoApproveAction_teamWrites",
-	enableNotifications: "autoApproveAction_readFiles",
+	enableNotifications: "autoApproveAction_enableNotifications",
 }
 
 export const AUTO_APPROVE_SHORT_KEYS: Record<ActionMetadata["id"], QuickStartStringKey> = {
@@ -98,5 +106,5 @@ export const AUTO_APPROVE_SHORT_KEYS: Record<ActionMetadata["id"], QuickStartStr
 	useMcp: "autoApproveShort_useMcp",
 	teamReads: "autoApproveShort_teamReads",
 	teamWrites: "autoApproveShort_teamWrites",
-	enableNotifications: "autoApproveShort_readFiles",
+	enableNotifications: "autoApproveShort_enableNotifications",
 }

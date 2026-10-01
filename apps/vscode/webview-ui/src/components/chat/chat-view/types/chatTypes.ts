@@ -39,6 +39,9 @@ export interface ChatState {
 	setExpandedRows: React.Dispatch<React.SetStateAction<Record<number, boolean>>>
 	pendingUserMessage: PendingUserMessage | undefined
 	setPendingUserMessage: React.Dispatch<React.SetStateAction<PendingUserMessage | undefined>>
+	// Sent-message history for Up/Down recall in the composer (session scope).
+	inputHistory: string[]
+	pushInputHistory: (text: string) => void
 
 	// Refs
 	textAreaRef: React.RefObject<HTMLTextAreaElement>

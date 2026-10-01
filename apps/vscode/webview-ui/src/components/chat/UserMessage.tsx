@@ -3,6 +3,7 @@ import type React from "react"
 import { useMemo, useState } from "react"
 import Thumbnails from "@/components/common/Thumbnails"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { useTranslation } from "@/i18n/useTranslation"
 import { TaskServiceClient } from "@/services/grpc-client"
 import { highlightText } from "./task-header/Highlights"
 
@@ -16,6 +17,7 @@ interface UserMessageProps {
 }
 
 const UserMessage: React.FC<UserMessageProps> = ({ text, images, files, messageTs, canRestoreWorkspace = true }) => {
+	const trQuickStart = useTranslation("quickStart")
 	const [isEditing, setIsEditing] = useState(false)
 	const [editedText, setEditedText] = useState(text ?? "")
 	const [savingMode, setSavingMode] = useState<"chat" | "workspace" | undefined>()
@@ -65,7 +67,7 @@ const UserMessage: React.FC<UserMessageProps> = ({ text, images, files, messageT
 			setSavingMode(undefined)
 		} catch (error) {
 			console.error("Failed to edit and regenerate message:", error)
-			setErrorMessage(error instanceof Error ? error.message : "Failed to edit and regenerate message")
+			setErrorMessage(error instanceof Error ? error.message : trQuickStart("editRegenerateFailed"))
 			setSavingMode(undefined)
 		}
 	}
@@ -93,13 +95,13 @@ const UserMessage: React.FC<UserMessageProps> = ({ text, images, files, messageT
 				wordWrap: "break-word",
 			}}
 			tabIndex={messageTs && !isEditing ? 0 : undefined}
-			title={messageTs && !isEditing ? "Edit and regenerate from here" : undefined}>
+			title={messageTs && !isEditing ? trQuickStart("editRegenerateHere") : undefined}>
 			{messageTs && !isEditing && (
 				<Tooltip>
-					<TooltipContent side="left">Edit and regenerate from here</TooltipContent>
+					<TooltipContent side="left">{trQuickStart("editRegenerateHere")}</TooltipContent>
 					<TooltipTrigger asChild>
 						<button
-							aria-label="Edit and regenerate from this message"
+							aria-label={trQuickStart("editRegenerateHere")}
 							className="absolute right-1.5 top-1.5 opacity-0 group-hover:opacity-80 hover:opacity-100 bg-transparent border-0 text-badge-foreground cursor-pointer p-1"
 							onClick={(event) => {
 								event.stopPropagation()
@@ -127,11 +129,11 @@ const UserMessage: React.FC<UserMessageProps> = ({ text, images, files, messageT
 							disabled={!!savingMode}
 							onClick={cancelEditing}
 							type="button">
-							Cancel
+							{trQuickStart("editCancel")}
 						</button>
 						<div className="flex items-center gap-1.5">
 							<Tooltip>
-								<TooltipContent side="top">Rewind conversation, keep current code edits</TooltipContent>
+								<TooltipContent side="top">{trQuickStart("editRewindKeepEdits")}</TooltipContent>
 								<TooltipTrigger asChild>
 									<span className="inline-flex shrink-0">
 										<button
@@ -139,14 +141,14 @@ const UserMessage: React.FC<UserMessageProps> = ({ text, images, files, messageT
 											disabled={!!savingMode}
 											onClick={() => handleSave(false)}
 											type="button">
-											{savingMode === "chat" ? "Running..." : "Reset Chat"}
+											{savingMode === "chat" ? trQuickStart("editRunning") : trQuickStart("editResetChat")}
 										</button>
 									</span>
 								</TooltipTrigger>
 							</Tooltip>
 							{canRestoreWorkspace && (
 								<Tooltip>
-									<TooltipContent side="top">Rewind conversation, reset code edits</TooltipContent>
+									<TooltipContent side="top">{trQuickStart("editRewindResetEdits")}</TooltipContent>
 									<TooltipTrigger asChild>
 										<span className="inline-flex shrink-0">
 											<button
@@ -154,7 +156,9 @@ const UserMessage: React.FC<UserMessageProps> = ({ text, images, files, messageT
 												disabled={!!savingMode}
 												onClick={() => handleSave(true)}
 												type="button">
-												{savingMode === "workspace" ? "Restoring..." : "Reset Code"}
+												{savingMode === "workspace"
+													? trQuickStart("editRestoring")
+													: trQuickStart("editResetCode")}
 											</button>
 										</span>
 									</TooltipTrigger>
