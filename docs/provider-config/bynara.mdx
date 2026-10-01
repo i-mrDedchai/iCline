@@ -19,7 +19,9 @@ NaraRouter (Bynara) is a multi-model AI gateway: one API key unlocks many models
 1.  **Open iCline Settings:** Click the ⚙️ icon in the iCline panel.
 2.  **Select Provider:** Choose **NaraRouter** from the **API Provider** dropdown.
 3.  **API Key:** Paste the key from your NaraRouter dashboard.
-4.  **Model:** iCline fetches the live model list from the gateway's `/v1/models` endpoint once the key is saved. Pick one from the dropdown, or type a model ID manually if you know it.
+4.  **Model:** iCline ships a snapshot of the gateway catalog (56 models, captured 2026-10-02), so the dropdown is already full before you paste a key — default `mimo-v2.5-free`. Once the key is saved, iCline re-fetches the live `/v1/models` list and merges it in, so new gateway models appear without waiting for an iCline update. You can always type a model ID manually too.
+
+> A fresh NaraRouter account must bind its Telegram account, join the required Telegram group/channel, and relink at `/settings` first — until then every API call (including `/v1/models`) answers 403 `telegram_required` and the live refresh stays on the snapshot.
 
 ### Tips and Notes
 

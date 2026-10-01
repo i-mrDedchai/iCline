@@ -45,6 +45,7 @@ import {
 	BUILTIN_TRANSCRIPTION_TRANSPORTS,
 } from "./model-operations";
 import { filterOpenAICodexModels } from "./openai-codex-models";
+import { buildBynaraModels, BYNARA_DEFAULT_MODEL_ID } from "./bynara-snapshot";
 import { resolveProviderModelCatalogKeys } from "./provider-keys";
 import { GENERATED_PROVIDER_SPECS } from "./providers.generated";
 import {
@@ -1156,13 +1157,17 @@ const OPENAI_COMPATIBLE_SPEC_OVERRIDES: BuiltinSpecOverride[] = [
 	{
 		// NaraRouter is iCline-only (not on models.dev): a multi-model AI
 		// gateway speaking plain OpenAI-compatible chat completions, so the
-		// generic settings form + live /models discovery own the UI — no
-		// dedicated handler, no custom protocol, no static model list.
+		// generic settings form owns the UI — no dedicated handler, no
+		// custom protocol. The static snapshot (see bynara-snapshot.ts -
+		// re-snapshot with a healthy key when the gateway announces new
+		// models) is what the pickers show keyless; a keyed /v1/models
+		// fetch enriches it at runtime.
 		id: "bynara",
 		name: "NaraRouter",
 		description: "NaraRouter multi-model AI gateway (OpenAI-compatible)",
 		family: "openai-compatible",
-		defaultModelId: "",
+		modelsFactory: buildBynaraModels,
+		defaultModelId: BYNARA_DEFAULT_MODEL_ID,
 		apiKeyEnv: ["BYNARA_API_KEY"],
 		docsUrl: "https://router.bynara.id/",
 		defaults: { baseUrl: "https://router.bynara.id/v1" },
