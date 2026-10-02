@@ -2,6 +2,7 @@ import { Mode } from "@shared/storage/types"
 import { useCallback } from "react"
 import { type ProviderId } from "@/context/ExtensionStateContext"
 import { useProviderConfig } from "@/hooks/useProviderConfig"
+import { useProviderListings } from "@/hooks/useProviderListings"
 import { useProviderModelSelection } from "@/hooks/useProviderModelSelection"
 import { useProviderModels } from "@/hooks/useProviderModels"
 import { useTranslation } from "@/i18n/useTranslation"
@@ -47,17 +48,23 @@ export const GenericProviderSettings = ({
 }: GenericProviderSettingsProps) => {
 	const { models, defaultModelId, isLoading, isStale, error, refresh } = useProviderModels(providerId)
 	const { config, write, commitSelection } = useProviderConfig(providerId)
+	const { refresh: refreshListings } = useProviderListings()
 	// Credential/endpoint writes change what the model list resolves to (a
 	// saved key unlocks the live endpoint list), so re-resolve after the
 	// host persists — otherwise the picker stays on the pre-save list until
 	// the next mount or manual expand (NaraRouter dev.4-fix.1). Reasoning
 	// writes keep the plain path: they never affect the list.
+	// The listings refresh keeps the Settings stats card (provider/model
+	// counts) moving on the same save the model list moves on (dev.4-fix.2):
+	// counts are static registry numbers today, so this is usually a no-op —
+	// it exists so any host-side count change propagates instead of going
+	// stale until the next mount.
 	const writeAndRefresh = useCallback(
 		async (patch: Parameters<typeof write>[0]) => {
 			await write(patch)
-			await refresh()
+			await Promise.all([refresh(), refreshListings()])
 		},
-		[write, refresh],
+		[write, refresh, refreshListings],
 	)
 	const { selectedModel, commitModelSelection } = useProviderModelSelection(providerId, currentMode, {
 		models,
