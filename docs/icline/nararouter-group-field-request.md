@@ -7,10 +7,47 @@
 ## บริบท
 
 - iCline รวม NaraRouter เป็น first-class provider แล้ว (56 chat models, snapshot ตรง live 100% ณ 2026-10-03)
-- ผล live probe ด้วยคีย์ทดสอบ: `/v1/models` → 200 (57 รายการ), chat → 200 บน
-  `ling-3.0-flash-sante-free` แต่ `mimo-v2.5-free` / `mimo-v2.5` → 502 (3/3 ครั้ง)
 - ข้อสรุปฝั่งเรา: wire ไม่มีฟิลด์ group/tier — ถ้าจะทำ tabs ต้อง hardcode เอง
   ซึ่งจะเน่าเร็วเพราะ catalog เปลี่ยนบ่อย จึงขอฟิลด์จาก gateway แทน
+
+## สิ่งที่อ่านจาก docs (https://router.bynara.id/docs, 2026-10-03)
+
+- **502 ไม่อยู่ในตาราง error** — ตารางมี 400/401/403/404/413/415/429/**503**/500 เท่านั้น
+  (`503 service_unavailable` คือ "temporarily unavailable, retry with backoff")
+  ส่วน **402** ก็ไม่มีในตาราง ทั้งที่ section combos อ้างถึง (insufficient balance)
+- `reasoning_effort` 7 ระดับ (`none|minimal|low|medium|high|xhigh|max`, `ultra` = alias
+  ของ `max`) — docs ระบุชัดว่า **"safe to always send"**: บน non-reasoning model เป็น
+  no-op, ระดับที่เกินถูก clamp ลงมาแทน error — ยืนยันด้วยการทดสอบจริงแล้ว (ดูด้านล่าง)
+- Models section ระบุว่าโหลดจาก **public `/api/plans`** (มีจริง, 200): free 12 โมเดล /
+  freemium 17 / freemium-max 17 / gpt-fams-promo 3 / freemium-ultra 17 —
+  **free 12 โมเดลตรงกับ snapshot shelf ของเราพอดี** (mapping เราถูก)
+- docs เขียนว่า "four API surfaces" แต่จริง ๆ อธิบาย 6+ (responses, messages, chat,
+  images, embeddings, rerank + systemone, videos)
+- มี **model combos** (`combo/'<name>'`, fallback + circuit breaker 10 นาที) — น่าสนใจ
+  สำหรับ resilience แต่ต้องสร้างใน dashboard
+
+## ผล sweep ทุกโมเดล (2026-10-03, คีย์ทดสอบ, curl เท่านั้น — ไม่ commit คีย์)
+
+**`/v1/chat/completions` 56 chat models: 43/56 ได้ HTTP 200**
+
+- **502 ถาวร 10 โมเดล** (ลองซ้ำ 2 รอบ): `deepseek-v4-flash-vision-exp`,
+  `deepseek-v4-flash-alibaba`, `deepseek-v4-pro-alibaba`, `longcat-2.5`,
+  `mimo-v2.6-flash`, `minimax-m3`, `qwen3.8-27b`, `qwen3.8-max`,
+  `qwen3.8-max-alibaba`, `mimo-v2.5-pro` — body เป็น **Cloudflare HTML
+  ไม่ใช่ JSON envelope ของ gateway** แปลว่า request ไม่ถึง gateway logic เลย
+  (upstream route ล่ม) และ 502 แบบนี้ไม่มีใน docs
+- **502 ชั่วคราว** (รอบแรก 502, รอบสอง 200): `mimo-v2.5-free`, `mimo-v2.5`
+  (default model ของเรา — กลับมาใช้ได้แล้ว แต่เคยล่ม)
+- **400 ถาวร 2 โมเดล**: `jev` (ถูกต้องตาม design — jev คือ System One
+  ใช้ได้เฉพาะ `/v1/systemone` ซึ่งทดสอบแล้ว 200), `ling-3.0-flash-fin-free`
+  (400 แม้ไม่ส่ง `max_tokens` — ไม่ใช่เรื่อง budget, เป็นปัญหาจริง)
+- **400 ชั่วคราว**: `gpt-6-astra` (รอบแรก 400, รอบสอง 200)
+- **ผ่านและยืนยันพฤติกรรมตาม docs**: `reasoning_effort: "ultra"` ไม่ error,
+  `xhigh` บน non-reasoning model เป็น no-op, `high` บน reasoning model ทำงานปกติ
+- **`/v1/embeddings` + `/v1/rerank`** ด้วยชื่อโมเดลตามตัวอย่างใน docs
+  (`text-embedding-3-small`, `rerank-v3`) → `not_found` ทั้งคู่ —
+  **ชื่อใน docs ไม่มีอยู่ใน catalog/entitlement** (docs กับของจริงไม่ตรงกัน)
+- **`/v1/systemone` ด้วย `jev` → 200** ใช้งานได้
 
 ## ร่างจดหมาย (ภาษาอังกฤษ — คัดลอกส่งได้เลย)
 
@@ -40,7 +77,7 @@ A `tier`/`plan` shelf field (Free / Bonus / PAYG) alongside it would be a welcom
 
 Happy to share our current client-side mapping as a starting point, and happy to beta-test the field as soon as it ships.
 
-**P.S. — possible incident, not part of the request:** on Oct 3 our probes to `POST /v1/chat/completions` returned `502` for `mimo-v2.5-free` and `mimo-v2.5` (3/3 attempts, minimal 5-token prompt), while `ling-3.0-flash-sante-free` answered `200` correctly with the same key. Flagging in case the mimo upstream route needs a look — it's currently our picker's default model, so we've had to warn our testers.
+**P.S. — possible incident, not part of the request:** on Oct 3 we probed all 56 chat models on `POST /v1/chat/completions` (minimal prompts, same key — 43/56 returned `200`). Ten models persistently return `502` with a Cloudflare HTML body rather than your documented JSON error envelope, across two rounds: `deepseek-v4-flash-vision-exp`, `deepseek-v4-flash-alibaba`, `deepseek-v4-pro-alibaba`, `longcat-2.5`, `mimo-v2.6-flash`, `minimax-m3`, `qwen3.8-27b`, `qwen3.8-max`, `qwen3.8-max-alibaba`, `mimo-v2.5-pro`. (`mimo-v2.5-free`/`mimo-v2.5` 502'd in round one but recovered in round two.) Two notes: (1) `502` is not in your docs' error table — only 500/503 are — so clients can't distinguish "retry with backoff" from "route is down"; (2) the docs' embedding/rerank examples (`text-embedding-3-small`, `rerank-v3`) return `not_found` — those aliases don't appear in the catalog. Happy to share full probe logs.
 
 Thanks for the great gateway — looking forward to growing with it.
 
