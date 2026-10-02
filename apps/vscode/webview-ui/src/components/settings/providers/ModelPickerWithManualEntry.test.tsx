@@ -88,6 +88,51 @@ describe("ModelPickerWithManualEntry", () => {
 		expect(onSelect).toHaveBeenCalledWith({ providerId: "ollama", modelId: "mistral", modelInfo: models.mistral })
 	})
 
+	it("shows the resolved model count beside the label once loaded", () => {
+		render(
+			<ModelPickerWithManualEntry
+				allowsCustomIds={false}
+				error={undefined}
+				isLoading={false}
+				isStale={false}
+				models={models}
+				onSelect={vi.fn()}
+				selectedModel={selectedModel}
+			/>,
+		)
+
+		// Live endpoint list when configured, else the bundled catalog (dev.4-fix.3).
+		expect(screen.getByText("2 models")).toBeInTheDocument()
+	})
+
+	it("hides the model count while loading or stale", () => {
+		const { rerender } = render(
+			<ModelPickerWithManualEntry
+				allowsCustomIds={false}
+				error={undefined}
+				isLoading={true}
+				isStale={false}
+				models={models}
+				onSelect={vi.fn()}
+				selectedModel={selectedModel}
+			/>,
+		)
+		expect(screen.queryByText("2 models")).not.toBeInTheDocument()
+
+		rerender(
+			<ModelPickerWithManualEntry
+				allowsCustomIds={false}
+				error={undefined}
+				isLoading={false}
+				isStale={true}
+				models={models}
+				onSelect={vi.fn()}
+				selectedModel={selectedModel}
+			/>,
+		)
+		expect(screen.queryByText("2 models")).not.toBeInTheDocument()
+	})
+
 	it("shows manual entry during loading when custom ids are allowed", () => {
 		render(
 			<ModelPickerWithManualEntry

@@ -132,3 +132,43 @@ e2e("Quick Picker — NaraRouter rows carry capability icons without being selec
 	// on the picker's "Active · …" footer, which unmounts with the picker.
 	await expect(trigger).toContainText("mimo-v2.5-free", { timeout: 10_000 })
 })
+
+e2e("Settings — NaraRouter shows its resolved model count and keeps effort reachable", async ({ helper, sidebar }) => {
+	await helper.signin(sidebar)
+
+	await sidebar.evaluate(() => window.dispatchEvent(new Event("icline:navigate-to-settings-model-picker")))
+	const providerInput = sidebar.getByTestId("provider-selector-input")
+	await expect(providerInput).toBeVisible({ timeout: 10_000 })
+
+	await providerInput.click({ delay: 50 })
+	await sidebar.getByTestId("provider-option-bynara").click({ delay: 50 })
+	await expect(providerInput).toHaveAttribute("current-value", /NaraRouter/i, { timeout: 10_000 })
+
+	const dropdown = sidebar.locator("vscode-dropdown#provider-model-picker").first()
+	await expect(dropdown, "NaraRouter form shows no model dropdown without a key").toBeVisible({ timeout: 20_000 })
+
+	// 1. The resolved count beside the Model label: the live endpoint list when
+	// configured, else the bundled snapshot (dev.4-fix.3 hybrid stats).
+	const countText = sidebar.getByText(/^\d+ models$/)
+	await expect(countText, "resolved model count caption missing").toBeVisible({ timeout: 15_000 })
+	await expect(async () => {
+		const text = (await countText.textContent()) ?? ""
+		expect(Number(text.replace(/[^\d]/g, "")), "NaraRouter listed almost no models").toBeGreaterThan(50)
+	}).toPass({ timeout: 15_000 })
+
+	// 2. A declared-reasoning model offers the effort control; store High.
+	await dropdown.click({ delay: 50 })
+	await dropdown.locator('vscode-option[value="glm-5.3-flash"]').click({ delay: 50 })
+	await expect(sidebar.getByText("Reasoning Effort", { exact: true })).toBeVisible({ timeout: 10_000 })
+	const effortTrigger = sidebar.getByTestId("reasoning-effort-trigger")
+	await expect(effortTrigger).toHaveCount(1)
+	await effortTrigger.click({ delay: 50 })
+	await sidebar.getByRole("listbox").getByRole("option", { name: "High", exact: true }).click({ delay: 50 })
+
+	// 3. Switching to a model with no declared reasoning must NOT hide the
+	// control: the stored High is in force for it (dev.4-fix.3 unify gate —
+	// before the fix Settings dropped the control while the picker kept it).
+	await dropdown.click({ delay: 50 })
+	await dropdown.locator('vscode-option[value="deepseek-v4-flash"]').click({ delay: 50 })
+	await expect(sidebar.getByText("Reasoning Effort", { exact: true })).toBeVisible({ timeout: 15_000 })
+})

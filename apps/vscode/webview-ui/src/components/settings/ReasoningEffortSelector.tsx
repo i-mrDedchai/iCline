@@ -89,7 +89,7 @@ const ReasoningEffortSelector = ({
 					onEffortChange?.(value)
 				}}
 				value={selectedEffort}>
-				<SelectTrigger className="w-full mt-1">
+				<SelectTrigger className="w-full mt-1" data-testid="reasoning-effort-trigger">
 					<SelectValue />
 				</SelectTrigger>
 				<SelectContent>

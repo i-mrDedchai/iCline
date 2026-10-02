@@ -35,6 +35,9 @@ const en = {
 	modelLabel: "Model",
 	modelListStale: "Model list may be stale for the current provider configuration.",
 	modelListLoading: "Loading models…",
+	// Live resolved count beside the Model label: the endpoint list when the
+	// provider is configured, else its bundled catalog (dev.4-fix.3).
+	modelAvailableCount: "{count} models",
 	modelNotInListOption: "{model} (not in current list)",
 	modelUseCustomId: "Use custom model ID…",
 	modelNotInListNotice: "Selected model “{model}” is not in the current list.",
@@ -433,6 +436,7 @@ const th: Record<ProvidersStringKey, string> = {
 	modelLabel: "โมเดล",
 	modelListStale: "รายการโมเดลอาจไม่เป็นปัจจุบันสำหรับการตั้งค่า provider นี้",
 	modelListLoading: "กำลังโหลดรายการโมเดล…",
+	modelAvailableCount: "{count} โมเดล",
 	modelNotInListOption: "{model} (ไม่อยู่ในรายการปัจจุบัน)",
 	modelUseCustomId: "ใช้ model ID ที่กำหนดเอง…",
 	modelNotInListNotice: "โมเดลที่เลือก “{model}” ไม่อยู่ในรายการปัจจุบัน",
@@ -763,6 +767,7 @@ const ja: Record<ProvidersStringKey, string> = {
 	modelLabel: "モデル",
 	modelListStale: "現在のプロバイダー構成では、モデル一覧が古い可能性があります。",
 	modelListLoading: "モデルを読み込み中…",
+	modelAvailableCount: "{count} モデル",
 	modelNotInListOption: "{model}（現在の一覧にありません）",
 	modelUseCustomId: "カスタムモデル ID を使う…",
 	modelNotInListNotice: "選択中のモデル「{model}」は現在の一覧にありません。",
@@ -1104,6 +1109,7 @@ const zhCN: Record<ProvidersStringKey, string> = {
 	modelLabel: "模型",
 	modelListStale: "当前提供商配置下的模型列表可能已过期。",
 	modelListLoading: "正在加载模型…",
+	modelAvailableCount: "{count} 个模型",
 	modelNotInListOption: "{model}（不在当前列表中）",
 	modelUseCustomId: "使用自定义模型 ID…",
 	modelNotInListNotice: "所选模型“{model}”不在当前列表中。",

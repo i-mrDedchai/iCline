@@ -84,6 +84,14 @@ export function ModelPickerWithManualEntry({
 		<div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
 			<label htmlFor="provider-model-picker">
 				<span className="font-medium">{tr("modelLabel")}</span>
+				{/* Resolved count for this provider: the live endpoint list when it is
+				configured, else its bundled catalog (dev.4-fix.3). Hidden while
+					loading or stale so the number never claims more than the list shows. */}{" "}
+				{hasModels && !isLoading && !isStale && (
+					<span className="font-normal opacity-70" style={{ marginLeft: 6 }}>
+						{formatString(tr, "modelAvailableCount", { count: modelIds.length })}
+					</span>
+				)}
 			</label>
 
 			{isStale && <div role="status">{tr("modelListStale")}</div>}
