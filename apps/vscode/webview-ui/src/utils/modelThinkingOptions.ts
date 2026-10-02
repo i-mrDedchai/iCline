@@ -699,6 +699,54 @@ export function resolveModelThinkingOptions(input: ModelThinkingInput): ModelThi
 	}
 }
 
+/*
+ * ---------------------------------------------------------------------------
+ * Gate INPUT: which stored values keep a control reachable
+ * ---------------------------------------------------------------------------
+ * `resolveModelThinkingOptions` answers from booleans (`effortIsSet` /
+ * `budgetIsSet`), but every surface starts from RAW stored values — and the two
+ * surfaces used to derive those booleans differently: Settings tested raw
+ * non-empty while the Quick Picker required a vocabulary match, so a level
+ * stored under another provider's vocabulary (e.g. Sakana `max` viewed on a
+ * NaraRouter model) showed its control in one place and hid it in the other
+ * (dev.4-fix.4 ก). Both surfaces now derive the flags here, so the derivation
+ * can never drift again: only this function decides what "set" means.
+ *
+ * The unified rule is deliberately the reachable one: any stored effort — even
+ * outside this provider's vocabulary, even the OFF level — keeps the effort
+ * control, so the user can always change or clear what is set. Vocabulary
+ * matching still happens downstream (badge, selected level), never at the gate.
+ */
+
+/** Raw stored thinking state, as either surface holds it. */
+export interface ThinkingGateStored {
+	/** Stored effort level in whatever vocabulary wrote it (`high`, `max`, `none`, …). */
+	reasoningEffort?: string | null
+	/** Stored thinking token budget (0/undefined = none). */
+	thinkingBudgetTokens?: number | null
+	/**
+	 * Picker-only: a non-active model inherits the ambient Settings default the
+	 * moment it is selected, so its row/panel keep the control reachable.
+	 * Reachable, not on — `enabled`/badge still need a value in force for
+	 * THIS model (NaraRouter dev.4-fix.2). Settings shows the selected model
+	 * itself, so it leaves this false and sends the stored values only.
+	 */
+	providerDefaultEffortIsSet?: boolean
+}
+
+export interface ThinkingGateFlags {
+	effortIsSet: boolean
+	budgetIsSet: boolean
+}
+
+export function resolveThinkingGateFlags(stored: ThinkingGateStored): ThinkingGateFlags {
+	const effort = typeof stored.reasoningEffort === "string" ? stored.reasoningEffort.trim() : ""
+	return {
+		effortIsSet: effort !== "" || stored.providerDefaultEffortIsSet === true,
+		budgetIsSet: (stored.thinkingBudgetTokens ?? 0) > 0,
+	}
+}
+
 /** Provider-aware "is this one of the ids the provider's own list calls a budget model?". */
 export function isProviderKnownThinkingBudgetModel(providerId: string, modelId: string): boolean {
 	const policy = policyFor(providerId)

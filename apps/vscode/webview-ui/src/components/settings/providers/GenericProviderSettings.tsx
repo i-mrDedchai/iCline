@@ -6,7 +6,7 @@ import { useProviderListings } from "@/hooks/useProviderListings"
 import { useProviderModelSelection } from "@/hooks/useProviderModelSelection"
 import { useProviderModels } from "@/hooks/useProviderModels"
 import { useTranslation } from "@/i18n/useTranslation"
-import { resolveModelThinkingOptions } from "@/utils/modelThinkingOptions"
+import { resolveModelThinkingOptions, resolveThinkingGateFlags } from "@/utils/modelThinkingOptions"
 import { ApiKeyField } from "../common/ApiKeyField"
 import { BaseUrlField } from "../common/BaseUrlField"
 import { ModelInfoView } from "../common/ModelInfoView"
@@ -134,8 +134,12 @@ export const GenericProviderSettings = ({
 						providerId,
 						modelId: selectedModel.modelId,
 						modelInfo: selectedModel.modelInfo,
-						effortIsSet: storedEffort !== "",
-						budgetIsSet: storedBudget > 0,
+						// Same gate derivation as the Quick Picker (`resolveThinkingGateFlags`):
+						// stored values only, never the ambient default (dev.4-fix.3, fix.4 ก).
+						...resolveThinkingGateFlags({
+							reasoningEffort: storedEffort,
+							thinkingBudgetTokens: storedBudget,
+						}),
 					}).showEffort && (
 						<ReasoningEffortSelector
 							currentMode={currentMode}

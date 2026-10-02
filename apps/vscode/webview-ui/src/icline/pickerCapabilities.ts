@@ -24,6 +24,7 @@ import {
 	modelIdLooksReasoning,
 	resolveEffortLevels,
 	resolveModelThinkingOptions,
+	resolveThinkingGateFlags,
 } from "@/utils/modelThinkingOptions"
 
 /** Structural subset of `ModelInfo` this module reads (see the shared policy). */
@@ -160,9 +161,17 @@ export function resolveModelStatus(input: {
 		 * reasoning-capable model whose catalog entry the app does not have: reading it as
 		 * "nothing is set" made the Thinking switch disable itself the moment it was turned
 		 * off, with no way back (smoke 2026-09-21, `z-ai/glm-5.3-flash`).
+		 *
+		 * The gate itself is derived by the SHARED helper — the same call Settings
+		 * makes — so the two surfaces can never disagree on what "set" means
+		 * (dev.4-fix.4 ก). `explicit` above stays vocabulary-matched: it drives the
+		 * badge/selected level, never the gate.
 		 */
-		effortIsSet: explicit !== undefined || input.providerDefaultEffortIsSet === true,
-		budgetIsSet: budget > 0,
+		...resolveThinkingGateFlags({
+			reasoningEffort: stored,
+			thinkingBudgetTokens: budget,
+			providerDefaultEffortIsSet: input.providerDefaultEffortIsSet,
+		}),
 	})
 	let effort = explicitOn ? explicit : undefined
 	if (!effort && !isOffEffortLevel(effortLevels, stored) && budget > 0) {

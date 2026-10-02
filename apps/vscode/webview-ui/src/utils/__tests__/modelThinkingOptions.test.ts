@@ -2,7 +2,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
 import { join } from "node:path"
 import { OPENAI_REASONING_EFFORT_OPTIONS } from "@shared/storage/types"
 import { describe, expect, it } from "vitest"
-import { resolveModelCapabilities } from "@/icline/pickerCapabilities"
+import { resolveModelCapabilities, resolveModelStatus } from "@/icline/pickerCapabilities"
 import {
 	declaredEffortDefault,
 	defaultEffortValue,
@@ -15,6 +15,7 @@ import {
 	OPENAI_COMPATIBLE_POLICY_ID,
 	resolveEffortLevels,
 	resolveModelThinkingOptions,
+	resolveThinkingGateFlags,
 	withSupportedEfforts,
 } from "../modelThinkingOptions"
 
@@ -408,6 +409,132 @@ describe("the policy has exactly one home", () => {
 			const source = readFileSync(file, "utf8")
 			return duplicatedIds.some((id) => source.includes(id))
 		})
+		expect(offenders).toEqual([])
+	})
+})
+
+/**
+ * Settings ↔ Quick Picker parity (dev.4-fix.4 ก/ข). The two surfaces used to
+ * derive the policy gate from raw stored values DIFFERENTLY — Settings tested
+ * raw non-empty, the picker required a vocabulary match — so one could offer a
+ * Reasoning Effort control the other hid. Both now call
+ * `resolveThinkingGateFlags`; this table asserts they agree row by row, and the
+ * scan below pins that no second derivation can reappear.
+ */
+describe("Settings and the Quick Picker agree on the effort gate", () => {
+	interface ParityRow {
+		name: string
+		providerId: string
+		modelId: string
+		modelInfo?: Parameters<typeof resolveModelThinkingOptions>[0]["modelInfo"]
+		reasoningEffort?: string
+		thinkingBudgetTokens?: number
+		providerDefaultEffortIsSet?: boolean
+		expectSupport: { showEffort: boolean; showThinkingBudget: boolean }
+	}
+
+	const rows: ParityRow[] = [
+		{
+			name: "stored High on an undeclared NaraRouter model keeps the control (dev.4-fix.3)",
+			providerId: "bynara",
+			modelId: "glm-5.3-flash",
+			reasoningEffort: "high",
+			expectSupport: { showEffort: true, showThinkingBudget: false },
+		},
+		{
+			name: "no stored values on an undeclared model offers nothing",
+			providerId: "bynara",
+			modelId: "deepseek-v4-flash",
+			expectSupport: { showEffort: false, showThinkingBudget: false },
+		},
+		{
+			name: "a level from another provider's vocabulary stays reachable on both (was picker-hidden)",
+			providerId: "bynara",
+			modelId: "deepseek-v4-flash",
+			reasoningEffort: "max",
+			expectSupport: { showEffort: true, showThinkingBudget: false },
+		},
+		{
+			name: "explicit OFF keeps the control reachable on both, enabled on neither",
+			providerId: "bynara",
+			modelId: "glm-5.3-flash",
+			reasoningEffort: "none",
+			expectSupport: { showEffort: true, showThinkingBudget: false },
+		},
+		{
+			name: "a stored budget offers the budget control on both, without inventing effort",
+			providerId: "bynara",
+			modelId: "deepseek-v4-flash",
+			thinkingBudgetTokens: 2000,
+			expectSupport: { showEffort: false, showThinkingBudget: true },
+		},
+		{
+			name: "ambient provider default keeps the control reachable on both (dev.4-fix.2)",
+			providerId: "bynara",
+			modelId: "deepseek-v4-flash",
+			providerDefaultEffortIsSet: true,
+			expectSupport: { showEffort: true, showThinkingBudget: false },
+		},
+		{
+			name: "whitespace-only stored effort counts as nothing on both",
+			providerId: "bynara",
+			modelId: "deepseek-v4-flash",
+			reasoningEffort: "   ",
+			expectSupport: { showEffort: false, showThinkingBudget: false },
+		},
+	]
+
+	for (const row of rows) {
+		it(row.name, () => {
+			// What Settings sends: stored values through the shared gate.
+			const settingsView = resolveModelThinkingOptions({
+				providerId: row.providerId,
+				modelId: row.modelId,
+				modelInfo: row.modelInfo,
+				...resolveThinkingGateFlags({
+					reasoningEffort: row.reasoningEffort,
+					thinkingBudgetTokens: row.thinkingBudgetTokens,
+					providerDefaultEffortIsSet: row.providerDefaultEffortIsSet,
+				}),
+			})
+			// What the picker derives internally for the same stored values.
+			const pickerView = resolveModelStatus({
+				providerId: row.providerId,
+				modelId: row.modelId,
+				modelInfo: row.modelInfo,
+				reasoningEffort: row.reasoningEffort,
+				thinkingBudgetTokens: row.thinkingBudgetTokens,
+				providerDefaultEffortIsSet: row.providerDefaultEffortIsSet,
+			}).support
+			expect(settingsView).toEqual(pickerView)
+			expect(settingsView).toMatchObject(row.expectSupport)
+		})
+	}
+
+	it("no surface derives the gate inline — resolveThinkingGateFlags is the only home", () => {
+		const srcRoots = [process.cwd(), join(process.cwd(), "webview-ui")]
+			.map((root) => join(root, "src"))
+			.filter((dir) => existsSync(dir))
+		const listAll = (dir: string): string[] =>
+			readdirSync(dir).flatMap((entry) => {
+				const full = join(dir, entry)
+				if (statSync(full).isDirectory()) {
+					return listAll(full)
+				}
+				return /\.tsx?$/.test(entry) && !/\.test\.tsx?$/.test(entry) ? [full] : []
+			})
+		const offenders = srcRoots
+			.flatMap(listAll)
+			.filter((file) => !file.endsWith(join("utils", "modelThinkingOptions.ts")))
+			.filter((file) => {
+				let source = readFileSync(file, "utf8")
+				// `providerDefaultEffortIsSet` (ambient inheritance, passed THROUGH to the
+				// helper) never matches: the capital E breaks the lowercase pattern.
+				// `effortIsSet: support.showEffort` (capability icons consuming the
+				// ALREADY-resolved policy answer) is downstream use, not a derivation.
+				source = source.replace(/effortIsSet:\s*support\.showEffort/g, "")
+				return /effortIsSet\s*:|budgetIsSet\s*:/.test(source)
+			})
 		expect(offenders).toEqual([])
 	})
 })
