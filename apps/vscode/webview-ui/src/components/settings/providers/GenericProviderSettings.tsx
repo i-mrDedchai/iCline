@@ -1,6 +1,6 @@
 import { Mode } from "@shared/storage/types"
 import { useCallback } from "react"
-import { type ProviderId } from "@/context/ExtensionStateContext"
+import { type ProviderId, useExtensionState } from "@/context/ExtensionStateContext"
 import { useProviderConfig } from "@/hooks/useProviderConfig"
 import { useProviderListings } from "@/hooks/useProviderListings"
 import { useProviderModelSelection } from "@/hooks/useProviderModelSelection"
@@ -11,6 +11,7 @@ import { ApiKeyField } from "../common/ApiKeyField"
 import { BaseUrlField } from "../common/BaseUrlField"
 import { ModelInfoView } from "../common/ModelInfoView"
 import ReasoningEffortSelector from "../ReasoningEffortSelector"
+import { getModeSpecificFields } from "../utils/providerUtils"
 import { useProviderApiKeyField } from "../utils/useProviderApiKeyField"
 import { type ModelPickerSelection, ModelPickerWithManualEntry } from "./ModelPickerWithManualEntry"
 
@@ -73,6 +74,15 @@ export const GenericProviderSettings = ({
 		commitSelection,
 	})
 
+	// The effort gate must see the same stored value the Quick Picker sees for
+	// the active model: a stored level keeps the control reachable even when the
+	// catalog entry declares no reasoning (`stored-preference`), so Settings and
+	// the picker agree on which models offer Reasoning Effort (dev.4-fix.3).
+	const { apiConfiguration } = useExtensionState()
+	const modeFields = getModeSpecificFields(apiConfiguration, currentMode)
+	const storedEffort = typeof modeFields.reasoningEffort === "string" ? modeFields.reasoningEffort.trim() : ""
+	const storedBudget = modeFields.thinkingBudgetTokens ?? 0
+
 	const handleModelSelect = (selection: ModelPickerSelection) => {
 		void commitModelSelection(selection).catch((err) =>
 			console.error(`Failed to commit ${providerName} model selection:`, err),
@@ -124,6 +134,8 @@ export const GenericProviderSettings = ({
 						providerId,
 						modelId: selectedModel.modelId,
 						modelInfo: selectedModel.modelInfo,
+						effortIsSet: storedEffort !== "",
+						budgetIsSet: storedBudget > 0,
 					}).showEffort && (
 						<ReasoningEffortSelector
 							currentMode={currentMode}

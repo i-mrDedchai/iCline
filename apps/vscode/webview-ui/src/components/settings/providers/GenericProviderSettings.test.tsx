@@ -2,7 +2,8 @@ import type { ProviderConfigResponse } from "@shared/proto/cline/models"
 import { ApiFormat } from "@shared/proto/cline/models"
 import { fireEvent, render, screen, waitFor } from "@testing-library/react"
 import type { ChangeEventHandler, ReactNode } from "react"
-import { describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
+import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useProviderConfig } from "@/hooks/useProviderConfig"
 import { useProviderModels } from "@/hooks/useProviderModels"
 import { GenericProviderSettings } from "./GenericProviderSettings"
@@ -18,10 +19,15 @@ vi.mock("@/hooks/useProviderConfig", () => ({
 }))
 
 // The reasoning effort selector reads the extension state for the current
-// mode-specific reasoning effort value.
+// mode-specific reasoning effort value; the effort gate reads the same state
+// so a stored level keeps the control reachable (dev.4-fix.3).
 vi.mock("@/context/ExtensionStateContext", () => ({
-	useExtensionState: () => ({ apiConfiguration: {}, planActSeparateModelsSetting: false }),
+	useExtensionState: vi.fn(() => ({ apiConfiguration: {}, planActSeparateModelsSetting: false })),
 }))
+
+beforeEach(() => {
+	vi.mocked(useExtensionState).mockReturnValue({ apiConfiguration: {}, planActSeparateModelsSetting: false })
+})
 
 // Render the dropdown web components as native elements so value/change
 // behavior is observable in jsdom. Other toolkit components stay real.
@@ -131,6 +137,48 @@ describe("GenericProviderSettings", () => {
 				currentMode="act"
 				providerId="deepseek"
 				providerName="DeepSeek"
+				showModelOptions={true}
+			/>,
+		)
+
+		expect(screen.getByText("Reasoning Effort")).toBeInTheDocument()
+	})
+
+	it("keeps the effort selector reachable for a model without declared reasoning once an effort is stored", () => {
+		// NaraRouter `deepseek-v4-flash`: no reasoning metadata, but the provider
+		// carries a stored High — Settings must offer the control like the Quick
+		// Picker does for the active model (dev.4-fix.3).
+		vi.mocked(useExtensionState).mockReturnValue({
+			apiConfiguration: { actModeReasoningEffort: "high" },
+			planActSeparateModelsSetting: false,
+		})
+		vi.mocked(useProviderModels).mockReturnValue({
+			models: {
+				"deepseek-v4-flash": {
+					name: "DeepSeek V4 Flash",
+					supportsPromptCache: false,
+					contextWindow: 1_000_000,
+				},
+			},
+			defaultModelId: "deepseek-v4-flash",
+			isLoading: false,
+			isStale: false,
+			error: undefined,
+			refresh: vi.fn(),
+			fingerprint: "fingerprint",
+		})
+		vi.mocked(useProviderConfig).mockReturnValue({
+			config: undefined,
+			write: vi.fn(async () => undefined),
+			commitSelection: vi.fn(),
+		})
+
+		render(
+			<GenericProviderSettings
+				allowsCustomIds={false}
+				currentMode="act"
+				providerId="bynara"
+				providerName="NaraRouter"
 				showModelOptions={true}
 			/>,
 		)
