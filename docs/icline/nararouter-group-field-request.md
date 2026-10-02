@@ -10,7 +10,7 @@
 - ข้อสรุปฝั่งเรา: wire ไม่มีฟิลด์ group/tier — ถ้าจะทำ tabs ต้อง hardcode เอง
   ซึ่งจะพังเงียบทันทีที่ catalog เปลี่ยน (57 โมเดลหลายตระกูล + docs เขาเองบอกว่า
   catalog อัปเดตต่อเนื่อง) จึงขอฟิลด์จาก gateway แทน — หมายเหตุซื่อสัตย์:
-  ช่วง 1–3 ต.ค. ที่เราทดสอบ list นิ่ง 100% ยังไม่เคยเห็น churn จริง
+  ช่วง 1 วันที่ทดสอบอย่างเป็นทางการ list นิ่ง 100% ยังไม่เคยเห็น churn จริง
   จดหมายจึงไม่อ้างความเร็วที่วัดไม่ได้ อ้างแค่ scale + failure mode
 
 ## สิ่งที่อ่านจาก docs (https://router.bynara.id/docs, 2026-10-03)
@@ -68,7 +68,7 @@ We're building **iCline**, an AI coding assistant for VS Code, with NaraRouter i
 
 ideally matching the shelves/grouping you already show on your dashboard.
 
-**Why we're asking instead of grouping client-side:** with 57 models across many families — and a catalog your own docs describe as continuously updated — any hardcoded mapping on our side breaks the moment the catalog changes: models land in the wrong tab with no error to catch, users pick the wrong model, and that costs both sides in confusion and wasted calls. A server-side field stays correct by construction. (For honesty: in our three days of testing the list itself was stable — this is about building for the long term, not about churn we've already seen.)
+**Why we're asking instead of grouping client-side:** with 57 models across many families — and a catalog your own docs describe as continuously updated — any hardcoded mapping on our side breaks the moment the catalog changes: models land in the wrong tab with no error to catch, users pick the wrong model, and that costs both sides in confusion and wasted calls. A server-side field stays correct by construction. (For honesty: in our day of official testing the list itself was stable — this is about building for the long term, not about churn we've already seen.)
 
 **What's in it for you:**
 
@@ -106,7 +106,7 @@ Best regards,
 
 โดยยึดตามชั้น/กลุ่มเดียวกับที่แสดงบน dashboard ของคุณก็จะดีมาก
 
-**ทำไมถึงขอแทนที่จะจัดกลุ่มเองฝั่ง client:** ด้วยโมเดล 57 ตัวหลายตระกูล — และ catalog ที่ docs ของคุณเองบอกว่าอัปเดตต่อเนื่อง — mapping ที่ hardcode ไว้ฝั่งเราจะพังทันทีที่ catalog เปลี่ยน: โมเดลไปอยู่ tab ผิดโดยไม่มี error ให้จับ ผู้ใช้เลือกโมเดลผิด และทั้งสองฝ่ายเสียหายทั้งความสับสนและ call ที่สูญเปล่า ฟิลด์ฝั่ง server จะถูกต้องโดยโครงสร้างตั้งแต่ต้น (พูดตามตรง: ช่วง 3 วันที่เราทดสอบ list นิ่งสนิท — เรื่องนี้คือการสร้างเผื่อระยะยาว ไม่ใช่ churn ที่เราเจอมาแล้ว)
+**ทำไมถึงขอแทนที่จะจัดกลุ่มเองฝั่ง client:** ด้วยโมเดล 57 ตัวหลายตระกูล — และ catalog ที่ docs ของคุณเองบอกว่าอัปเดตต่อเนื่อง — mapping ที่ hardcode ไว้ฝั่งเราจะพังทันทีที่ catalog เปลี่ยน: โมเดลไปอยู่ tab ผิดโดยไม่มี error ให้จับ ผู้ใช้เลือกโมเดลผิด และทั้งสองฝ่ายเสียหายทั้งความสับสนและ call ที่สูญเปล่า ฟิลด์ฝั่ง server จะถูกต้องโดยโครงสร้างตั้งแต่ต้น (พูดตามตรง: ช่วง 1 วันที่ทดสอบอย่างเป็นทางการ list นิ่งสนิท — เรื่องนี้คือการสร้างเผื่อระยะยาว ไม่ใช่ churn ที่เราเจอมาแล้ว)
 
 **ฝั่งคุณจะได้อะไร:**
 
