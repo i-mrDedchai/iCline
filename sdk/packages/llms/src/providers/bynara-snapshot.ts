@@ -25,8 +25,58 @@ import type { ModelInfo } from "../catalog/types"
  */
 export const BYNARA_SNAPSHOT_DATE = "2026-10-02"
 export const BYNARA_DEFAULT_MODEL_ID = "mimo-v2.5-free"
+
+/**
+ * Which dashboard shelf a model sits on. The gateway's /v1/models payload
+ * carries NO tier signal — this mapping was read off the NaraRouter
+ * dashboard model tables ("Free models" / "Free for paid users" /
+ * "PAYG Models", month precision {@link BYNARA_TIERS_MONTH}) and must be
+ * re-read by a human whenever the dashboard moves models between shelves.
+ *
+ * "free" does NOT mean price zero: several Free-plan models carry real
+ * PAYG rates (agnes-2.5-flash, agnes-3-flash, longcat-2.5) — "free" means
+ * usable on the Free plan quota at no extra cost. "bonus" models have real
+ * rates too but are served free while the account holds the qualifying
+ * credit balance (the dashboard's "Hold above Rp…" badge; the threshold
+ * itself drifts — Rp15,000 vs Rp35,000 was seen for the same model — so it
+ * is described, never hardcoded). Only "payg" is billed per token, period.
+ *
+ * Model multipliers (2x, 0.01x, …) affect plan-quota burn only, never PAYG
+ * billing, so they are deliberately not modeled here.
+ */
+export type BynaraModelTier = "free" | "bonus" | "payg"
+export const BYNARA_TIERS_MONTH = "2026-10"
+export const BYNARA_MODEL_TIERS: Record<string, BynaraModelTier> = {
+	"agnes-2.5-flash": "free",
+	"agnes-3-flash": "free",
+	jev: "free",
+	"laguna-s-2.1": "free",
+	"ling-3.0-flash-fin-free": "free",
+	"ling-3.0-flash-sante-free": "free",
+	"longcat-2.5": "free",
+	"nemotron-3-super-free": "free",
+	"nemotron-3-ultra-free": "free",
+	"nemotron-3.5-lightning-free": "free",
+	"space-bunny-alpha": "free",
+	"space-bunny-alpha-bynara": "free",
+	"mimo-v2.5-free": "bonus",
+	"mimo-v2.6-flash-free": "bonus",
+	"muse-spark-1.3-contributor-free": "bonus",
+	"step-5-preview": "bonus",
+	"stepfun-3.7-flash": "bonus",
+}
+
+export function bynaraTierOf(modelId: string): BynaraModelTier {
+	return BYNARA_MODEL_TIERS[modelId] ?? "payg"
+}
+
+const BYNARA_TIER_DESCRIPTIONS: Record<Exclude<BynaraModelTier, "payg">, string> = {
+	free: "NaraRouter Free-plan model: usable on the Free plan quota at no extra cost.",
+	bonus:
+		"NaraRouter bonus model: served free while the account holds the qualifying credit balance (threshold varies — see the NaraRouter dashboard).",
+}
 export function buildBynaraModels(): Record<string, ModelInfo> {
-	return {
+	const models: Record<string, ModelInfo> = {
 		"agnes-2.5-flash": {
 			id: "agnes-2.5-flash",
 			name: "Agnes 2.5 Flash",
@@ -532,4 +582,15 @@ export function buildBynaraModels(): Record<string, ModelInfo> {
 			status: "active",
 		},
 	}
+	// Surface the dashboard shelf in Settings (ModelInfoView renders
+	// description): a Free-plan model with a real PAYG rate must not look
+	// identical to a billed one, and a bonus model must carry its hold
+	// condition where the user picks the model — not just in the docs.
+	for (const [id, info] of Object.entries(models)) {
+		const tier = bynaraTierOf(id)
+		if (tier !== "payg") {
+			info.description = BYNARA_TIER_DESCRIPTIONS[tier]
+		}
+	}
+	return models
 }

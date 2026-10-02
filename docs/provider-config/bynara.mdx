@@ -29,6 +29,7 @@ NaraRouter (Bynara) is a multi-model AI gateway: one API key unlocks many models
 -   **Context window** — when the gateway's `/v1/models` response lacks size info for a model, iCline falls back to a 128K context window. Adjust the `Context Window` field in model config if you know the model's real limit.
 -   **Anthropic-compatible endpoint** — NaraRouter also exposes an Anthropic-compatible surface, but iCline uses the OpenAI-compatible one; you do not need it.
 -   **Billing** — usage bills against your NaraRouter account (free-tier quota refreshes daily). The TaskHeader cost indicator reflects the per-token prices iCline knows; gateway-side pricing wins when the catalog declares it.
+-   **Three model shelves** — the dashboard groups models into **Free models** (usable on the Free plan quota; note some still carry PAYG rates, e.g. `agnes-2.5-flash`), **Free for paid users** (served free while you hold the qualifying credit balance — the "Hold above Rp…" threshold drifts, check the dashboard), and **PAYG Models** (billed per token). iCline tags each snapshot model with its shelf (read 2026-10) and shows the note under the model in Settings; anything not on the first two shelves is PAYG. Model **multipliers** (2x, 0.01x, …) only affect plan-quota burn, never PAYG billing.
 
 ### Troubleshooting
 

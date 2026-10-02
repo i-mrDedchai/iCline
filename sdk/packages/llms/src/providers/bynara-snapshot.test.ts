@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest"
-import { buildBynaraModels, BYNARA_DEFAULT_MODEL_ID, BYNARA_SNAPSHOT_DATE } from "./bynara-snapshot"
+import {
+	buildBynaraModels,
+	BYNARA_DEFAULT_MODEL_ID,
+	BYNARA_MODEL_TIERS,
+	BYNARA_SNAPSHOT_DATE,
+	bynaraTierOf,
+} from "./bynara-snapshot"
 import { BUILTIN_SPECS } from "./builtins"
 
 describe("bynara snapshot catalog", () => {
@@ -46,5 +52,30 @@ describe("bynara snapshot catalog", () => {
 		expect(models[BYNARA_DEFAULT_MODEL_ID]).toBeDefined()
 		const spec = BUILTIN_SPECS.find((s) => s.id === "bynara")
 		expect(spec?.defaultModelId).toBe(BYNARA_DEFAULT_MODEL_ID)
+	})
+
+	it("tiers follow the dashboard shelves: 12 free, 5 bonus, rest PAYG", () => {
+		const models = buildBynaraModels()
+		const ids = Object.keys(models)
+		// The map covers exactly the snapshot: an id added to either side
+		// without the other fails here (never hand-add ids).
+		expect(Object.keys(BYNARA_MODEL_TIERS).sort()).toEqual(
+			ids.filter((id) => bynaraTierOf(id) !== "payg").sort(),
+		)
+		const tiers = ids.map((id) => bynaraTierOf(id))
+		expect(tiers.filter((tier) => tier === "free")).toHaveLength(12)
+		expect(tiers.filter((tier) => tier === "bonus")).toHaveLength(5)
+		expect(tiers.filter((tier) => tier === "payg")).toHaveLength(39)
+		// "Free" is plan-quota inclusion, NOT price zero: the dashboard's
+		// Free shelf carries real PAYG rates on these three.
+		for (const id of ["agnes-2.5-flash", "agnes-3-flash", "longcat-2.5"]) {
+			expect(bynaraTierOf(id)).toBe("free")
+			expect(models[id].pricing?.input).toBeGreaterThan(0)
+		}
+		// The shelf is visible where the model is picked (Settings renders
+		// description); PAYG models carry no such note.
+		expect(models.jev.description).toMatch(/Free-plan/)
+		expect(models["mimo-v2.5-free"].description).toMatch(/qualifying credit balance/)
+		expect(models["claude-sonnet-5"].description).toBeUndefined()
 	})
 })
