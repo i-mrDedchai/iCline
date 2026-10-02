@@ -8,7 +8,10 @@
 
 - iCline รวม NaraRouter เป็น first-class provider แล้ว (56 chat models, snapshot ตรง live 100% ณ 2026-10-03)
 - ข้อสรุปฝั่งเรา: wire ไม่มีฟิลด์ group/tier — ถ้าจะทำ tabs ต้อง hardcode เอง
-  ซึ่งจะเน่าเร็วเพราะ catalog เปลี่ยนบ่อย จึงขอฟิลด์จาก gateway แทน
+  ซึ่งจะพังเงียบทันทีที่ catalog เปลี่ยน (57 โมเดลหลายตระกูล + docs เขาเองบอกว่า
+  catalog อัปเดตต่อเนื่อง) จึงขอฟิลด์จาก gateway แทน — หมายเหตุซื่อสัตย์:
+  ช่วง 1–3 ต.ค. ที่เราทดสอบ list นิ่ง 100% ยังไม่เคยเห็น churn จริง
+  จดหมายจึงไม่อ้างความเร็วที่วัดไม่ได้ อ้างแค่ scale + failure mode
 
 ## สิ่งที่อ่านจาก docs (https://router.bynara.id/docs, 2026-10-03)
 
@@ -65,7 +68,7 @@ We're building **iCline**, an AI coding assistant for VS Code, with NaraRouter i
 
 ideally matching the shelves/grouping you already show on your dashboard.
 
-**Why we're asking instead of grouping client-side:** your catalog moves fast (we see new families appearing regularly), so any hardcoded mapping on our side rots within weeks — models land in the wrong tab, users pick the wrong model, and that costs both sides in confusion and wasted calls. A server-side field stays correct by construction.
+**Why we're asking instead of grouping client-side:** with 57 models across many families — and a catalog your own docs describe as continuously updated — any hardcoded mapping on our side breaks the moment the catalog changes: models land in the wrong tab with no error to catch, users pick the wrong model, and that costs both sides in confusion and wasted calls. A server-side field stays correct by construction. (For honesty: in our three days of testing the list itself was stable — this is about building for the long term, not about churn we've already seen.)
 
 **What's in it for you:**
 
