@@ -578,9 +578,19 @@ export function QuickModelPicker({ modelDisplayName, disabled }: QuickModelPicke
 				modelInfo,
 				reasoningEffort: effective.reasoningEffort,
 				thinkingBudgetTokens: effective.thinkingBudgetTokens,
+				// A non-active model of the current provider inherits the ambient
+				// effort the moment it is selected (the Settings-level default),
+				// so its row/panel keep the control reachable instead of claiming
+				// "No capability data". Reachable, not on: enabled/badge still
+				// require a value in force for THIS model (dev.4-fix.2).
+				providerDefaultEffortIsSet:
+					!isActiveModel(providerId, modelId) &&
+					providerId === currentProvider &&
+					!!modeFields.reasoningEffort &&
+					modeFields.reasoningEffort !== "none",
 			})
 		},
-		[thinkingForModel],
+		[thinkingForModel, isActiveModel, currentProvider, modeFields.reasoningEffort],
 	)
 
 	/** Persist a thinking/effort change and remember it for this session. */

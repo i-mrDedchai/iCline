@@ -129,6 +129,15 @@ export function resolveModelStatus(input: {
 	modelInfo?: ModelCapabilityLike | null
 	reasoningEffort?: string
 	thinkingBudgetTokens?: number
+	/**
+	 * The provider already carries a configured effort (the Settings-level
+	 * default that takes effect the moment this model is selected). It does
+	 * NOT switch reasoning on — the switch and badge stay off — but it keeps
+	 * the effort control reachable and the muted reasoning icon visible, so a
+	 * hover no longer claims "No capability data" for a model that will
+	 * reason as soon as it is picked (NaraRouter dev.4-fix.2).
+	 */
+	providerDefaultEffortIsSet?: boolean
 }): ModelStatus {
 	const budget = input.thinkingBudgetTokens ?? 0
 	// Accept the provider's OWN vocabulary: a Sakana model stores `max`, which the
@@ -152,7 +161,7 @@ export function resolveModelStatus(input: {
 		 * "nothing is set" made the Thinking switch disable itself the moment it was turned
 		 * off, with no way back (smoke 2026-09-21, `z-ai/glm-5.3-flash`).
 		 */
-		effortIsSet: explicit !== undefined,
+		effortIsSet: explicit !== undefined || input.providerDefaultEffortIsSet === true,
 		budgetIsSet: budget > 0,
 	})
 	let effort = explicitOn ? explicit : undefined

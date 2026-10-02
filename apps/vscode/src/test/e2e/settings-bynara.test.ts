@@ -101,6 +101,24 @@ e2e("Quick Picker — NaraRouter rows carry capability icons without being selec
 	await expect(reasoningRow).toBeVisible({ timeout: 10_000 })
 	await expect(reasoningRow.locator('[data-icline-capability="reasoning"]')).toBeVisible({ timeout: 10_000 })
 
+	// Hovering it opens an Options panel WITH an effort control (dev.4-fix.2:
+	// the bynara thinking policy follows gateway declarations, so Settings
+	// and the picker agree on which models take effort).
+	await reasoningRow.hover()
+	const optionsPanel = picker.locator("[data-icline-options-panel]")
+	await expect(optionsPanel).toBeVisible({ timeout: 10_000 })
+	await expect(optionsPanel.locator("[data-icline-effort-option]").first()).toBeVisible({ timeout: 10_000 })
+
+	// The honest negative, pinned keyless: the gateway declares no reasoning
+	// for deepseek-v4-flash (dashboard badge: Text) and nothing is stored, so
+	// its hover says so instead of inventing icons. (With a provider-level
+	// effort configured the control stays reachable — unit-covered in
+	// pickerCapabilities.test.ts — which is the dev.4 smoke case resolved.)
+	const plainRow = picker.locator('[data-icline-model-row][data-icline-model-id="deepseek-v4-flash"]')
+	await expect(plainRow).toBeVisible({ timeout: 10_000 })
+	await plainRow.hover()
+	await expect(optionsPanel.getByText("No capability data")).toBeVisible({ timeout: 10_000 })
+
 	// 4. Full flow: picking the default from the picker commits provider+model.
 	const freeRow = picker.locator('[data-icline-model-row][data-icline-model-id="mimo-v2.5-free"]')
 	await expect(freeRow).toBeVisible({ timeout: 10_000 })

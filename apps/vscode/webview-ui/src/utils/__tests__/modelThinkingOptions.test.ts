@@ -101,6 +101,26 @@ describe("resolveModelThinkingOptions — provider rules", () => {
 		expect(options("oca", "claude", { thinkingConfig: {} }).showThinkingBudget).toBe(true)
 	})
 
+	it("bynara follows its gateway declarations, not the wire family", () => {
+		// The transport is openai-compatible, but the Settings form is the
+		// catalog-backed generic one and the gateway declares reasoning per
+		// model — so a declared flag opens effort, anything else stays shut
+		// (dev.4-fix.2: hover-then-select disagreed on deepseek-v4-flash).
+		expect(options("bynara", "glm-5.3-flash", { supportsReasoning: true })).toMatchObject({
+			showEffort: true,
+			effortSource: "declared-reasoning",
+		})
+		expect(options("bynara", "deepseek-v4-flash")).toMatchObject({
+			showEffort: false,
+			showThinkingBudget: false,
+		})
+		// A stored value still keeps its own control reachable.
+		expect(options("bynara", "deepseek-v4-flash", undefined, true)).toMatchObject({
+			showEffort: true,
+			effortSource: "stored-preference",
+		})
+	})
+
 	it("litellm treats a reasoning flag as a budget model (its Settings rule)", () => {
 		expect(options("litellm", "some-proxy-model", { supportsReasoning: true })).toMatchObject({
 			showEffort: false,

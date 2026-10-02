@@ -131,6 +131,23 @@ describe("resolveModelStatus", () => {
 		expect(declared.support.showEffort).toBe(true)
 	})
 
+	it("a provider-level default keeps controls reachable without switching anything on", () => {
+		// NaraRouter dev.4-fix.2: hovering deepseek-v4-flash (no declared
+		// reasoning, provider default High configured) claimed "No capability
+		// data", yet selecting it lit up Thinking + High. The ambient default
+		// keeps the control and the muted icon — enabled/badge still need a
+		// value in force for THIS model.
+		const status = resolveModelStatus({
+			providerId: "bynara",
+			modelId: "deepseek-v4-flash",
+			providerDefaultEffortIsSet: true,
+		})
+		expect(status).toMatchObject({ enabled: false, effort: undefined, effortShort: "" })
+		expect(status.support.showEffort).toBe(true)
+		expect(status.support.effortSource).toBe("stored-preference")
+		expect(status.caps.map((cap) => cap.id)).toContain("reasoning")
+	})
+
 	it("never claims controls for a model with nothing to configure", () => {
 		const status = resolveModelStatus({ providerId: "jan", modelId: "jan-local-7b", modelInfo: {} })
 		expect(status).toMatchObject({ enabled: false, effort: undefined, effortShort: "" })

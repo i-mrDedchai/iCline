@@ -588,6 +588,19 @@ const POLICIES: Record<string, ProviderThinkingPolicy> = {
 		effort: (ctx) => adaptiveEffort(ctx) ?? declaredReasoningEffort(ctx),
 	},
 
+	// NaraRouter declares vision/reasoning per model in its /v1/models payload
+	// (threaded into supportsReasoning by the SDK merge); the dashboard's
+	// Vision/Text badges carry no reasoning signal, so only declared metadata —
+	// or a value the user already stored — opens the effort control. Deliberately
+	// NOT "provider-always": the gateway is openai-compatible on the wire, but
+	// its Settings form is the catalog-backed generic one, and lighting up effort
+	// for all 56 models would claim support the gateway never declared
+	// (dev.4-fix.2: hover showed nothing while post-select showed High).
+	bynara: {
+		effort: (ctx) => declaredReasoningEffort(ctx),
+		budget: thinkingConfigBudget,
+	},
+
 	// Vertex routes by the catalog's thinkingLevel flag, then the budget.
 	vertex: {
 		effort: (ctx) => adaptiveEffort(ctx) ?? thinkingLevelEffort(ctx),
