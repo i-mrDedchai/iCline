@@ -22,7 +22,7 @@ Standalone Cline fork for VS Code — extension ID **`i-mrdedchai.iCline`**. **N
 
 Settings (all tabs), welcome home, history, Customize modal, MCP servers, Team panel, Marketplace, Account, onboarding, Browser settings — plus the extension's own notifications and manifest strings — in **English, Thai, Japanese and Simplified Chinese**. Interface language never changes how the agent talks.
 
-![iCline Settings and webview in English, Chinese, Japanese and Thai](assets/docs/0.1.18-Settings+Webview-EN+CH+JP+TH.png)
+![iCline Settings and webview in English, Chinese, Japanese and Thai](assets/docs/0.1.18-Settings-Webview-EN-CH-JP-TH.png)
 
 ### 🎨 Settings → Appearance tab
 
@@ -34,19 +34,19 @@ Accent colors for the Task Completed panel and the final-reply card that follow 
 
 Switch providers and models without leaving the chat, now with a refreshed design and **Thinking / Effort per model** on hover.
 
-![iCline quick provider and model picker, new design with Effort](assets/docs/0.1.18-NewDesign-QuickPicker+Effort.png)
+![iCline quick provider and model picker, new design with Effort](assets/docs/0.1.18-NewDesign-QuickPicker-Effort.png)
 
 ### 🏢 Custom providers, managed end to end
 
 Create, edit and delete your own gateways from the **Custom providers** card — with live provider/model stats, **Fetch models automatically** from the endpoint's `/models`, and a Context row that says where its number came from (gateway declaration, your override, catalog majority, or fallback).
 
-![iCline provider and model stats with custom providers](assets/docs/0.1.18-Providers+models-Stats+Customer-Providers.jpg)
+![iCline provider and model stats with custom providers](assets/docs/0.1.18-Providers-models-Stats-Customer-Providers.jpg)
 
 ### 👥 Sub-agents & Agent Teams
 
 Opt-in multi-agent work under Settings → Agent: `spawn_agent` sub-agents and the full Agent Teams suite (mailbox, mission logs, shared outcomes), a visual **team panel** (topology, per-agent model, mailbox, spawn/shutdown), granular **Team reads / Team writes** approvals, and a **Team budget** (max agents + tokens per turn) so teams can't burn unboundedly.
 
-![iCline Sub-agents and Agent Teams](assets/docs/0.1.18-Sub-agents+Agent-Teams.jpg)
+![iCline Sub-agents and Agent Teams](assets/docs/0.1.18-Sub-agents-Agent-Teams.jpg)
 
 ### 🛡️ Runs that survive trouble
 

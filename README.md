@@ -81,7 +81,7 @@ code --install-extension dist/i-mrdedchai.iCline-<version>.vsix --force
 | 🛡️ Self-healing runs (mid-stream retry, truncation continuation) | ❌ | ✅ |
 
 <p align="center">
-  <img src="apps/vscode/assets/docs/0.1.18-NewDesign-QuickPicker+Effort.png" alt="iCline quick model picker on chat (0.1.18 new design)" width="640" />
+  <img src="apps/vscode/assets/docs/0.1.18-NewDesign-QuickPicker-Effort.png" alt="iCline quick model picker on chat (0.1.18 new design)" width="640" />
 </p>
 
 See **[apps/vscode/README.md](apps/vscode/README.md)** for screenshots and full feature list.

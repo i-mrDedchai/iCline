@@ -81,7 +81,7 @@ code --install-extension dist/i-mrdedchai.iCline-0.1.19-dev.2-fix.1.vsix --force
 | 🛡️ รันงานซ่อมตัวเอง (retry สตรีมขาด, ต่อ truncation) | ❌ | ✅ |
 
 <p align="center">
-  <img src="apps/vscode/assets/docs/0.1.18-NewDesign-QuickPicker+Effort.png" alt="เมนูด่วนเลือก Provider และ Model บนแชท iCline (โฉมใหม่ 0.1.18)" width="640" />
+  <img src="apps/vscode/assets/docs/0.1.18-NewDesign-QuickPicker-Effort.png" alt="เมนูด่วนเลือก Provider และ Model บนแชท iCline (โฉมใหม่ 0.1.18)" width="640" />
 </p>
 
 ดูภาพและรายละเอียดเต็มที่ **[apps/vscode/README.th.md](apps/vscode/README.th.md)**

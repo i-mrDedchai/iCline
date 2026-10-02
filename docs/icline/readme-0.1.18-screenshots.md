@@ -29,11 +29,11 @@ references them anymore; they survive only in `memorial-0.1.17/`):
 
 | # | File | Shows | Used in |
 |---|---|---|---|
-| 1 | `0.1.18-Settings+Webview-EN+CH+JP+TH.png` | Settings + webview in 4 languages | i18n sections (Details + full EN/TH) |
+| 1 | `0.1.18-Settings-Webview-EN-CH-JP-TH.png` | Settings + webview in 4 languages | i18n sections (Details + full EN/TH) |
 | 2 | `0.1.18-Appearance-Settings.jpg` | Settings → **Appearance** tab | Appearance sections (Details + full EN/TH) |
-| 3 | `0.1.18-NewDesign-QuickPicker+Effort.png` | Quick picker new design + per-model Effort | Picker sections (Details + full EN/TH) |
-| 4 | `0.1.18-Providers+models-Stats+Customer-Providers.jpg` | Provider/model stats + Custom providers | Provider sections (Details + full EN/TH) |
-| 5 | `0.1.18-Sub-agents+Agent-Teams.jpg` | Sub-agents & Agent Teams | Team sections (Details + full EN/TH) |
+| 3 | `0.1.18-NewDesign-QuickPicker-Effort.png` | Quick picker new design + per-model Effort | Picker sections (Details + full EN/TH) |
+| 4 | `0.1.18-Providers-models-Stats-Customer-Providers.jpg` | Provider/model stats + Custom providers | Provider sections (Details + full EN/TH) |
+| 5 | `0.1.18-Sub-agents-Agent-Teams.jpg` | Sub-agents & Agent Teams | Team sections (Details + full EN/TH) |
 
 The Thai READMEs reuse the same files (existing TH docs already share the
 EN-named images) — no separate TH captures. No API keys / tokens / personal

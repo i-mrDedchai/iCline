@@ -20,7 +20,7 @@
 
 Settings ทุกแท็บ, หน้า welcome และการ์ด Quick Start, หน้าประวัติทั้งหมด (ค้นหา, จัดเรียง/กรอง, export/import), โมดัล Customize (Rules / Hooks / Skills), หน้า MCP server, แผง Team, แค็ตตาล็อก Marketplace, หน้าจอ Account, ตัวช่วย Onboarding, ตั้งค่า Browser รวมถึงข้อความแจ้งเตือนของ extension และข้อความ manifest — รองรับ**อังกฤษ ไทย ญี่ปุ่น และจีนตัวย่อ** prompt ยังเป็นภาษาอังกฤษ (เพราะสั่งโมเดล) และการเปลี่ยนภาษาหน้าจอไม่เปลี่ยนภาษาที่ agent ตอบ วิธีเพิ่มภาษาใหม่ (3 จุด) ดูที่ `docs/icline/i18n-contributing.md`
 
-![iCline Settings และ webview 4 ภาษา อังกฤษ จีน ญี่ปุ่น ไทย](assets/docs/0.1.18-Settings+Webview-EN+CH+JP+TH.png)
+![iCline Settings และ webview 4 ภาษา อังกฤษ จีน ญี่ปุ่น ไทย](assets/docs/0.1.18-Settings-Webview-EN-CH-JP-TH.png)
 
 ### 🎨 แท็บ Settings → Appearance
 
@@ -32,19 +32,19 @@ Settings ทุกแท็บ, หน้า welcome และการ์ด Qu
 
 สลับ Provider และโมเดลโดยไม่ต้องออกจากหน้าแชท โฉมใหม่ พร้อมตั้ง **Thinking / Effort รายโมเดล** เมื่อ hover บนยอดสถิติ provider/model แบบ live
 
-![เมนูด่วนเลือก Provider และ Model โฉมใหม่พร้อม Effort](assets/docs/0.1.18-NewDesign-QuickPicker+Effort.png)
+![เมนูด่วนเลือก Provider และ Model โฉมใหม่พร้อม Effort](assets/docs/0.1.18-NewDesign-QuickPicker-Effort.png)
 
 ### 🏢 จัดการ Custom provider ครบวงจร
 
 การ์ด **Custom providers** ใน Settings รวม gateway ที่สร้างเองทั้งหมด — สร้าง (id slug, ชื่อ, base URL, API key, รายการ model, model หลัก, URL แหล่ง models, header เพิ่มเติม), แก้ไข (API key เขียนอย่างเดียว), ลบแบบยืนยันสองขั้น **Fetch models automatically** ถาม `/models` ของ endpoint (Bearer ก่อน, `x-api-key` เฉพาะ retry) แล้วรวมผลไม่ซ้ำ ลบ provider ที่ใช้อยู่มี fallback ปลอดภัย (พิสูจน์บน VS Code จริง) แถว Context มี badge บอกที่มาของตัวเลข — endpoint ประกาศเอง, override ที่เขียนมือ, เสียงส่วนใหญ่ของ catalog, หรือค่า fallback — แยก 444K ที่ประกาศจริงออกจาก 1.05M ที่เดาได้ชัดเจน
 
-![สถิติ Provider และ Model พร้อม Custom providers](assets/docs/0.1.18-Providers+models-Stats+Customer-Providers.jpg)
+![สถิติ Provider และ Model พร้อม Custom providers](assets/docs/0.1.18-Providers-models-Stats-Customer-Providers.jpg)
 
 ### 👥 Sub-agent และ Agent Team
 
 สวิตช์ opt-in ใต้ Settings → Agent (ค่าเริ่มต้นปิดทั้งคู่): sub-agent `spawn_agent` และชุด Agent Teams เต็ม (mailbox, mission log, ผลลัพธ์ร่วม, state คงอยู่) **แผง team** แสดง topology พร้อม model ของแต่ละ agent, mailbox ใหม่สุดก่อน, spawn/shutdown ด้วยเมาส์ (เลือก model ราย agent ได้) การอนุมัติ **Team reads / Team writes** แยกตามสิทธิ์โดยไม่ขยายสิทธิ์ของ lead และ **Team budget** (จำนวน agent + token สูงสุดต่อ turn, ค่าเริ่มต้น 4 ตัว) กันใช้เกิน agent ที่ delegate ได้เครื่องมือจริงของ session (รวม terminal) พร้อม policy และ approval callback
 
-![iCline Sub-agent และ Agent Team](assets/docs/0.1.18-Sub-agents+Agent-Teams.jpg)
+![iCline Sub-agent และ Agent Team](assets/docs/0.1.18-Sub-agents-Agent-Teams.jpg)
 
 ### 🛡️ รันงานที่รอดเมื่อเจอปัญหา
 

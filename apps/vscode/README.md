@@ -21,7 +21,7 @@
 All seven Settings tabs, the welcome home and Quick Start cards, the full history view (search, sort/filter, export/import), the Customize modal (Rules / Hooks / Skills), MCP server surfaces, the Team panel, the Marketplace catalog, the Account screens, the Onboarding wizard, Browser settings, plus the extension's own notifications and manifest strings — in **English, Thai, Japanese and Simplified Chinese**. Prompts stay English (they instruct the model), and changing the interface language never changes how the agent talks. See `docs/icline/i18n-contributing.md` to add a language in three edits.
 
 <p align="center">
-  <img src="assets/docs/0.1.18-Settings+Webview-EN+CH+JP+TH.png" alt="iCline Settings and webview in English, Chinese, Japanese and Thai" width="720" />
+  <img src="assets/docs/0.1.18-Settings-Webview-EN-CH-JP-TH.png" alt="iCline Settings and webview in English, Chinese, Japanese and Thai" width="720" />
 </p>
 
 ### 🎨 Settings → Appearance tab
@@ -37,7 +37,7 @@ The Task Completed panel gets its own `--color-completed` token (apart from `suc
 Switch providers and models without leaving the chat, now with a refreshed design and **Thinking / Effort per model** on hover, over live provider/model stats.
 
 <p align="center">
-  <img src="assets/docs/0.1.18-NewDesign-QuickPicker+Effort.png" alt="iCline quick provider and model picker, new design with Effort" width="720" />
+  <img src="assets/docs/0.1.18-NewDesign-QuickPicker-Effort.png" alt="iCline quick provider and model picker, new design with Effort" width="720" />
 </p>
 
 ### 🏢 Custom providers, managed end to end
@@ -45,7 +45,7 @@ Switch providers and models without leaving the chat, now with a refreshed desig
 A **Custom providers** card in Settings lists every user-created gateway — create (id slug, display name, base URL, API key, model ids, default model, models-source URL, custom headers), edit in place (API key is write-only), delete behind two-step confirmation. **Fetch models automatically** asks the endpoint's `/models` (Bearer-first, `x-api-key`-only-on-retry) and merges results without duplicating; deleting the active provider falls back safely instead of leaving a mode pointed at nothing (proven in real VS Code). The Context row carries a source badge — gateway declaration, hand-written override, cross-catalog majority, or built-in fallback — so a 444K declaration is visibly distinct from a 1.05M guess.
 
 <p align="center">
-  <img src="assets/docs/0.1.18-Providers+models-Stats+Customer-Providers.jpg" alt="iCline provider and model stats with custom providers" width="720" />
+  <img src="assets/docs/0.1.18-Providers-models-Stats-Customer-Providers.jpg" alt="iCline provider and model stats with custom providers" width="720" />
 </p>
 
 ### 👥 Sub-agents & Agent Teams
@@ -53,7 +53,7 @@ A **Custom providers** card in Settings lists every user-created gateway — cre
 Two opt-in switches under Settings → Agent (both default off): `spawn_agent` sub-agents and the full 18-tool Agent Teams suite (mailbox, mission logs, shared outcomes, persisted team state). A visual **team panel** shows the topology with each agent's own model, the mailbox newest-first, and mouse-driven spawn/shutdown (per-agent model picker). **Team reads / Team writes** approvals split delegated calls by mutability without widening what the lead itself may do; a **Team budget** (max agents + tokens per turn, default 4 teammates) bounds multi-agent spend. Delegated agents inherit the session's real tools — including the terminal — plus its policies and approval callback.
 
 <p align="center">
-  <img src="assets/docs/0.1.18-Sub-agents+Agent-Teams.jpg" alt="iCline Sub-agents and Agent Teams" width="720" />
+  <img src="assets/docs/0.1.18-Sub-agents-Agent-Teams.jpg" alt="iCline Sub-agents and Agent Teams" width="720" />
 </p>
 
 ### 🛡️ Runs that survive trouble
