@@ -1,7 +1,7 @@
 # iCline
 
 <!-- icline:version -->
-> 📦 **Current version:** `0.1.19-dev.4-fix.2` · [Releases](https://github.com/i-mrDedchai/iCline/releases) · [Changelog](https://github.com/i-mrDedchai/iCline/blob/main/apps/vscode/CHANGELOG.md) · [Repo](https://github.com/i-mrDedchai/iCline)
+> 📦 **Current version:** `0.1.19-dev.4-fix.3` · [Releases](https://github.com/i-mrDedchai/iCline/releases) · [Changelog](https://github.com/i-mrDedchai/iCline/blob/main/apps/vscode/CHANGELOG.md) · [Repo](https://github.com/i-mrDedchai/iCline)
 <!-- /icline:version -->
 
 <!-- icline:repo -->
