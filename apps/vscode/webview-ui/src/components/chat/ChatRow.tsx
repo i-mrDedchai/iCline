@@ -36,7 +36,7 @@ import {
 import { MouseEvent, memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useSize } from "react-use"
 import { DEFAULT_REPLY_ICON } from "@/appearance/appearance"
-import { canRestoreWorkspaceFromMessage } from "@/components/chat/chat-view/utils/messageUtils"
+import { canRestoreWorkspaceFromMessage, isFinalReplyText } from "@/components/chat/chat-view/utils/messageUtils"
 import { OptionsButtons } from "@/components/chat/OptionsButtons"
 import { WithCopyButton } from "@/components/common/CopyButton"
 import McpResponseDisplay from "@/components/mcp/chat-display/McpResponseDisplay"
@@ -925,11 +925,15 @@ export const ChatRowContent = memo(
 						// completion card (COMPLETED header + always-visible copy,
 						// top-right) — official-parity for text-only endings
 						// (deepseek/glm answer conversationally without
-						// attempt_completion). Streaming/older rows stay plain.
+						// attempt_completion). Streaming rows stay plain; ex-final
+						// replies keep the card via isFinalReplyText (F4b).
 						// The accent is the `reply` theme token, not a fixed hex: the card's
 						// fill, its border and its label must be one colour, and all three
 						// must follow the editor theme like the rest of the chat.
-						const isFinalReply = isLast && message.partial !== true && Boolean(message.text)
+						// F4b: persistence comes from the message sequence, not row
+						// position — an ex-final reply keeps its COMPLETED header
+						// after newer messages arrive, like official Cline.
+						const isFinalReply = isFinalReplyText(message, clineMessages)
 						// Fill/border alphas are precomputed on the webview root
 						// (`useAppearanceVars` × the opacity slider); the label below
 						// keeps the raw accent so copy never fades with the tint.
@@ -949,7 +953,8 @@ export const ChatRowContent = memo(
 									textToCopy={message.text}>
 									{isFinalReply && (
 										<div
-											className="mb-1 flex items-center justify-between pr-8"
+											className="mb-1 flex items-center justify-start gap-1.5 pr-8"
+											data-testid="final-reply-completed"
 											style={{
 												fontSize: 11,
 												fontWeight: 600,

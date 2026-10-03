@@ -37,6 +37,13 @@ describe("getIclineHarnessOverlay", () => {
 		expect(overlay).toContain("# Current Time")
 	})
 
+	it("guides provider display names for self-reports without inventing model vendors (F1)", () => {
+		const overlay = getIclineHarnessOverlay()
+		expect(overlay).toContain("display name")
+		expect(overlay).toContain('"bynara" → "NaraRouter"')
+		expect(overlay).toContain("never invent a vendor")
+	})
+
 	it("never demands tool usage in a way that induces fabricated tool markup", () => {
 		const overlay = getIclineHarnessOverlay()
 		// fix.5 lesson: demanding "must use a tool (attempt_completion or …)"

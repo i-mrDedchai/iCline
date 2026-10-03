@@ -1,6 +1,12 @@
 import type { ClineMessage } from "@shared/ExtensionMessage"
 import { describe, expect, it } from "vitest"
-import { canRestoreWorkspaceFromMessage, filterVisibleMessages, groupLowStakesTools, isToolGroup } from "./messageUtils"
+import {
+	canRestoreWorkspaceFromMessage,
+	filterVisibleMessages,
+	groupLowStakesTools,
+	isFinalReplyText,
+	isToolGroup,
+} from "./messageUtils"
 
 const createTextMessage = (ts: number, text: string): ClineMessage => ({
 	type: "say",
@@ -48,6 +54,27 @@ const createAskMessage = (
 	text: JSON.stringify(
 		ask === "followup" ? { question: "Pick one", options, selected } : { response: "Pick one", options, selected },
 	),
+	ts,
+})
+
+const createApiReqMessage = (ts: number, text = JSON.stringify({ request: "GET /" })): ClineMessage => ({
+	type: "say",
+	say: "api_req_started",
+	text,
+	ts,
+})
+
+const createCompletionMessage = (ts: number, text: string): ClineMessage => ({
+	type: "say",
+	say: "completion_result",
+	text,
+	ts,
+})
+
+const createInfoMessage = (ts: number, text: string): ClineMessage => ({
+	type: "say",
+	say: "info",
+	text,
 	ts,
 })
 
@@ -165,5 +192,86 @@ describe("groupLowStakesTools", () => {
 		expect(grouped).toHaveLength(2)
 		expect(grouped[0]).toMatchObject({ type: "say", say: "reasoning", text: "Planning next read" })
 		expect(isToolGroup(grouped[1])).toBe(true)
+	})
+})
+
+describe("isFinalReplyText", () => {
+	it("badges the last complete text", () => {
+		const messages = [createUserFeedbackMessage(1, "hi"), createTextMessage(2, "hello")]
+		expect(isFinalReplyText(messages[1], messages)).toBe(true)
+	})
+
+	it("keeps the header after a new user message (F4b)", () => {
+		const messages = [
+			createUserFeedbackMessage(1, "first"),
+			createTextMessage(2, "first reply"),
+			createUserFeedbackMessage(3, "second"),
+			createTextMessage(4, "second reply"),
+		]
+		expect(isFinalReplyText(messages[1], messages)).toBe(true)
+		expect(isFinalReplyText(messages[3], messages)).toBe(true)
+	})
+
+	it("keeps the header before a completion result", () => {
+		const messages = [
+			createUserFeedbackMessage(1, "go"),
+			createTextMessage(2, "done"),
+			createCompletionMessage(3, "all done"),
+		]
+		expect(isFinalReplyText(messages[1], messages)).toBe(true)
+	})
+
+	it("withholds the header from mid-turn narration", () => {
+		const narrative = createTextMessage(2, "I'll read the file first")
+		for (const continuation of [
+			createToolMessage(3, "readFile"),
+			createReasoningMessage(3, "thinking"),
+			createTextMessage(3, "more narration"),
+			createAskMessage(3, "followup", ["a"]),
+		]) {
+			expect(isFinalReplyText(narrative, [createUserFeedbackMessage(1, "go"), narrative, continuation])).toBe(false)
+		}
+		// A quiet api_req_started renders nothing (filterVisibleMessages drops
+		// it), so like the old isLast rule the header shows transiently until a
+		// real continuation lands and takes it away again.
+		expect(isFinalReplyText(narrative, [createUserFeedbackMessage(1, "go"), narrative, createApiReqMessage(3)])).toBe(true)
+		expect(
+			isFinalReplyText(narrative, [
+				createUserFeedbackMessage(1, "go"),
+				narrative,
+				createApiReqMessage(3),
+				createToolMessage(4, "readFile"),
+			]),
+		).toBe(false)
+	})
+
+	it("sees through a quiet trailing api_req the render hides (e2e: costless api_req after final text)", () => {
+		const reply = createTextMessage(2, "final reply")
+		const messages = [createUserFeedbackMessage(1, "go"), reply, createApiReqMessage(3)]
+		expect(isFinalReplyText(reply, messages)).toBe(true)
+	})
+
+	it("treats an api_req carrying an error as same-turn activity", () => {
+		const reply = createTextMessage(2, "reply before cancel")
+		const errored = createApiReqMessage(3, JSON.stringify({ request: "GET /", cancelReason: "user" }))
+		expect(isFinalReplyText(reply, [createUserFeedbackMessage(1, "go"), reply, errored])).toBe(false)
+	})
+
+	it("sees through incidental rows to the turn boundary", () => {
+		const messages = [
+			createUserFeedbackMessage(1, "go"),
+			createTextMessage(2, "done"),
+			createInfoMessage(3, "retrying"),
+			createUserFeedbackMessage(4, "next"),
+		]
+		expect(isFinalReplyText(messages[1], messages)).toBe(true)
+	})
+
+	it("rejects partial texts, non-texts, and strangers", () => {
+		const partial = { ...createTextMessage(2, "streaming"), partial: true }
+		const messages = [createUserFeedbackMessage(1, "go"), partial]
+		expect(isFinalReplyText(partial, messages)).toBe(false)
+		expect(isFinalReplyText(createUserFeedbackMessage(1, "go"), messages)).toBe(false)
+		expect(isFinalReplyText(createTextMessage(999, "ghost"), messages)).toBe(false)
 	})
 })

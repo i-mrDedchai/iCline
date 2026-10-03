@@ -682,6 +682,88 @@ export function groupLowStakesTools(groupedMessages: (ClineMessage | ClineMessag
 	return result
 }
 
+/**
+ * Whether a `say:text` row is the final reply of its turn — and therefore keeps
+ * the final-reply COMPLETED header even after newer messages arrive (F4b).
+ *
+ * The old rule (`isLast`) dropped the header the moment any message followed,
+ * so the first turn's COMPLETED card visually vanished on the next user message
+ * while official Cline kept every one. Position in the list is the wrong signal:
+ * what matters is whether the turn continued after this text. Scanning forward:
+ *
+ *  - a turn boundary (`user_feedback`, `completion_result`, a new `task`) or the
+ *    end of the list means this text ended its turn → header shows (and stays).
+ *  - any same-turn continuation (another text, reasoning, api_req, tools,
+ *    commands, questions…) means it was narration mid-turn → no header.
+ *  - incidental rows (errors, checkpoints, notifications…) are transparent.
+ *
+ * Anything unlisted defaults to continuation: a missing header on a true final
+ * is the old behavior, but a header on mid-turn narration would be a new bug.
+ */
+const FINAL_REPLY_TURN_BOUNDARY = new Set(["user_feedback", "completion_result", "task"])
+
+const FINAL_REPLY_TRANSPARENT = new Set([
+	"say:api_req_finished",
+	"say:api_req_retried",
+	"say:subagent_usage",
+	"say:error",
+	"say:diff_error",
+	"say:clineignore_error",
+	"say:info",
+	"say:task_progress",
+	"say:checkpoint_created",
+	"say:deleted_api_reqs",
+	"say:mcp_notification",
+	"say:hook_status",
+	"say:hook_output_stream",
+	"say:load_mcp_documentation",
+	"say:shell_integration_warning",
+	"say:shell_integration_warning_with_suggestion",
+])
+
+/**
+ * An `api_req_started` row renders visible content only for errors/cancels
+ * (same rule as `filterVisibleMessages`); a quiet one is invisible padding
+ * and must not steal finality from the text before it — e2e showed a trailing
+ * costless api_req hiding every COMPLETED header while the user saw none of it.
+ */
+function isInvisibleApiReq(message: ClineMessage): boolean {
+	if (message.say !== "api_req_started") {
+		return false
+	}
+	try {
+		const info = JSON.parse(message.text || "{}")
+		return !info.cancelReason && !info.streamingFailedMessage
+	} catch {
+		return false
+	}
+}
+
+export function isFinalReplyText(message: ClineMessage, allMessages: ClineMessage[]): boolean {
+	if (message.type !== "say" || message.say !== "text" || message.partial === true || !message.text) {
+		return false
+	}
+	const index = allMessages.findIndex((m) => m.ts === message.ts)
+	if (index === -1) {
+		return false
+	}
+	for (let i = index + 1; i < allMessages.length; i++) {
+		const next = allMessages[i]
+		const kind = next.type === "ask" ? next.ask : next.say
+		if (!kind) {
+			continue
+		}
+		if (FINAL_REPLY_TURN_BOUNDARY.has(kind)) {
+			return true
+		}
+		if (FINAL_REPLY_TRANSPARENT.has(`${next.type}:${kind}`) || isInvisibleApiReq(next)) {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
 export function getIconByToolName(toolName: string) {
 	switch (toolName) {
 		case "readFile":
