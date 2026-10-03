@@ -16,6 +16,23 @@ npm run package:vsix   # = sync-icline-docs + npm run package + node scripts/pac
    absolute URL (ของที่ผ่าน pipeline นี้: relative 0 / absolute 17)
 3. `--no-dependencies --out dist/<extensionId>-<version>.vsix` — ดูข้อ 2
 
+## ห้ามข้าม `sync-icline-docs.mjs` (บทเรียน dev.4-fix.4 — About โชว์เวอร์ชันเก่า)
+
+หน้า About อ่านป้ายเวอร์ชันจาก `webview-ui/src/icline/build-metadata.ts`
+ซึ่งเป็นไฟล์ **generated** ไม่ได้อ่าน `package.json` ตรง ๆ — bump เวอร์ชันแล้วไม่รัน
+sync = VS Code โชว์เลขใหม่ แต่ About โชว์ป้ายเก่า (fix.4 โดนมาแล้ว: manifest
+บอก fix.4 แต่ About บอก `fix.2 · 2026-10-02`) เคยเกิดมาแล้วรอบ dev.2-fix.2
+แล้วแก้แบบ repack เฉพาะหน้า เลยกลับมาเป็นอีก
+
+- ทุก chore ที่ bump version ต้องรัน `node scripts/sync-icline-docs.mjs` จาก
+  `apps/vscode` (มันแก้ `build-metadata.ts` + root READMEs ให้ด้วย — รอบ fix.4
+  sync จับได้ว่า root `README.md`/`README.th.md` ยังค้าง fix.3 เพราะ sed
+  ตอน bump ครอบแค่ `apps/vscode/`)
+- ทุก pack ต้องผ่านขั้น sync — ห้ามเรียก `package-vsix.mjs` ตรง ๆ แบบข้าม sync
+  (รอบ fix.4 ทำผิดข้อนี้ด้วย)
+- guard ถาวร: `webview-ui/src/icline/build-metadata.test.ts` assert ว่า metadata
+  ตรงกับ `package.json` — bump แล้วไม่ sync = suite แดงพร้อมบอกคำสั่งที่ต้องรัน
+
 ## ห้ามเรียก `vsce package` เปล่า ๆ
 
 vsce จะรัน `npm list --production` เองแล้วล้มด้วย `ELSPROBLEMS` เสมอ เพราะ
