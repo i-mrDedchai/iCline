@@ -29,12 +29,40 @@ const STALE_TOOL_NAMES = [
 	"search_files",
 ]
 
+// Context blocks that do NOT exist in the SDK runtime. The overlay may only
+// point the model at context that actually arrives: `# Current Time` inside
+// `environment_details` was a classic-Cline context block the SDK runtime never
+// sends (the only reference repo-wide WAS this overlay), and the old test PINNED
+// the stale reference so it could never be fixed. Today's date really arrives in
+// the `<env>` block of the system prompt ("2. Date: …",
+// sdk/packages/shared/src/prompt/system/act.ts), so the overlay points there.
+const STALE_CONTEXT_REFS = ["environment_details", "# Current Time"]
+
 describe("getIclineHarnessOverlay", () => {
 	it("requires epistemic discipline for user factual claims", () => {
 		const overlay = getIclineHarnessOverlay()
 		expect(overlay).toContain("Epistemic discipline")
 		expect(overlay).toContain("do not echo the user's factual claims")
-		expect(overlay).toContain("# Current Time")
+		// Points at the date source the runtime really sends.
+		expect(overlay).toContain("`Date:` line")
+		expect(overlay).toContain("<env>")
+	})
+
+	it("never references context blocks the runtime does not send", () => {
+		const overlay = getIclineHarnessOverlay()
+		for (const stale of STALE_CONTEXT_REFS) {
+			expect(overlay, `overlay must not reference stale context ${stale}`).not.toContain(stale)
+		}
+	})
+
+	it("never assumes a single file-editing tool", () => {
+		// Routing disables `editor` for some providers and substitutes
+		// `apply_patch` (sdk/packages/core/src/extensions/tools/
+		// model-tool-routing.ts), so the overlay must not hard-code one tool name
+		// as THE way to write a file.
+		const overlay = getIclineHarnessOverlay()
+		expect(overlay).not.toContain("in one `editor` call")
+		expect(overlay).toContain("whichever your session provides")
 	})
 
 	it("guides provider display names for self-reports without inventing model vendors (F1)", () => {

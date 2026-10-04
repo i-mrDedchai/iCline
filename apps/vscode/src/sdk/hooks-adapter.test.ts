@@ -369,4 +369,57 @@ describe("hooks-adapter iCline post-write verification", () => {
 			},
 		})
 	})
+
+	it("verifies the move destination of a rename, never the deleted source", async () => {
+		// `*** Update File` + `*** Move to` is the canonical rename: the executor
+		// writes the content to the NEW path and deletes the old one. Verifying the
+		// source (the pre-fix behavior) stats a deleted file and reports a false
+		// failure for a write that landed.
+		const patch = [
+			"*** Begin Patch",
+			"*** Update File: /workspace/old/name.ts",
+			"*** Move to: /workspace/new/name.ts",
+			"@@",
+			"-old line",
+			"+new line",
+			"*** End Patch",
+		].join("\n")
+		const hooks = buildAgentHooks(makeStateManager())
+		const result = await hooks.afterTool?.(makeAfterToolCtx({ toolName: "apply_patch", input: { input: patch } }))
+		expect(result).toBeUndefined()
+		expect(mocks.verifyWrittenFile).toHaveBeenCalledTimes(1)
+		expect(mocks.verifyWrittenFile).toHaveBeenCalledWith({
+			absolutePath: "/workspace/new/name.ts",
+			expectedMinBytes: 0,
+		})
+	})
+
+	it("leaves forced trace evidence when no write target could be extracted", async () => {
+		// Best-effort patch parsing gives up on some payloads the executor still
+		// accepts. The skip must not vanish silently — it is a verification gap.
+		const patch = ["--- a/file.ts", "+++ b/file.ts", "@@ -1 +1 @@", "-a", "+b"].join("\n")
+		const hooks = buildAgentHooks(makeStateManager())
+		const result = await hooks.afterTool?.(makeAfterToolCtx({ toolName: "apply_patch", input: { input: patch } }))
+		expect(result).toBeUndefined()
+		expect(mocks.verifyWrittenFile).not.toHaveBeenCalled()
+		expect(mocks.recordToolTrace).toHaveBeenCalledWith(
+			expect.objectContaining({ event: "post-write-verify-skipped-no-targets", toolName: "apply_patch" }),
+			{ force: true },
+		)
+	})
+
+	it("stays fail-open but traces the gap when the verifier itself throws", async () => {
+		mocks.verifyWrittenFile.mockRejectedValueOnce(new Error("EPERM: operation not permitted"))
+		const hooks = buildAgentHooks(makeStateManager())
+		const result = await hooks.afterTool?.(makeAfterToolCtx({}))
+		expect(result).toBeUndefined()
+		expect(mocks.recordToolTrace).toHaveBeenCalledWith(
+			expect.objectContaining({
+				event: "post-write-verification-error",
+				toolName: "editor",
+				message: "EPERM: operation not permitted",
+			}),
+			{ force: true },
+		)
+	})
 })

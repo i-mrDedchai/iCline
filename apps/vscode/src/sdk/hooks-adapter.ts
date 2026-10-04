@@ -512,6 +512,23 @@ async function runIclinePostWriteVerification(ctx: AgentAfterToolContext): Promi
 		}
 
 		const targets = await extractWriteTargets(toolName, ctx.input)
+		if (targets.length === 0) {
+			// A write call whose targets could not be extracted is a verification
+			// GAP: the tool may have landed something we never checked (best-effort
+			// patch parsing gives up on wrappers the executor still accepts). The
+			// skip used to vanish silently — fail-open must not mean invisible, so
+			// leave forced evidence behind.
+			recordToolTrace(
+				{
+					event: "post-write-verify-skipped-no-targets",
+					toolName,
+					toolCallId: ctx.toolCall.toolCallId,
+					...traceInputShape(ctx.input),
+				},
+				{ force: true },
+			)
+			return undefined
+		}
 		for (const target of targets) {
 			const verification = await verifyWrittenFile(target)
 			if (!verification.ok) {
@@ -551,8 +568,19 @@ async function runIclinePostWriteVerification(ctx: AgentAfterToolContext): Promi
 		})
 		return undefined
 	} catch (error) {
-		// Never block a successful tool call on a verifier bug.
+		// Never block a successful tool call on a verifier bug — but leave forced
+		// evidence of the gap: an invisible fail-open is what made the phantom-write
+		// bug undiagnosable in the first place.
 		Logger.warn("[HooksAdapter] iCline post-write verification error:", error)
+		recordToolTrace(
+			{
+				event: "post-write-verification-error",
+				toolName: ctx.toolCall.toolName,
+				toolCallId: ctx.toolCall.toolCallId,
+				message: error instanceof Error ? error.message : String(error),
+			},
+			{ force: true },
+		)
 		return undefined
 	}
 }
@@ -585,11 +613,19 @@ async function extractWriteTargets(toolName: string, input: unknown): Promise<Wr
  * Add File targets expect non-empty content when the patch carries visible
  * content lines; Update File targets only assert existence (an update may
  * legitimately shrink a file). Delete File targets are skipped.
+ *
+ * `*** Update File: old` + `*** Move to: new` (the canonical rename form) lands
+ * the content at the move destination and DELETES the source (the executor's
+ * `fs.rm(sourceAbsPath)`), so the move destination is the only path worth
+ * verifying. Verifying the source instead reports a false failure for a write
+ * that landed — the mirror image of the phantom-write bug this guardrail exists
+ * to catch.
  */
 async function extractPatchTargets(patchText: string): Promise<WriteTarget[]> {
 	const targets: WriteTarget[] = []
 	const lines = patchText.split("\n")
 	let pendingAdd: { path: string; hasContent: boolean } | undefined
+	let pendingUpdate: { path: string } | undefined
 
 	const flushPendingAdd = async () => {
 		if (pendingAdd) {
@@ -601,21 +637,38 @@ async function extractPatchTargets(patchText: string): Promise<WriteTarget[]> {
 		}
 	}
 
+	const flushPendingUpdate = async () => {
+		if (pendingUpdate) {
+			targets.push({ absolutePath: await resolveMaybeRelative(pendingUpdate.path), expectedMinBytes: 0 })
+			pendingUpdate = undefined
+		}
+	}
+
 	for (const line of lines) {
 		const header = line.match(/^\*\*\* (Add|Update|Delete) File: (.+)$/)
 		if (header) {
 			await flushPendingAdd()
+			await flushPendingUpdate()
 			const [, action, rawPath] = header
 			const filePath = rawPath.trim()
 			if (action === "Add") {
 				pendingAdd = { path: filePath, hasContent: false }
 			} else if (action === "Update") {
-				targets.push({ absolutePath: await resolveMaybeRelative(filePath), expectedMinBytes: 0 })
+				pendingUpdate = { path: filePath }
+			}
+			continue
+		}
+		const move = line.match(/^\*\*\* Move to: (.+)$/)
+		if (move) {
+			// Re-point the pending update at the move destination (see doc comment).
+			if (pendingUpdate) {
+				pendingUpdate.path = move[1].trim()
 			}
 			continue
 		}
 		if (line.startsWith("***")) {
 			await flushPendingAdd()
+			await flushPendingUpdate()
 			continue
 		}
 		if (pendingAdd && line.startsWith("+") && line.slice(1).trim().length > 0) {
@@ -623,6 +676,7 @@ async function extractPatchTargets(patchText: string): Promise<WriteTarget[]> {
 		}
 	}
 	await flushPendingAdd()
+	await flushPendingUpdate()
 	return targets
 }
 
