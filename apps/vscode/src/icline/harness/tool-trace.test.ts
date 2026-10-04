@@ -105,7 +105,10 @@ describe("tool trace", () => {
 		expect(new Set(lines.map((line) => line.toolCallId)).size).toBe(24)
 	})
 
-	it("drops the backlog once the file exceeds its size cap", async () => {
+	it("rotates the overflow into one .1 generation instead of destroying the evidence", async () => {
+		// The overflow is usually the evidence trail of an interesting session;
+		// truncating it (the pre-fix behavior) destroyed exactly what a later
+		// diagnosis needs. One rotated generation is kept next to the live file.
 		recordToolTrace(
 			{ event: "post-write-verified", toolName: "editor", payload: "x".repeat(2 * 1024 * 1024 + 64) },
 			{ force: true },
@@ -117,5 +120,41 @@ describe("tool trace", () => {
 		const lines = await readLines()
 		expect(lines).toHaveLength(1)
 		expect(lines[0].toolCallId).toBe("after-cap")
+
+		const rotated = await fs.readFile(`${traceFile}.1`, "utf8")
+		expect(rotated).toContain('"payload":"x')
+		expect(rotated.split("\n").filter(Boolean)).toHaveLength(1)
+	})
+
+	it("keeps only one rotated generation when the live file overflows again", async () => {
+		recordToolTrace({ event: "e1", toolName: "editor", payload: "x".repeat(2 * 1024 * 1024 + 64) }, { force: true })
+		recordToolTrace({ event: "e2", toolName: "editor", toolCallId: "second" }, { force: true })
+		// Second overflow: the old .1 is replaced, never accumulated.
+		recordToolTrace({ event: "e3", toolName: "editor", payload: "y".repeat(2 * 1024 * 1024 + 64) }, { force: true })
+		recordToolTrace({ event: "e4", toolName: "editor", toolCallId: "third" }, { force: true })
+		await flushToolTrace()
+
+		const rotated = await fs.readFile(`${traceFile}.1`, "utf8")
+		expect(rotated).toContain('"event":"e2"')
+		expect(rotated).toContain('"event":"e3"')
+		expect(rotated).not.toContain('"event":"e1"')
+		const live = await readLines()
+		expect(live).toHaveLength(1)
+		expect(live[0].toolCallId).toBe("third")
+	})
+
+	it("records routine traffic only when the trace is explicitly enabled", async () => {
+		// `IS_DEV=true` alone must NOT churn routine successes into the file —
+		// they would rotate the real evidence out of the live file on every dev run.
+		process.env.IS_DEV = "true"
+		recordToolTrace({ event: "post-write-verified", toolName: "editor", toolCallId: "dev" }, { routine: true })
+		await flushToolTrace()
+		await expect(fs.access(traceFile)).rejects.toThrow()
+
+		process.env.ICLINE_TOOL_TRACE = "1"
+		recordToolTrace({ event: "post-write-verified", toolName: "editor", toolCallId: "explicit" }, { routine: true })
+		const lines = await readLines()
+		expect(lines).toHaveLength(1)
+		expect(lines[0].toolCallId).toBe("explicit")
 	})
 })

@@ -39,8 +39,17 @@ export function resolveToolTracePath(env: NodeJS.ProcessEnv = process.env): stri
 // Appends are chained so concurrent tool calls never interleave a partial line.
 let writeChain: Promise<void> = Promise.resolve()
 
-export function recordToolTrace(entry: IclineToolTraceEntry, options: { force?: boolean } = {}): void {
-	if (!options.force && !isToolTraceEnabled()) {
+export function recordToolTrace(entry: IclineToolTraceEntry, options: { force?: boolean; routine?: boolean } = {}): void {
+	if (options.force) {
+		// Evidence (failures, verification gaps) always lands — see file header.
+	} else if (options.routine) {
+		// Routine success traffic needs the trace EXPLICITLY on. `IS_DEV=true`
+		// alone would churn the file to its cap in minutes and rotate the real
+		// evidence out of the live file on every dev run.
+		if (process.env.ICLINE_TOOL_TRACE !== "1") {
+			return
+		}
+	} else if (!isToolTraceEnabled()) {
 		return
 	}
 	writeChain = writeChain.then(async () => {
@@ -50,7 +59,15 @@ export function recordToolTrace(entry: IclineToolTraceEntry, options: { force?: 
 			try {
 				const stat = await fs.stat(file)
 				if (stat.size > MAX_TRACE_BYTES) {
-					await fs.rm(file)
+					// Rotate, never destroy: the overflow is usually the evidence
+					// trail of an interesting session. One rotated generation is
+					// kept next to the live file; a second overflow replaces it.
+					try {
+						await fs.rm(`${file}.1`, { force: true })
+						await fs.rename(file, `${file}.1`)
+					} catch {
+						await fs.rm(file, { force: true })
+					}
 				}
 			} catch {
 				// Missing file is the normal first-write case.

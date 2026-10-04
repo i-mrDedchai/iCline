@@ -504,7 +504,11 @@ describe("buildSessionConfig", () => {
 
 		const config = await buildSessionConfig({ cwd: "/tmp/workspace" })
 		expect(config.systemPrompt).toMatch(/You are iCline/)
-		expect(config.systemPrompt).not.toMatch(/You are Cline/)
+		// D9 guard: no first/second-person identity claim may name the upstream
+		// product in ANY form the upstream prompt uses.
+		expect(config.systemPrompt).not.toMatch(/\bYou are Cline\b/)
+		expect(config.systemPrompt).not.toMatch(/\bI'm Cline\b/)
+		expect(config.systemPrompt).not.toMatch(/\bI am Cline\b/)
 	})
 
 	it("resolves SDK-backed provider API keys from provider-specific settings", async () => {

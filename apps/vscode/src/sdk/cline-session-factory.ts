@@ -1022,7 +1022,7 @@ export async function buildSessionConfig(input: SessionConfigInput): Promise<Cor
 			},
 			logger: sdkLogger,
 		},
-		hooks: buildAgentHooks(StateManager.get()),
+		hooks: buildAgentHooks(StateManager.get(), undefined, cwd),
 	}
 
 	return config

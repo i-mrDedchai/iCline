@@ -87,4 +87,20 @@ describe("SdkSessionConfigBuilder", () => {
 		expect(config.execution).toEqual({ maxRetries: 1 })
 		expect(config.onConsecutiveMistakeLimitReached).toBe(onConsecutiveMistakeLimitReached)
 	})
+
+	it("threads the session cwd into buildAgentHooks for post-write verification", async () => {
+		// D1/D2: verification must resolve relative write paths against the same
+		// base the tool executors use — the session cwd.
+		mocks.buildSessionConfig.mockResolvedValueOnce({ hooks: {} })
+
+		const builder = new SdkSessionConfigBuilder({
+			stateManager: {} as never,
+			emitHookMessage: vi.fn(),
+			onSwitchToActMode: vi.fn(),
+		})
+
+		await builder.build({ cwd: "/sessions/task-9", mode: "act" })
+
+		expect(mocks.buildAgentHooks).toHaveBeenCalledWith(expect.anything(), expect.anything(), "/sessions/task-9")
+	})
 })

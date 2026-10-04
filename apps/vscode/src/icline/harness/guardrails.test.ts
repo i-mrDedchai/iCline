@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest"
-import { EDITOR_CHUNK_CHAR_LIMIT, EDITOR_INPUT_CHAR_LIMIT, getIclineHarnessOverlay, getLargeWriteGuidance } from "./guardrails"
+import {
+	applyIclineAgentIdentity,
+	EDITOR_CHUNK_CHAR_LIMIT,
+	EDITOR_INPUT_CHAR_LIMIT,
+	getIclineHarnessOverlay,
+	getLargeWriteGuidance,
+} from "./guardrails"
 
 // Classic-Cline tool names that do NOT exist in the SDK runtime. The runtime
 // exposes: skills, read_files, search_codebase, fetch_web_content, editor,
@@ -112,5 +118,33 @@ describe("getIclineHarnessOverlay", () => {
 		expect(recipe).toContain("Do not re-send the oversized call unchanged")
 		// The overlay may only point at the rejection's recipe, not embed it.
 		expect(getIclineHarnessOverlay()).not.toContain(recipe)
+	})
+})
+
+describe("applyIclineAgentIdentity", () => {
+	it("rewrites every Cline identity form to iCline", () => {
+		const prompt = ["You are Cline, a coding agent.", "When asked who you are, I'm Cline.", "I am Cline."].join("\n")
+		expect(applyIclineAgentIdentity(prompt)).toBe(
+			["You are iCline, a coding agent.", "When asked who you are, I'm iCline.", "I am iCline."].join("\n"),
+		)
+	})
+
+	it("never leaves an identity claim naming plain Cline", () => {
+		// D9 guard: the fork's system prompt must not identify the agent as the
+		// upstream product in ANY first/second-person form.
+		const rewritten = applyIclineAgentIdentity("You are Cline. I'm Cline. I am Cline.")
+		expect(rewritten).not.toMatch(/\b(?:You are|I'm|I am) Cline\b/)
+		expect(rewritten).not.toMatch(/\bCline\b/)
+	})
+
+	it("rewrites repeatedly within one prompt", () => {
+		const rewritten = applyIclineAgentIdentity("You are Cline. You are Cline.")
+		expect(rewritten).toBe("You are iCline. You are iCline.")
+	})
+
+	it("leaves unrelated text untouched", () => {
+		expect(applyIclineAgentIdentity("Configure the Cline extension settings.")).toBe(
+			"Configure the Cline extension settings.",
+		)
 	})
 })

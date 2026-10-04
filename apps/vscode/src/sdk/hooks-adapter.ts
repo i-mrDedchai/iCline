@@ -93,7 +93,17 @@ function buildHookStatusMessage(opts: {
 	}
 }
 
-export function buildAgentHooks(stateManager: StateManager, emitHookMessage?: HookMessageEmitter): AgentHooks {
+/**
+ * @param sessionCwd The session's working directory — the SAME base the tool
+ * executors resolve relative paths against. Post-write verification mirrors
+ * that resolution exactly; without it the fallback is the first workspace root,
+ * which can verify a different file than the one the executor wrote.
+ */
+export function buildAgentHooks(
+	stateManager: StateManager,
+	emitHookMessage?: HookMessageEmitter,
+	sessionCwd?: string,
+): AgentHooks {
 	const hooksEnabled = () => getHooksEnabledSafe(stateManager.getGlobalSettingsKey("hooksEnabled"))
 
 	return {
@@ -158,50 +168,45 @@ export function buildAgentHooks(stateManager: StateManager, emitHookMessage?: Ho
 			// iCline harness guardrail: post-write verification. Runs independently of
 			// the user-configured hooks (hooksEnabled) because it is a build-level
 			// guardrail, mirroring the legacy WriteToFileToolHandler integration.
-			// A failure short-circuits and replaces the tool result so the model
-			// sees the verification error instead of a false success.
-			const guardrailResult = await runIclinePostWriteVerification(ctx)
-			if (guardrailResult) {
-				return guardrailResult
-			}
+			// A failure replaces the tool result so the model sees the verification
+			// error instead of a false success — but the user's PostToolUse hooks
+			// still run and see the EFFECTIVE result: a guardrail interception must
+			// not blind user tooling that logs every write.
+			const guardrailResult = await runIclinePostWriteVerification(ctx, sessionCwd)
+			const effective = guardrailResult?.result ?? ctx.result
 
 			let runningTs: number | undefined
 			try {
-				if (!hooksEnabled()) {
-					return undefined
+				if (hooksEnabled()) {
+					const factory = new HookFactory()
+					if (await factory.hasHook("PostToolUse")) {
+						const toolName = ctx.toolCall.toolName
+						const runningMsg = buildHookStatusMessage({ hookName: "PostToolUse", toolName, status: "running" })
+						runningTs = runningMsg.ts
+						emitHookMessage?.(runningMsg)
+
+						const runner = await factory.create("PostToolUse")
+						const result = await runner.run({
+							taskId: taskIdFromSnapshot(ctx.snapshot),
+							postToolUse: {
+								toolName,
+								parameters: toStringRecord(ctx.input),
+								result: String(effective.output ?? ""),
+								success: !effective.isError,
+								executionTimeMs: ctx.durationMs,
+							},
+						})
+
+						emitHookMessage?.(
+							buildHookStatusMessage({
+								hookName: "PostToolUse",
+								toolName,
+								status: result.cancel ? "cancelled" : "completed",
+								ts: runningTs,
+							}),
+						)
+					}
 				}
-
-				const factory = new HookFactory()
-				if (!(await factory.hasHook("PostToolUse"))) {
-					return undefined
-				}
-
-				const toolName = ctx.toolCall.toolName
-				const runningMsg = buildHookStatusMessage({ hookName: "PostToolUse", toolName, status: "running" })
-				runningTs = runningMsg.ts
-				emitHookMessage?.(runningMsg)
-
-				const runner = await factory.create("PostToolUse")
-				const result = await runner.run({
-					taskId: taskIdFromSnapshot(ctx.snapshot),
-					postToolUse: {
-						toolName,
-						parameters: toStringRecord(ctx.input),
-						result: String(ctx.result.output ?? ""),
-						success: !ctx.result.isError,
-						executionTimeMs: ctx.durationMs,
-					},
-				})
-
-				emitHookMessage?.(
-					buildHookStatusMessage({
-						hookName: "PostToolUse",
-						toolName,
-						status: result.cancel ? "cancelled" : "completed",
-						ts: runningTs,
-					}),
-				)
-				return undefined
 			} catch (error) {
 				emitHookMessage?.(
 					buildHookStatusMessage({
@@ -212,8 +217,8 @@ export function buildAgentHooks(stateManager: StateManager, emitHookMessage?: Ho
 					}),
 				)
 				Logger.error("[HooksAdapter] afterTool hook failed:", error)
-				return undefined
 			}
+			return guardrailResult
 		},
 
 		async afterRun(ctx): Promise<void> {
@@ -405,7 +410,12 @@ interface WriteTarget {
 /**
  * Failure text carried by a RETURNED (not thrown) tool envelope. Upstream edit
  * tools signal input-level rejection this way, with `success: false` and/or a
- * non-empty `error` string. A successful envelope carries neither.
+ * non-empty `error` string.
+ *
+ * An EXPLICIT `success: true` is never a failure — it is a claim, and the
+ * verification below checks filesystem reality anyway. Reading a warning in the
+ * `error` field as a failure would report a false failure for a write that
+ * landed the moment upstream starts passing warnings through that field.
  */
 function readToolEnvelopeFailure(output: unknown): string | undefined {
 	if (output == null || typeof output !== "object" || Array.isArray(output)) {
@@ -416,6 +426,26 @@ function readToolEnvelopeFailure(output: unknown): string | undefined {
 	if (record.success === false) {
 		return error || "The tool reported success: false"
 	}
+	if (record.success === true) {
+		return undefined
+	}
+	return error || undefined
+}
+
+/**
+ * Warning text carried by an explicit `success: true` envelope alongside a
+ * non-empty `error` string. Not a failure (see readToolEnvelopeFailure) — but it
+ * must not disappear either, so the caller traces it.
+ */
+function readToolEnvelopeWarning(output: unknown): string | undefined {
+	if (output == null || typeof output !== "object" || Array.isArray(output)) {
+		return undefined
+	}
+	const record = output as Record<string, unknown>
+	if (record.success !== true) {
+		return undefined
+	}
+	const error = typeof record.error === "string" ? record.error.trim() : ""
 	return error || undefined
 }
 
@@ -464,7 +494,10 @@ function traceInputShape(input: unknown): Record<string, unknown> {
 	}
 }
 
-async function runIclinePostWriteVerification(ctx: AgentAfterToolContext): Promise<AgentAfterToolResult | undefined> {
+async function runIclinePostWriteVerification(
+	ctx: AgentAfterToolContext,
+	sessionCwd?: string,
+): Promise<AgentAfterToolResult | undefined> {
 	try {
 		if (!isIclineBuild()) {
 			return undefined
@@ -511,7 +544,23 @@ async function runIclinePostWriteVerification(ctx: AgentAfterToolContext): Promi
 			return undefined
 		}
 
-		const targets = await extractWriteTargets(toolName, ctx.input)
+		const envelopeWarning = readToolEnvelopeWarning(ctx.result.output)
+		if (envelopeWarning) {
+			// Explicit success + non-empty error string: a warning, not a failure.
+			// Verification below checks reality; the warning is kept as evidence.
+			recordToolTrace(
+				{
+					event: "write-tool-envelope-warning",
+					toolName,
+					toolCallId: ctx.toolCall.toolCallId,
+					message: envelopeWarning,
+					...traceInputShape(ctx.input),
+				},
+				{ force: true },
+			)
+		}
+
+		const targets = await extractWriteTargets(toolName, ctx.input, sessionCwd)
 		if (targets.length === 0) {
 			// A write call whose targets could not be extracted is a verification
 			// GAP: the tool may have landed something we never checked (best-effort
@@ -560,12 +609,15 @@ async function runIclinePostWriteVerification(ctx: AgentAfterToolContext): Promi
 				}
 			}
 		}
-		recordToolTrace({
-			event: "post-write-verified",
-			toolName,
-			toolCallId: ctx.toolCall.toolCallId,
-			...traceInputShape(ctx.input),
-		})
+		recordToolTrace(
+			{
+				event: "post-write-verified",
+				toolName,
+				toolCallId: ctx.toolCall.toolCallId,
+				...traceInputShape(ctx.input),
+			},
+			{ routine: true },
+		)
 		return undefined
 	} catch (error) {
 		// Never block a successful tool call on a verifier bug — but leave forced
@@ -585,7 +637,7 @@ async function runIclinePostWriteVerification(ctx: AgentAfterToolContext): Promi
 	}
 }
 
-async function extractWriteTargets(toolName: string, input: unknown): Promise<WriteTarget[]> {
+async function extractWriteTargets(toolName: string, input: unknown, sessionCwd?: string): Promise<WriteTarget[]> {
 	if (toolName === "editor") {
 		const editorInput = input as { path?: unknown; new_text?: unknown } | undefined
 		if (typeof editorInput?.path !== "string" || editorInput.path.length === 0) {
@@ -594,7 +646,7 @@ async function extractWriteTargets(toolName: string, input: unknown): Promise<Wr
 		const newText = typeof editorInput.new_text === "string" ? editorInput.new_text : ""
 		return [
 			{
-				absolutePath: await resolveMaybeRelative(editorInput.path),
+				absolutePath: await resolveMaybeRelative(editorInput.path, sessionCwd),
 				expectedMinBytes: newText.trim().length > 0 ? 1 : 0,
 			},
 		]
@@ -605,7 +657,7 @@ async function extractWriteTargets(toolName: string, input: unknown): Promise<Wr
 	if (typeof patchText !== "string" || patchText.length === 0) {
 		return []
 	}
-	return extractPatchTargets(patchText)
+	return extractPatchTargets(patchText, sessionCwd)
 }
 
 /**
@@ -621,7 +673,7 @@ async function extractWriteTargets(toolName: string, input: unknown): Promise<Wr
  * that landed — the mirror image of the phantom-write bug this guardrail exists
  * to catch.
  */
-async function extractPatchTargets(patchText: string): Promise<WriteTarget[]> {
+async function extractPatchTargets(patchText: string, sessionCwd?: string): Promise<WriteTarget[]> {
 	const targets: WriteTarget[] = []
 	const lines = patchText.split("\n")
 	let pendingAdd: { path: string; hasContent: boolean } | undefined
@@ -630,7 +682,7 @@ async function extractPatchTargets(patchText: string): Promise<WriteTarget[]> {
 	const flushPendingAdd = async () => {
 		if (pendingAdd) {
 			targets.push({
-				absolutePath: await resolveMaybeRelative(pendingAdd.path),
+				absolutePath: await resolveMaybeRelative(pendingAdd.path, sessionCwd),
 				expectedMinBytes: pendingAdd.hasContent ? 1 : 0,
 			})
 			pendingAdd = undefined
@@ -639,7 +691,7 @@ async function extractPatchTargets(patchText: string): Promise<WriteTarget[]> {
 
 	const flushPendingUpdate = async () => {
 		if (pendingUpdate) {
-			targets.push({ absolutePath: await resolveMaybeRelative(pendingUpdate.path), expectedMinBytes: 0 })
+			targets.push({ absolutePath: await resolveMaybeRelative(pendingUpdate.path, sessionCwd), expectedMinBytes: 0 })
 			pendingUpdate = undefined
 		}
 	}
@@ -680,10 +732,22 @@ async function extractPatchTargets(patchText: string): Promise<WriteTarget[]> {
 	return targets
 }
 
-async function resolveMaybeRelative(filePath: string): Promise<string> {
+async function resolveMaybeRelative(filePath: string, sessionCwd?: string): Promise<string> {
 	if (path.isAbsolute(filePath)) {
 		return filePath
 	}
+	// Mirror the executors exactly: they resolve relative paths against the
+	// SESSION cwd (`config.cwd` in sdk core's definitions.ts), and both editor
+	// and apply_patch reject relative paths that escape it. Resolving against
+	// anything else (a workspace root, the extension host's process.cwd()) can
+	// verify a different file than the one the executor wrote — the multi-root
+	// and custom-cwd failure mode.
+	if (sessionCwd && sessionCwd.trim().length > 0) {
+		return path.resolve(sessionCwd, filePath)
+	}
+	// Fallback for callers that could not supply a session cwd: the first
+	// workspace root, then the host process. A relative path carries no target
+	// root of its own, so no smarter multi-root match exists here.
 	try {
 		const { paths } = await HostProvider.workspace.getWorkspacePaths({})
 		const root = paths?.[0]

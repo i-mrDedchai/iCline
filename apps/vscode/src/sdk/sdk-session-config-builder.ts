@@ -21,7 +21,7 @@ export class SdkSessionConfigBuilder {
 			config.onConsecutiveMistakeLimitReached = this.options.onConsecutiveMistakeLimitReached
 		}
 
-		const baseHooks = buildAgentHooks(this.options.stateManager, this.options.emitHookMessage)
+		const baseHooks = buildAgentHooks(this.options.stateManager, this.options.emitHookMessage, input.cwd)
 		config.hooks = {
 			...baseHooks,
 			beforeModel: async (ctx) => {

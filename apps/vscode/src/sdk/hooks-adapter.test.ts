@@ -1,3 +1,4 @@
+import * as path from "node:path"
 import type { AgentAfterToolContext } from "@cline/shared"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { buildAgentHooks } from "./hooks-adapter"
@@ -11,6 +12,7 @@ const mocks = vi.hoisted(() => ({
 	getWorkspacePaths: vi.fn(async () => ({ paths: ["/workspace"] })),
 	getHooksEnabledSafe: vi.fn(() => false),
 	hasHook: vi.fn(async () => false),
+	createRunner: vi.fn(async () => ({ run: vi.fn(async () => ({})) })),
 	recordToolTrace: vi.fn(),
 }))
 
@@ -45,7 +47,7 @@ vi.mock("@/core/hooks/hooks-utils", () => ({
 vi.mock("@/core/hooks/hook-factory", () => ({
 	HookFactory: class {
 		hasHook = mocks.hasHook
-		create = vi.fn()
+		create = mocks.createRunner
 	},
 }))
 
@@ -255,6 +257,40 @@ describe("hooks-adapter iCline post-write verification", () => {
 		expect(mocks.verifyWrittenFile).toHaveBeenCalledTimes(1)
 	})
 
+	// D6: explicit `success: true` + non-empty `error` is a WARNING, not a failure.
+	// Failing on it would report a false failure for a write that landed the moment
+	// upstream starts passing warnings through that field — but the warning must
+	// still leave forced evidence instead of vanishing.
+	it("treats success:true with a non-empty error as a traced warning, not a failure", async () => {
+		const hooks = buildAgentHooks(makeStateManager())
+		const result = await hooks.afterTool?.(
+			makeAfterToolCtx({
+				output: {
+					query: "edit:/workspace/file.ts",
+					result: "File created successfully at: /workspace/file.ts",
+					error: "Warning: file was written with mixed line endings",
+					success: true,
+				},
+			}),
+		)
+		expect(result).toBeUndefined()
+		// Reality is still checked.
+		expect(mocks.verifyWrittenFile).toHaveBeenCalledTimes(1)
+		expect(mocks.recordToolTrace).toHaveBeenCalledWith(
+			expect.objectContaining({
+				event: "write-tool-envelope-warning",
+				toolName: "editor",
+				message: "Warning: file was written with mixed line endings",
+			}),
+			{ force: true },
+		)
+		// The warning is evidence — never a tool failure.
+		expect(mocks.recordToolTrace).not.toHaveBeenCalledWith(
+			expect.objectContaining({ event: "write-tool-failure-envelope" }),
+			expect.anything(),
+		)
+	})
+
 	it("reports the envelope failure for apply_patch without appending editor guidance", async () => {
 		const hooks = buildAgentHooks(makeStateManager())
 		const patch = ["*** Begin Patch", "*** Add File: /workspace/new.ts", "+const x = 1", "*** End Patch"].join("\n")
@@ -300,12 +336,49 @@ describe("hooks-adapter iCline post-write verification", () => {
 		})
 	})
 
-	it("resolves relative editor paths against the workspace root", async () => {
+	it("resolves relative editor paths against the workspace root when no session cwd is known", async () => {
 		const hooks = buildAgentHooks(makeStateManager())
 		await hooks.afterTool?.(makeAfterToolCtx({ input: { path: "src/file.ts", new_text: "x" } }))
 		expect(mocks.getWorkspacePaths).toHaveBeenCalled()
 		expect(mocks.verifyWrittenFile).toHaveBeenCalledWith({
 			absolutePath: expect.stringMatching(/src[\\/]file\.ts$/),
+			expectedMinBytes: 1,
+		})
+	})
+
+	it("resolves relative editor paths against the session cwd, exactly like the executors", async () => {
+		// D1/D2: the executors resolve relative paths against the SESSION cwd
+		// (`config.cwd` in sdk core's definitions.ts). Verifying against a workspace
+		// root instead can stat a different file than the one was written — the
+		// multi-root and custom-cwd failure mode.
+		const sessionCwd = path.resolve(path.sep, "sessions", "task-1")
+		const hooks = buildAgentHooks(makeStateManager(), undefined, sessionCwd)
+		await hooks.afterTool?.(makeAfterToolCtx({ input: { path: "src/file.ts", new_text: "x" } }))
+		expect(mocks.verifyWrittenFile).toHaveBeenCalledWith({
+			absolutePath: path.join(sessionCwd, "src", "file.ts"),
+			expectedMinBytes: 1,
+		})
+		// The workspace root must not even be consulted when the session cwd is known.
+		expect(mocks.getWorkspacePaths).not.toHaveBeenCalled()
+	})
+
+	it("resolves relative apply_patch targets against the session cwd", async () => {
+		const sessionCwd = path.resolve(path.sep, "sessions", "task-1")
+		const hooks = buildAgentHooks(makeStateManager(), undefined, sessionCwd)
+		const patch = ["*** Begin Patch", "*** Add File: src/new.ts", "+const x = 1", "*** End Patch"].join("\n")
+		await hooks.afterTool?.(makeAfterToolCtx({ toolName: "apply_patch", input: { input: patch } }))
+		expect(mocks.verifyWrittenFile).toHaveBeenCalledWith({
+			absolutePath: path.join(sessionCwd, "src", "new.ts"),
+			expectedMinBytes: 1,
+		})
+	})
+
+	it("passes an absolute path through unchanged regardless of session cwd", async () => {
+		const absolute = path.resolve(path.sep, "elsewhere", "file.ts")
+		const hooks = buildAgentHooks(makeStateManager(), undefined, path.resolve(path.sep, "sessions", "task-1"))
+		await hooks.afterTool?.(makeAfterToolCtx({ input: { path: absolute, new_text: "x" } }))
+		expect(mocks.verifyWrittenFile).toHaveBeenCalledWith({
+			absolutePath: absolute,
 			expectedMinBytes: 1,
 		})
 	})
@@ -421,5 +494,61 @@ describe("hooks-adapter iCline post-write verification", () => {
 			}),
 			{ force: true },
 		)
+	})
+
+	it("records verified writes as routine trace traffic", async () => {
+		// D8: routine successes must go through the `routine` gate (explicit
+		// ICLINE_TOOL_TRACE only), not `force` — they would churn the evidence file
+		// to its cap on every dev run otherwise.
+		const hooks = buildAgentHooks(makeStateManager())
+		await hooks.afterTool?.(makeAfterToolCtx({}))
+		expect(mocks.recordToolTrace).toHaveBeenCalledWith(
+			expect.objectContaining({ event: "post-write-verified", toolName: "editor" }),
+			{ routine: true },
+		)
+	})
+
+	it("lets user PostToolUse hooks see the guardrail's effective result", async () => {
+		// D5: a guardrail interception must not blind user tooling that logs every
+		// write — the hook receives the EFFECTIVE result (what the model will see),
+		// while the loop still gets the guardrail result.
+		mocks.getHooksEnabledSafe.mockReturnValue(true)
+		mocks.hasHook.mockResolvedValue(true)
+		mocks.verifyWrittenFile.mockResolvedValue({ ok: false, message: "Verification failed: file.ts is empty" })
+		const run = vi.fn(
+			async (_payload: { postToolUse: { toolName: string; result: string; success: boolean } }) => ({}) as never,
+		)
+		mocks.createRunner.mockResolvedValue({ run } as never)
+
+		const hooks = buildAgentHooks(makeStateManager())
+		const result = await hooks.afterTool?.(makeAfterToolCtx({}))
+
+		expect(run).toHaveBeenCalledTimes(1)
+		const payload = run.mock.calls[0][0]
+		expect(payload.postToolUse.toolName).toBe("editor")
+		expect(payload.postToolUse.result).toContain("Verification failed: file.ts is empty")
+		expect(payload.postToolUse.success).toBe(false)
+		// The loop still receives the guardrail interception.
+		expect(result).toEqual({
+			result: {
+				output: "Verification failed: file.ts is empty\nThe tool reported: write ok",
+				isError: true,
+			},
+		})
+	})
+
+	it("lets user PostToolUse hooks see the original result when the guardrail passes", async () => {
+		mocks.getHooksEnabledSafe.mockReturnValue(true)
+		mocks.hasHook.mockResolvedValue(true)
+		const run = vi.fn(async (_payload: { postToolUse: { result: string; success: boolean } }) => ({}) as never)
+		mocks.createRunner.mockResolvedValue({ run } as never)
+
+		const hooks = buildAgentHooks(makeStateManager())
+		const result = await hooks.afterTool?.(makeAfterToolCtx({}))
+
+		const payload = run.mock.calls[0][0]
+		expect(payload.postToolUse.result).toBe("write ok")
+		expect(payload.postToolUse.success).toBe(true)
+		expect(result).toBeUndefined()
 	})
 })
