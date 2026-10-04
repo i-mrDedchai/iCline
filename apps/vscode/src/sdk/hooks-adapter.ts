@@ -11,11 +11,13 @@
 // Deferred hooks (NOT wired here): TaskResume, TaskError, SessionShutdown,
 // PreCompact, Notification.
 
+import * as fs from "node:fs/promises"
 import * as path from "node:path"
 import type {
 	AgentAfterToolContext,
 	AgentAfterToolResult,
 	AgentBeforeToolContext,
+	AgentBeforeToolResult,
 	AgentHooks,
 	AgentRunLifecycleContext,
 	AgentStopControl,
@@ -26,7 +28,14 @@ import { HookFactory } from "@/core/hooks/hook-factory"
 import { getHooksEnabledSafe } from "@/core/hooks/hooks-utils"
 import type { StateManager } from "@/core/storage/StateManager"
 import { HostProvider } from "@/hosts/host-provider"
-import { EDITOR_INPUT_CHAR_LIMIT, getLargeWriteGuidance, hasChunkRecipe, verifyWrittenFile } from "@/icline/harness/guardrails"
+import {
+	applyIclineAgentIdentity,
+	EDITOR_INPUT_CHAR_LIMIT,
+	getIclineHarnessOverlay,
+	getLargeWriteGuidance,
+	hasChunkRecipe,
+	verifyWrittenFile,
+} from "@/icline/harness/guardrails"
 import { recordToolTrace } from "@/icline/harness/tool-trace"
 import { isIclineBuild } from "@/registry"
 
@@ -105,6 +114,8 @@ export function buildAgentHooks(
 	sessionCwd?: string,
 ): AgentHooks {
 	const hooksEnabled = () => getHooksEnabledSafe(stateManager.getGlobalSettingsKey("hooksEnabled"))
+	// C3 loop/stall guard state — per hook instance (= per session).
+	const toolStreak: ToolStreak = { key: "", count: 0 }
 
 	return {
 		async beforeRun(ctx: AgentRunLifecycleContext): Promise<AgentStopControl | undefined> {
@@ -115,53 +126,20 @@ export function buildAgentHooks(
 			return runUserPromptSubmit(ctx, hooksEnabled, emitHookMessage)
 		},
 
-		async beforeTool(ctx: AgentBeforeToolContext): Promise<{ stop?: boolean; reason?: string } | undefined> {
-			let runningTs: number | undefined
-			try {
-				if (!hooksEnabled()) {
-					return undefined
-				}
-
-				const factory = new HookFactory()
-				if (!(await factory.hasHook("PreToolUse"))) {
-					return undefined
-				}
-
-				const toolName = ctx.toolCall.toolName
-				const runningMsg = buildHookStatusMessage({ hookName: "PreToolUse", toolName, status: "running" })
-				runningTs = runningMsg.ts
-				emitHookMessage?.(runningMsg)
-
-				const runner = await factory.create("PreToolUse")
-				const result = await runner.run({
-					taskId: taskIdFromSnapshot(ctx.snapshot),
-					preToolUse: {
-						toolName,
-						parameters: toStringRecord(ctx.input),
-					},
-				})
-
-				emitHookMessage?.(
-					buildHookStatusMessage({
-						hookName: "PreToolUse",
-						toolName,
-						status: result.cancel ? "cancelled" : "completed",
-						ts: runningTs,
-					}),
-				)
-				return mapStopControl(result)
-			} catch (error) {
-				emitHookMessage?.(
-					buildHookStatusMessage({
-						hookName: "PreToolUse",
-						toolName: ctx.toolCall.toolName,
-						status: "failed",
-						ts: runningTs,
-					}),
-				)
-				Logger.error("[HooksAdapter] beforeTool hook failed:", error)
-				return undefined
+		async beforeTool(ctx: AgentBeforeToolContext): Promise<AgentBeforeToolResult | undefined> {
+			// Build-level iCline guardrails (C1 subagent prompt, C3 loop streak) run
+			// FIRST and independently of the user-configured hooks — they are part of
+			// the build, not of user tooling, and must never be gated on hooksEnabled.
+			const guardrail = runIclineBeforeToolGuardrails(ctx, toolStreak)
+			const hookControl = await runPreToolUseHook(ctx, hooksEnabled, emitHookMessage)
+			if (hookControl?.stop) {
+				// A user hook veto outranks any rewrite — the call never executes.
+				return hookControl
 			}
+			if (!guardrail) {
+				return hookControl
+			}
+			return { ...guardrail, ...hookControl }
 		},
 
 		async afterTool(ctx: AgentAfterToolContext): Promise<AgentAfterToolResult | undefined> {
@@ -288,6 +266,59 @@ export function buildAgentHooks(
 	}
 }
 
+async function runPreToolUseHook(
+	ctx: AgentBeforeToolContext,
+	hooksEnabled: () => boolean,
+	emitHookMessage?: HookMessageEmitter,
+): Promise<AgentStopControl | undefined> {
+	let runningTs: number | undefined
+	try {
+		if (!hooksEnabled()) {
+			return undefined
+		}
+
+		const factory = new HookFactory()
+		if (!(await factory.hasHook("PreToolUse"))) {
+			return undefined
+		}
+
+		const toolName = ctx.toolCall.toolName
+		const runningMsg = buildHookStatusMessage({ hookName: "PreToolUse", toolName, status: "running" })
+		runningTs = runningMsg.ts
+		emitHookMessage?.(runningMsg)
+
+		const runner = await factory.create("PreToolUse")
+		const result = await runner.run({
+			taskId: taskIdFromSnapshot(ctx.snapshot),
+			preToolUse: {
+				toolName,
+				parameters: toStringRecord(ctx.input),
+			},
+		})
+
+		emitHookMessage?.(
+			buildHookStatusMessage({
+				hookName: "PreToolUse",
+				toolName,
+				status: result.cancel ? "cancelled" : "completed",
+				ts: runningTs,
+			}),
+		)
+		return mapStopControl(result)
+	} catch (error) {
+		emitHookMessage?.(
+			buildHookStatusMessage({
+				hookName: "PreToolUse",
+				toolName: ctx.toolCall.toolName,
+				status: "failed",
+				ts: runningTs,
+			}),
+		)
+		Logger.error("[HooksAdapter] beforeTool hook failed:", error)
+		return undefined
+	}
+}
+
 async function runTaskStart(
 	ctx: AgentRunLifecycleContext,
 	hooksEnabled: () => boolean,
@@ -381,6 +412,116 @@ async function runUserPromptSubmit(
 }
 
 // ---------------------------------------------------------------------------
+// iCline harness guardrails: subagent prompt (C1) + loop/stall guard (C3)
+// ---------------------------------------------------------------------------
+
+interface ToolStreak {
+	key: string
+	count: number
+}
+
+/** C3: identical tool+args streak length that triggers the loop warning. */
+const TOOL_STREAK_LIMIT = 3
+
+/**
+ * C1: subagent prompts are model-authored (`spawn_agent.input.systemPrompt`) and
+ * reach the delegated agent verbatim — `buildSubAgentSystemPrompt` wraps prompts
+ * only for provider "cline", so iCline subagents would otherwise run without the
+ * harness overlay and with any upstream "You are Cline" identity intact. The
+ * session hooks and extension rules flow to delegated agents already; the gap is
+ * THIS prompt, which replaces the system prompt the main session gets. Rewrite it
+ * at the call site instead: identity first, then the same overlay rules.
+ */
+function rewriteSpawnAgentPrompt(toolName: string, input: unknown): unknown | undefined {
+	if (toolName !== "spawn_agent") {
+		return undefined
+	}
+	const record = (input ?? {}) as Record<string, unknown>
+	if (typeof record.systemPrompt !== "string" || record.systemPrompt.length === 0) {
+		return undefined
+	}
+	const systemPrompt = `${applyIclineAgentIdentity(record.systemPrompt.trim())}\n\n${getIclineHarnessOverlay()}`
+	return { ...record, systemPrompt }
+}
+
+/**
+ * C3: runtime loop/stall guard. A streak of identical tool calls (same tool,
+ * same arguments) is the classic loop signature — the dev.6 smoke showed a model
+ * re-sending the identical failing call round after round. Warn once the streak
+ * crosses TOOL_STREAK_LIMIT (and every multiple after) instead of letting it spin
+ * silently. The warning is soft (`appendContext`, non-blocking): deliberate
+ * repetition (polling) is legal — it must only make the loop VISIBLE.
+ */
+function noteToolStreak(streak: ToolStreak, ctx: AgentBeforeToolContext): string | undefined {
+	let key: string
+	try {
+		key = `${ctx.toolCall.toolName}\u0000${JSON.stringify(ctx.input ?? {})}`
+	} catch {
+		return undefined
+	}
+	if (streak.key === key) {
+		streak.count += 1
+	} else {
+		streak.key = key
+		streak.count = 1
+	}
+	if (streak.count < TOOL_STREAK_LIMIT || streak.count % TOOL_STREAK_LIMIT !== 0) {
+		return undefined
+	}
+	recordToolTrace(
+		{
+			event: "tool-loop-warning",
+			toolName: ctx.toolCall.toolName,
+			toolCallId: ctx.toolCall.toolCallId,
+			repeatCount: streak.count,
+		},
+		{ force: true },
+	)
+	return `The exact same tool call (same tool, same arguments) has now run ${streak.count} times in a row. If the repetition is intentional (e.g. polling), continue; otherwise change strategy — repeating a failing or no-op call will not make it work.`
+}
+
+/** Build-level beforeTool guardrails: C1 subagent prompt rewrite + C3 loop streak. */
+function runIclineBeforeToolGuardrails(ctx: AgentBeforeToolContext, streak: ToolStreak): AgentBeforeToolResult | undefined {
+	try {
+		if (!isIclineBuild()) {
+			return undefined
+		}
+		let result: AgentBeforeToolResult | undefined
+		const rewritten = rewriteSpawnAgentPrompt(ctx.toolCall.toolName, ctx.input)
+		if (rewritten !== undefined) {
+			result = { ...result, input: rewritten }
+			recordToolTrace(
+				{
+					event: "subagent-prompt-guarded",
+					toolName: ctx.toolCall.toolName,
+					toolCallId: ctx.toolCall.toolCallId,
+				},
+				{ routine: true },
+			)
+		}
+		const warning = noteToolStreak(streak, ctx)
+		if (warning) {
+			result = { ...result, appendContext: [result?.appendContext, warning].filter(Boolean).join("\n") }
+		}
+		return result
+	} catch (error) {
+		// Same fail-open contract as post-write verification: never block a call
+		// on a guardrail bug, but leave forced evidence of the gap.
+		Logger.warn("[HooksAdapter] iCline beforeTool guardrail error:", error)
+		recordToolTrace(
+			{
+				event: "before-tool-guardrail-error",
+				toolName: ctx.toolCall.toolName,
+				toolCallId: ctx.toolCall.toolCallId,
+				message: error instanceof Error ? error.message : String(error),
+			},
+			{ force: true },
+		)
+		return undefined
+	}
+}
+
+// ---------------------------------------------------------------------------
 // iCline harness guardrail: post-write verification
 // ---------------------------------------------------------------------------
 //
@@ -405,6 +546,12 @@ const WRITE_TOOL_NAMES = new Set(["editor", "apply_patch"])
 interface WriteTarget {
 	absolutePath: string
 	expectedMinBytes: number
+	/**
+	 * Complete expected file content (D10) — set ONLY for full-file writes
+	 * (editor create, apply_patch Add File), where the call carries the file's
+	 * whole content. Partial writes have no complete expected content to hash.
+	 */
+	expectedContent?: string
 }
 
 /**
@@ -639,15 +786,25 @@ async function runIclinePostWriteVerification(
 
 async function extractWriteTargets(toolName: string, input: unknown, sessionCwd?: string): Promise<WriteTarget[]> {
 	if (toolName === "editor") {
-		const editorInput = input as { path?: unknown; new_text?: unknown } | undefined
+		const editorInput = input as { path?: unknown; new_text?: unknown; old_text?: unknown; insert_line?: unknown } | undefined
 		if (typeof editorInput?.path !== "string" || editorInput.path.length === 0) {
 			return []
 		}
 		const newText = typeof editorInput.new_text === "string" ? editorInput.new_text : ""
+		// D10: content hash only for FULL-FILE writes. With `old_text` absent and
+		// no insert boundary (`insert_line` 0 is a filler for null — mirror
+		// normalizeInsertLine), the executor's only success path is createFile with
+		// `new_text` as the complete content: the partial paths (insertFile,
+		// replaceInFile) require insert_line / old_text, and "create" on an
+		// existing file throws before anything reaches verification. Any other
+		// shape has no complete expected content, and guessing one would
+		// manufacture false failures.
+		const isFullFileWrite = editorInput.old_text == null && (editorInput.insert_line == null || editorInput.insert_line === 0)
 		return [
 			{
 				absolutePath: await resolveMaybeRelative(editorInput.path, sessionCwd),
 				expectedMinBytes: newText.trim().length > 0 ? 1 : 0,
+				expectedContent: isFullFileWrite ? newText : undefined,
 			},
 		]
 	}
@@ -676,7 +833,7 @@ async function extractWriteTargets(toolName: string, input: unknown, sessionCwd?
 async function extractPatchTargets(patchText: string, sessionCwd?: string): Promise<WriteTarget[]> {
 	const targets: WriteTarget[] = []
 	const lines = patchText.split("\n")
-	let pendingAdd: { path: string; hasContent: boolean } | undefined
+	let pendingAdd: { path: string; hasContent: boolean; contentLines: string[] | undefined } | undefined
 	let pendingUpdate: { path: string } | undefined
 
 	const flushPendingAdd = async () => {
@@ -684,6 +841,11 @@ async function extractPatchTargets(patchText: string, sessionCwd?: string): Prom
 			targets.push({
 				absolutePath: await resolveMaybeRelative(pendingAdd.path, sessionCwd),
 				expectedMinBytes: pendingAdd.hasContent ? 1 : 0,
+				// D10: an Add File block carries the complete content the parser
+				// writes (`lines.join("\n")`), so a full-file hash is available —
+				// unless content collection bailed on a malformed block (see below),
+				// in which case only existence and size are asserted.
+				expectedContent: pendingAdd.contentLines ? pendingAdd.contentLines.join("\n") : undefined,
 			})
 			pendingAdd = undefined
 		}
@@ -704,7 +866,7 @@ async function extractPatchTargets(patchText: string, sessionCwd?: string): Prom
 			const [, action, rawPath] = header
 			const filePath = rawPath.trim()
 			if (action === "Add") {
-				pendingAdd = { path: filePath, hasContent: false }
+				pendingAdd = { path: filePath, hasContent: false, contentLines: [] }
 			} else if (action === "Update") {
 				pendingUpdate = { path: filePath }
 			}
@@ -723,8 +885,20 @@ async function extractPatchTargets(patchText: string, sessionCwd?: string): Prom
 			await flushPendingUpdate()
 			continue
 		}
-		if (pendingAdd && line.startsWith("+") && line.slice(1).trim().length > 0) {
-			pendingAdd.hasContent = true
+		if (pendingAdd) {
+			if (line.startsWith("+")) {
+				const text = line.slice(1)
+				pendingAdd.contentLines?.push(text)
+				if (text.trim().length > 0) {
+					pendingAdd.hasContent = true
+				}
+			} else {
+				// The canonical parser rejects any non-"+" line in an Add File
+				// block (the patch then writes nothing), but a wrapped patch can
+				// reach us in a shape the parser would not accept. Give up the
+				// content hash rather than guess; the target itself stays verified.
+				pendingAdd.contentLines = undefined
+			}
 		}
 	}
 	await flushPendingAdd()
@@ -745,17 +919,68 @@ async function resolveMaybeRelative(filePath: string, sessionCwd?: string): Prom
 	if (sessionCwd && sessionCwd.trim().length > 0) {
 		return path.resolve(sessionCwd, filePath)
 	}
-	// Fallback for callers that could not supply a session cwd: the first
-	// workspace root, then the host process. A relative path carries no target
-	// root of its own, so no smarter multi-root match exists here.
+	// Fallback for callers that could not supply a session cwd (D1): pick the
+	// root that MATCHES the path instead of always the first — a relative path
+	// of workspace root 2+ must not silently verify root 1's file.
 	try {
 		const { paths } = await HostProvider.workspace.getWorkspacePaths({})
-		const root = paths?.[0]
-		if (root) {
-			return path.resolve(root, filePath)
+		const roots = (paths ?? []).filter((root): root is string => typeof root === "string" && root.length > 0)
+		if (roots.length > 0) {
+			// 1. A root whose folder the path names ("two/src/x.ts" for root
+			//    ".../two") — deterministic from the string alone, and nested
+			//    roots resolve to the same target. Longest match wins.
+			const named = roots
+				.map((root) => ({ root, count: rootNamePrefixLength(root, filePath) }))
+				.filter((entry) => entry.count > 0)
+				.sort((a, b) => b.count - a.count || b.root.length - a.root.length)[0]
+			if (named) {
+				const rest = filePath.split(/[\\/]/).slice(named.count).join(path.sep)
+				return path.resolve(named.root, rest)
+			}
+			// 2. Else the root where the resolved target actually exists — the
+			//    strongest "this root matches" signal a relative path can give.
+			//    Longest (most specific) root wins; with no match, the first root.
+			const existing: string[] = []
+			for (const root of roots) {
+				if (await fileExists(path.resolve(root, filePath))) {
+					existing.push(root)
+				}
+			}
+			const match = existing.sort((a, b) => b.length - a.length)[0]
+			return path.resolve(match ?? roots[0], filePath)
 		}
 	} catch (error) {
 		Logger.warn("[HooksAdapter] Failed to resolve workspace root for post-write verification:", error)
 	}
 	return path.resolve(filePath)
+}
+
+/**
+ * Longest-prefix match of a relative path's leading segments against a root's
+ * trailing segments: "two/src/x.ts" matches root ".../two" (1 segment),
+ * "packages/two/src/x.ts" matches ".../packages/two" (2 segments). Requires a
+ * leftover segment — a path that IS just the root's name is a sibling file in
+ * the parent directory, not the root directory itself.
+ */
+function rootNamePrefixLength(root: string, filePath: string): number {
+	const rootSegments = root.split(/[\\/]/).filter(Boolean)
+	const fileSegments = filePath.split(/[\\/]/)
+	const sameSegment = (a: string, b: string) => a === b || (process.platform === "win32" && a.toLowerCase() === b.toLowerCase())
+	let best = 0
+	for (let count = 1; count <= rootSegments.length && count < fileSegments.length; count += 1) {
+		const rootTail = rootSegments.slice(-count)
+		if (rootTail.every((segment, index) => sameSegment(segment, fileSegments[index]))) {
+			best = count
+		}
+	}
+	return best
+}
+
+async function fileExists(candidate: string): Promise<boolean> {
+	try {
+		await fs.stat(candidate)
+		return true
+	} catch {
+		return false
+	}
 }

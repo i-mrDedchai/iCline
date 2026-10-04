@@ -1,11 +1,13 @@
+import * as fs from "node:fs/promises"
+import * as os from "node:os"
 import * as path from "node:path"
-import type { AgentAfterToolContext } from "@cline/shared"
+import type { AgentAfterToolContext, AgentBeforeToolContext } from "@cline/shared"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { buildAgentHooks } from "./hooks-adapter"
 
 const mocks = vi.hoisted(() => ({
 	isIclineBuild: vi.fn(() => true),
-	verifyWrittenFile: vi.fn(async (_params: { absolutePath: string; expectedMinBytes?: number }) => ({
+	verifyWrittenFile: vi.fn(async (_params: { absolutePath: string; expectedMinBytes?: number; expectedContent?: string }) => ({
 		ok: true,
 		message: "Verified write",
 	})),
@@ -26,6 +28,12 @@ vi.mock("@/icline/harness/guardrails", () => ({
 	EDITOR_CHUNK_CHAR_LIMIT: 32_000,
 	getLargeWriteGuidance: () => "Write it in chunks: create the file with a first chunk, then append with `insert_line`.",
 	hasChunkRecipe: (message: string) => message.includes("first chunk") && message.includes("insert_line"),
+	applyIclineAgentIdentity: (systemPrompt: string) =>
+		systemPrompt
+			.replace(/\bYou are Cline\b/g, "You are iCline")
+			.replace(/\bI'm Cline\b/g, "I'm iCline")
+			.replace(/\bI am Cline\b/g, "I am iCline"),
+	getIclineHarnessOverlay: () => "ICLINE HARNESS GUARDRAILS (overlay marker)",
 }))
 
 vi.mock("@/icline/harness/tool-trace", () => ({
@@ -101,6 +109,7 @@ describe("hooks-adapter iCline post-write verification", () => {
 		expect(mocks.verifyWrittenFile).toHaveBeenCalledWith({
 			absolutePath: "/workspace/file.ts",
 			expectedMinBytes: 1,
+			expectedContent: "content",
 		})
 	})
 
@@ -333,6 +342,7 @@ describe("hooks-adapter iCline post-write verification", () => {
 		expect(mocks.verifyWrittenFile).toHaveBeenCalledWith({
 			absolutePath: "/workspace/file.ts",
 			expectedMinBytes: 0,
+			expectedContent: "",
 		})
 	})
 
@@ -343,6 +353,7 @@ describe("hooks-adapter iCline post-write verification", () => {
 		expect(mocks.verifyWrittenFile).toHaveBeenCalledWith({
 			absolutePath: expect.stringMatching(/src[\\/]file\.ts$/),
 			expectedMinBytes: 1,
+			expectedContent: "x",
 		})
 	})
 
@@ -357,6 +368,7 @@ describe("hooks-adapter iCline post-write verification", () => {
 		expect(mocks.verifyWrittenFile).toHaveBeenCalledWith({
 			absolutePath: path.join(sessionCwd, "src", "file.ts"),
 			expectedMinBytes: 1,
+			expectedContent: "x",
 		})
 		// The workspace root must not even be consulted when the session cwd is known.
 		expect(mocks.getWorkspacePaths).not.toHaveBeenCalled()
@@ -370,6 +382,7 @@ describe("hooks-adapter iCline post-write verification", () => {
 		expect(mocks.verifyWrittenFile).toHaveBeenCalledWith({
 			absolutePath: path.join(sessionCwd, "src", "new.ts"),
 			expectedMinBytes: 1,
+			expectedContent: "const x = 1",
 		})
 	})
 
@@ -380,6 +393,7 @@ describe("hooks-adapter iCline post-write verification", () => {
 		expect(mocks.verifyWrittenFile).toHaveBeenCalledWith({
 			absolutePath: absolute,
 			expectedMinBytes: 1,
+			expectedContent: "x",
 		})
 	})
 
@@ -402,6 +416,7 @@ describe("hooks-adapter iCline post-write verification", () => {
 		expect(mocks.verifyWrittenFile).toHaveBeenCalledWith({
 			absolutePath: "/workspace/new.ts",
 			expectedMinBytes: 1,
+			expectedContent: "const x = 1",
 		})
 		expect(mocks.verifyWrittenFile).toHaveBeenCalledWith({
 			absolutePath: "/workspace/existing.ts",
@@ -409,13 +424,14 @@ describe("hooks-adapter iCline post-write verification", () => {
 		})
 	})
 
-	it("treats an Add File block with no content lines as expectedMinBytes 0", async () => {
+	it("treats an Add File block with no content lines as an empty file (minBytes 0, empty hash)", async () => {
 		const patch = ["*** Begin Patch", "*** Add File: /workspace/empty.ts", "*** End Patch"].join("\n")
 		const hooks = buildAgentHooks(makeStateManager())
 		await hooks.afterTool?.(makeAfterToolCtx({ toolName: "apply_patch", input: { input: patch } }))
 		expect(mocks.verifyWrittenFile).toHaveBeenCalledWith({
 			absolutePath: "/workspace/empty.ts",
 			expectedMinBytes: 0,
+			expectedContent: "",
 		})
 	})
 
@@ -550,5 +566,220 @@ describe("hooks-adapter iCline post-write verification", () => {
 		expect(payload.postToolUse.result).toBe("write ok")
 		expect(payload.postToolUse.success).toBe(true)
 		expect(result).toBeUndefined()
+	})
+})
+
+function makeBeforeToolCtx(overrides: { toolName?: string; input?: unknown }): AgentBeforeToolContext {
+	const { toolName = "editor", input = {} } = overrides
+	return {
+		snapshot: {
+			agentId: "agent-1",
+			conversationId: "conv-1",
+			runId: "run-1",
+			status: "running",
+			iteration: 1,
+			messages: [],
+			pendingToolCalls: [],
+			usage: {},
+		},
+		tool: { name: toolName },
+		toolCall: { toolName, toolCallId: "call-1" },
+		input,
+	} as unknown as AgentBeforeToolContext
+}
+
+describe("hooks-adapter iCline beforeTool guardrails (C1 subagent prompt, C3 loop)", () => {
+	beforeEach(() => {
+		vi.clearAllMocks()
+		mocks.isIclineBuild.mockReturnValue(true)
+		mocks.getHooksEnabledSafe.mockReturnValue(false)
+		mocks.hasHook.mockResolvedValue(false)
+	})
+
+	it("rewrites a model-authored spawn_agent systemPrompt with the iCline identity and harness overlay", async () => {
+		// C1: the subagent prompt is model-authored and reaches the delegated
+		// agent verbatim — without this rewrite, iCline subagents would run with
+		// "You are Cline" intact and no harness overlay at all.
+		const hooks = buildAgentHooks(makeStateManager())
+		const result = await hooks.beforeTool?.(
+			makeBeforeToolCtx({
+				toolName: "spawn_agent",
+				input: { systemPrompt: "You are Cline, a coding agent.", task: "implement X" },
+			}),
+		)
+		const prompt = (result?.input as { systemPrompt: string; task: string }).systemPrompt
+		expect(prompt).toBe("You are iCline, a coding agent.\n\nICLINE HARNESS GUARDRAILS (overlay marker)")
+		expect(prompt).not.toContain("You are Cline")
+		expect((result?.input as { task: string }).task).toBe("implement X")
+		expect(mocks.recordToolTrace).toHaveBeenCalledWith(
+			expect.objectContaining({ event: "subagent-prompt-guarded", toolName: "spawn_agent" }),
+			{ routine: true },
+		)
+	})
+
+	it("leaves other tools and spawn_agent inputs without a systemPrompt untouched", async () => {
+		const hooks = buildAgentHooks(makeStateManager())
+		const other = await hooks.beforeTool?.(makeBeforeToolCtx({ toolName: "run_commands", input: { command: "ls" } }))
+		expect(other?.input).toBeUndefined()
+		const noPrompt = await hooks.beforeTool?.(makeBeforeToolCtx({ toolName: "spawn_agent", input: { task: "x" } }))
+		expect(noPrompt?.input).toBeUndefined()
+	})
+
+	it("warns via appendContext when an identical tool call streak reaches the limit", async () => {
+		// C3: a streak of identical tool+args is the classic loop signature. The
+		// warning is soft (appendContext, non-blocking) — deliberate polling must
+		// stay legal, the loop only has to become VISIBLE.
+		const hooks = buildAgentHooks(makeStateManager())
+		const call = () => hooks.beforeTool?.(makeBeforeToolCtx({ toolName: "run_commands", input: { command: "sleep 1" } }))
+		expect((await call())?.appendContext).toBeUndefined()
+		expect((await call())?.appendContext).toBeUndefined()
+		const warned = await call()
+		expect(warned?.appendContext).toContain("3 times in a row")
+		expect(warned?.appendContext).toContain("change strategy")
+		// Periodic, not spam: quiet again until the next multiple.
+		expect((await call())?.appendContext).toBeUndefined()
+		expect((await call())?.appendContext).toBeUndefined()
+		expect((await call())?.appendContext).toContain("6 times in a row")
+	})
+
+	it("resets the streak when the arguments change", async () => {
+		const hooks = buildAgentHooks(makeStateManager())
+		const withCommand = (command: string) =>
+			hooks.beforeTool?.(makeBeforeToolCtx({ toolName: "run_commands", input: { command } }))
+		await withCommand("a")
+		await withCommand("a")
+		await withCommand("b")
+		const result = await withCommand("b")
+		expect(result?.appendContext).toBeUndefined()
+	})
+
+	it("traces the loop warning as forced evidence", async () => {
+		const hooks = buildAgentHooks(makeStateManager())
+		const call = () =>
+			hooks.beforeTool?.(makeBeforeToolCtx({ toolName: "editor", input: { path: "/workspace/f.ts", new_text: "x" } }))
+		await call()
+		await call()
+		await call()
+		expect(mocks.recordToolTrace).toHaveBeenCalledWith(
+			expect.objectContaining({ event: "tool-loop-warning", toolName: "editor", repeatCount: 3 }),
+			{ force: true },
+		)
+	})
+
+	it("runs the build-level guardrails even when user hooks are disabled", async () => {
+		// The guardrails are part of the build — hooksEnabled gates user tooling,
+		// never these. (Default mocks already have hooks disabled.)
+		const hooks = buildAgentHooks(makeStateManager())
+		const result = await hooks.beforeTool?.(
+			makeBeforeToolCtx({ toolName: "spawn_agent", input: { systemPrompt: "You are Cline" } }),
+		)
+		expect((result?.input as { systemPrompt: string }).systemPrompt).toContain("You are iCline")
+	})
+})
+
+describe("hooks-adapter multi-root fallback resolution (D1)", () => {
+	beforeEach(() => {
+		vi.clearAllMocks()
+		mocks.isIclineBuild.mockReturnValue(true)
+		mocks.verifyWrittenFile.mockResolvedValue({ ok: true, message: "Verified write" })
+		mocks.getHooksEnabledSafe.mockReturnValue(false)
+		mocks.hasHook.mockResolvedValue(false)
+	})
+
+	it("resolves a relative path naming its root folder against that root, not root 1", async () => {
+		mocks.getWorkspacePaths.mockResolvedValue({
+			paths: [path.resolve(path.sep, "ws", "one"), path.resolve(path.sep, "ws", "two")],
+		})
+		const hooks = buildAgentHooks(makeStateManager())
+		await hooks.afterTool?.(makeAfterToolCtx({ input: { path: path.join("two", "src", "file.ts"), new_text: "x" } }))
+		expect(mocks.verifyWrittenFile).toHaveBeenCalledWith(
+			expect.objectContaining({ absolutePath: path.resolve(path.sep, "ws", "two", "src", "file.ts") }),
+		)
+	})
+
+	it("prefers the longest matching root for nested roots", async () => {
+		const rootA = path.resolve(path.sep, "ws", "proj")
+		const rootB = path.join(rootA, "packages", "app")
+		mocks.getWorkspacePaths.mockResolvedValue({ paths: [rootA, rootB] })
+		const hooks = buildAgentHooks(makeStateManager())
+		await hooks.afterTool?.(makeAfterToolCtx({ input: { path: path.join("packages", "app", "src", "x.ts"), new_text: "x" } }))
+		expect(mocks.verifyWrittenFile).toHaveBeenCalledWith(
+			expect.objectContaining({ absolutePath: path.resolve(rootB, "src", "x.ts") }),
+		)
+	})
+
+	it("falls back to the root where the resolved file actually exists", async () => {
+		const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "icline-d1-"))
+		const rootA = path.join(tmp, "alpha")
+		const rootB = path.join(tmp, "beta")
+		await fs.mkdir(rootA, { recursive: true })
+		await fs.mkdir(path.join(rootB, "src"), { recursive: true })
+		await fs.writeFile(path.join(rootB, "src", "file.ts"), "x")
+		mocks.getWorkspacePaths.mockResolvedValue({ paths: [rootA, rootB] })
+		const hooks = buildAgentHooks(makeStateManager())
+		await hooks.afterTool?.(makeAfterToolCtx({ input: { path: path.join("src", "file.ts"), new_text: "x" } }))
+		expect(mocks.verifyWrittenFile).toHaveBeenCalledWith(
+			expect.objectContaining({ absolutePath: path.join(rootB, "src", "file.ts") }),
+		)
+	})
+
+	it("falls back to the first root when nothing matches", async () => {
+		mocks.getWorkspacePaths.mockResolvedValue({
+			paths: [path.resolve(path.sep, "ws", "one"), path.resolve(path.sep, "ws", "two")],
+		})
+		const hooks = buildAgentHooks(makeStateManager())
+		await hooks.afterTool?.(makeAfterToolCtx({ input: { path: path.join("src", "file.ts"), new_text: "x" } }))
+		expect(mocks.verifyWrittenFile).toHaveBeenCalledWith(
+			expect.objectContaining({ absolutePath: path.resolve(path.sep, "ws", "one", "src", "file.ts") }),
+		)
+	})
+})
+
+describe("hooks-adapter full-file content hash (D10)", () => {
+	beforeEach(() => {
+		vi.clearAllMocks()
+		mocks.isIclineBuild.mockReturnValue(true)
+		mocks.verifyWrittenFile.mockResolvedValue({ ok: true, message: "Verified write" })
+		mocks.getHooksEnabledSafe.mockReturnValue(false)
+		mocks.hasHook.mockResolvedValue(false)
+	})
+
+	it("hashes only full-file writes: create carries expectedContent, partial edits do not", async () => {
+		const hooks = buildAgentHooks(makeStateManager())
+		await hooks.afterTool?.(makeAfterToolCtx({ input: { path: "/workspace/a.ts", new_text: "body" } }))
+		expect(mocks.verifyWrittenFile.mock.calls[0][0].expectedContent).toBe("body")
+
+		await hooks.afterTool?.(makeAfterToolCtx({ input: { path: "/workspace/a.ts", new_text: "next", old_text: "prev" } }))
+		expect(mocks.verifyWrittenFile.mock.calls[1][0].expectedContent).toBeUndefined()
+
+		await hooks.afterTool?.(makeAfterToolCtx({ input: { path: "/workspace/a.ts", new_text: "line", insert_line: 3 } }))
+		expect(mocks.verifyWrittenFile.mock.calls[2][0].expectedContent).toBeUndefined()
+	})
+
+	it("treats insert_line 0 as the filler it is (full-file create), mirroring normalizeInsertLine", async () => {
+		const hooks = buildAgentHooks(makeStateManager())
+		await hooks.afterTool?.(makeAfterToolCtx({ input: { path: "/workspace/a.ts", new_text: "body", insert_line: 0 } }))
+		expect(mocks.verifyWrittenFile.mock.calls[0][0].expectedContent).toBe("body")
+	})
+
+	it("reconstructs Add File content for the hash but never trusts Update hunks", async () => {
+		const patch = [
+			"*** Begin Patch",
+			"*** Add File: /workspace/new.ts",
+			"+line one",
+			"+",
+			"+line two",
+			"*** Update File: /workspace/old.ts",
+			"@@",
+			"-old",
+			"+new",
+			"*** End Patch",
+		].join("\n")
+		const hooks = buildAgentHooks(makeStateManager())
+		await hooks.afterTool?.(makeAfterToolCtx({ toolName: "apply_patch", input: { input: patch } }))
+		const addCall = mocks.verifyWrittenFile.mock.calls.find((call) => call[0].absolutePath === "/workspace/new.ts")
+		expect(addCall?.[0].expectedContent).toBe("line one\n\nline two")
+		const updateCall = mocks.verifyWrittenFile.mock.calls.find((call) => call[0].absolutePath === "/workspace/old.ts")
+		expect(updateCall?.[0].expectedContent).toBeUndefined()
 	})
 })

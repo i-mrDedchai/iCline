@@ -8,7 +8,7 @@ Post-write verification และ failure-envelope guard อยู่ใน `app
 
 - core คือ upstream ที่ fork มา — guardrail เฉพาะของ iCline (เช่น บังคับ verify หลังเขียนไฟล์) ไม่ควรเปลี่ยน semantics ของ SDK ที่ app อื่นใช้อยู่
 - envelope guard (`{success:false, error}` ที่ runtime ไม่ตั้ง `isError`) แก้บั๊กเฉพาะการ integrate ของ fork นี้ (phantom-write dev.6) — เป็นความรับผิดชอบของ host ที่ตีความ result envelope
-- ข้อเสียที่ยอมรับ: subagent หรือ consumer อื่นที่ไม่ผ่าน hook ชั้นนี้จะไม่ถูก verify (ดู C1 ในรายงาน audit หลอมรวม)
+- ข้อเสียที่ยอมรับ: consumer ที่ไม่ได้ถือ hook ชั้นนี้ (เช่น SDK consumer ภายนอก) จะไม่ถูก verify — **แต่ subagent จาก `spawn_agent` ได้ verify แล้ว**: delegated agent รับ `hooks: runtimeConfig.hooks` (delegated-agent.ts) เท่ากับ hook ของ session หลัก (ช่องว่างที่เหลือคือ prompt — ปิดแล้วด้วย C1, ดู decision log)
 
 ## ช่องหลบ guardrail ที่ยอมรับโดย design
 
@@ -18,7 +18,7 @@ Post-write verification และ failure-envelope guard อยู่ใน `app
 ## ขอบเขตของ post-write verification (ณ 2026-10-03)
 
 - ตรวจ **exists + is file + min bytes** เท่านั้น — insert ผิดบรรทัด/เขียนเนื้อหาผิดยังผ่านการตรวจ
-- ที่ทำได้จริงโดยไม่ false positive: **hash เฉพาะกรณี full-file write** (เขียนทั้งไฟล์ใน call เดียว → เทียบ hash เนื้อหากับ payload ได้) — แผนเฟส 3 ยังไม่ทำ
+- ที่ทำได้จริงโดยไม่ false positive: **hash เฉพาะกรณี full-file write** (เขียนทั้งไฟล์ใน call เดียว → เทียบ hash เนื้อหากับ payload ได้) — ทำแล้วในเฟส 3 (D10, ดู decision log)
 - Update ที่ย่อไฟล์ได้ = assertion แค่ existence (min bytes 0) — ถูกต้องแล้ว
 
 ## Fail-open แต่ไม่เงียบ
@@ -48,3 +48,12 @@ Verifier ห้ามทำ turn พังเด็ดขาด (ทุก excep
 ### 2026-10-03 — A1 `apply_patch` + `*** Move to:` verify ปลายทาง
 
 `Update File` + `Move to` = executor เขียนปลายทางแล้วลบต้นทาง (`fs.rm(sourceAbsPath)`) — verify path เก่า = stat fail = รายงานเท็จทุก rename ตอนนี้ `extractPatchTargets` ตาม `Move to` ไป verify ปลายทาง (ดู test ใน `hooks-adapter.test.ts`)
+
+### 2026-10-04 — เฟส 3: C1 subagent prompt, C2 display-name, C3 loop guard, D1 multi-root, D10 content hash
+
+- **C1 subagent overlay/identity:** prompt ของ subagent เป็น model-authored (`spawn_agent.input.systemPrompt`) และ `buildSubAgentSystemPrompt` wrap เฉพาะ provider "cline" → subagent ของ iCline เคยวิ่งเปล่า ไม่มี overlay/identity แก้ที่ app layer ตาม ADR: `beforeTool` (hooks-adapter) rewrite prompt — identity ก่อน แล้วต่อ `getIclineHarnessOverlay()`; hooks/extension rules ไหลถึง delegated agent อยู่แล้ว ช่องว่างคือ prompt เท่านั้น หมายเหตุ: overlay ปรับถ้อยคำบรรทัด `<env>` ให้ session-agnostic เพราะ subagent ไม่มี `<env>` block (กัน stale reference แบบ A2)
+- **C2 display-name:** แยก `PROVIDER_DISPLAY_NAMES` + `getProviderDisplayName` ใน guardrails.ts — overlay (F1) กับ `# Active Session` (cline-session-factory) ใช้ตารางเดียวกัน ไม่มีทางเลี่ยนกันอีก; ตัด "report these values exactly" ที่สั่งรายงาน raw id ขัดกับ F1 เปลี่ยนเป็น "name the provider by its display name" เหมือนกันทั้ง prompt; unknown id ไม่ถูกตั้งชื่อเอง (fallback = raw id)
+- **C3 loop/stall guard:** counter ใน hook layer — tool+args เดิมซ้ำครบ 3 (และทุก ×3) เตือนผ่าน `appendContext` (soft, non-blocking) + trace `tool-loop-warning` (forced) การเตือนแบบ polling ยังใช้ได้ตามปกติ — เป้าหมายคือทำให้ loop มองเห็น ไม่ใช่ห้ามซ้ำ
+- **D1 multi-root fallback:** (ใช้เฉพาะเมื่อไม่มี sessionCwd — D2 มาก่อนเสมอ) relative path ที่ชื่อ root folder ("two/src/x.ts" กับ root `.../two`) → resolve กับ root นั้นแบบ longest-prefix; ไม่งั้น root ที่ไฟล์มีจริง (root ยาวสุดชนะ); สุดท้าย root แรก
+- **D10 content hash เฉพาะ full-file write:** `expectedContent` ถูกส่งเฉพาะ editor create (`old_text` ว่าง + `insert_line` ว่าง/0 — 0 เป็น filler ตาม `normalizeInsertLine`) และ `*** Add File` (ต่อเนื้อหาเหมือน parser: `lines.join("\n")`; block พังยอมเสีย hash เก็บ existence) เทียบ sha256 หลัง normalize CRLF→LF เพราะ executor rewrite EOL ตาม platform — content ตรงต้องไม่แพ้เพราะ line ending
+- **test gap #5/#6:** real-fs verify (junction/symlink, long path 260+ chars, directory, stale content, EOL tolerance) ใน `guardrails.test.ts` + integration chain move/hash (`hooks-adapter-fs.test.ts` — executor ฝั่ง rename ปักไว้ที่ test ของ sdk core แล้ว) **ยังไม่ครอบคลุม UNC/ACL** — fabricate ไม่ได้จริงบนเครื่อง dev (ต้องมี share/permission จริง) ถ้าจะปิดช่องนี้ต้องรันบนเครื่องที่มี UNC share

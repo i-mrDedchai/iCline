@@ -30,7 +30,7 @@ import { isReasoningEffortValue, type Mode } from "@shared/storage/types"
 import { stringifyVsCodeLmModelSelector } from "@shared/vsCodeSelectorUtils"
 import { StateManager } from "@/core/storage/StateManager"
 import { HostProvider } from "@/hosts/host-provider"
-import { applyIclineAgentIdentity, getIclineHarnessOverlay } from "@/icline/harness/guardrails"
+import { applyIclineAgentIdentity, getIclineHarnessOverlay, getProviderDisplayName } from "@/icline/harness/guardrails"
 import { assertXaiModelMatchesAuth, resolveXaiAuth } from "@/integrations/xai/auth-mode"
 import { isXaiCliModel, XAI_CLI_PROXY_BASE_URL, XAI_DEFAULT_BASE_URL, XAI_GROK_CLI_VERSION } from "@/integrations/xai/constants"
 import { ExtensionRegistryInfo } from "@/registry"
@@ -886,7 +886,17 @@ export async function buildSessionConfig(input: SessionConfigInput): Promise<Cor
 	// Always surface the active provider/model so the agent can answer
 	// "which model am I using?" without guessing from disk caches / other apps.
 	if (providerId || modelId) {
-		systemPrompt = `${systemPrompt}\n\n# Active Session\n\n- Provider: \`${providerId || "unknown"}\`\n- Model: \`${modelId || "unknown"}\`\n- When asked which model or provider you are connected to, report these values exactly.`
+		// C2: one identity story per prompt. The overlay names providers by display
+		// name (F1), so "report these values exactly" against the raw id was a
+		// SECOND, conflicting instruction. Present both (display name + id) and
+		// point back at the overlay's rule — the display table itself lives in
+		// guardrails (getProviderDisplayName) so the two sections cannot drift.
+		const providerLine = providerId
+			? getProviderDisplayName(providerId) !== providerId
+				? `${getProviderDisplayName(providerId)} (\`${providerId}\`)`
+				: `\`${providerId}\``
+			: "`unknown`"
+		systemPrompt = `${systemPrompt}\n\n# Active Session\n\n- Provider: ${providerLine}\n- Model: \`${modelId || "unknown"}\`\n- When asked which model or provider you are connected to, name the provider by its display name and quote the model id exactly as configured — never invent a vendor or display name for a model.`
 	}
 
 	const stateManager = StateManager.get()

@@ -511,6 +511,32 @@ describe("buildSessionConfig", () => {
 		expect(config.systemPrompt).not.toMatch(/\bI am Cline\b/)
 	})
 
+	it("names the provider in # Active Session the way the overlay does (C2)", async () => {
+		// One identity story per prompt: the overlay's F1 rule names providers by
+		// display name, so the Active Session block must agree. The old
+		// "report these values exactly" demanded the raw id and contradicted it.
+		mocks.stateManager.getApiConfiguration.mockReturnValue({
+			actModeApiProvider: "bynara",
+			actModeApiModelId: "some/model-x",
+			apiKey: "bynara-key",
+		} as any)
+
+		const config = await buildSessionConfig({ cwd: "/tmp/workspace" })
+		expect(config.systemPrompt).toContain("NaraRouter (`bynara`)")
+		expect(config.systemPrompt).not.toContain("report these values exactly")
+	})
+
+	it("never invents a display name: unknown providers keep their raw id (C2)", async () => {
+		mocks.stateManager.getApiConfiguration.mockReturnValue({
+			actModeApiProvider: "mystery-provider",
+			actModeApiModelId: "m-1",
+			apiKey: "mystery-key",
+		} as any)
+
+		const config = await buildSessionConfig({ cwd: "/tmp/workspace" })
+		expect(config.systemPrompt).toContain("- Provider: `mystery-provider`")
+	})
+
 	it("resolves SDK-backed provider API keys from provider-specific settings", async () => {
 		const providers = [
 			{ providerId: "poolside", modelId: "poolside/laguna-m.1" },

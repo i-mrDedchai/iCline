@@ -1,10 +1,16 @@
-import { describe, expect, it } from "vitest"
+import * as fs from "node:fs/promises"
+import * as os from "node:os"
+import * as path from "node:path"
+import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import {
 	applyIclineAgentIdentity,
 	EDITOR_CHUNK_CHAR_LIMIT,
 	EDITOR_INPUT_CHAR_LIMIT,
 	getIclineHarnessOverlay,
 	getLargeWriteGuidance,
+	getProviderDisplayName,
+	PROVIDER_DISPLAY_NAMES,
+	verifyWrittenFile,
 } from "./guardrails"
 
 // Classic-Cline tool names that do NOT exist in the SDK runtime. The runtime
@@ -146,5 +152,110 @@ describe("applyIclineAgentIdentity", () => {
 		expect(applyIclineAgentIdentity("Configure the Cline extension settings.")).toBe(
 			"Configure the Cline extension settings.",
 		)
+	})
+})
+
+describe("provider display names (one shared table, C2)", () => {
+	it("maps known provider ids to their display names", () => {
+		expect(getProviderDisplayName("bynara")).toBe("NaraRouter")
+		expect(getProviderDisplayName("cline")).toBe("Cline")
+	})
+
+	it("never invents a name: unknown ids fall back to the raw id", () => {
+		expect(getProviderDisplayName("some-new-provider")).toBe("some-new-provider")
+	})
+
+	it("keeps the overlay's self-report table identical to the shared map", () => {
+		// The overlay and the `# Active Session` block both read this map, so the
+		// two prompt sections can no longer name the same provider differently.
+		const overlay = getIclineHarnessOverlay()
+		for (const [id, name] of Object.entries(PROVIDER_DISPLAY_NAMES)) {
+			expect(overlay).toContain(`"${id}" → "${name}"`)
+		}
+	})
+})
+
+describe("verifyWrittenFile (real filesystem)", () => {
+	let tmp = ""
+	beforeAll(async () => {
+		tmp = await fs.mkdtemp(path.join(os.tmpdir(), "icline-verify-"))
+	})
+	afterAll(async () => {
+		await fs.rm(tmp, { recursive: true, force: true })
+	})
+
+	it("passes when the file exists with expected content", async () => {
+		const target = path.join(tmp, "ok.ts")
+		await fs.writeFile(target, "body {}")
+		const result = await verifyWrittenFile({ absolutePath: target, expectedMinBytes: 1, expectedContent: "body {}" })
+		expect(result.ok).toBe(true)
+	})
+
+	it("fails when the file is missing", async () => {
+		const result = await verifyWrittenFile({ absolutePath: path.join(tmp, "missing.ts") })
+		expect(result.ok).toBe(false)
+		expect(result.message).toContain("could not read")
+	})
+
+	it("fails when the path is a directory, not a file", async () => {
+		const dir = path.join(tmp, "a-directory")
+		await fs.mkdir(dir)
+		const result = await verifyWrittenFile({ absolutePath: dir })
+		expect(result.ok).toBe(false)
+		expect(result.message).toContain("is not a file")
+	})
+
+	it("fails an empty file when content was expected", async () => {
+		const target = path.join(tmp, "empty.ts")
+		await fs.writeFile(target, "")
+		const result = await verifyWrittenFile({ absolutePath: target, expectedMinBytes: 1 })
+		expect(result.ok).toBe(false)
+		expect(result.message).toContain("empty or too small")
+	})
+
+	it("fails an existing file whose content does not match the full-file write (D10)", async () => {
+		// The phantom-write mirror image: SOMETHING is on disk (a stale file),
+		// but not what the call reported writing — existence alone cannot see it.
+		const target = path.join(tmp, "stale.ts")
+		await fs.writeFile(target, "stale content from an earlier run")
+		const result = await verifyWrittenFile({ absolutePath: target, expectedContent: "fresh content" })
+		expect(result.ok).toBe(false)
+		expect(result.message).toContain("content does not match")
+	})
+
+	it("does not manufacture a failure from line-ending differences", async () => {
+		// The executors rewrite EOL per platform (normalizeNewFileLineEndings):
+		// the content hash must judge content, not line-ending style.
+		const target = path.join(tmp, "eol.ts")
+		await fs.writeFile(target, "a\r\nb\r\n")
+		const result = await verifyWrittenFile({ absolutePath: target, expectedContent: "a\nb\n" })
+		expect(result.ok).toBe(true)
+	})
+
+	it("reads through a directory junction / symlink to the real target", async () => {
+		// Test gap #5: Windows junctions and POSIX symlinks must verify against
+		// the REAL file — fs.stat follows the link, so a link to the target must
+		// never read as "missing" or "not a file".
+		const realDir = path.join(tmp, "real-dir")
+		await fs.mkdir(realDir)
+		await fs.writeFile(path.join(realDir, "file.ts"), "x")
+		const linkDir = path.join(tmp, "linked-dir")
+		await fs.symlink(realDir, linkDir, process.platform === "win32" ? "junction" : "dir")
+		const result = await verifyWrittenFile({ absolutePath: path.join(linkDir, "file.ts"), expectedContent: "x" })
+		expect(result.ok).toBe(true)
+	})
+
+	it("verifies a file behind a deep (260+ char) path", async () => {
+		// Test gap #5: legacy MAX_PATH territory.
+		let deep = tmp
+		for (let index = 0; index < 20; index += 1) {
+			deep = path.join(deep, `directory-with-a-long-name-${index}`)
+		}
+		await fs.mkdir(deep, { recursive: true })
+		const target = path.join(deep, "file.ts")
+		expect(target.length).toBeGreaterThan(260)
+		await fs.writeFile(target, "deep")
+		const result = await verifyWrittenFile({ absolutePath: target, expectedContent: "deep" })
+		expect(result.ok).toBe(true)
 	})
 })

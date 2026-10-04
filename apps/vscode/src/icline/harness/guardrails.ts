@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto"
 import * as fs from "node:fs/promises"
 import * as path from "node:path"
 
@@ -55,12 +56,31 @@ export interface PostWriteVerificationResult {
 }
 
 /**
- * Lightweight post-write verification: file exists and is non-empty when content was expected.
+ * Content check for FULL-FILE writes (editor create, apply_patch Add File): the
+ * call carries the file's complete content, so verification can compare reality
+ * against exactly what the call reported writing. Only full-file writes get this
+ * — partial writes (replace, insert, Update File hunks) have no complete expected
+ * content, and guessing one would manufacture false failures.
+ *
+ * Line endings are normalized before hashing: the executors rewrite EOL per
+ * platform (`normalizeNewFileLineEndings`), so raw bytes may differ from the
+ * call's `new_text` in line endings alone while the content is exactly right.
+ */
+function hashNormalizedContent(content: string): string {
+	return createHash("sha256").update(content.replace(/\r\n/g, "\n"), "utf8").digest("hex")
+}
+
+/**
+ * Lightweight post-write verification: file exists and is non-empty when content
+ * was expected, and — for full-file writes — its content matches exactly what the
+ * call reported writing (see hashNormalizedContent).
  * Inspired by Fable-style epistemic checks — verify claims against filesystem reality.
  */
 export async function verifyWrittenFile(params: {
 	absolutePath: string
 	expectedMinBytes?: number
+	/** Complete expected file content — only for full-file writes. */
+	expectedContent?: string
 }): Promise<PostWriteVerificationResult> {
 	try {
 		const stat = await fs.stat(params.absolutePath)
@@ -74,6 +94,17 @@ export async function verifyWrittenFile(params: {
 				message: `Verification failed: ${path.basename(params.absolutePath)} is empty or too small (${stat.size} bytes).`,
 			}
 		}
+		if (params.expectedContent !== undefined) {
+			const actual = await fs.readFile(params.absolutePath, "utf8")
+			const expectedHash = hashNormalizedContent(params.expectedContent)
+			const actualHash = hashNormalizedContent(actual)
+			if (expectedHash !== actualHash) {
+				return {
+					ok: false,
+					message: `Verification failed: ${path.basename(params.absolutePath)} content does not match what the call reported writing (expected ${params.expectedContent.length} chars, hash ${expectedHash.slice(0, 12)}; found ${actual.length} chars, hash ${actualHash.slice(0, 12)}).`,
+				}
+			}
+		}
 		return { ok: true, message: `Verified write: ${path.basename(params.absolutePath)} (${stat.size} bytes).` }
 	} catch (error) {
 		const msg = error instanceof Error ? error.message : String(error)
@@ -81,13 +112,45 @@ export async function verifyWrittenFile(params: {
 	}
 }
 
+/**
+ * Provider display names for self-reporting (audit F1/C2). ONE table, used by both
+ * the harness overlay and the `# Active Session` block (cline-session-factory) —
+ * two hand-maintained copies of a name table is exactly how the two prompt sections
+ * ended up telling the model different names for the same provider.
+ */
+export const PROVIDER_DISPLAY_NAMES: Readonly<Record<string, string>> = {
+	cline: "Cline",
+	bynara: "NaraRouter",
+	openrouter: "OpenRouter",
+	zenmux: "ZenMux",
+	requesty: "Requesty",
+	xai: "xAI",
+	ollama: "Ollama",
+	anthropic: "Anthropic",
+}
+
+/**
+ * Display name for a provider id. Unknown providers fall back to the raw id —
+ * the overlay says never invent a vendor or display name, and that starts here.
+ */
+export function getProviderDisplayName(providerId: string): string {
+	return PROVIDER_DISPLAY_NAMES[providerId] ?? providerId
+}
+
+/** The overlay's self-report pairs, generated from PROVIDER_DISPLAY_NAMES. */
+function formatProviderDisplayNamePairs(): string {
+	return Object.entries(PROVIDER_DISPLAY_NAMES)
+		.map(([id, name]) => `"${id}" → "${name}"`)
+		.join(", ")
+}
+
 /** Harness overlay text — behavioral guardrails aligned with robust agent patterns. */
 export function getIclineHarnessOverlay(): string {
 	return `ICLINE HARNESS GUARDRAILS
 - Identity: You are iCline (fork of Cline). When introducing yourself or referring to yourself, always say "iCline", never "Cline".
-- Self-reporting setup: when asked which provider or model you run on, name the provider by its display name ("cline" → "Cline", "bynara" → "NaraRouter", "openrouter" → "OpenRouter", "zenmux" → "ZenMux", "requesty" → "Requesty", "xai" → "xAI", "ollama" → "Ollama", "anthropic" → "Anthropic") and quote the model id exactly as configured — never invent a vendor or display name for a model.
+- Self-reporting setup: when asked which provider or model you run on, name the provider by its display name (${formatProviderDisplayNamePairs()}) and quote the model id exactly as configured — never invent a vendor or display name for a model.
 - Verify before claiming: read files, run commands, and inspect outputs before stating something is done.
-- Epistemic discipline: do not echo the user's factual claims (day, date, time, version, status) as if true. For temporal claims, check the \`Date:\` line in the \`<env>\` block of your system prompt first (it carries today's date); if you need the exact time, run a command such as \`date\`. If the user's claim conflicts with verified facts, correct politely — do not mirror it.
+- Epistemic discipline: do not echo the user's factual claims (day, date, time, version, status) as if true. For temporal claims, check the \`Date:\` line in the \`<env>\` block of your system prompt first if your session provides one (it carries today's date); if you need the exact time — or your session has no \`<env>\` block — run a command such as \`date\`. If the user's claim conflicts with verified facts, correct politely — do not mirror it.
 - Reply in the natural format the runtime supports; do not fabricate tool-call markup inside plain text — write tool arguments through the real tool interface only.
 - On tool errors: acknowledge what failed, do not repeat the identical failing call; change strategy.
 - On ambiguous requests: ask one focused clarifying question OR proceed with the safest minimal assumption and state it.
