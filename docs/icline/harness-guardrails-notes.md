@@ -63,6 +63,11 @@ Verifier ห้ามทำ turn พังเด็ดขาด (ทุก excep
   (check share/ACL permissions)" ให้โมเดลแก้ถูกทาง (ขอสิทธิ์ แทนที่จะเขียนไฟล์ใหม่
   ทับของที่อาจอยู่แล้ว) mapping นี้ pin ด้วย unit test ผ่าน UNC-shaped path
   (`guardrails.test.ts` — ไม่แตะ network จริง) + assert ว่า UNC absolute ผ่าน gate
-  `isAbsolute` โดยไม่ถูก rewrite กับ workspace root **ส่วนที่ยังต้องเครื่องจริง:**
-  end-to-end บน share จริง / ACL จริง (verify ไฟล์หลัง `\\server\share` +
-  เคสถูกปฏิเสธสิทธิ์) — ยัง fabricate ไม่ได้บนเครื่อง dev
+  `isAbsolute` โดยไม่ถูก rewrite กับ workspace root
+- **UNC จริง — ปิดแล้ว (2026-10-04):** `guardrails-unc.test.ts` verify ผ่าน share
+  จริง (`\\localhost\iClineUncTest` — สร้างด้วย `net share iClineUncTest=<dir>
+  /GRANT:Everyone,FULL` ลบด้วย `net share iClineUncTest //DELETE` —หมายเหตุ
+  Git Bash: `/DELETE` เดี่ยวถูกแปลงเป็น path ต้องใช้ `//DELETE` สอง slash)
+  3 เคส (full-file hash, CRLF tolerance, missing file) วิ่งจริง 57ms; ไม่มี share =
+  skip ทั้งไฟล์ (suite เขียวต่อ) **ส่วนที่ยังต้องเครื่องจริง:** เคสถูกปฏิเสธสิทธิ์
+  (ACL จริง — ต้อง revoke สิทธิ์แล้วเสี่ยงล็อกตัวเอง เลยยังไม่ทำ)
