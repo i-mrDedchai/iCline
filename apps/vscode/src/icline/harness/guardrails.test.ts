@@ -1,14 +1,5 @@
 import { describe, expect, it } from "vitest"
-import {
-	createHarnessMistakeState,
-	EDITOR_CHUNK_CHAR_LIMIT,
-	EDITOR_INPUT_CHAR_LIMIT,
-	getIclineHarnessOverlay,
-	getLargeWriteGuidance,
-	incrementHarnessMistake,
-	normalizeCompactionThreshold,
-	totalHarnessMistakes,
-} from "./guardrails"
+import { EDITOR_CHUNK_CHAR_LIMIT, EDITOR_INPUT_CHAR_LIMIT, getIclineHarnessOverlay, getLargeWriteGuidance } from "./guardrails"
 
 // Classic-Cline tool names that do NOT exist in the SDK runtime. The runtime
 // exposes: skills, read_files, search_codebase, fetch_web_content, editor,
@@ -121,20 +112,5 @@ describe("getIclineHarnessOverlay", () => {
 		expect(recipe).toContain("Do not re-send the oversized call unchanged")
 		// The overlay may only point at the rejection's recipe, not embed it.
 		expect(getIclineHarnessOverlay()).not.toContain(recipe)
-	})
-})
-
-describe("harness mistake counters", () => {
-	it("tracks verification mistakes", () => {
-		const state = createHarnessMistakeState()
-		incrementHarnessMistake(state, "verification")
-		expect(totalHarnessMistakes(state)).toBe(1)
-	})
-})
-
-describe("normalizeCompactionThreshold", () => {
-	it("clamps out-of-range values", () => {
-		expect(normalizeCompactionThreshold(0.1)).toBe(0.5)
-		expect(normalizeCompactionThreshold(0.99)).toBe(0.95)
 	})
 })

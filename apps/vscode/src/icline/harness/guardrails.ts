@@ -1,48 +1,6 @@
 import * as fs from "node:fs/promises"
 import * as path from "node:path"
 
-/** Categories for harness mistake tracking (Fable-inspired: precise failure modes). */
-export type HarnessMistakeCategory = "format" | "logic" | "loop" | "stall" | "verification"
-
-export interface HarnessMistakeState {
-	format: number
-	logic: number
-	loop: number
-	stall: number
-	verification: number
-}
-
-export function createHarnessMistakeState(): HarnessMistakeState {
-	return { format: 0, logic: 0, loop: 0, stall: 0, verification: 0 }
-}
-
-export function incrementHarnessMistake(state: HarnessMistakeState, category: HarnessMistakeCategory): number {
-	state[category] += 1
-	return totalHarnessMistakes(state)
-}
-
-export function resetHarnessMistakeCategory(state: HarnessMistakeState, category: HarnessMistakeCategory): void {
-	state[category] = 0
-}
-
-export function totalHarnessMistakes(state: HarnessMistakeState): number {
-	return state.format + state.logic + state.loop + state.stall + state.verification
-}
-
-/** Clamp auto-compact threshold to avoid accidental early compaction (known Cline footgun). */
-export function normalizeCompactionThreshold(raw?: number): number {
-	if (raw === undefined || Number.isNaN(raw)) {
-		return 0.75
-	}
-	if (raw < 0.5) {
-		return 0.5
-	}
-	if (raw > 0.95) {
-		return 0.95
-	}
-	return raw
-}
-
 /**
  * Hard per-call ceiling of the runtime's `editor` tool. Mirrors `EDITOR_INPUT_CHAR_LIMIT`
  * (@cline/core `extensions/tools/schemas.ts`), which the fork layer cannot import as a
