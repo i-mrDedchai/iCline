@@ -76,6 +76,32 @@ function hashNormalizedContent(content: string): string {
  * call reported writing (see hashNormalizedContent).
  * Inspired by Fable-style epistemic checks — verify claims against filesystem reality.
  */
+/**
+ * Human-readable classification of a filesystem read failure during
+ * post-write verification (UNC/ACL gap closure, dev.5 follow-up).
+ *
+ * Why a separate exported function: real UNC shares and real ACL denials
+ * cannot be fabricated on the dev machine (no share, no restricted ACL to
+ * test against), so the mapping from `errno` to an actionable message is
+ * unit-tested directly with UNC-shaped paths — while `verifyWrittenFile`
+ * itself stays a thin caller. The classifier never throws: an unrecognized
+ * error shape still yields the generic message.
+ *
+ * - `ENOENT` / `ENOTDIR` → the file is missing (UNC target unreachable and
+ *   local missing file share the same code — both mean "nothing to verify").
+ * - `EACCES` / `EPERM` → permission denial (share/NTFS ACL) — actionable:
+ *   the write may have landed for another identity but is unreadable here,
+ *   so the message says so instead of reporting "missing".
+ */
+export function describeVerifyReadError(absolutePath: string, error: unknown): string {
+	const msg = error instanceof Error ? error.message : String(error)
+	const code = (error as { code?: unknown } | null)?.code
+	if (code === "EACCES" || code === "EPERM") {
+		return `Verification failed: permission denied reading ${absolutePath} (check share/ACL permissions: ${msg}).`
+	}
+	return `Verification failed: could not read ${absolutePath} (${msg}).`
+}
+
 export async function verifyWrittenFile(params: {
 	absolutePath: string
 	expectedMinBytes?: number
@@ -107,8 +133,7 @@ export async function verifyWrittenFile(params: {
 		}
 		return { ok: true, message: `Verified write: ${path.basename(params.absolutePath)} (${stat.size} bytes).` }
 	} catch (error) {
-		const msg = error instanceof Error ? error.message : String(error)
-		return { ok: false, message: `Verification failed: could not read ${params.absolutePath} (${msg}).` }
+		return { ok: false, message: describeVerifyReadError(params.absolutePath, error) }
 	}
 }
 

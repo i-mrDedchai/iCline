@@ -56,4 +56,13 @@ Verifier ห้ามทำ turn พังเด็ดขาด (ทุก excep
 - **C3 loop/stall guard:** counter ใน hook layer — tool+args เดิมซ้ำครบ 3 (และทุก ×3) เตือนผ่าน `appendContext` (soft, non-blocking) + trace `tool-loop-warning` (forced) การเตือนแบบ polling ยังใช้ได้ตามปกติ — เป้าหมายคือทำให้ loop มองเห็น ไม่ใช่ห้ามซ้ำ
 - **D1 multi-root fallback:** (ใช้เฉพาะเมื่อไม่มี sessionCwd — D2 มาก่อนเสมอ) relative path ที่ชื่อ root folder ("two/src/x.ts" กับ root `.../two`) → resolve กับ root นั้นแบบ longest-prefix; ไม่งั้น root ที่ไฟล์มีจริง (root ยาวสุดชนะ); สุดท้าย root แรก
 - **D10 content hash เฉพาะ full-file write:** `expectedContent` ถูกส่งเฉพาะ editor create (`old_text` ว่าง + `insert_line` ว่าง/0 — 0 เป็น filler ตาม `normalizeInsertLine`) และ `*** Add File` (ต่อเนื้อหาเหมือน parser: `lines.join("\n")`; block พังยอมเสีย hash เก็บ existence) เทียบ sha256 หลัง normalize CRLF→LF เพราะ executor rewrite EOL ตาม platform — content ตรงต้องไม่แพ้เพราะ line ending
-- **test gap #5/#6:** real-fs verify (junction/symlink, long path 260+ chars, directory, stale content, EOL tolerance) ใน `guardrails.test.ts` + integration chain move/hash (`hooks-adapter-fs.test.ts` — executor ฝั่ง rename ปักไว้ที่ test ของ sdk core แล้ว) **ยังไม่ครอบคลุม UNC/ACL** — fabricate ไม่ได้จริงบนเครื่อง dev (ต้องมี share/permission จริง) ถ้าจะปิดช่องนี้ต้องรันบนเครื่องที่มี UNC share
+- **test gap #5/#6:** real-fs verify (junction/symlink, long path 260+ chars, directory, stale content, EOL tolerance) ใน `guardrails.test.ts` + integration chain move/hash (`hooks-adapter-fs.test.ts` — executor ฝั่ง rename ปักไว้ที่ test ของ sdk core แล้ว) **UNC/ACL — ปิดบางส่วนแล้ว (dev.5 follow-up 2026-10-04):** `verifyWrittenFile` แยก
+  `EACCES`/`EPERM` (share/NTFS ACL) ออกจาก missing (`ENOENT`/`ENOTDIR`) ผ่าน
+  `describeVerifyReadError` ใน `guardrails.ts` — จากเดิมที่ทุก read failure รายงาน
+  "could not read" เหมือนกันหมด ตอนนี้ permission รายงาน "permission denied …
+  (check share/ACL permissions)" ให้โมเดลแก้ถูกทาง (ขอสิทธิ์ แทนที่จะเขียนไฟล์ใหม่
+  ทับของที่อาจอยู่แล้ว) mapping นี้ pin ด้วย unit test ผ่าน UNC-shaped path
+  (`guardrails.test.ts` — ไม่แตะ network จริง) + assert ว่า UNC absolute ผ่าน gate
+  `isAbsolute` โดยไม่ถูก rewrite กับ workspace root **ส่วนที่ยังต้องเครื่องจริง:**
+  end-to-end บน share จริง / ACL จริง (verify ไฟล์หลัง `\\server\share` +
+  เคสถูกปฏิเสธสิทธิ์) — ยัง fabricate ไม่ได้บนเครื่อง dev

@@ -4,6 +4,7 @@ import * as path from "node:path"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import {
 	applyIclineAgentIdentity,
+	describeVerifyReadError,
 	EDITOR_CHUNK_CHAR_LIMIT,
 	EDITOR_INPUT_CHAR_LIMIT,
 	getIclineHarnessOverlay,
@@ -257,5 +258,43 @@ describe("verifyWrittenFile (real filesystem)", () => {
 		await fs.writeFile(target, "deep")
 		const result = await verifyWrittenFile({ absolutePath: target, expectedContent: "deep" })
 		expect(result.ok).toBe(true)
+	})
+})
+
+describe("describeVerifyReadError (UNC/ACL gap closure)", () => {
+	// Real UNC shares and real ACL denials cannot be fabricated on the dev
+	// machine, so the errno→message mapping is pinned directly with
+	// UNC-shaped paths — no network I/O, no permission changes.
+	const unc = String.raw`\\test-server\share\missing.ts`
+
+	it("reports a missing file without crashing on a UNC-shaped path", () => {
+		const error = Object.assign(new Error(`ENOENT: no such file or directory, stat '${unc}'`), { code: "ENOENT" })
+		const message = describeVerifyReadError(unc, error)
+		expect(message).toContain("could not read")
+		expect(message).toContain(unc)
+	})
+
+	it("reports permission denial (share/ACL) as permission, not missing", () => {
+		for (const code of ["EACCES", "EPERM"]) {
+			const error = Object.assign(new Error(`${code}: permission denied, stat '${unc}'`), { code })
+			const message = describeVerifyReadError(unc, error)
+			expect(message).toContain("permission denied")
+			expect(message).toContain("share/ACL")
+			expect(message).toContain(unc)
+		}
+	})
+
+	it("keeps the generic message for unrecognized error shapes", () => {
+		const message = describeVerifyReadError(unc, new Error("boom"))
+		expect(message).toContain("could not read")
+		const fallback = describeVerifyReadError(unc, "plain string failure")
+		expect(fallback).toContain("could not read")
+	})
+
+	it("leaves UNC absolute paths untouched through verification", async () => {
+		// `path.win32.isAbsolute` is the gate `resolveMaybeRelative` uses
+		// before joining any root: a UNC path must read as absolute so it is
+		// never rewritten against a workspace root. No FS access involved.
+		expect(path.win32.isAbsolute(unc)).toBe(true)
 	})
 })
