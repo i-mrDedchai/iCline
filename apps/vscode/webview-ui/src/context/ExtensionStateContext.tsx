@@ -30,21 +30,9 @@ import {
 	applyStateSnapshot as reducerApplyStateSnapshot,
 } from "../components/chat/chat-view/messageReducer"
 import { McpServiceClient, ModelsServiceClient, StateServiceClient, UiServiceClient } from "../services/grpc-client"
+import { type ProviderId, type ProviderModelsState, reduceProviderModelsResponse } from "./providerModelsState"
 
-export type ProviderId = string
-
-interface ProviderModelsState {
-	providerId: ProviderId
-	models: Record<string, ModelInfo>
-	defaultModelId: string
-	configFingerprint: string
-	requestId: string
-	source?: string
-	fetchedAt: number
-	isLoading: boolean
-	isStale: boolean
-	error?: string
-}
+export type { ProviderId } from "./providerModelsState"
 
 export interface ExtensionStateContextType extends ExtensionState {
 	/** Apply a partial api configuration locally (optimistic selection echo —
@@ -445,33 +433,9 @@ export const ExtensionStateContextProvider: React.FC<{
 	}, [])
 
 	const applyProviderModelsResponse = useCallback((response: ProviderModelsResponse) => {
-		setProviderModelsByProvider((prevModels) => {
-			const latestRequestId = latestModelRequestIdByProviderRef.current[response.providerId]
-			if (latestRequestId !== response.requestId) {
-				console.debug("Dropping stale provider models response", {
-					providerId: response.providerId,
-					requestId: response.requestId,
-					latestRequestId,
-				})
-				return prevModels
-			}
-
-			return {
-				...prevModels,
-				[response.providerId]: {
-					providerId: response.providerId,
-					models: response.ok ? fromProtobufModels(response.models) : {},
-					defaultModelId: response.defaultModelId ?? "",
-					configFingerprint: response.configFingerprint,
-					requestId: response.requestId,
-					source: response.source,
-					fetchedAt: response.fetchedAt,
-					isLoading: false,
-					isStale: false,
-					error: response.ok ? undefined : response.error?.message,
-				},
-			}
-		})
+		setProviderModelsByProvider((prevModels) =>
+			reduceProviderModelsResponse(prevModels, latestModelRequestIdByProviderRef.current[response.providerId], response),
+		)
 	}, [])
 
 	// References to store subscription cancellation functions
