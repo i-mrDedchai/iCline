@@ -239,6 +239,81 @@ describe("useNormalizedApiConfiguration", () => {
 		expect(mockResolveModelInfo).toHaveBeenCalledWith({ providerId: "xai", modelId: "grok-4.6" })
 	})
 
+	it("prefers a fresh authoritative RPC over a stale webview-cached 128K (dev.5-fix.1 repro)", async () => {
+		setApiConfiguration({ actModeApiProvider: "cline", actModeClineModelId: "cline-free/muse-spark-1.3-conductor" }, {
+			providerModelsByProvider: {
+				cline: {
+					models: {
+						"cline-free/muse-spark-1.3-conductor": {
+							name: "Muse Spark 1.3",
+							supportsPromptCache: false,
+							contextWindow: 128_000,
+						},
+					},
+					fetchedAt: Date.now() - 10 * 60 * 1000,
+				},
+			},
+		} as Partial<ReturnType<typeof useExtensionState>>)
+		mockResolveModelInfo.mockResolvedValue(modelInfoResponse("cline", "cline-free/muse-spark-1.3-conductor", 1_000_000))
+
+		const { result } = renderHook(() => useNormalizedApiConfiguration("act"))
+
+		await waitFor(() => expect(result.current.selectedModelInfo.contextWindow).toBe(1_000_000))
+		expect(result.current.selectedModelInfo.contextWindow).not.toBe(128_000)
+		expect(result.current.catalogStale).toBe(true)
+	})
+
+	it("hides the meter instead of showing a stale cached window when the RPC is unknown", async () => {
+		setApiConfiguration({ actModeApiProvider: "cline", actModeClineModelId: "cline-free/muse-spark-1.3-conductor" }, {
+			providerModelsByProvider: {
+				cline: {
+					models: {
+						"cline-free/muse-spark-1.3-conductor": {
+							name: "Muse Spark 1.3",
+							supportsPromptCache: false,
+							contextWindow: 128_000,
+						},
+					},
+					fetchedAt: Date.now() - 10 * 60 * 1000,
+				},
+			},
+		} as Partial<ReturnType<typeof useExtensionState>>)
+		mockResolveModelInfo.mockResolvedValue(
+			ResolveModelInfoResponse.create({
+				providerId: "cline",
+				modelId: "cline-free/muse-spark-1.3-conductor",
+				source: "unknown",
+			}),
+		)
+
+		const { result } = renderHook(() => useNormalizedApiConfiguration("act"))
+
+		await waitFor(() => expect(mockResolveModelInfo).toHaveBeenCalled())
+		await waitFor(() => expect(result.current.selectedModelInfo.contextWindow).toBeUndefined())
+		expect(result.current.selectedModelInfo.contextWindow).not.toBe(128_000)
+	})
+
+	it("treats a webview cache entry without fetchedAt as stale against an authoritative RPC", async () => {
+		setApiConfiguration({ actModeApiProvider: "cline", actModeClineModelId: "cline-free/muse-spark-1.3-conductor" }, {
+			providerModelsByProvider: {
+				cline: {
+					models: {
+						"cline-free/muse-spark-1.3-conductor": {
+							name: "Muse Spark 1.3",
+							supportsPromptCache: false,
+							contextWindow: 128_000,
+						},
+					},
+				},
+			},
+		} as Partial<ReturnType<typeof useExtensionState>>)
+		mockResolveModelInfo.mockResolvedValue(modelInfoResponse("cline", "cline-free/muse-spark-1.3-conductor", 1_000_000))
+
+		const { result } = renderHook(() => useNormalizedApiConfiguration("act"))
+
+		await waitFor(() => expect(result.current.selectedModelInfo.contextWindow).toBe(1_000_000))
+	})
+
 	it("uses live Settings catalog contextWindow over a stale resolve snapshot", async () => {
 		setApiConfiguration({ actModeApiProvider: "cline", actModeClineModelId: "poolside/laguna-s-2.1:free" }, {
 			providerModelsByProvider: {
@@ -250,6 +325,7 @@ describe("useNormalizedApiConfiguration", () => {
 							contextWindow: 262_144,
 						},
 					},
+					fetchedAt: Date.now(),
 				},
 			},
 		} as Partial<ReturnType<typeof useExtensionState>>)
@@ -272,6 +348,7 @@ describe("useNormalizedApiConfiguration", () => {
 							contextWindow: 1_000_000,
 						},
 					},
+					fetchedAt: Date.now(),
 				},
 			},
 		} as Partial<ReturnType<typeof useExtensionState>>)
@@ -320,6 +397,7 @@ describe("useNormalizedApiConfiguration", () => {
 							contextWindow: 524_288,
 						},
 					},
+					fetchedAt: Date.now(),
 				},
 			},
 		} as Partial<ReturnType<typeof useExtensionState>>
@@ -379,6 +457,7 @@ describe("useNormalizedApiConfiguration", () => {
 							contextWindow: 500_000,
 						},
 					},
+					fetchedAt: Date.now(),
 				},
 			},
 		} as Partial<ReturnType<typeof useExtensionState>>)

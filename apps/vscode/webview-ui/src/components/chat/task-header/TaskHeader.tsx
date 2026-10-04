@@ -83,7 +83,7 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 	}, [isHighlightedTextExpanded])
 
 	// Simplified computed values
-	const { selectedModelInfo } = useNormalizedApiConfiguration(mode)
+	const { selectedModelInfo, catalogStale } = useNormalizedApiConfiguration(mode)
 	const modeFields = getModeSpecificFields(apiConfiguration, mode)
 
 	// Local providers report no cost; the openai-compatible provider can
@@ -205,6 +205,7 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 							cacheReads={cacheReads}
 							cacheWrites={cacheWrites}
 							contextWindow={selectedModelInfo?.contextWindow}
+							isStale={catalogStale}
 							lastApiReqTotalTokens={lastApiReqTotalTokens}
 							onSendMessage={onSendMessage}
 							tokensIn={tokensIn}

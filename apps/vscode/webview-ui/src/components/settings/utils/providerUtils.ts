@@ -20,6 +20,13 @@ export interface NormalizedApiConfig {
 	selectedProvider: ApiProvider
 	selectedModelId: string
 	selectedModelInfo: ModelInfo
+	/**
+	 * True when the warm model catalog for the active provider is missing
+	 * or older than the freshness window. The displayed `selectedModelInfo`
+	 * never comes from a stale warm entry — callers should render a
+	 * refreshing affordance while the catalog revalidates.
+	 */
+	catalogStale: boolean
 }
 
 /**

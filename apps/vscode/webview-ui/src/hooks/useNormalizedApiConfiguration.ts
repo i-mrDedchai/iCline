@@ -75,6 +75,37 @@ export function getActiveProviderAndModelId(
 }
 
 /**
+ * How long a webview-side provider-catalog entry is trusted over the
+ * host-resolved RPC answer. Mirrors the host catalog TTL so both layers
+ * go stale together — a stale webview entry must never shadow a fresh
+ * authoritative resolution (dev.5-fix.1: chat stuck at 128K while
+ * Settings showed 1M because the chat read a stale warm cache first).
+ */
+export const PROVIDER_MODELS_FRESHNESS_MS = 5 * 60 * 1000
+
+/**
+ * Reads the warm catalog models for a provider only when the entry is
+ * fresh. An entry with no usable `fetchedAt` (or an expired one) is
+ * treated as stale: callers fall through to the host RPC instead of
+ * presenting outdated numbers as the model's supported context.
+ * `catalogStale` is true when a warm entry exists but can no longer be
+ * trusted — the UI should show a refreshing affordance, not the old value.
+ */
+function readFreshCatalogModels(
+	providerModelsByProvider: ReturnType<typeof useExtensionState>["providerModelsByProvider"],
+	provider: ApiProvider,
+): { models: Record<string, ModelInfo> | undefined; catalogStale: boolean } {
+	const entry = providerModelsByProvider?.[provider]
+	const models = entry?.models
+	if (!models || Object.keys(models).length === 0) {
+		return { models: undefined, catalogStale: false }
+	}
+	const fetchedAt = entry?.fetchedAt ?? 0
+	const fresh = fetchedAt > 0 && Date.now() - fetchedAt <= PROVIDER_MODELS_FRESHNESS_MS
+	return { models: fresh ? models : undefined, catalogStale: !fresh }
+}
+
+/**
  * Webview's universal handle on "what model is currently selected, with
  * what capabilities". Sources its answer from the extension over gRPC
  * (`ResolveModelInfo`), which combines the SDK catalog with the user's
@@ -85,11 +116,17 @@ export function getActiveProviderAndModelId(
  * time a provider is selected after a config change. UI callers must
  * treat `unknownModelInfo` as "no data yet" — render placeholders, do
  * not assume features are unsupported.
+ *
+ * `catalogStale` reports that the warm catalog for the active provider is
+ * missing or expired. A stale warm entry never wins over an authoritative
+ * RPC answer; callers should render a refreshing affordance while it
+ * revalidates rather than trusting the previous number.
  */
 export function useNormalizedApiConfiguration(mode: Mode): NormalizedApiConfig {
 	const { apiConfiguration, providerModelsByProvider } = useExtensionState()
 	const { provider, modelId } = getActiveProviderAndModelId(apiConfiguration, mode)
-	const liveCatalogInfo = lookupLiveCatalogInfo(providerModelsByProvider?.[provider]?.models, modelId)
+	const { models: freshCatalogModels, catalogStale } = readFreshCatalogModels(providerModelsByProvider, provider)
+	const liveCatalogInfo = lookupLiveCatalogInfo(freshCatalogModels, modelId)
 	const [resolvedInfo, setResolvedInfo] = useState<
 		Awaited<ReturnType<typeof ModelsServiceClient.resolveModelInfo>> | undefined
 	>(undefined)
@@ -133,6 +170,7 @@ export function useNormalizedApiConfiguration(mode: Mode): NormalizedApiConfig {
 				selectedProvider: provider,
 				selectedModelId,
 				selectedModelInfo: applyGrok46OfficialContextWindow(selectedModelId, liveCatalogInfo),
+				catalogStale,
 			}
 		}
 		if (!rpcMatchesCurrent || !resolvedInfo?.modelInfo || resolvedInfo.source === "unknown") {
@@ -140,6 +178,7 @@ export function useNormalizedApiConfiguration(mode: Mode): NormalizedApiConfig {
 				selectedProvider: provider,
 				selectedModelId: selectedModelId || resolvedInfo?.modelId || "",
 				selectedModelInfo: unknownModelInfo,
+				catalogStale,
 			}
 		}
 		const resolvedModelId = selectedModelId || resolvedInfo.modelId || ""
@@ -147,8 +186,9 @@ export function useNormalizedApiConfiguration(mode: Mode): NormalizedApiConfig {
 			selectedProvider: provider,
 			selectedModelId: resolvedModelId,
 			selectedModelInfo: applyGrok46OfficialContextWindow(resolvedModelId, fromProtobufModelInfo(resolvedInfo.modelInfo)),
+			catalogStale,
 		}
-	}, [liveCatalogInfo, provider, modelId, resolvedInfo])
+	}, [liveCatalogInfo, catalogStale, provider, modelId, resolvedInfo])
 }
 
 function modelIdSlug(modelId: string): string {

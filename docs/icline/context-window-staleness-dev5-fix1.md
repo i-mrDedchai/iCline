@@ -97,6 +97,14 @@ ClineModelPicker
 
 ---
 
+## 7) การแก้ไข (follow-up หลังอนุมัติ — โค้ด + เทสต์, ยังไม่แพ็ก)
+
+- `useNormalizedApiConfiguration`: warm catalog entry มีอายุ (`PROVIDER_MODELS_FRESHNESS_MS` 5 นาที เท่า host TTL) — entry หมดอายุ/ไม่มี `fetchedAt` จะไม่ชนะ RPC authoritative อีก, คืน `catalogStale` ให้ UI
+- ใหม่ `useChatProviderCatalogRefresh` (mount ใน `ChatView`): แชท revalidate catalog ของ active provider เองเมื่อเข้าหน้าแชท/สลับโมเดล/กลับจาก surface อื่น — ไม่ต้องพึ่ง Settings เป็นผลพลอยได้
+- `ContextWindow` รับ `isStale` (ต่อจาก `TaskHeader`): ค่าไม่สดแสดงแบบ dim + tooltip "Model catalog is refreshing" แทนการอ้างว่าเป็นค่าปัจจุบัน
+- เทสต์ใหม่ 9 ข้อ: repro stale-128K→RPC-1M, stale+RPC-unknown→ซ่อน meter, ไม่มี fetchedAt→RPC ชนะ, badge stale/fresh, refresh hook (mount/visible/model-switch/no-render-spam); ปรับ 4 เทสต์เดิมให้ seed `fetchedAt` สด (เจตนาเดิมไม่เปลี่ยน)
+- ตรวจ: webview 893/893, tsc สะอาดทั้ง extension และ webview, biome ไม่เพิ่มปัญหาใหม่
+
 ## อ้างอิงไฟล์ (path ใน `cline-temp/`)
 
 - `apps/vscode/webview-ui/src/hooks/useNormalizedApiConfiguration.ts` (ลำดับ liveCatalog > RPC > unknown)

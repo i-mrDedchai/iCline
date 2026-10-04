@@ -9,6 +9,7 @@ import { useCallback, useEffect, useMemo, useRef } from "react"
 import { useMount } from "react-use"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useShowNavbar } from "@/context/PlatformContext"
+import { useChatProviderCatalogRefresh } from "@/hooks/useChatProviderCatalogRefresh"
 import { useNormalizedApiConfiguration } from "@/hooks/useNormalizedApiConfiguration"
 import { useTranslation } from "@/i18n/useTranslation"
 import { FileServiceClient, UiServiceClient } from "@/services/grpc-client"
@@ -247,6 +248,10 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 	const messageHandlers = useMessageHandlers(messages, chatState)
 
 	const { selectedModelInfo } = useNormalizedApiConfiguration(mode)
+	// Keep the chat's warm model catalog honest: entering chat, switching
+	// models, or returning from another surface revalidates the active
+	// provider instead of trusting a stale snapshot (dev.5-fix.1 128K bug).
+	useChatProviderCatalogRefresh(mode, !isHidden)
 
 	const selectFilesAndImages = useCallback(async () => {
 		try {

@@ -72,4 +72,17 @@ describe("ContextWindow compact button", () => {
 		await waitFor(() => expect(condense).toHaveBeenCalledWith({ value: "compact" }))
 		expect(onSendMessage).not.toHaveBeenCalled()
 	})
+
+	it("marks the max label as refreshing when the catalog is stale", () => {
+		render(<ContextWindow contextWindow={1_000_000} isStale={true} lastApiReqTotalTokens={120_000} useAutoCondense={false} />)
+
+		expect(screen.getByTitle(/catalog is refreshing/i)).toBeTruthy()
+	})
+
+	it("shows the plain max label when the catalog is fresh", () => {
+		render(<ContextWindow contextWindow={1_000_000} lastApiReqTotalTokens={120_000} useAutoCondense={false} />)
+
+		expect(screen.getByTitle(/maximum context window size/i)).toBeTruthy()
+		expect(screen.queryByTitle(/catalog is refreshing/i)).toBeNull()
+	})
 })

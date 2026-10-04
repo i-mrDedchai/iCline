@@ -23,6 +23,12 @@ interface ContextWindowProgressProps extends ContextWindowInfoProps {
 	lastApiReqTotalTokens?: number
 	contextWindow?: number
 	onSendMessage?: (command: string, files: string[], images: string[]) => void
+	/**
+	 * The warm model catalog is missing or expired, so this number is not
+	 * backed by a fresh catalog entry. Rendered dimmed with an honest
+	 * tooltip instead of silently claiming to be current (dev.5-fix.1).
+	 */
+	isStale?: boolean
 }
 
 const ConfirmationDialog = memo<{
@@ -63,6 +69,7 @@ const ContextWindow: React.FC<ContextWindowProgressProps> = ({
 	tokensOut,
 	cacheWrites,
 	cacheReads,
+	isStale = false,
 }) => {
 	const [isOpened, setIsOpened] = useState(false)
 	const [confirmationNeeded, setConfirmationNeeded] = useState(false)
@@ -180,7 +187,13 @@ const ContextWindow: React.FC<ContextWindowProgressProps> = ({
 							</HoverCardTrigger>
 						</HoverCard>
 					</div>
-					<span className="cursor-pointer text-sm" title="Maximum context window size for this model">
+					<span
+						className={isStale ? "cursor-pointer text-sm opacity-70" : "cursor-pointer text-sm"}
+						title={
+							isStale
+								? "Model catalog is refreshing — this value may be outdated"
+								: "Maximum context window size for this model"
+						}>
 						{formatTokenNumber(tokenData.max)}
 					</span>
 				</div>
