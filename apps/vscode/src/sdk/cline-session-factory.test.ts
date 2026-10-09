@@ -346,6 +346,33 @@ describe("buildSessionConfig", () => {
 		expect(config.enableAgentTeams).toBe(false)
 	})
 
+	it("sends a custom provider's saved base URL and API key with the session", async () => {
+		// Custom providers are written to providers.json by the Settings form
+		// (createCustomProvider). The chat session must read that endpoint and
+		// key back, not stop at the built-in ApiConfiguration slots.
+		mocks.stateManager.getApiConfiguration.mockReturnValue({
+			actModeApiProvider: "ded-llm-stack",
+			planModeApiProvider: "ded-llm-stack",
+		} as any)
+		mocks.providerSettingsManager.getProviderSettings.mockImplementation((providerId?: string) =>
+			providerId === "ded-llm-stack"
+				? ({
+						provider: "ded-llm-stack",
+						baseUrl: "http://127.0.0.1:28789/v1",
+						apiKey: "saved-custom-key",
+						model: "/models/Qwen3.8-9B-Q4_K_M.gguf",
+					} as any)
+				: undefined,
+		)
+
+		const config = await buildSessionConfig({ cwd: "/tmp/workspace" })
+
+		expect(config.providerId).toBe("ded-llm-stack")
+		expect(config.baseUrl).toBe("http://127.0.0.1:28789/v1")
+		expect(config.apiKey).toBe("saved-custom-key")
+		expect(config.modelId).toBe("/models/Qwen3.8-9B-Q4_K_M.gguf")
+	})
+
 	it("resolves Cline OAuth credentials after defaulting to the Cline provider", async () => {
 		mocks.stateManager.getApiConfiguration.mockReturnValue({} as any)
 		mocks.providerSettingsManager.getProviderSettings.mockReturnValue({

@@ -655,6 +655,17 @@ export function resolveOllamaProviderConfig(config: ApiConfiguration, modelId: s
 	}
 }
 
+function readSavedProviderModelId(providerId: string): string | undefined {
+	try {
+		return (
+			getProviderSettingsManager().getProviderSettings(providerSettingsProviderId(providerId))?.model?.trim() || undefined
+		)
+	} catch {
+		Logger.warn(`[SessionFactory] Failed to read ${providerId} model from providers.json`)
+		return undefined
+	}
+}
+
 export function resolveBaseUrl(providerId: string, config: ApiConfiguration): string | undefined {
 	const baseUrlMap: Record<string, keyof ApiConfiguration> = {
 		anthropic: "anthropicBaseUrl",
@@ -676,7 +687,16 @@ export function resolveBaseUrl(providerId: string, config: ApiConfiguration): st
 		return normalizeSdkBaseUrl(providerId, config[field])
 	}
 
-	return undefined
+	// Providers without a legacy ApiConfiguration slot (user-created custom
+	// providers) keep their endpoint in providers.json. Read it from the same
+	// store resolveApiKey uses, otherwise the session starts with no base URL.
+	try {
+		const settingsBaseUrl = getProviderSettingsManager().getProviderSettings(providerSettingsProviderId(providerId))?.baseUrl
+		return normalizeSdkBaseUrl(providerId, settingsBaseUrl)
+	} catch {
+		Logger.warn(`[SessionFactory] Failed to read ${providerId} base URL from providers.json`)
+		return undefined
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -803,7 +823,15 @@ export async function buildSessionConfig(input: SessionConfigInput): Promise<Cor
 		}
 		modelId = modelId || ""
 	} else {
-		modelId = modelId ?? getDefaultModelIdForProvider(providerId) ?? getDefaultModelIdForProvider(DEFAULT_PROVIDER_ID) ?? ""
+		// A user-created provider has no catalog default, so its committed model
+		// from providers.json must win over the default provider's model;
+		// otherwise the request names a model the custom endpoint does not serve.
+		modelId =
+			modelId ??
+			getDefaultModelIdForProvider(providerId) ??
+			readSavedProviderModelId(providerId) ??
+			getDefaultModelIdForProvider(DEFAULT_PROVIDER_ID) ??
+			""
 	}
 	if (!apiKey && apiConfig) {
 		apiKey = await resolveApiKeyAsync(providerId, apiConfig)
