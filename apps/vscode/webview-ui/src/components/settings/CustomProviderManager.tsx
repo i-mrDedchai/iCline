@@ -114,12 +114,24 @@ export const CustomProviderManager = () => {
 		setEditing({ mode: "create", form: { ...EMPTY_FORM } })
 	}, [])
 
-	const openEdit = useCallback((provider: ProviderListing) => {
+	const openEdit = useCallback(async (provider: ProviderListing) => {
 		setError(null)
 		setFetchModelStatus(null)
 		setConfirmingDeleteId(null)
 		setShowAdvanced(false)
 		setEditing({ mode: "edit", form: toFormState(provider) })
+		// The listing does not carry the endpoint, so read the saved base URL
+		// from the provider config. The API key stays write-only.
+		try {
+			const config = await ModelsServiceClient.readProviderConfig(StringRequest.create({ value: provider.id }))
+			setEditing((current) =>
+				current?.mode === "edit" && current.form.providerId === provider.id
+					? { ...current, form: { ...current.form, baseUrl: config.baseUrl ?? "" } }
+					: current,
+			)
+		} catch (err) {
+			setError(err instanceof Error ? err.message : String(err))
+		}
 	}, [])
 
 	const updateForm = useCallback((patch: Partial<FormState>) => {
@@ -313,7 +325,7 @@ export const CustomProviderManager = () => {
 								className="px-2 py-0.5 text-xs rounded border border-[var(--vscode-button-border,transparent)] bg-[var(--vscode-button-secondaryBackground)] text-[var(--vscode-button-secondaryForeground)] hover:bg-[var(--vscode-button-secondaryHoverBackground)]"
 								data-testid={`custom-provider-edit-${provider.id}`}
 								disabled={busy}
-								onClick={() => openEdit(provider)}
+								onClick={() => void openEdit(provider)}
 								style={{ cursor: busy ? "default" : "pointer" }}>
 								{tr("customProviderEdit")}
 							</button>

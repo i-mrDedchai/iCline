@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
 	updateCustomProvider: vi.fn(),
 	deleteCustomProvider: vi.fn(),
 	refreshOpenAiModels: vi.fn(),
+	readProviderConfig: vi.fn(),
 }))
 
 vi.mock("@/hooks/useProviderListings", () => ({
@@ -26,6 +27,7 @@ vi.mock("@/services/grpc-client", () => ({
 		updateCustomProvider: mocks.updateCustomProvider,
 		deleteCustomProvider: mocks.deleteCustomProvider,
 		refreshOpenAiModels: mocks.refreshOpenAiModels,
+		readProviderConfig: mocks.readProviderConfig,
 	},
 }))
 
@@ -61,6 +63,12 @@ describe("CustomProviderManager", () => {
 		mocks.updateCustomProvider.mockResolvedValue({ providers: [] })
 		mocks.deleteCustomProvider.mockResolvedValue({ providers: [] })
 		mocks.refreshOpenAiModels.mockResolvedValue({ values: ["auto-m1", "auto-m2"] })
+		mocks.readProviderConfig.mockResolvedValue({
+			providerId: "gw-one",
+			baseUrl: "https://gw-one.example/v1",
+			headers: {},
+			apiKeyLength: 0,
+		})
 	})
 
 	it("lists only user-created providers and hides built-ins", () => {
@@ -116,6 +124,16 @@ describe("CustomProviderManager", () => {
 			providerId: "gw-one",
 			name: "Renamed Gateway",
 		})
+	})
+
+	it("pre-fills the saved base URL when editing, so the endpoint is visible and kept on save", async () => {
+		render(<CustomProviderManager />)
+		fireEvent.click(screen.getByTestId("custom-provider-edit-gw-one"))
+
+		await waitFor(() =>
+			expect((screen.getByTestId("custom-provider-base-url") as HTMLInputElement).value).toBe("https://gw-one.example/v1"),
+		)
+		expect(mocks.readProviderConfig).toHaveBeenCalledWith(expect.objectContaining({ value: "gw-one" }))
 	})
 
 	it("deletes only after the two-step confirmation", async () => {
