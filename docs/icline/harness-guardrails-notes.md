@@ -64,6 +64,7 @@ Verifier ห้ามทำ turn พังเด็ดขาด (ทุก excep
   ทับของที่อาจอยู่แล้ว) mapping นี้ pin ด้วย unit test ผ่าน UNC-shaped path
   (`guardrails.test.ts` — ไม่แตะ network จริง) + assert ว่า UNC absolute ผ่าน gate
   `isAbsolute` โดยไม่ถูก rewrite กับ workspace root
+- **e2e `apply_patch` rename — ทำไม่ได้โดยไม่แก้ product (2026-10-04, บันทึกไว้ไม่ให้ลองซ้ำ):** เคยลงมือทำ e2e move เต็มรอบแล้ว revert ทิ้ง — `apply_patch` ปิดโดย SDK preset ทุกโหมด (`enableApplyPatch: false` ×5) เปิดได้ทางเดียวคือ model-tool-routing (provider `openai-native` หรือ id มี `codex`/`gpt`) แต่ session e2e วิ่งบนโมเดล mock (`deepseek-v4.1-flash`) และ catalog ฝั่ง extension มาจาก SDK bundle ล้วน — verbose log ยืนยันว่า mock ไม่เคยถูกเรียก `/ai/cline/models` หรือ recommended feed เลย (มีแค่ auth/users/chat) เติม mock model ชื่อมี `gpt` จึงไม่โผล่ใน picker (พิสูจน์ด้วย row dump) ทางที่เหลือต้องแก้ product (routing/test-only rule, ปน fallback data) ซึ่งไม่คุ้ม — rename จึง pin ที่ unit (`hooks-adapter.test.ts` เคส move) + real-fs (`hooks-adapter-fs.test.ts`) ส่วน multi-root ปิดที่ e2e แล้ว (`file-edit.test.ts` วิ่ง matrix single+multi)
 - **UNC จริง — ปิดแล้ว (2026-10-04):** `guardrails-unc.test.ts` verify ผ่าน share
   จริง (`\\localhost\iClineUncTest` — สร้างด้วย `net share iClineUncTest=<dir>
   /GRANT:Everyone,FULL` ลบด้วย `net share iClineUncTest //DELETE` —หมายเหตุ
