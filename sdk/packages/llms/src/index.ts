@@ -104,6 +104,7 @@ export {
 	registerAsyncHandler,
 	registerHandler,
 	resolveProviderApiLineBaseUrl,
+	resolveProviderRegistrationSync,
 } from "./providers";
 export {
 	type ProviderUsageCostDisplay,

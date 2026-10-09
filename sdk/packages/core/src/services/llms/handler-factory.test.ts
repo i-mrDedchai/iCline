@@ -12,6 +12,8 @@ const gatewayMock = vi.hoisted(() => {
 		createHandlerAsync: vi.fn(),
 		// Merged registry model lookup (runtime-registered models included).
 		getModelsForProviderSync: vi.fn(() => ({})),
+		// Sync registration resolver (default: no custom provider registration).
+		resolveProviderRegistrationSync: vi.fn((_config: unknown) => undefined as unknown),
 		// Cross-provider catalog fill (default: no match, base unchanged).
 		fillCrossProviderModelInfo: vi.fn((base: unknown, _modelId: string) => base),
 	};
@@ -23,6 +25,7 @@ vi.mock("@cline/llms", async (importOriginal) => ({
 	getModelsForProviderSync: gatewayMock.getModelsForProviderSync,
 	fillCrossProviderModelInfo: gatewayMock.fillCrossProviderModelInfo,
 	hasRegisteredHandler: gatewayMock.hasRegisteredHandler,
+	resolveProviderRegistrationSync: gatewayMock.resolveProviderRegistrationSync,
 	createHandlerAsync: gatewayMock.createHandlerAsync,
 	normalizeProviderId: (id: string) => id,
 	// Capability translation is the behaviour under test in the gateway model
@@ -42,6 +45,8 @@ describe("createAgentModelFromConfig", () => {
 		}));
 		gatewayMock.hasRegisteredHandler.mockReset();
 		gatewayMock.hasRegisteredHandler.mockReturnValue(false);
+		gatewayMock.resolveProviderRegistrationSync.mockReset();
+		gatewayMock.resolveProviderRegistrationSync.mockReturnValue(undefined);
 		gatewayMock.createHandlerAsync.mockReset();
 		gatewayMock.getModelsForProviderSync.mockReset();
 		gatewayMock.getModelsForProviderSync.mockReturnValue({});
@@ -507,6 +512,36 @@ describe("createAgentModelFromConfig", () => {
 					}),
 				],
 			}),
+		);
+	});
+
+	it("registers a user-created provider's manifest with the gateway so its id is not rejected as unknown", async () => {
+		const { createAgentModelFromConfig } = await import("./handler-factory");
+
+		const registration = { manifest: { id: "ded-llm-stack", name: "ded-llm-stack", models: [] } };
+		gatewayMock.resolveProviderRegistrationSync.mockReturnValue(registration);
+
+		createAgentModelFromConfig(
+			{
+				providerId: "ded-llm-stack",
+				modelId: "Qwen3.8-9B-Q4_K_M.gguf",
+				apiKey: "dk_test",
+				baseUrl: "http://127.0.0.1:28789/v1",
+				systemPrompt: "",
+				tools: [],
+				providerConfig: {
+					providerId: "ded-llm-stack",
+					modelId: "Qwen3.8-9B-Q4_K_M.gguf",
+				},
+			},
+			undefined,
+		);
+
+		expect(gatewayMock.resolveProviderRegistrationSync).toHaveBeenCalledWith(
+			expect.objectContaining({ providerId: "ded-llm-stack" }),
+		);
+		expect(gatewayMock.createGateway).toHaveBeenLastCalledWith(
+			expect.objectContaining({ providers: [registration] }),
 		);
 	});
 

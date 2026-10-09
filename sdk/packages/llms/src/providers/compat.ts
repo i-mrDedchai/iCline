@@ -206,7 +206,7 @@ async function resolveProviderRegistration(
 	};
 }
 
-function resolveProviderRegistrationSync(
+export function resolveProviderRegistrationSync(
 	config: ProviderConfig,
 ): GatewayProviderRegistration | undefined {
 	const providerId = normalizeProviderId(config.providerId);

@@ -5,6 +5,7 @@ import {
 	getModelsForProviderSync,
 	hasRegisteredHandler,
 	normalizeProviderId,
+	resolveProviderRegistrationSync,
 	toGatewayModelCapabilities,
 } from "@cline/llms";
 import type {
@@ -248,12 +249,19 @@ export function createAgentModelFromConfig(
 		);
 	}
 
+	// A user-created provider id is not in the gateway's built-in set, so its
+	// manifest must be registered explicitly. Without it the gateway rejects the
+	// id with "Unknown or disabled provider" at chat time, even though the
+	// provider's settings and models are saved.
+	const registration = resolveProviderRegistrationSync(normalizedProviderConfig);
+
 	return createGateway({
 		// Forward the host-provided fetch so inference honors proxy/CA config on
 		// JetBrains and CLI, where the global fetch is not proxy-aware. Without
 		// this the agent loop falls back to bare global fetch and corporate
 		// proxy/self-signed CA setups fail.
 		fetch: normalizedProviderConfig.fetch,
+		providers: registration ? [registration] : undefined,
 		providerConfigs: [
 			{
 				providerId: normalizedProviderConfig.providerId,

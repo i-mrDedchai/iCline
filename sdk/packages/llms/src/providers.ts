@@ -23,6 +23,8 @@ import {
 	createGatewayApiHandler,
 	createGatewayApiHandlerAsync,
 } from "./providers/compat";
+
+export { resolveProviderRegistrationSync } from "./providers/compat";
 import {
 	getRegisteredHandler,
 	getRegisteredHandlerAsync,
