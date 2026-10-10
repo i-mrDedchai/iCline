@@ -1,4 +1,5 @@
 import { VSCodeLink, VSCodeTextField } from "@vscode/webview-ui-toolkit/react"
+import { Eye, EyeOff } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 import { formatString } from "@/i18n/strings"
 import { useTranslation } from "@/i18n/useTranslation"
@@ -31,6 +32,7 @@ export const ApiKeyField = ({
 }: ApiKeyFieldProps) => {
 	const tr = useTranslation("providers")
 	const [localValue, setLocalValue] = useState(initialValue)
+	const [showKey, setShowKey] = useState(false)
 	const isFocusedRef = useRef(false)
 	const hasPendingUserEditRef = useRef(false)
 	const prevInitialValueRef = useRef(initialValue)
@@ -80,9 +82,33 @@ export const ApiKeyField = ({
 				placeholder={placeholder ?? tr("apiKeyPlaceholder")}
 				required={true}
 				style={{ width: "100%" }}
-				type="password"
+				type={showKey ? "text" : "password"}
 				value={localValue}>
 				<span style={{ fontWeight: 500 }}>{label ?? formatString(tr, "apiKeyLabel", { provider: providerName })}</span>
+				<span
+					aria-label={showKey ? tr("apiKeyHideLabel") : tr("apiKeyShowLabel")}
+					data-testid="api-key-visibility-toggle"
+					onClick={() => setShowKey((visible) => !visible)}
+					onKeyDown={(event) => {
+						if (event.key === "Enter" || event.key === " ") {
+							event.preventDefault()
+							setShowKey((visible) => !visible)
+						}
+					}}
+					role="button"
+					slot="end"
+					style={{
+						display: "flex",
+						justifyContent: "center",
+						alignItems: "center",
+						height: "100%",
+						padding: "0 6px",
+						cursor: "pointer",
+					}}
+					tabIndex={0}
+					title={showKey ? tr("apiKeyHideLabel") : tr("apiKeyShowLabel")}>
+					{showKey ? <EyeOff aria-hidden size={14} /> : <Eye aria-hidden size={14} />}
+				</span>
 			</VSCodeTextField>
 			<p
 				style={{

@@ -1,10 +1,12 @@
 import { StringRequest } from "@shared/proto/cline/common"
 import { CustomProviderMutationRequest, OpenAiModelsRequest, type ProviderListing } from "@shared/proto/cline/models"
+import { Eye, EyeOff } from "lucide-react"
 import { type CSSProperties, useCallback, useMemo, useState } from "react"
 import { useProviderListings } from "@/hooks/useProviderListings"
 import { formatString, splitOnPlaceholder } from "@/i18n/strings"
 import { useTranslation } from "@/i18n/useTranslation"
 import { ModelsServiceClient } from "@/services/grpc-client"
+import { getSavedApiKeyMask, sanitizeMaskedApiKeyInput } from "./utils/apiKeyMasking"
 
 type HeaderRow = { key: string; value: string }
 
@@ -105,12 +107,17 @@ export const CustomProviderManager = () => {
 	const [isFetchingModels, setIsFetchingModels] = useState(false)
 	const [fetchModelStatus, setFetchModelStatus] = useState<{ success?: string; error?: string } | null>(null)
 	const [showAdvanced, setShowAdvanced] = useState(false)
+	// The saved key is write-only: the host sends only its length, shown as a mask.
+	const [savedApiKeyMask, setSavedApiKeyMask] = useState("")
+	const [showApiKey, setShowApiKey] = useState(false)
 
 	const openCreate = useCallback(() => {
 		setError(null)
 		setFetchModelStatus(null)
 		setConfirmingDeleteId(null)
 		setShowAdvanced(false)
+		setSavedApiKeyMask("")
+		setShowApiKey(false)
 		setEditing({ mode: "create", form: { ...EMPTY_FORM } })
 	}, [])
 
@@ -119,11 +126,14 @@ export const CustomProviderManager = () => {
 		setFetchModelStatus(null)
 		setConfirmingDeleteId(null)
 		setShowAdvanced(false)
+		setSavedApiKeyMask("")
+		setShowApiKey(false)
 		setEditing({ mode: "edit", form: toFormState(provider) })
 		// The listing does not carry the endpoint, so read the saved base URL
 		// from the provider config. The API key stays write-only.
 		try {
 			const config = await ModelsServiceClient.readProviderConfig(StringRequest.create({ value: provider.id }))
+			setSavedApiKeyMask(getSavedApiKeyMask(config.apiKeyLength))
 			setEditing((current) =>
 				current?.mode === "edit" && current.form.providerId === provider.id
 					? { ...current, form: { ...current.form, baseUrl: config.baseUrl ?? "" } }
@@ -448,18 +458,34 @@ export const CustomProviderManager = () => {
 								htmlFor="cp-api-key">
 								{tr("apiKeyPlaceholder")}
 							</label>
-							<input
-								data-testid="custom-provider-api-key"
-								disabled={busy}
-								id="cp-api-key"
-								onChange={(e) => updateForm({ apiKey: e.target.value })}
-								placeholder={
-									editing.mode === "edit" ? tr("customProviderApiKeyKeepPlaceholder") : tr("apiKeyPlaceholder")
-								}
-								style={INPUT_STYLE}
-								type="password"
-								value={editing.form.apiKey}
-							/>{" "}
+							<div className="relative">
+								<input
+									data-testid="custom-provider-api-key"
+									disabled={busy}
+									id="cp-api-key"
+									onChange={(e) =>
+										updateForm({ apiKey: sanitizeMaskedApiKeyInput(e.target.value, savedApiKeyMask) ?? "" })
+									}
+									placeholder={
+										editing.mode === "edit"
+											? tr("customProviderApiKeyKeepPlaceholder")
+											: tr("apiKeyPlaceholder")
+									}
+									style={{ ...INPUT_STYLE, paddingRight: 28 }}
+									type={showApiKey ? "text" : "password"}
+									value={editing.form.apiKey || savedApiKeyMask}
+								/>
+								<button
+									aria-label={showApiKey ? tr("apiKeyHideLabel") : tr("apiKeyShowLabel")}
+									className="absolute right-1 top-1/2 -translate-y-1/2 p-1 rounded text-[var(--vscode-descriptionForeground)] hover:text-[var(--vscode-foreground)]"
+									data-testid="custom-provider-api-key-toggle"
+									disabled={busy}
+									onClick={() => setShowApiKey((visible) => !visible)}
+									title={showApiKey ? tr("apiKeyHideLabel") : tr("apiKeyShowLabel")}
+									type="button">
+									{showApiKey ? <EyeOff aria-hidden size={14} /> : <Eye aria-hidden size={14} />}
+								</button>
+							</div>{" "}
 							<span className="text-[10px] text-[var(--vscode-descriptionForeground)]">
 								{tr("customProviderApiKeyHint")}
 							</span>

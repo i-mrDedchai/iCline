@@ -216,4 +216,50 @@ describe("CustomProviderManager", () => {
 		expect(Array.from(select.options).map((option) => option.value)).toEqual(["", "m-a", "m-b"])
 		expect(screen.getByTestId("custom-provider-default-model")).toBeTruthy()
 	})
+
+	// The saved key is write-only: the host reports only its length, shown as a mask. Leaving the
+	// field untouched keeps the stored key (no apiKey sent); the eye toggle only changes visibility.
+	it("shows the saved key as a mask on edit and keeps it unless the user types a new one", async () => {
+		mocks.readProviderConfig.mockResolvedValue({
+			providerId: "gw-one",
+			baseUrl: "https://gw-one.example/v1",
+			headers: {},
+			apiKeyLength: 8,
+		})
+		render(<CustomProviderManager />)
+		fireEvent.click(screen.getByTestId("custom-provider-edit-gw-one"))
+
+		const keyInput = screen.getByTestId("custom-provider-api-key") as HTMLInputElement
+		await waitFor(() => expect(keyInput.value).toBe("••••••••"))
+		expect(keyInput.type).toBe("password")
+
+		fireEvent.click(screen.getByTestId("custom-provider-api-key-toggle"))
+		expect(keyInput.type).toBe("text")
+		fireEvent.click(screen.getByTestId("custom-provider-api-key-toggle"))
+		expect(keyInput.type).toBe("password")
+
+		fireEvent.click(screen.getByTestId("custom-provider-save"))
+		await waitFor(() => expect(mocks.updateCustomProvider).toHaveBeenCalledTimes(1))
+		expect(mocks.updateCustomProvider.mock.calls[0][0].apiKey).toBeUndefined()
+	})
+
+	it("replaces the mask with a typed key and sends only the typed characters", async () => {
+		mocks.readProviderConfig.mockResolvedValue({
+			providerId: "gw-one",
+			baseUrl: "https://gw-one.example/v1",
+			headers: {},
+			apiKeyLength: 8,
+		})
+		render(<CustomProviderManager />)
+		fireEvent.click(screen.getByTestId("custom-provider-edit-gw-one"))
+
+		const keyInput = screen.getByTestId("custom-provider-api-key") as HTMLInputElement
+		await waitFor(() => expect(keyInput.value).toBe("••••••••"))
+
+		fireEvent.change(keyInput, { target: { value: "••••••••sk-new" } })
+		expect(keyInput.value).toBe("sk-new")
+		fireEvent.click(screen.getByTestId("custom-provider-save"))
+		await waitFor(() => expect(mocks.updateCustomProvider).toHaveBeenCalledTimes(1))
+		expect(mocks.updateCustomProvider.mock.calls[0][0].apiKey).toBe("sk-new")
+	})
 })

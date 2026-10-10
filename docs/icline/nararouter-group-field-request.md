@@ -1,6 +1,8 @@
 # คำขอฟิลด์ group/family ถึง NaraRouter — ร่างพร้อมส่ง (ยังไม่ส่ง)
 
-> สถานะ (2026-10-03): ร่างเสร็จ รอส่ง — ทิศทางข้อ 5 (grouped tabs) และข้อ 4
+> สถานะ (2026-10-10): **ส่งแล้ว และได้รับคำตอบแล้ว** — ดูหัวข้อ "คำตอบจาก NaraRouter" ท้ายไฟล์
+>
+> สถานะเดิม (2026-10-03): ร่างเสร็จ รอส่ง — ทิศทางข้อ 5 (grouped tabs) และข้อ 4
 > (ชุดทดสอบที่ครอบคลุมขึ้น) **พักเป็นงานรอตัดสินใจ** จนกว่าจะได้คำตอบจาก
 > NaraRouter (ร่วมมือ / ปฏิเสธ) แล้วค่อยเลือกทางเดินต่อ
 >
@@ -149,3 +151,26 @@ Best regards,
 
 - **กรณีร่วมมือ (ได้ฟิลด์ group/tier):** ออกแบบ grouped tabs ขับด้วยฟิลด์จริง + ขยายชุดทดสอบ (live-key e2e แบบ keyed, snapshot refresh อัตโนมัติ)
 - **กรณีปฏิเสธ/เงียบ:** ทำฟิลเตอร์จากฟิลด์จริงที่มี (shelf Free/Bonus/PAYG, reasoning/vision, search) + group header ใน list เดียวแบบไม่ซ่อนของ — ไม่ hardcode vendor tabs
+
+## คำตอบจาก NaraRouter (2026-10-10) และคิวงานถัดไป
+
+**สรุปคำตอบ**
+
+- **ฟิลด์ group/family:** ตอบรับแบบร่วมมือ จะปรับ `GET /v1/models` ให้มี metadata การจัดกลุ่ม "ใกล้เคียงกับที่ใช้บน dashboard" — ยังไม่มีวันปล่อย
+- **502:** เขายืนยันว่าเกิดจาก upstream ล่ม (ยอดคงเหลือ upstream หมด / provider down) และ request อาจจบที่ proxy ก่อนถึง JSON error handler — จะพิจารณาทำ JSON envelope ให้สม่ำเสมอ (ยังไม่มีวันปล่อย)
+- **embedding/rerank alias ใน docs:** รับทราบ จะตรวจและแก้เอกสารให้ตรงกับ catalog ปัจจุบัน
+- **probe log:** เขาขอ log ฉบับเต็ม
+
+**ผลตรวจฝั่ง client (2026-10-10)**
+
+- `error-classification.ts` จัด 502 เป็นสถานะที่ retry ได้อยู่แล้ว และ SDK retry ทำงานที่ช่วงเริ่ม request — ยังไม่ได้ทดสอบ runtime กับ 502 จริง
+- snapshot (`bynara-snapshot.ts`) ไม่มี alias embedding/rerank → ไม่ต้องแก้ snapshot
+- ไม่พบไฟล์ probe log ฉบับเต็มในโปรเจกต์ ต้อง sweep ใหม่ถ้าจะส่ง
+
+**คิวถัดไป (เรียงตามลำดับ)**
+
+1. **ส่ง probe log ฉบับเต็ม** — รอผู้ใช้ยืนยันว่าจะให้ sweep ใหม่ด้วยคีย์ทดสอบ (ห้าม commit คีย์) แล้วส่งให้ทีม NaraRouter
+2. **ติดตามฟิลด์ group ใน `/v1/models`** — เมื่อมีฟิลด์จริงจึงเริ่มงาน grouped tabs ตาม "กรณีร่วมมือ" ข้างต้น ระหว่างนี้ไม่ hardcode vendor tabs
+3. **502 / JSON envelope** — รอฝั่ง NaraRouter ไม่ต้องแก้โค้ดเพิ่มในรอบนี้ เพราะ retry มีอยู่แล้ว
+4. **ตรวจเอกสาร `bynara.mdx`** ซ้ำเมื่อ NaraRouter แก้ alias เสร็จ
+5. **พิจารณา model combos** (`combo/'<name>'`) ของ NaraRouter เป็น fallback สำรองเมื่อ 502 ซ้ำ — ต้องสร้างใน dashboard ของเขา เป็นงานเลือกทาง ยังไม่เริ่ม
