@@ -99,6 +99,12 @@ e2e("Settings — custom providers can be added, edited, deleted and models auto
 	await sidebar.getByTestId("custom-provider-edit-e2e-gw-two").click({ delay: 40 })
 	const nameField = sidebar.getByTestId("custom-provider-name")
 	await expect(nameField).toBeVisible({ timeout: 10_000 })
+	// The saved key is write-only: the form shows a mask of its length, never the key itself,
+	// and the eye toggle only changes how that field is displayed.
+	const keyField = sidebar.getByTestId("custom-provider-api-key")
+	await expect(keyField).toHaveValue("•".repeat(E2E_GATEWAY_API_KEY.length), { timeout: 10_000 })
+	await sidebar.getByTestId("custom-provider-api-key-toggle").click({ delay: 40 })
+	await expect(keyField).toHaveAttribute("type", "text")
 	await nameField.fill("E2E Gateway Two Renamed")
 	await sidebar.getByTestId("custom-provider-save").click({ delay: 40 })
 	await expect(sidebar.getByTestId("custom-provider-row-e2e-gw-two")).toContainText("E2E Gateway Two Renamed", {

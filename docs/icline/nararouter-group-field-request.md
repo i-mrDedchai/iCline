@@ -170,7 +170,7 @@ Best regards,
 **คิวถัดไป (เรียงตามลำดับ)**
 
 1. **ส่ง probe log ฉบับเต็ม** — รอผู้ใช้ยืนยันว่าจะให้ sweep ใหม่ด้วยคีย์ทดสอบ (ห้าม commit คีย์) แล้วส่งให้ทีม NaraRouter
-2. **ติดตามฟิลด์ group ใน `/v1/models`** — เมื่อมีฟิลด์จริงจึงเริ่มงาน grouped tabs ตาม "กรณีร่วมมือ" ข้างต้น ระหว่างนี้ไม่ hardcode vendor tabs
+2. **ติดตามฟิลด์ group ใน `/v1/models`** (รันได้ด้วย `NARAROUTER_API_KEY=... node apps/vscode/scripts/check-nararouter-groups.mjs`; ยังไม่ได้ตั้งเวลาอัตโนมัติ) — เมื่อมีฟิลด์จริงจึงเริ่มงาน grouped tabs ตาม "กรณีร่วมมือ" ข้างต้น ระหว่างนี้ไม่ hardcode vendor tabs
 3. **502 / JSON envelope** — รอฝั่ง NaraRouter ไม่ต้องแก้โค้ดเพิ่มในรอบนี้ เพราะ retry มีอยู่แล้ว
 4. **ตรวจเอกสาร `bynara.mdx`** ซ้ำเมื่อ NaraRouter แก้ alias เสร็จ
 5. **พิจารณา model combos** (`combo/'<name>'`) ของ NaraRouter เป็น fallback สำรองเมื่อ 502 ซ้ำ — ต้องสร้างใน dashboard ของเขา เป็นงานเลือกทาง ยังไม่เริ่ม
