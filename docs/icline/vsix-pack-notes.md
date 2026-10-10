@@ -47,8 +47,7 @@ root แถม README ไม่ถูก swap — เหตุของไฟล
 
 ## กับดัก `npx vsce` (เจอ 2026-10-03)
 
-`package-vsix.mjs` เรียกผ่าน `npx` — ถ้า npx ไปโหลด vsce ใส่ cache เองแล้วได้ของเสีย
-(`Cannot find module 'leven'`) ให้เลี่ยงโดยเรียก local binary ตรง ๆ:
+`package-vsix.mjs` resolve `@vscode/vsce` เองแล้วรันผ่าน Node (ไม่พึ่ง `npx` หรือ `.bin` shim) จึงไม่ต้องทำขั้นตอนมือด้านล่างอีก — ส่วนนี้เก็บไว้เป็นประวัติการแก้เท่านั้น:
 
 ```bash
 node -e "import('node:child_process').then(async ({spawnSync}) => {
