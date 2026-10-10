@@ -167,6 +167,16 @@ Best regards,
 - snapshot (`bynara-snapshot.ts`) ไม่มี alias embedding/rerank → ไม่ต้องแก้ snapshot
 - ไม่พบไฟล์ probe log ฉบับเต็มในโปรเจกต์ ต้อง sweep ใหม่ถ้าจะส่ง
 
+**ผลรอบล่าสุด (2026-10-10, คีย์ทดสอบจากผู้ใช้)**
+
+- `GET /v1/models`: 200, 51 โมเดลที่คีย์นี้เห็น, **withGroupField=0** (ยังไม่มีฟิลด์ group เลย)
+- Sweep `POST /v1/chat/completions` (max_tokens 256): 200 = 48, 400 = 2, 403 = 1 จาก 51
+  - 403 `agnes-video-v2.0`: แพลนนี้ไม่มีสิทธิ์
+  - 400 `jev`: ตามเอกสาร (System One ใช้ได้บน `/v1/systemone`)
+  - 400 `exo-stealh`: โมเดลปฏิเสธ parameter/input ของคำขอนี้
+  - **502 = 0** รอบนี้ (10 โมเดลที่เคย 502 ถาวรในรอบ 2026-10-03 ตอนนี้ตอบ 200 ทั้งหมด)
+- บันทึกเต็มอยู่นอก repo: `D:/.grok/iCline/nararouter-probe-2026-10-10.log` (ไม่มีคีย์ในไฟล์) พร้อมส่งตามข้อ 1 ของคิว
+
 **คิวถัดไป (เรียงตามลำดับ)**
 
 1. **ส่ง probe log ฉบับเต็ม** — รอผู้ใช้ยืนยันว่าจะให้ sweep ใหม่ด้วยคีย์ทดสอบ (ห้าม commit คีย์) แล้วส่งให้ทีม NaraRouter
