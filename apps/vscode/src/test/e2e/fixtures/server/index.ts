@@ -27,6 +27,9 @@ import {
 } from "./api"
 import { ClineDataMock } from "./data"
 
+/** Reply the custom-provider chat mock streams back (see the `/e2e-gateway/v1` branch). */
+export const E2E_GATEWAY_CHAT_REPLY = "mock custom gateway reply"
+
 /** Flatten a chat message's content (string or part array) into matchable text. */
 function extractMessageText(message: { content?: unknown } | undefined): string {
 	if (!message) {
@@ -352,6 +355,37 @@ export class ClineApiServerMock {
 							return sendApiError("Unauthorized", 401)
 						}
 						return sendJson(E2E_MOCK_GATEWAY_MODELS)
+					}
+
+					// Custom-provider chat: an OpenAI-compatible stream that answers with a
+					// fixed reply, so a chat test can prove the custom gateway (not the Cline
+					// mock) produced the answer. The bearer key is the gateway's own credential.
+					if (endpoint === "/chat/completions" && method === "POST") {
+						const bearerToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : undefined
+						if (bearerToken !== E2E_GATEWAY_API_KEY) {
+							return sendApiError("Unauthorized", 401)
+						}
+						const { model = E2E_GATEWAY_MODEL_ID } = JSON.parse(await readBody())
+						const id = `gw-${Date.now()}`
+						const chunk = (delta: Record<string, unknown>, finishReason: string | null) => ({
+							id,
+							object: "chat.completion.chunk",
+							created: Math.floor(Date.now() / 1000),
+							model,
+							choices: [{ index: 0, delta, finish_reason: finishReason }],
+						})
+						res.writeHead(200, {
+							"Content-Type": "text/event-stream",
+							"Cache-Control": "no-cache",
+							Connection: "keep-alive",
+						})
+						res.write(
+							`data: ${JSON.stringify(chunk({ role: "assistant", content: E2E_GATEWAY_CHAT_REPLY }, null))}\n\n`,
+						)
+						res.write(`data: ${JSON.stringify(chunk({}, "stop"))}\n\n`)
+						res.write("data: [DONE]\n\n")
+						res.end()
+						return
 					}
 				}
 

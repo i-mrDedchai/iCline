@@ -39,7 +39,7 @@ export const E2E_REGISTERED_MOCK_ENDPOINTS = {
 	},
 	"/e2e-gateway/v1": {
 		GET: ["/models"],
-		POST: [],
+		POST: ["/chat/completions"],
 		PUT: [],
 	},
 }
