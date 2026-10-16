@@ -64,7 +64,8 @@ export const ZAiProvider = ({ showModelOptions, isPopup, currentMode }: ZAiProvi
 		fallbackModelInfo: legacySelectedModelInfo,
 	})
 	const selectedEntrypoint = config?.apiLine || apiConfiguration?.zaiApiLine || "international"
-	const { savedApiKeyMask, handleApiKeyChange } = useProviderApiKeyField({
+	const { savedApiKeyMask, handleApiKeyChange, copySavedApiKey } = useProviderApiKeyField({
+		providerId: PROVIDER_ID,
 		apiKeyLength: config?.apiKeyLength,
 		providerName: "Z AI",
 		write,
@@ -117,6 +118,7 @@ export const ZAiProvider = ({ showModelOptions, isPopup, currentMode }: ZAiProvi
 			<ApiKeyField
 				initialValue={savedApiKeyMask || apiConfiguration?.zaiApiKey || ""}
 				onChange={handleApiKeyChange}
+				onCopySavedKey={savedApiKeyMask ? copySavedApiKey : undefined}
 				providerName="Z AI"
 				signupUrl={
 					selectedEntrypoint === "china"

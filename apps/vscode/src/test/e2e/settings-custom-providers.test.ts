@@ -50,72 +50,79 @@ async function deleteCustomProvider(sidebar: Frame, providerId: string): Promise
  * proving it in a real window is that a stranded mode is exactly where this
  * surface stops responding — the unit test can only observe the writes.
  */
-e2e("Settings — custom providers can be added, edited, deleted and models auto-fetched", async ({ helper, sidebar, page }) => {
-	await helper.signin(sidebar)
+e2e(
+	"Settings — custom providers can be added, edited, deleted and models auto-fetched",
+	async ({ helper, sidebar, page, app }) => {
+		await helper.signin(sidebar)
 
-	// Same entry point the Quick Picker's footer uses to open API configuration.
-	await sidebar.evaluate(() => window.dispatchEvent(new Event("icline:navigate-to-settings-model-picker")))
-	const providerInput = sidebar.getByTestId("provider-selector-input")
-	await expect(providerInput).toBeVisible({ timeout: 10_000 })
+		// Same entry point the Quick Picker's footer uses to open API configuration.
+		await sidebar.evaluate(() => window.dispatchEvent(new Event("icline:navigate-to-settings-model-picker")))
+		const providerInput = sidebar.getByTestId("provider-selector-input")
+		await expect(providerInput).toBeVisible({ timeout: 10_000 })
 
-	const manager = sidebar.getByTestId("custom-provider-manager")
-	await expect(manager).toBeVisible({ timeout: 10_000 })
-	const gatewayUrl = `${getMockApiServerUrl()}/e2e-gateway/v1`
+		const manager = sidebar.getByTestId("custom-provider-manager")
+		await expect(manager).toBeVisible({ timeout: 10_000 })
+		const gatewayUrl = `${getMockApiServerUrl()}/e2e-gateway/v1`
 
-	// --- 1. Test auto-fetch models feature on create ---
-	await sidebar.getByTestId("custom-provider-add").click({ delay: 40 })
-	await sidebar.getByTestId("custom-provider-id").fill("e2e-gw-auto")
-	await sidebar.getByTestId("custom-provider-name").fill("E2E Gateway Auto")
-	await sidebar.getByTestId("custom-provider-base-url").fill(gatewayUrl)
-	await sidebar.getByTestId("custom-provider-api-key").fill(E2E_GATEWAY_API_KEY)
+		// --- 1. Test auto-fetch models feature on create ---
+		await sidebar.getByTestId("custom-provider-add").click({ delay: 40 })
+		await sidebar.getByTestId("custom-provider-id").fill("e2e-gw-auto")
+		await sidebar.getByTestId("custom-provider-name").fill("E2E Gateway Auto")
+		await sidebar.getByTestId("custom-provider-base-url").fill(gatewayUrl)
+		await sidebar.getByTestId("custom-provider-api-key").fill(E2E_GATEWAY_API_KEY)
 
-	// Click auto-fetch models button
-	await sidebar.getByTestId("custom-provider-fetch-models").click({ delay: 40 })
-	// Should populate models with E2E_GATEWAY_MODEL_ID from mock server
-	await expect(sidebar.getByTestId("custom-provider-models")).toHaveValue(new RegExp(E2E_GATEWAY_MODEL_ID), {
-		timeout: 10_000,
-	})
+		// Click auto-fetch models button
+		await sidebar.getByTestId("custom-provider-fetch-models").click({ delay: 40 })
+		// Should populate models with E2E_GATEWAY_MODEL_ID from mock server
+		await expect(sidebar.getByTestId("custom-provider-models")).toHaveValue(new RegExp(E2E_GATEWAY_MODEL_ID), {
+			timeout: 10_000,
+		})
 
-	await sidebar.getByTestId("custom-provider-save").click({ delay: 40 })
-	await expect(sidebar.getByTestId("custom-provider-row-e2e-gw-auto")).toBeVisible({ timeout: 15_000 })
+		await sidebar.getByTestId("custom-provider-save").click({ delay: 40 })
+		await expect(sidebar.getByTestId("custom-provider-row-e2e-gw-auto")).toBeVisible({ timeout: 15_000 })
 
-	// --- 2. Create second provider back-to-back ---
-	await sidebar.getByTestId("custom-provider-add").click({ delay: 40 })
-	await sidebar.getByTestId("custom-provider-id").fill("e2e-gw-two")
-	await sidebar.getByTestId("custom-provider-name").fill("E2E Gateway Two")
-	await sidebar.getByTestId("custom-provider-base-url").fill(gatewayUrl)
-	await sidebar.getByTestId("custom-provider-api-key").fill(E2E_GATEWAY_API_KEY)
-	await sidebar.getByTestId("custom-provider-models").fill(E2E_GATEWAY_MODEL_ID)
-	await sidebar.getByTestId("custom-provider-save").click({ delay: 40 })
-	await expect(sidebar.getByTestId("custom-provider-row-e2e-gw-two")).toBeVisible({ timeout: 15_000 })
+		// --- 2. Create second provider back-to-back ---
+		await sidebar.getByTestId("custom-provider-add").click({ delay: 40 })
+		await sidebar.getByTestId("custom-provider-id").fill("e2e-gw-two")
+		await sidebar.getByTestId("custom-provider-name").fill("E2E Gateway Two")
+		await sidebar.getByTestId("custom-provider-base-url").fill(gatewayUrl)
+		await sidebar.getByTestId("custom-provider-api-key").fill(E2E_GATEWAY_API_KEY)
+		await sidebar.getByTestId("custom-provider-models").fill(E2E_GATEWAY_MODEL_ID)
+		await sidebar.getByTestId("custom-provider-save").click({ delay: 40 })
+		await expect(sidebar.getByTestId("custom-provider-row-e2e-gw-two")).toBeVisible({ timeout: 15_000 })
 
-	// The created providers feed the provider selector like any built-in.
-	await providerInput.click({ delay: 50 })
-	await page.keyboard.type("E2E Gateway Auto", { delay: 40 })
-	await expect(sidebar.getByTestId("provider-option-e2e-gw-auto")).toBeVisible({ timeout: 10_000 })
-	await page.keyboard.press("Escape")
+		// The created providers feed the provider selector like any built-in.
+		await providerInput.click({ delay: 50 })
+		await page.keyboard.type("E2E Gateway Auto", { delay: 40 })
+		await expect(sidebar.getByTestId("provider-option-e2e-gw-auto")).toBeVisible({ timeout: 10_000 })
+		await page.keyboard.press("Escape")
 
-	// --- 3. Edit one in place ---
-	await sidebar.getByTestId("custom-provider-edit-e2e-gw-two").click({ delay: 40 })
-	const nameField = sidebar.getByTestId("custom-provider-name")
-	await expect(nameField).toBeVisible({ timeout: 10_000 })
-	// The saved key is write-only: the form shows a mask of its length, never the key itself,
-	// and the eye toggle only changes how that field is displayed.
-	const keyField = sidebar.getByTestId("custom-provider-api-key")
-	await expect(keyField).toHaveValue("•".repeat(E2E_GATEWAY_API_KEY.length), { timeout: 10_000 })
-	await sidebar.getByTestId("custom-provider-api-key-toggle").click({ delay: 40 })
-	await expect(keyField).toHaveAttribute("type", "text")
-	await nameField.fill("E2E Gateway Two Renamed")
-	await sidebar.getByTestId("custom-provider-save").click({ delay: 40 })
-	await expect(sidebar.getByTestId("custom-provider-row-e2e-gw-two")).toContainText("E2E Gateway Two Renamed", {
-		timeout: 15_000,
-	})
+		// --- 3. Edit one in place ---
+		await sidebar.getByTestId("custom-provider-edit-e2e-gw-two").click({ delay: 40 })
+		const nameField = sidebar.getByTestId("custom-provider-name")
+		await expect(nameField).toBeVisible({ timeout: 10_000 })
+		// The saved key is write-only: the form shows a mask of its length, never the key itself.
+		// Copy puts the real key on the system clipboard from the host, and the field stays masked.
+		const keyField = sidebar.getByTestId("custom-provider-api-key")
+		await expect(keyField).toHaveValue("•".repeat(E2E_GATEWAY_API_KEY.length), { timeout: 10_000 })
+		await expect(sidebar.getByTestId("custom-provider-api-key-toggle")).toHaveCount(0)
+		await sidebar.getByTestId("custom-provider-api-key-copy").click({ delay: 40 })
+		await expect
+			.poll(() => app.evaluate(({ clipboard }) => clipboard.readText()), { timeout: 10_000 })
+			.toBe(E2E_GATEWAY_API_KEY)
+		await expect(keyField).toHaveValue("•".repeat(E2E_GATEWAY_API_KEY.length))
+		await nameField.fill("E2E Gateway Two Renamed")
+		await sidebar.getByTestId("custom-provider-save").click({ delay: 40 })
+		await expect(sidebar.getByTestId("custom-provider-row-e2e-gw-two")).toContainText("E2E Gateway Two Renamed", {
+			timeout: 15_000,
+		})
 
-	// --- 4. Delete one behind the confirmation, keep the other ---
-	await deleteCustomProvider(sidebar, "e2e-gw-two")
-	await expect(sidebar.getByTestId("custom-provider-row-e2e-gw-two")).toHaveCount(0, { timeout: 15_000 })
-	await expect(sidebar.getByTestId("custom-provider-row-e2e-gw-auto")).toBeVisible()
-})
+		// --- 4. Delete one behind the confirmation, keep the other ---
+		await deleteCustomProvider(sidebar, "e2e-gw-two")
+		await expect(sidebar.getByTestId("custom-provider-row-e2e-gw-two")).toHaveCount(0, { timeout: 15_000 })
+		await expect(sidebar.getByTestId("custom-provider-row-e2e-gw-auto")).toBeVisible()
+	},
+)
 
 const ACTIVE_PROVIDER_ID = "e2e-gw-active"
 const ACTIVE_PROVIDER_NAME = "E2E Gateway Active"

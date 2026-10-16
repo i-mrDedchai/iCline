@@ -1,9 +1,9 @@
 import { VSCodeLink, VSCodeTextField } from "@vscode/webview-ui-toolkit/react"
-import { Eye, EyeOff } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 import { formatString } from "@/i18n/strings"
 import { useTranslation } from "@/i18n/useTranslation"
 import { useDebounceEffect } from "@/utils/useDebounceEffect"
+import { SavedApiKeyCopyButton } from "./SavedApiKeyCopyButton"
 
 /**
  * Props for the ApiKeyField component
@@ -16,6 +16,8 @@ interface ApiKeyFieldProps {
 	placeholder?: string
 	helpText?: string
 	label?: string
+	/** Asks the host to copy the saved key. Shown only while a key is saved (non-empty initialValue). */
+	onCopySavedKey?: () => Promise<unknown>
 }
 
 /**
@@ -29,10 +31,10 @@ export const ApiKeyField = ({
 	placeholder,
 	helpText,
 	label,
+	onCopySavedKey,
 }: ApiKeyFieldProps) => {
 	const tr = useTranslation("providers")
 	const [localValue, setLocalValue] = useState(initialValue)
-	const [showKey, setShowKey] = useState(false)
 	const isFocusedRef = useRef(false)
 	const hasPendingUserEditRef = useRef(false)
 	const prevInitialValueRef = useRef(initialValue)
@@ -66,50 +68,35 @@ export const ApiKeyField = ({
 		[localValue],
 	)
 
+	const canCopySavedKey = Boolean(onCopySavedKey && initialValue)
+
 	return (
 		<div>
-			<VSCodeTextField
-				onBlur={() => {
-					isFocusedRef.current = false
-				}}
-				onFocus={() => {
-					isFocusedRef.current = true
-				}}
-				onInput={(e) => {
-					hasPendingUserEditRef.current = true
-					setLocalValue((e.target as HTMLInputElement | null)?.value ?? "")
-				}}
-				placeholder={placeholder ?? tr("apiKeyPlaceholder")}
-				required={true}
-				style={{ width: "100%" }}
-				type={showKey ? "text" : "password"}
-				value={localValue}>
-				<span style={{ fontWeight: 500 }}>{label ?? formatString(tr, "apiKeyLabel", { provider: providerName })}</span>
-				<span
-					aria-label={showKey ? tr("apiKeyHideLabel") : tr("apiKeyShowLabel")}
-					data-testid="api-key-visibility-toggle"
-					onClick={() => setShowKey((visible) => !visible)}
-					onKeyDown={(event) => {
-						if (event.key === "Enter" || event.key === " ") {
-							event.preventDefault()
-							setShowKey((visible) => !visible)
-						}
+			<div style={{ display: "flex", alignItems: "stretch", gap: 4 }}>
+				<VSCodeTextField
+					onBlur={() => {
+						isFocusedRef.current = false
 					}}
-					role="button"
-					slot="end"
-					style={{
-						display: "flex",
-						justifyContent: "center",
-						alignItems: "center",
-						height: "100%",
-						padding: "0 6px",
-						cursor: "pointer",
+					onFocus={() => {
+						isFocusedRef.current = true
 					}}
-					tabIndex={0}
-					title={showKey ? tr("apiKeyHideLabel") : tr("apiKeyShowLabel")}>
-					{showKey ? <EyeOff aria-hidden size={14} /> : <Eye aria-hidden size={14} />}
-				</span>
-			</VSCodeTextField>
+					onInput={(e) => {
+						hasPendingUserEditRef.current = true
+						setLocalValue((e.target as HTMLInputElement | null)?.value ?? "")
+					}}
+					placeholder={placeholder ?? tr("apiKeyPlaceholder")}
+					required={true}
+					style={{ flex: 1, minWidth: 0, width: "100%" }}
+					type="password"
+					value={localValue}>
+					<span style={{ fontWeight: 500 }}>
+						{label ?? formatString(tr, "apiKeyLabel", { provider: providerName })}
+					</span>
+				</VSCodeTextField>
+				{canCopySavedKey && onCopySavedKey && (
+					<SavedApiKeyCopyButton onCopy={onCopySavedKey} providerName={providerName} testId="api-key-copy-saved" />
+				)}
+			</div>
 			<p
 				style={{
 					fontSize: "12px",

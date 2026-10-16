@@ -1,10 +1,13 @@
+import { StringRequest } from "@shared/proto/cline/common"
 import { useCallback } from "react"
+import { ModelsServiceClient } from "@/services/grpc-client"
 import { getSavedApiKeyMask, sanitizeMaskedApiKeyInput } from "./apiKeyMasking"
 
 interface UseProviderApiKeyFieldOptions {
 	apiKeyLength?: number
 	canWrite?: boolean
 	onApiKeyChange?: (apiKey: string) => void
+	providerId: string
 	providerName: string
 	write: (patch: { apiKey: string }) => Promise<unknown>
 }
@@ -13,6 +16,7 @@ export function useProviderApiKeyField({
 	apiKeyLength,
 	canWrite = true,
 	onApiKeyChange,
+	providerId,
 	providerName,
 	write,
 }: UseProviderApiKeyFieldOptions) {
@@ -36,5 +40,11 @@ export function useProviderApiKeyField({
 		[canWrite, onApiKeyChange, providerName, savedApiKeyMask, write],
 	)
 
-	return { savedApiKeyMask, handleApiKeyChange }
+	// The host copies the key itself; the webview never receives the secret.
+	const copySavedApiKey = useCallback(
+		() => ModelsServiceClient.copySavedApiKey(StringRequest.create({ value: providerId })),
+		[providerId],
+	)
+
+	return { savedApiKeyMask, handleApiKeyChange, copySavedApiKey }
 }

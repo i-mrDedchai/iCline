@@ -1,7 +1,7 @@
 import { StringRequest } from "@shared/proto/cline/common"
 import { CustomProviderMutationRequest, OpenAiModelsRequest, type ProviderListing } from "@shared/proto/cline/models"
-import { Eye, EyeOff } from "lucide-react"
-import { type CSSProperties, useCallback, useMemo, useState } from "react"
+import { Check, Copy } from "lucide-react"
+import { type CSSProperties, useCallback, useEffect, useMemo, useState } from "react"
 import { useProviderListings } from "@/hooks/useProviderListings"
 import { formatString, splitOnPlaceholder } from "@/i18n/strings"
 import { useTranslation } from "@/i18n/useTranslation"
@@ -109,7 +109,14 @@ export const CustomProviderManager = () => {
 	const [showAdvanced, setShowAdvanced] = useState(false)
 	// The saved key is write-only: the host sends only its length, shown as a mask.
 	const [savedApiKeyMask, setSavedApiKeyMask] = useState("")
-	const [showApiKey, setShowApiKey] = useState(false)
+	const [apiKeyCopied, setApiKeyCopied] = useState(false)
+	useEffect(() => {
+		if (!apiKeyCopied) {
+			return
+		}
+		const timer = window.setTimeout(() => setApiKeyCopied(false), 1500)
+		return () => window.clearTimeout(timer)
+	}, [apiKeyCopied])
 
 	const openCreate = useCallback(() => {
 		setError(null)
@@ -117,7 +124,6 @@ export const CustomProviderManager = () => {
 		setConfirmingDeleteId(null)
 		setShowAdvanced(false)
 		setSavedApiKeyMask("")
-		setShowApiKey(false)
 		setEditing({ mode: "create", form: { ...EMPTY_FORM } })
 	}, [])
 
@@ -127,7 +133,6 @@ export const CustomProviderManager = () => {
 		setConfirmingDeleteId(null)
 		setShowAdvanced(false)
 		setSavedApiKeyMask("")
-		setShowApiKey(false)
 		setEditing({ mode: "edit", form: toFormState(provider) })
 		// The listing does not carry the endpoint, so read the saved base URL
 		// from the provider config. The API key stays write-only.
@@ -147,6 +152,20 @@ export const CustomProviderManager = () => {
 	const updateForm = useCallback((patch: Partial<FormState>) => {
 		setEditing((current) => (current ? { ...current, form: { ...current.form, ...patch } } : current))
 	}, [])
+
+	// The host copies the saved key itself; the webview only learns that it succeeded.
+	const copySavedApiKey = useCallback(async () => {
+		if (!editing) {
+			return
+		}
+		setError(null)
+		try {
+			await ModelsServiceClient.copySavedApiKey(StringRequest.create({ value: editing.form.providerId }))
+			setApiKeyCopied(true)
+		} catch (err) {
+			setError(err instanceof Error ? err.message : String(err))
+		}
+	}, [editing])
 
 	const fetchModelsFromEndpoint = useCallback(async () => {
 		if (!editing?.form.baseUrl?.trim()) {
@@ -472,19 +491,21 @@ export const CustomProviderManager = () => {
 											: tr("apiKeyPlaceholder")
 									}
 									style={{ ...INPUT_STYLE, paddingRight: 28 }}
-									type={showApiKey ? "text" : "password"}
+									type="password"
 									value={editing.form.apiKey || savedApiKeyMask}
 								/>
-								<button
-									aria-label={showApiKey ? tr("apiKeyHideLabel") : tr("apiKeyShowLabel")}
-									className="absolute right-1 top-1/2 -translate-y-1/2 p-1 rounded text-[var(--vscode-descriptionForeground)] hover:text-[var(--vscode-foreground)]"
-									data-testid="custom-provider-api-key-toggle"
-									disabled={busy}
-									onClick={() => setShowApiKey((visible) => !visible)}
-									title={showApiKey ? tr("apiKeyHideLabel") : tr("apiKeyShowLabel")}
-									type="button">
-									{showApiKey ? <EyeOff aria-hidden size={14} /> : <Eye aria-hidden size={14} />}
-								</button>
+								{savedApiKeyMask && (
+									<button
+										aria-label={tr("apiKeyCopyLabel")}
+										className="absolute right-1 top-1/2 -translate-y-1/2 p-1 rounded text-[var(--vscode-descriptionForeground)] hover:text-[var(--vscode-foreground)]"
+										data-testid="custom-provider-api-key-copy"
+										disabled={busy}
+										onClick={() => void copySavedApiKey()}
+										title={apiKeyCopied ? tr("apiKeyCopiedLabel") : tr("apiKeyCopyLabel")}
+										type="button">
+										{apiKeyCopied ? <Check aria-hidden size={14} /> : <Copy aria-hidden size={14} />}
+									</button>
+								)}
 							</div>{" "}
 							<span className="text-[10px] text-[var(--vscode-descriptionForeground)]">
 								{tr("customProviderApiKeyHint")}

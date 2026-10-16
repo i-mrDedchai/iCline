@@ -8,6 +8,7 @@ import { useTranslation } from "@/i18n/useTranslation"
 import { AccountServiceClient } from "@/services/grpc-client"
 import { useOpenRouterKeyInfo } from "../../ui/hooks/useOpenRouterKeyInfo"
 import { DebouncedTextField } from "../common/DebouncedTextField"
+import { SavedApiKeyCopyButton } from "../common/SavedApiKeyCopyButton"
 import OpenRouterModelPicker from "../OpenRouterModelPicker"
 import { formatPrice } from "../utils/pricingUtils"
 import { useProviderApiKeyField } from "../utils/useProviderApiKeyField"
@@ -67,12 +68,17 @@ export const OpenRouterProvider = ({ showModelOptions, isPopup, currentMode }: O
 	const { config, write } = useProviderConfig("openrouter")
 	const [openRouterApiKey, setOpenRouterApiKey] = useState(apiConfiguration?.openRouterApiKey || "")
 	const apiKeyLength = config?.apiKeyLength || apiConfiguration?.openRouterApiKey?.length
-	const { savedApiKeyMask, handleApiKeyChange } = useProviderApiKeyField({
+	const { savedApiKeyMask, handleApiKeyChange, copySavedApiKey } = useProviderApiKeyField({
+		providerId: "openrouter",
 		apiKeyLength,
 		onApiKeyChange: setOpenRouterApiKey,
 		providerName: "OpenRouter",
 		write,
 	})
+	// This form owns its text field instead of using `ApiKeyField`, so the copy
+	// control is wired here explicitly. Gated on the store's length (the same source
+	// the mask comes from) because that is what the host copies from.
+	const hasSavedApiKey = Boolean(config?.apiKeyLength)
 
 	useEffect(() => {
 		setOpenRouterApiKey(apiConfiguration?.openRouterApiKey || "")
@@ -81,17 +87,26 @@ export const OpenRouterProvider = ({ showModelOptions, isPopup, currentMode }: O
 	return (
 		<div>
 			<div>
-				<DebouncedTextField
-					initialValue={savedApiKeyMask}
-					onChange={handleApiKeyChange}
-					placeholder={tr("apiKeyPlaceholder")}
-					style={{ width: "100%" }}
-					type="password">
-					<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
-						<span style={{ fontWeight: 500 }}>{tr("openRouterApiKeyLabel")}</span>
-						{openRouterApiKey && <OpenRouterBalanceDisplay apiKey={openRouterApiKey} />}
-					</div>
-				</DebouncedTextField>
+				<div style={{ display: "flex", alignItems: "stretch", gap: 4 }}>
+					<DebouncedTextField
+						initialValue={savedApiKeyMask}
+						onChange={handleApiKeyChange}
+						placeholder={tr("apiKeyPlaceholder")}
+						style={{ flex: 1, minWidth: 0, width: "100%" }}
+						type="password">
+						<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
+							<span style={{ fontWeight: 500 }}>{tr("openRouterApiKeyLabel")}</span>
+							{openRouterApiKey && <OpenRouterBalanceDisplay apiKey={openRouterApiKey} />}
+						</div>
+					</DebouncedTextField>
+					{hasSavedApiKey && (
+						<SavedApiKeyCopyButton
+							onCopy={copySavedApiKey}
+							providerName="OpenRouter"
+							testId="openrouter-api-key-copy-saved"
+						/>
+					)}
+				</div>
 				{!openRouterApiKey && (
 					<VSCodeButton
 						appearance="secondary"

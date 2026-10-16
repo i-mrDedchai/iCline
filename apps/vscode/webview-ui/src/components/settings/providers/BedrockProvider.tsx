@@ -84,7 +84,8 @@ export const BedrockProvider = ({ showModelOptions, isPopup, currentMode }: Bedr
 				: config?.aws?.authentication
 	const selectedAuthentication =
 		awsAuthentication ?? (config?.apiKeyLength ? "apikey" : config?.aws?.profile ? "profile" : "credentials")
-	const { savedApiKeyMask, handleApiKeyChange } = useProviderApiKeyField({
+	const { savedApiKeyMask, handleApiKeyChange, copySavedApiKey } = useProviderApiKeyField({
+		providerId: "bedrock",
 		apiKeyLength: config?.apiKeyLength,
 		providerName: "Bedrock",
 		write,
@@ -266,6 +267,7 @@ export const BedrockProvider = ({ showModelOptions, isPopup, currentMode }: Bedr
 					key="apikey"
 					label={tr("bedrockApiKeyLabel")}
 					onChange={handleApiKeyChange}
+					onCopySavedKey={savedApiKeyMask ? copySavedApiKey : undefined}
 					placeholder={tr("bedrockApiKeyPlaceholder")}
 					providerName="Bedrock"
 				/>

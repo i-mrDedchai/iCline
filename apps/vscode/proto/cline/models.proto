@@ -61,6 +61,8 @@ service ModelsService {
   rpc resolveModelInfo(ResolveModelInfoRequest) returns (ResolveModelInfoResponse);
   // Reads redacted effective provider configuration
   rpc readProviderConfig(StringRequest) returns (ProviderConfigResponse);
+  // Copies a provider's saved API key to the system clipboard on the host; the key is never returned to the webview
+  rpc copySavedApiKey(StringRequest) returns (Empty);
   // Writes provider configuration fields and returns redacted effective configuration
   rpc writeProviderConfig(WriteProviderConfigRequest) returns (ProviderConfigResponse);
   // Commits a mode-specific model ID with optional user-authored metadata overrides

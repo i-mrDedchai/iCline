@@ -57,7 +57,8 @@ export const OllamaProvider = ({ showModelOptions, isPopup, currentMode }: Ollam
 		fallbackModelInfo: ollamaModelInfo,
 		customModelInfo: (modelId) => ({ ...ollamaModelInfo, name: modelId }),
 	})
-	const { savedApiKeyMask, handleApiKeyChange } = useProviderApiKeyField({
+	const { savedApiKeyMask, handleApiKeyChange, copySavedApiKey } = useProviderApiKeyField({
+		providerId: "ollama",
 		apiKeyLength: config?.apiKeyLength,
 		providerName: "Ollama",
 		write,
@@ -113,6 +114,7 @@ export const OllamaProvider = ({ showModelOptions, isPopup, currentMode }: Ollam
 					helpText={tr("ollamaApiKeyHelp")}
 					initialValue={savedApiKeyMask}
 					onChange={handleApiKeyChange}
+					onCopySavedKey={savedApiKeyMask ? copySavedApiKey : undefined}
 					placeholder={tr("ollamaApiKeyPlaceholder")}
 					providerName="Ollama"
 				/>

@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
 	deleteCustomProvider: vi.fn(),
 	refreshOpenAiModels: vi.fn(),
 	readProviderConfig: vi.fn(),
+	copySavedApiKey: vi.fn(),
 }))
 
 vi.mock("@/hooks/useProviderListings", () => ({
@@ -28,6 +29,7 @@ vi.mock("@/services/grpc-client", () => ({
 		deleteCustomProvider: mocks.deleteCustomProvider,
 		refreshOpenAiModels: mocks.refreshOpenAiModels,
 		readProviderConfig: mocks.readProviderConfig,
+		copySavedApiKey: mocks.copySavedApiKey,
 	},
 }))
 
@@ -62,6 +64,7 @@ describe("CustomProviderManager", () => {
 		mocks.createCustomProvider.mockResolvedValue({ providers: [] })
 		mocks.updateCustomProvider.mockResolvedValue({ providers: [] })
 		mocks.deleteCustomProvider.mockResolvedValue({ providers: [] })
+		mocks.copySavedApiKey.mockResolvedValue({})
 		mocks.refreshOpenAiModels.mockResolvedValue({ values: ["auto-m1", "auto-m2"] })
 		mocks.readProviderConfig.mockResolvedValue({
 			providerId: "gw-one",
@@ -233,14 +236,40 @@ describe("CustomProviderManager", () => {
 		await waitFor(() => expect(keyInput.value).toBe("••••••••"))
 		expect(keyInput.type).toBe("password")
 
-		fireEvent.click(screen.getByTestId("custom-provider-api-key-toggle"))
-		expect(keyInput.type).toBe("text")
-		fireEvent.click(screen.getByTestId("custom-provider-api-key-toggle"))
+		// There is no reveal: the host never sends the key, so the field stays masked.
+		expect(screen.queryByTestId("custom-provider-api-key-toggle")).toBeNull()
+		fireEvent.click(screen.getByTestId("custom-provider-api-key-copy"))
+		await waitFor(() => expect(mocks.copySavedApiKey).toHaveBeenCalledTimes(1))
+		expect(mocks.copySavedApiKey.mock.calls[0][0]).toMatchObject({ value: "gw-one" })
 		expect(keyInput.type).toBe("password")
+		expect(keyInput.value).toBe("••••••••")
 
 		fireEvent.click(screen.getByTestId("custom-provider-save"))
 		await waitFor(() => expect(mocks.updateCustomProvider).toHaveBeenCalledTimes(1))
 		expect(mocks.updateCustomProvider.mock.calls[0][0].apiKey).toBeUndefined()
+	})
+
+	it("offers no copy action when no key is saved", async () => {
+		render(<CustomProviderManager />)
+		fireEvent.click(screen.getByTestId("custom-provider-edit-gw-one"))
+		await waitFor(() => expect(mocks.readProviderConfig).toHaveBeenCalled())
+		expect(screen.queryByTestId("custom-provider-api-key-copy")).toBeNull()
+	})
+
+	it("surfaces a refused copy as a visible error", async () => {
+		mocks.readProviderConfig.mockResolvedValue({
+			providerId: "gw-one",
+			baseUrl: "https://gw-one.example/v1",
+			headers: {},
+			apiKeyLength: 8,
+		})
+		mocks.copySavedApiKey.mockRejectedValue(new Error('No saved API key for provider "gw-one"'))
+		render(<CustomProviderManager />)
+		fireEvent.click(screen.getByTestId("custom-provider-edit-gw-one"))
+		await waitFor(() => expect(screen.getByTestId("custom-provider-api-key-copy")).toBeTruthy())
+
+		fireEvent.click(screen.getByTestId("custom-provider-api-key-copy"))
+		await waitFor(() => expect(screen.getByTestId("custom-provider-error").textContent).toContain("No saved API key"))
 	})
 
 	it("replaces the mask with a typed key and sends only the typed characters", async () => {

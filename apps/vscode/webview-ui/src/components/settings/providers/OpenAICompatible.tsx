@@ -294,7 +294,8 @@ export const OpenAICompatibleProvider = ({
 		[commitOpenAiSelection, currentMode, handleModeFieldChange, isOpenAiProvider],
 	)
 
-	const { savedApiKeyMask, handleApiKeyChange } = useProviderApiKeyField({
+	const { savedApiKeyMask, handleApiKeyChange, copySavedApiKey } = useProviderApiKeyField({
+		providerId: providerId,
 		apiKeyLength: config?.apiKeyLength,
 		canWrite: config !== undefined,
 		onApiKeyChange: (apiKey) => {
@@ -339,7 +340,12 @@ export const OpenAICompatibleProvider = ({
 				</TooltipContent>
 			</Tooltip>
 
-			<ApiKeyField initialValue={savedApiKeyMask} onChange={handleApiKeyChange} providerName="OpenAI Compatible" />
+			<ApiKeyField
+				initialValue={savedApiKeyMask}
+				onChange={handleApiKeyChange}
+				onCopySavedKey={savedApiKeyMask ? copySavedApiKey : undefined}
+				providerName="OpenAI Compatible"
+			/>
 
 			<label htmlFor="openai-compatible-model-picker">
 				<span style={{ fontWeight: 500 }}>{tr("modelIdLabel")}</span>

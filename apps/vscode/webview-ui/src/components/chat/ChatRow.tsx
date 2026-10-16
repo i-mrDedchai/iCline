@@ -51,6 +51,7 @@ import { FileServiceClient, UiServiceClient } from "@/services/grpc-client"
 import { findMatchingResourceOrTemplate } from "@/utils/mcp"
 import CodeAccordian, { cleanPathPrefix } from "../common/CodeAccordian"
 import { CommandOutputContent, CommandOutputRow } from "./CommandOutputRow"
+import { CompletionCardHeader } from "./CompletionCardHeader"
 import { CompletionOutputRow } from "./CompletionOutputRow"
 import { DiffEditRow } from "./DiffEditRow"
 import ErrorRow from "./ErrorRow"
@@ -943,48 +944,65 @@ export const ChatRowContent = memo(
 							background: "var(--color-reply-bg)",
 							padding: "8px 12px",
 						}
+						// The reply text and the quote button are identical in both shapes;
+						// only the header below (and where its copy control lives) differs.
+						const replyBody = (
+							<>
+								<div className="flex items-center">
+									<div className={cn("flex-1 min-w-0 pl-1")}>
+										<MarkdownRow markdown={message.text} showCursor={false} />
+									</div>
+								</div>
+								{quoteButtonState.visible && (
+									<QuoteButton
+										left={quoteButtonState.left}
+										onClick={handleQuoteClick}
+										top={quoteButtonState.top}
+									/>
+								)}
+							</>
+						)
 						return (
 							<div style={isFinalReply ? cardStyle : undefined}>
-								<WithCopyButton
-									copyButtonClassname={isFinalReply ? "opacity-100" : undefined}
-									onMouseUp={handleMouseUp}
-									position={isFinalReply ? "top-right" : "bottom-right"}
-									ref={contentRef}
-									textToCopy={message.text}>
-									{isFinalReply && (
-										<div
-											className="mb-1 flex items-center justify-start gap-1.5 pr-8"
-											data-testid="final-reply-completed"
-											style={{
-												fontSize: 11,
-												fontWeight: 600,
-												letterSpacing: "0.4px",
-												color: "var(--color-reply, var(--vscode-charts-purple, #b180d7))",
-											}}>
-											{replyIcon !== "none" &&
-												(replyIcon === "check" ? (
+								{isFinalReply ? (
+									// The copy control is a flex sibling of the header label, on the
+									// header's own row (like the Task Completed panel). Floating it
+									// over the card parked it on the reply's first text line, where
+									// it covered the words.
+									<div className="group relative w-full" onMouseUp={handleMouseUp} ref={contentRef}>
+										<CompletionCardHeader
+											accentClassName="text-reply"
+											className="mb-1"
+											copyText={message.text}
+											icon={
+												replyIcon === "none" ? undefined : replyIcon === "check" ? (
 													<CheckIcon className="size-2.5" />
 												) : (
 													<span aria-hidden className="text-[11px] leading-none">
 														{replyIcon}
 													</span>
-												))}
-											<span>{trQuickStart("approvalReplyCompleted")}</span>
-										</div>
-									)}
-									<div className="flex items-center">
-										<div className={cn("flex-1 min-w-0 pl-1")}>
-											<MarkdownRow markdown={message.text} showCursor={false} />
-										</div>
-									</div>
-									{quoteButtonState.visible && (
-										<QuoteButton
-											left={quoteButtonState.left}
-											onClick={handleQuoteClick}
-											top={quoteButtonState.top}
+												)
+											}
+											label={trQuickStart("approvalReplyCompleted")}
+											labelStyle={{
+												fontSize: 11,
+												fontWeight: 600,
+												letterSpacing: "0.4px",
+												color: "var(--color-reply, var(--vscode-charts-purple, #b180d7))",
+											}}
+											labelTestId="final-reply-completed"
 										/>
-									)}
-								</WithCopyButton>
+										{replyBody}
+									</div>
+								) : (
+									<WithCopyButton
+										onMouseUp={handleMouseUp}
+										position="bottom-right"
+										ref={contentRef}
+										textToCopy={message.text}>
+										{replyBody}
+									</WithCopyButton>
+								)}
 							</div>
 						)
 					}
@@ -1056,7 +1074,6 @@ export const ChatRowContent = memo(
 						return (
 							<CompletionOutputRow
 								handleQuoteClick={handleQuoteClick}
-								headClassNames={HEADER_CLASSNAMES}
 								quoteButtonState={quoteButtonState}
 								text={text || ""}
 							/>
@@ -1197,7 +1214,6 @@ export const ChatRowContent = memo(
 							return (
 								<CompletionOutputRow
 									handleQuoteClick={handleQuoteClick}
-									headClassNames={HEADER_CLASSNAMES}
 									quoteButtonState={quoteButtonState}
 									text={text || ""}
 								/>
@@ -1308,10 +1324,7 @@ export const ChatRowContent = memo(
 						}
 						return (
 							<div>
-								<PlanCompletionOutputRow
-									headClassNames={HEADER_CLASSNAMES}
-									text={response || message.text || ""}
-								/>
+								<PlanCompletionOutputRow text={response || message.text || ""} />
 								<OptionsButtons
 									inputValue={inputValue}
 									isActive={

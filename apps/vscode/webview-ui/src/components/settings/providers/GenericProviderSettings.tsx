@@ -89,7 +89,8 @@ export const GenericProviderSettings = ({
 		)
 	}
 
-	const { savedApiKeyMask, handleApiKeyChange } = useProviderApiKeyField({
+	const { savedApiKeyMask, handleApiKeyChange, copySavedApiKey } = useProviderApiKeyField({
+		providerId: providerId,
 		apiKeyLength: config?.apiKeyLength,
 		providerName,
 		write: writeAndRefresh,
@@ -104,6 +105,7 @@ export const GenericProviderSettings = ({
 			<ApiKeyField
 				initialValue={savedApiKeyMask}
 				onChange={handleApiKeyChange}
+				onCopySavedKey={savedApiKeyMask ? copySavedApiKey : undefined}
 				placeholder={tr("apiKeyPlaceholder")}
 				providerName={providerName}
 				signupUrl={signupUrl}

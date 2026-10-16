@@ -107,7 +107,8 @@ export const XaiProvider = ({ showModelOptions, isPopup, currentMode }: XaiProvi
 
 	// Local state for reasoning effort toggle
 	const [reasoningEffortSelected, setReasoningEffortSelected] = useState(!!modeFields.reasoningEffort)
-	const { savedApiKeyMask, handleApiKeyChange } = useProviderApiKeyField({
+	const { savedApiKeyMask, handleApiKeyChange, copySavedApiKey } = useProviderApiKeyField({
+		providerId: PROVIDER_ID,
 		apiKeyLength: config?.apiKeyLength,
 		providerName: "Grok",
 		write,
@@ -229,6 +230,7 @@ export const XaiProvider = ({ showModelOptions, isPopup, currentMode }: XaiProvi
 				<ApiKeyField
 					initialValue={savedApiKeyMask || apiConfiguration?.xaiApiKey || ""}
 					onChange={handleApiKeyChange}
+					onCopySavedKey={savedApiKeyMask ? copySavedApiKey : undefined}
 					providerName="Grok"
 					signupUrl="https://x.ai"
 				/>

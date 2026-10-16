@@ -13,6 +13,7 @@ import { DebouncedTextField } from "../common/DebouncedTextField"
 import { ModelAutocomplete } from "../common/ModelAutocomplete"
 import { ModelInfoView } from "../common/ModelInfoView"
 import { LockIcon, RemotelyConfiguredInputWrapper } from "../common/RemotelyConfiguredInputWrapper"
+import { SavedApiKeyCopyButton } from "../common/SavedApiKeyCopyButton"
 import ThinkingBudgetSlider from "../ThinkingBudgetSlider"
 import { useProviderApiKeyField } from "../utils/useProviderApiKeyField"
 
@@ -60,12 +61,16 @@ export const LiteLlmProvider = ({ showModelOptions, isPopup, currentMode }: Lite
 		modelId: selectedModelId,
 		modelInfo: selectedModelInfo,
 	})
-	const { savedApiKeyMask, handleApiKeyChange } = useProviderApiKeyField({
+	const { savedApiKeyMask, handleApiKeyChange, copySavedApiKey } = useProviderApiKeyField({
+		providerId: LITELLM_PROVIDER_ID,
 		apiKeyLength: config?.apiKeyLength,
 		canWrite: config !== undefined,
 		providerName: "LiteLLM",
 		write,
 	})
+	// This form owns its text field instead of using `ApiKeyField`, so the copy
+	// control is wired here explicitly — a masked key must be copyable wherever it shows.
+	const hasSavedApiKey = Boolean(config?.apiKeyLength)
 
 	const handleModelChange = (newModelId: string, modelInfo: ModelInfo | undefined) => {
 		void commitModelSelection({
@@ -103,18 +108,27 @@ export const LiteLlmProvider = ({ showModelOptions, isPopup, currentMode }: Lite
 				</DebouncedTextField>
 			</RemotelyConfiguredInputWrapper>
 			<RemotelyConfiguredInputWrapper hidden={!remoteConfigSettings?.configuredApiKeys?.litellm}>
-				<DebouncedTextField
-					disabled={remoteConfigSettings?.configuredApiKeys?.litellm}
-					initialValue={savedApiKeyMask}
-					onChange={handleApiKeyChange}
-					placeholder={formatString(tr, "defaultValue", { value: "noop" })}
-					style={{ width: "100%" }}
-					type="password">
-					<div className="flex items-center gap-2 mb-1">
-						<span style={{ fontWeight: 500 }}>{tr("liteLlmApiKeyLabel")}</span>
-						{remoteConfigSettings?.configuredApiKeys?.litellm && <LockIcon />}
-					</div>
-				</DebouncedTextField>
+				<div style={{ display: "flex", alignItems: "stretch", gap: 4 }}>
+					<DebouncedTextField
+						disabled={remoteConfigSettings?.configuredApiKeys?.litellm}
+						initialValue={savedApiKeyMask}
+						onChange={handleApiKeyChange}
+						placeholder={formatString(tr, "defaultValue", { value: "noop" })}
+						style={{ flex: 1, minWidth: 0, width: "100%" }}
+						type="password">
+						<div className="flex items-center gap-2 mb-1">
+							<span style={{ fontWeight: 500 }}>{tr("liteLlmApiKeyLabel")}</span>
+							{remoteConfigSettings?.configuredApiKeys?.litellm && <LockIcon />}
+						</div>
+					</DebouncedTextField>
+					{hasSavedApiKey && (
+						<SavedApiKeyCopyButton
+							onCopy={copySavedApiKey}
+							providerName="LiteLLM"
+							testId="litellm-api-key-copy-saved"
+						/>
+					)}
+				</div>
 			</RemotelyConfiguredInputWrapper>
 			{showModelOptions && (
 				<>

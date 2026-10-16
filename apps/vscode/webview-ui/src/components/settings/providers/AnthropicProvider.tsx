@@ -50,7 +50,8 @@ export const AnthropicProvider = ({ showModelOptions, isPopup, currentMode }: An
 		commitSelection,
 		fallbackModelInfo: legacySelectedModelInfo,
 	})
-	const { savedApiKeyMask, handleApiKeyChange } = useProviderApiKeyField({
+	const { savedApiKeyMask, handleApiKeyChange, copySavedApiKey } = useProviderApiKeyField({
+		providerId: "anthropic",
 		apiKeyLength: config?.apiKeyLength,
 		providerName: "Anthropic",
 		write,
@@ -93,6 +94,7 @@ export const AnthropicProvider = ({ showModelOptions, isPopup, currentMode }: An
 			<ApiKeyField
 				initialValue={savedApiKeyMask}
 				onChange={handleApiKeyChange}
+				onCopySavedKey={savedApiKeyMask ? copySavedApiKey : undefined}
 				providerName="Anthropic"
 				signupUrl="https://console.anthropic.com/settings/keys"
 			/>

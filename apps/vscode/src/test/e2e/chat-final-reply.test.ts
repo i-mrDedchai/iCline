@@ -43,4 +43,34 @@ e2e("Chat - final-reply COMPLETED headers persist across turns", async ({ helper
 		})
 		expect(iconLeftOfLabel).toBe(true)
 	}
+
+	// F7: the copy control shares the header's own row — centred on the label,
+	// to its right, and entirely above the answer's first line. It used to float
+	// over the card at a fixed offset, which parked it on the first line of the
+	// reply text and covered the words.
+	for (let i = 0; i < 2; i++) {
+		const copyPlacement = await completedHeaders.nth(i).evaluate((el) => {
+			const row = el.parentElement
+			const button = row?.querySelector("button") ?? null
+			const body = row?.nextElementSibling as HTMLElement | null
+			if (!row || !button || !body) {
+				return { found: false }
+			}
+			const label = el.getBoundingClientRect()
+			const copy = button.getBoundingClientRect()
+			const text = body.getBoundingClientRect()
+			return {
+				found: true,
+				alignedWithLabel: Math.abs(copy.top + copy.height / 2 - (label.top + label.height / 2)) <= 4,
+				rightOfLabel: copy.left >= label.right - 1,
+				clearsText: copy.bottom <= text.top + 1,
+			}
+		})
+		expect(copyPlacement).toEqual({
+			found: true,
+			alignedWithLabel: true,
+			rightOfLabel: true,
+			clearsText: true,
+		})
+	}
 })
