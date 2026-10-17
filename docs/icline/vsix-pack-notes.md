@@ -80,6 +80,27 @@ node -e "import('node:child_process').then(async ({spawnSync}) => {
 markers (`reasoning-effort-trigger` ×1, `modelAvailableCount` ×5),
 รูปใน README เป็น absolute ทั้งหมด — ดูคำสั่งในประวัติ commit นี้
 
+## บันทึกรอบลง tracker อัตโนมัติ (ตั้งแต่ dev.5-fix.7)
+
+`package-vsix.mjs` เรียก `scripts/update-round-tracker.mjs` หลังแพ็กสำเร็จ ทุกครั้ง:
+มันเขียนบล็อก `<!-- icline:round:start --> … <!-- icline:round:end -->` ไว้บนสุดของ
+[docs/icline/smoke-test-tracker.md](smoke-test-tracker.md) พร้อม **เวอร์ชัน · path VSIX ·
+ขนาดไบต์ · sha1 · ป้าย About · เวลาที่แพ็ก** ที่อ่านจากไฟล์จริง ⇒ เอกสารไม่ตกหล่นจาก pack อีก
+
+- **แพ็กซ้ำ = เขียนบล็อกเดิมทับ** ไม่เกิดสองบล็อก และไม่แตะส่วนที่เขียนมือด้านล่าง
+- **จุด smoke / ผลตรวจ** เติมด้วยธง (เว้นได้ แล้วเติมทีหลังโดยไม่เสียข้อมูล pack):
+
+```bash
+cd apps/vscode
+node scripts/update-round-tracker.mjs \
+  --smoke "Settings → API Configuration → คัดลอกคีย์ที่บันทึกไว้" \
+  --smoke "แชท → การ์ดคำตอบสุดท้าย → ปุ่มคัดลอกอยู่แถวหัวข้อ" \
+  --tests "webview 904 · e2e 33/33"
+```
+
+- `--status "✅ smoke PASS"` เปลี่ยนสถานะ · `--dry-run` ดูบล็อกก่อนเขียน · `--vsix <path>` ระบุไฟล์อื่น
+- ค่าที่ไม่ระบุจะถูก **คงจากบล็อกเดิม** (ไม่ถูกล้างด้วยการแพ็กซ้ำ) · สคริปต์ล้มต้องไม่ทำให้แพ็กที่ได้ VSIX ดีอยู่แล้วล้มตาม
+
 ## ข้อห้ามอื่นที่ยังใช้อยู่
 
 - ห้าม `+` ในชื่อไฟล์รูป (`vsce` ตายด้วย \"Invalid image source in README.md\")

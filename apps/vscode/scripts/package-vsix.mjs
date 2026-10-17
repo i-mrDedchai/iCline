@@ -46,4 +46,17 @@ try {
 		restore()
 	}
 }
+
+// Record the round in the smoke-test tracker while the artifact is fresh, so the
+// documentation cannot trail the pack (the tracker used to lag a round behind).
+// A tracker failure must not fail a pack that already produced a valid VSIX.
+if (exitCode === 0) {
+	const recorded = spawnSync(process.execPath, [path.join(__dirname, "update-round-tracker.mjs"), "--vsix", out], {
+		stdio: "inherit",
+		cwd: extRoot,
+	})
+	if (recorded.status !== 0) {
+		console.warn("warning: could not update docs/icline/smoke-test-tracker.md (see above)")
+	}
+}
 process.exit(exitCode)

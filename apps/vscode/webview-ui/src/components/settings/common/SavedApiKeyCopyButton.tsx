@@ -40,25 +40,32 @@ export const SavedApiKeyCopyButton = ({ onCopy, providerName, testId }: SavedApi
 	}
 
 	return (
-		<button
-			aria-label={tr("apiKeyCopyLabel")}
-			data-testid={testId}
-			onClick={handleCopy}
-			style={{
-				display: "flex",
-				alignItems: "center",
-				justifyContent: "center",
-				flexShrink: 0,
-				width: 30,
-				background: "var(--vscode-button-secondaryBackground)",
-				color: "var(--vscode-button-secondaryForeground)",
-				border: "1px solid var(--vscode-button-border, transparent)",
-				borderRadius: 3,
-				cursor: "pointer",
-			}}
-			title={copied ? tr("apiKeyCopiedLabel") : tr("apiKeyCopyLabel")}
-			type="button">
-			{copied ? <Check aria-hidden size={16} /> : <Copy aria-hidden size={16} />}
-		</button>
+		<>
+			<button
+				aria-label={tr("apiKeyCopyLabel")}
+				className="focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--vscode-focusBorder)]"
+				data-testid={testId}
+				onClick={handleCopy}
+				style={{
+					display: "flex",
+					alignItems: "center",
+					justifyContent: "center",
+					flexShrink: 0,
+					width: 30,
+					background: "var(--vscode-button-secondaryBackground)",
+					color: "var(--vscode-button-secondaryForeground)",
+					border: "1px solid var(--vscode-button-border, transparent)",
+					borderRadius: 3,
+					cursor: "pointer",
+				}}
+				title={copied ? tr("apiKeyCopiedLabel") : tr("apiKeyCopyLabel")}
+				type="button">
+				{copied ? <Check aria-hidden size={16} /> : <Copy aria-hidden size={16} />}
+			</button>
+			{/* The tick is silent: this is the confirmation a screen reader hears. */}
+			<span aria-live="polite" className="sr-only" role="status">
+				{copied ? tr("apiKeyCopiedLabel") : ""}
+			</span>
+		</>
 	)
 }

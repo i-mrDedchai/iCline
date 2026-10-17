@@ -1,4 +1,31 @@
-> ℹ️ บล็อก `Last updated` / `vsix` ด้านล่างยังค้างที่สาย **0.1.18** — รอบสาย **0.1.19-dev.5 (`fix.1`–`fix.6`)** บันทึกไว้ที่ [CHANGELOG.md](../../apps/vscode/CHANGELOG.md); รอบ `fix.6` มีหมวดของตัวเองอยู่ด้านล่างของไฟล์นี้
+<!-- icline:round:start -->
+> 🤖 บล็อกนี้เขียนโดย `apps/vscode/scripts/update-round-tracker.mjs` ทุกครั้งที่แพ็ก VSIX — อย่าแก้มือ
+> (ข้อมูลแพ็กมาจากไฟล์จริง; จุด smoke/ผลตรวจเติมด้วย `--smoke` / `--tests`)
+
+## 🔖 รอบล่าสุด — `0.1.19-dev.5-fix.7`
+
+|  |  |
+|---|---|
+| VSIX | `apps/vscode/dist/i-mrdedchai.iCline-0.1.19-dev.5-fix.7.vsix` |
+| ขนาด | 12,885,735 B · sha1 `b597c8452b88` |
+| ป้าย About | `dev build 5 · fix.7` |
+| แพ็กเมื่อ | 2026-10-17 16:41 |
+| สถานะ | ⏳ รอ smoke |
+
+**จุด smoke**
+- Settings → API Configuration → ฟอร์มที่มีคีย์ → ปุ่มคัดลอกมี aria-label ตามภาษา และประกาศ 'คัดลอกแล้ว'
+- แชท → การ์ดคำตอบสุดท้าย / งานเสร็จแล้ว → ปุ่มคัดลอกอยู่แถวหัวข้อ และกด Tab ถึงปุ่มแล้วต้องเห็นปุ่ม
+- โค้ดบล็อกในคำตอบ → ปุ่มใช้ชื่อ 'คัดลอกโค้ด' ตามภาษา
+- แถว subagent ที่ prompt ยาว → ปุ่ม Show more ต้องไม่ทับคำท้ายบรรทัด
+- บนสุดของ docs/icline/smoke-test-tracker.md มีบล็อกรอบ fix.7 (เวอร์ชัน/ขนาด/sha1/ป้าย About)
+
+**ผลตรวจ**
+- typecheck 0 error · lint 0 · webview vitest 81 ไฟล์ / 908 ข้อ
+- e2e 4/4 บนไบต์ที่แพ็ก (chat-final-reply · settings-api-key-copy)
+- marker ใน VSIX: คัดลอกโค้ด · คัดลอกแล้ว · 复制代码 · コードをコピー · group-focus-within
+<!-- icline:round:end -->
+
+> ℹ️ **รอบล่าสุดอยู่บนสุดของไฟล์** ในบล็อกที่เขียนอัตโนมัติทุกครั้งที่แพ็ก (`apps/vscode/scripts/update-round-tracker.mjs` — ดู [vsix-pack-notes.md](vsix-pack-notes.md)) · บล็อก `Last updated` / `vsix` ด้านล่างยังค้างที่สาย **0.1.18** · รอบสาย **0.1.19-dev.5** บันทึกฉบับเต็มไว้ที่ [CHANGELOG.md](../../apps/vscode/CHANGELOG.md) และรอบ `fix.6` มีหมวดของตัวเองอยู่ด้านล่างของไฟล์นี้
 
 **Last updated:** 2026-09-30 (fix.52 — Wave-3 mini selective ports: js-yaml CVE floor · abort-aware backoff · content-filter mapping · output-budget fraction · compaction live credentials + sync doctrine §0 + About sync-point corrected to `4.1.18 SDK (main@173837314)` · ✅ fix.51 smoke PASS 2026-09-30 (maintainer: runs complete end to end, good output — colors/retry/Appearance) · ✅ **fix.52 smoke PASS 2026-09-30** (maintainer: feature checklist complete — Wave-3 mini ports, About sync-point, all fix.51 items still pass) · ✅ **release VSIX 0.1.18 smoke PASS 2026-09-30** (maintainer: old images gone, Details/About/sample-provider tolerated, tables anchored — repacked after docs touch, code bundles byte-identical, gate 88/88))
 **vsix (ล่าสุด — `fix.52`):** `apps/vscode/dist/i-mrdedchai.iCline-0.1.18-dev.6-fix.52.vsix` (12,260,300 B @ 2026-09-30T02:40:36Z · 65 files · version `0.1.18-dev.6-fix.52` — host `dist/extension.js` sha1 `d5ee2689` (27,348,631 B) · webview `index.js` sha1 `543f2fc6` (9,196,884 B) · label `dev build 6 · fix.52` ตัวเดียว · **gate 89/89 ผ่าน** · SDK dists (shared/llms/agents/core) rebuilt ก่อนแพ็ก · **ใช้แทน `fix.51`** (fix.51 vsix 12,091,627 B — smoke ผ่านแล้ว) · **ทดสอบ:** llms 908 + 4 ollama.wire เดิม · agents 130 · shared 432 · core 2478 + 5 env-flake ไม่เกี่ยว (python-hook/workspace-git/runtime-builder ไม่ import โค้ดที่แตะ) · webview/host `tsc` 0 · **ใช้ตัวนี้ smoke:** (ก) cancel กลาง backoff ต้องหยุดทันทีไม่ re-dial (ข) turn โดน content-filter ผ่านครั้งเดียวไม่ retry ฟรี (ค) reasoning หนักบนโมเดล budget ใหญ่ชนเพดานน้อยลง (ง) compaction หลังสลับ provider กลาง session ใช้ credential ใหม่ (จ) ของ fix.51 ทั้งหมดยังผ่าน + About แสดง sync point ใหม่) · ของเดิม (อย่าใช้ smoke — มี `fix.52` แทนแล้ว):

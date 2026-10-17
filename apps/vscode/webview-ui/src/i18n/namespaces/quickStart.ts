@@ -142,6 +142,13 @@ const en = {
 	approvalOutsideWorkspace: "This file is outside of your workspace",
 	approvalTaskCompleted: "Task Completed",
 	approvalReplyCompleted: "COMPLETED",
+	// Copy controls on the completion cards and code blocks. One label per action so a
+	// button's accessible name is the same words a sighted user reads. `copyLabel` is the
+	// resting name, `copiedLabel` the announced confirmation, `copyCodeLabel` the more
+	// specific name for a code block's control.
+	copyLabel: "Copy",
+	copiedLabel: "Copied",
+	copyCodeLabel: "Copy code",
 	approvalError: "Error",
 	reasoningThinking: "Thinking...",
 	reasoningThought: "Thought",
@@ -277,6 +284,9 @@ const th: Record<QuickStartStringKey, string> = {
 	approvalOutsideWorkspace: "ไฟล์นี้อยู่นอก workspace ของคุณ",
 	approvalTaskCompleted: "งานเสร็จแล้ว",
 	approvalReplyCompleted: "คำตอบสุดท้าย",
+	copyLabel: "คัดลอก",
+	copiedLabel: "คัดลอกแล้ว",
+	copyCodeLabel: "คัดลอกโค้ด",
 	approvalError: "ข้อผิดพลาด",
 	reasoningThinking: "กำลังคิด...",
 	reasoningThought: "ความคิด",
@@ -411,6 +421,9 @@ const ja: Record<QuickStartStringKey, string> = {
 	approvalOutsideWorkspace: "このファイルはワークスペースの外にあります",
 	approvalTaskCompleted: "タスク完了",
 	approvalReplyCompleted: "最終回答",
+	copyLabel: "コピー",
+	copiedLabel: "コピーしました",
+	copyCodeLabel: "コードをコピー",
 	approvalError: "エラー",
 	reasoningThinking: "考え中...",
 	reasoningThought: "思考内容",
@@ -544,6 +557,9 @@ const zhCN: Record<QuickStartStringKey, string> = {
 	approvalOutsideWorkspace: "此文件位于您的工作区之外",
 	approvalTaskCompleted: "任务已完成",
 	approvalReplyCompleted: "最终答复",
+	copyLabel: "复制",
+	copiedLabel: "已复制",
+	copyCodeLabel: "复制代码",
 	approvalError: "错误",
 	reasoningThinking: "思考中...",
 	reasoningThought: "思考过程",

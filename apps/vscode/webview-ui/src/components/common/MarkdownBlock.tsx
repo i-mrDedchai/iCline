@@ -12,6 +12,7 @@ import { visit } from "unist-util-visit"
 import MermaidBlock from "@/components/common/MermaidBlock"
 import { Button } from "@/components/ui/button"
 import { useExtensionState } from "@/context/ExtensionStateContext"
+import { useTranslation } from "@/i18n/useTranslation"
 import { cn } from "@/lib/utils"
 import { FileServiceClient, StateServiceClient } from "@/services/grpc-client"
 import { WithCopyButton } from "./CopyButton"
@@ -313,6 +314,7 @@ const remarkPreventBoldFilenames = () => {
 
 const PreWithCopyButton = ({ children, ...preProps }: React.HTMLAttributes<HTMLPreElement>) => {
 	const preRef = useRef<HTMLPreElement>(null)
+	const tr = useTranslation("quickStart")
 
 	const handleCopy = () => {
 		if (preRef.current) {
@@ -328,7 +330,7 @@ const PreWithCopyButton = ({ children, ...preProps }: React.HTMLAttributes<HTMLP
 	}
 
 	return (
-		<WithCopyButton ariaLabel="Copy code" onCopy={handleCopy} position="top-right">
+		<WithCopyButton ariaLabel={tr("copyCodeLabel")} onCopy={handleCopy} position="top-right">
 			<pre {...preProps} ref={preRef}>
 				{children}
 			</pre>

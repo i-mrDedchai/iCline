@@ -1,12 +1,14 @@
 import { CheckCheckIcon, CopyIcon } from "lucide-react"
 import { forwardRef, useCallback, useState } from "react"
 import { Button } from "@/components/ui/button"
+import { useTranslation } from "@/i18n/useTranslation"
 import { cn } from "@/lib/utils"
 
 interface CopyButtonProps {
 	textToCopy?: string
 	onCopy?: () => string | undefined | null
 	className?: string
+	/** Overrides the translated default name; use it when the context is not obvious. */
 	ariaLabel?: string
 }
 
@@ -30,9 +32,15 @@ const POSITION_CLASSES = {
 } as const
 
 /**
- * Base copy button component with clipboard functionality
+ * Base copy button component with clipboard functionality.
+ *
+ * Accessibility contract, because these controls sit on top of the text they copy:
+ * the accessible name comes from the translator (not a hardcoded "Copy"), a `role=status`
+ * line announces the confirmation for screen readers (the tick alone is visual), and the
+ * control is a plain `type="button"` so it can never submit a surrounding form.
  */
 export const CopyButton: React.FC<CopyButtonProps> = ({ textToCopy, onCopy, className, ariaLabel }) => {
+	const tr = useTranslation("quickStart")
 	const [copied, setCopied] = useState(false)
 
 	const handleCopy = useCallback(() => {
@@ -50,15 +58,25 @@ export const CopyButton: React.FC<CopyButtonProps> = ({ textToCopy, onCopy, clas
 			.catch((err) => console.error("Copy failed", err))
 	}, [textToCopy, onCopy])
 
+	const label = ariaLabel ?? tr("copyLabel")
+
 	return (
-		<Button
-			aria-label={copied ? "Copied" : ariaLabel || "Copy"}
-			className={cn("scale-90", className)}
-			onClick={handleCopy}
-			size="icon"
-			variant="icon">
-			{copied ? <CheckCheckIcon className="size-2" /> : <CopyIcon className="size-2" />}
-		</Button>
+		<>
+			<Button
+				aria-label={label}
+				className={cn("scale-90", className)}
+				onClick={handleCopy}
+				size="icon"
+				title={copied ? tr("copiedLabel") : label}
+				type="button"
+				variant="icon">
+				{copied ? <CheckCheckIcon aria-hidden className="size-2" /> : <CopyIcon aria-hidden className="size-2" />}
+			</Button>
+			{/* The tick is silent; this is what a screen reader actually hears after copying. */}
+			<span aria-live="polite" className="sr-only" role="status">
+				{copied ? tr("copiedLabel") : ""}
+			</span>
+		</>
 	)
 }
 
@@ -88,7 +106,9 @@ export const WithCopyButton = forwardRef<HTMLDivElement, WithCopyButtonProps>(
 				{hasCopyFunctionality && (
 					<div
 						className={cn(
-							"absolute opacity-0 group-hover:opacity-100 transition-opacity",
+							// Hidden until hover *or* keyboard focus: a button that only appears on
+							// hover is still tabbable, so a keyboard user would land on nothing visible.
+							"absolute opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 focus-within:opacity-100",
 							POSITION_CLASSES[position],
 							copyButtonClassname,
 						)}>

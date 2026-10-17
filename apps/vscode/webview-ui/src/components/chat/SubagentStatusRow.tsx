@@ -155,7 +155,15 @@ function SubagentPromptText({ prompt, isExpanded, onToggle }: SubagentPromptText
 	return (
 		<div className="relative">
 			<div
-				className={`text-xs font-medium text-foreground whitespace-pre-wrap break-words ${!isExpanded ? "overflow-hidden [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]" : ""}`}
+				className={`text-xs font-medium text-foreground whitespace-pre-wrap break-words ${
+					!isExpanded
+						? `overflow-hidden [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] ${
+								// The Show more control sits on the last line; reserve its width so it
+								// cannot sit on top of the words it is offering to reveal.
+								showMoreVisible ? "pr-16" : ""
+							}`
+						: ""
+				}`}
 				ref={promptRef}>
 				"{prompt}"
 			</div>

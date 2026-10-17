@@ -2,8 +2,8 @@
 export const ICLINE_BUILD_METADATA = {
 	releaseVersion: "0.1.19",
 	devBuildNumber: 5,
-	devBuildLabel: "dev build 5 · fix.6",
-	builtAt: "2026-10-16 21:57",
+	devBuildLabel: "dev build 5 · fix.7",
+	builtAt: "2026-10-17 16:37",
 	upstreamClineSyncedVersion: "v4.1.18 SDK (main@173837314)",
 	upstreamClineSyncedAt: "2026-09-16",
 	upstreamClineRepo: "https://github.com/cline/cline",
