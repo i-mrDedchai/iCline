@@ -41,6 +41,17 @@ const MODEL_ID_SELECT_STYLE: CSSProperties = {
 }
 
 /**
+ * Widest the Base URL field is allowed to get.
+ *
+ * It used to collapse to the toolkit field's intrinsic 167px (see the tooltip trigger
+ * note below), which clipped gateway URLs such as `https://opencode.ai/zen/v1`; 250px
+ * holds a full one at the default font size. Below that the field keeps shrinking with
+ * the pane (`width: 100%`): a fixed 250px overflowed a pane narrower than itself, which
+ * is the responsive half the fix.8 smoke reported (dev.5-fix.9).
+ */
+const BASE_URL_FIELD_MAX_WIDTH = 250
+
+/**
  * Props for the OpenAICompatibleProvider component
  */
 interface OpenAICompatibleProviderProps {
@@ -309,16 +320,27 @@ export const OpenAICompatibleProvider = ({
 	return (
 		<div>
 			<Tooltip>
-				<TooltipTrigger>
+				{/*
+				 * `asChild` keeps the wrapper a plain <div>. Without it Radix renders a
+				 * <button>, which is shrink-to-fit: the field's `width: 100%` then
+				 * resolved against the button's intrinsic width, so the Base URL input
+				 * collapsed to the toolkit field's own 167px no matter how wide the
+				 * Settings pane was (dev.5-fix.8).
+				 */}
+				<TooltipTrigger asChild>
 					<div className="mb-2.5">
 						<div className="flex items-center gap-2 mb-1">
-							<span style={{ fontWeight: 500 }}>{tr("baseUrlLabel")}</span>
+							<label htmlFor="openai-compatible-base-url">
+								<span style={{ fontWeight: 500 }}>{tr("baseUrlLabel")}</span>
+							</label>
 							{remoteConfigSettings?.openAiBaseUrl !== undefined && (
 								<i className="codicon codicon-lock text-description text-sm" />
 							)}
 						</div>
+						{/* Grows with the pane, capped at BASE_URL_FIELD_MAX_WIDTH. */}
 						<DebouncedTextField
 							disabled={remoteConfigSettings?.openAiBaseUrl !== undefined}
+							id="openai-compatible-base-url"
 							initialValue={config?.baseUrl || ""}
 							onChange={(value) => {
 								if (!config) {
@@ -330,7 +352,7 @@ export const OpenAICompatibleProvider = ({
 								debouncedRefreshOpenAiModels(value, latestOpenAiApiKeyRef.current)
 							}}
 							placeholder={tr("baseUrlEntryPlaceholder")}
-							style={{ width: "100%", marginBottom: 10 }}
+							style={{ width: "100%", maxWidth: BASE_URL_FIELD_MAX_WIDTH, marginBottom: 10 }}
 							type="text"
 						/>
 					</div>

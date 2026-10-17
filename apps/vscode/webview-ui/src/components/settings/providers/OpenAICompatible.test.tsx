@@ -1,6 +1,6 @@
 import { ApiFormat } from "@shared/proto/cline/models"
 import { act, fireEvent, render, screen } from "@testing-library/react"
-import type { ChangeEventHandler, ReactNode } from "react"
+import type { ChangeEventHandler, CSSProperties, ReactNode } from "react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { OpenAICompatibleProvider } from "./OpenAICompatible"
 
@@ -119,22 +119,28 @@ vi.mock("../common/DebouncedTextField", () => ({
 	DebouncedTextField: ({
 		children,
 		disabled,
+		id,
 		initialValue,
 		onChange,
 		placeholder,
+		style,
 	}: {
 		children?: ReactNode
 		disabled?: boolean
+		id?: string
 		initialValue?: string
 		onChange: (value: string) => void
 		placeholder?: string
+		style?: CSSProperties
 	}) => (
 		<label>
 			{children}
 			<input
 				disabled={disabled}
+				id={id}
 				onChange={(event) => onChange(event.target.value)}
 				placeholder={placeholder}
+				style={style}
 				value={initialValue ?? ""}
 			/>
 		</label>
@@ -238,6 +244,17 @@ describe("OpenAICompatibleProvider", () => {
 			expect.objectContaining({ baseUrl: "http://localhost:1234/v1", apiKey: "" }),
 		)
 		expect(screen.getByLabelText("OpenAI Compatible API key")).toHaveValue("••••••••••••")
+	})
+
+	it("lets the Base URL field grow with the pane up to 250px", async () => {
+		renderProvider()
+		await act(async () => {})
+
+		// 100% used to resolve against a shrink-to-fit tooltip <button>, which clipped the
+		// field to the toolkit's 167px however wide the pane was (dev.5-fix.8); a fixed
+		// 250px then overflowed a pane narrower than that (dev.5-fix.9). 100% + the cap
+		// is both: it fills a narrow pane and stops growing past 250.
+		expect(screen.getByDisplayValue("http://localhost:1234/v1")).toHaveStyle({ width: "100%", maxWidth: "250px" })
 	})
 
 	it("writes a newly entered API key without echoing a stored key into config", async () => {

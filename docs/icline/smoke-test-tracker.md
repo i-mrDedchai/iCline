@@ -2,27 +2,22 @@
 > 🤖 บล็อกนี้เขียนโดย `apps/vscode/scripts/update-round-tracker.mjs` ทุกครั้งที่แพ็ก VSIX — อย่าแก้มือ
 > (ข้อมูลแพ็กมาจากไฟล์จริง; จุด smoke/ผลตรวจเติมด้วย `--smoke` / `--tests`)
 
-## 🔖 รอบล่าสุด — `0.1.19-dev.5-fix.7`
+## 🔖 รอบล่าสุด — `0.1.19-dev.5-fix.9`
 
 |  |  |
 |---|---|
-| VSIX | `apps/vscode/dist/i-mrdedchai.iCline-0.1.19-dev.5-fix.7.vsix` |
-| ขนาด | 12,885,735 B · sha1 `b597c8452b88` |
-| ป้าย About | `dev build 5 · fix.7` |
-| แพ็กเมื่อ | 2026-10-17 16:41 |
+| VSIX | `apps/vscode/dist/i-mrdedchai.iCline-0.1.19-dev.5-fix.9.vsix` |
+| ขนาด | 12,886,539 B · sha1 `7894b837a314` |
+| ป้าย About | `dev build 5 · fix.9` |
+| แพ็กเมื่อ | 2026-10-17 21:41 |
 | สถานะ | ⏳ รอ smoke |
 
 **จุด smoke**
-- Settings → API Configuration → ฟอร์มที่มีคีย์ → ปุ่มคัดลอกมี aria-label ตามภาษา และประกาศ 'คัดลอกแล้ว'
-- แชท → การ์ดคำตอบสุดท้าย / งานเสร็จแล้ว → ปุ่มคัดลอกอยู่แถวหัวข้อ และกด Tab ถึงปุ่มแล้วต้องเห็นปุ่ม
-- โค้ดบล็อกในคำตอบ → ปุ่มใช้ชื่อ 'คัดลอกโค้ด' ตามภาษา
-- แถว subagent ที่ prompt ยาว → ปุ่ม Show more ต้องไม่ทับคำท้ายบรรทัด
-- บนสุดของ docs/icline/smoke-test-tracker.md มีบล็อกรอบ fix.7 (เวอร์ชัน/ขนาด/sha1/ป้าย About)
+- Settings → API Configuration → ฟอร์ม OpenAI Compatible / custom provider: ช่อง Base URL กว้างสุด 250px และแสดง https://opencode.ai/zen/v1 ได้ครบ
+- ลากขอบ pane ของ Settings ให้แคบกว่า 250px ⇒ ช่อง Base URL ต้องหดตาม pane (ไม่ล้นออกนอกคอลัมน์) และพอลากกว้างขึ้นต้องหยุดที่ 250px
 
 **ผลตรวจ**
-- typecheck 0 error · lint 0 · webview vitest 81 ไฟล์ / 908 ข้อ
-- e2e 4/4 บนไบต์ที่แพ็ก (chat-final-reply · settings-api-key-copy)
-- marker ใน VSIX: คัดลอกโค้ด · คัดลอกแล้ว · 复制代码 · コードをコピー · group-focus-within
+- webview vitest 81 ไฟล์ / 909 ข้อ · typecheck 0 · lint 0 · e2e 34/34 (4.9m) · spec Base URL (narrow→shrink, wide→250) rerun ผ่านบนไบต์ fix.9 · contract gate 90/90 + byte match
 <!-- icline:round:end -->
 
 > ℹ️ **รอบล่าสุดอยู่บนสุดของไฟล์** ในบล็อกที่เขียนอัตโนมัติทุกครั้งที่แพ็ก (`apps/vscode/scripts/update-round-tracker.mjs` — ดู [vsix-pack-notes.md](vsix-pack-notes.md)) · บล็อก `Last updated` / `vsix` ด้านล่างยังค้างที่สาย **0.1.18** · รอบสาย **0.1.19-dev.5** บันทึกฉบับเต็มไว้ที่ [CHANGELOG.md](../../apps/vscode/CHANGELOG.md) และรอบ `fix.6` มีหมวดของตัวเองอยู่ด้านล่างของไฟล์นี้

@@ -78,6 +78,15 @@ const WEBVIEW_BUNDLE = "extension/webview-ui/build/assets/index.js"
  * left failing: a table with permanent noise stops being read.
  */
 const CONTRACTS = [
+	// --- dev.5-fix.8: the Base URL field keeps its own fixed width instead of
+	// collapsing into the tooltip trigger's intrinsic width ---
+	{
+		round: "dev.5-fix.8",
+		bundle: "webview",
+		marker: "openai-compatible-base-url",
+		why: "the Base URL field ships with the id its label points at and its own 250px width",
+	},
+
 	// --- fix.45: the General tab renders in the user's language ---
 	{
 		round: "fix.45",
