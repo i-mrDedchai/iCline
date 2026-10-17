@@ -80,6 +80,23 @@ node -e "import('node:child_process').then(async ({spawnSync}) => {
 markers (`reasoning-effort-trigger` ×1, `modelAvailableCount` ×5),
 รูปใน README เป็น absolute ทั้งหมด — ดูคำสั่งในประวัติ commit นี้
 
+## รูปใน README โหลดจาก GitHub `main` — ต้อง push ก่อนปล่อย (เจอ 2026-10-17)
+
+`scripts/marketplace-images.mjs` เขียน URL ของรูป `assets/...` เป็น absolute
+`https://github.com/i-mrDedchai/iCline/raw/main/...` ตอนแพ็ก ⇒ ทั้งหน้า **Details ใน VS Code**
+และหน้า **Marketplace** โหลดรูปจาก **branch main บน GitHub** ไม่ใช่จากใน VSIX
+(แม้ใน VSIX จะมี `extension/assets/docs/` ครบ — absolute URL ชนะไฟล์ในเครื่อง)
+
+อาการที่เจอ (fix.9): รูป Appearance ขึ้น แต่ 4 รูปที่เพิ่มในคอมมิตที่ยังไม่ push ขึ้นไอคอนรูปแตก
+ตรวจด้วย HTTP ตรง ๆ: `0.1.18-Appearance-Settings.jpg` = **200** (อยู่บน main แล้ว) แต่
+`0.1.18-NewDesign-QuickPicker-Effort.png` / `0.1.18-Providers-models-Stats-Customer-Providers.jpg` /
+`0.1.18-Sub-agents-Agent-Teams.jpg` / `0.1.18-Settings-Webview-EN-CH-JP-TH.png` = **404**
+(ตอนนั้น HEAD ห่าง `origin/main` 55 คอมมิต)
+
+⇒ **ก่อน Publish ต้อง push ให้ main มีไฟล์รูปครบก่อน** การ publish อัปโหลดแค่ VSIX/README
+ไม่ได้อัปโหลดรูปขึ้น marketplace ⇒ ถ้า push ไม่ทัน หน้า Marketplace จะแสดงรูปแตกชุดเดียวกัน
+วิธีเช็คเร็ว: แตก VSIX แล้ว `grep -o '!\[[^]]*\]([^)]*)' extension/readme.md` แล้วยิง HTTP กับทุก URL
+
 ## บันทึกรอบลง tracker อัตโนมัติ (ตั้งแต่ dev.5-fix.7)
 
 `package-vsix.mjs` เรียก `scripts/update-round-tracker.mjs` หลังแพ็กสำเร็จ ทุกครั้ง:
