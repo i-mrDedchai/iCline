@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.1.19] - Unreleased
+## [0.1.19] - 2026-10-17
 
 ### Added
 - 📐 **The Base URL field is a fixed 250px instead of collapsing to 167px (dev.5-fix.8)** — the OpenAI-compatible form asks for `width: 100%`, but the field sits inside a Radix `TooltipTrigger`, which renders a shrink-to-fit `<button>`; the percentage therefore resolved against that button, so the input rendered at the toolkit field's own **167px** and stayed there at *every* pane width (measured 167px in a 600px and a 1200px column). Any gateway URL longer than ~24 characters was clipped mid-token — `https://opencode.ai/zen/v1` showed as `https://opencode.ai/zen/v`. The trigger now uses `asChild` so the wrapper is a plain div, and the field carries a fixed 250px (the size asked for on smoke, enough for the whole URL at the default font size), with its label tied to it through `htmlFor`/`id`. Pinned two ways: a webview unit test for the fixed width, and an e2e bounding box of 250px in a real VS Code window that also proves a 29-character URL no longer overflows its input.

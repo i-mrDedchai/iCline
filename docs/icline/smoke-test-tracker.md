@@ -2,14 +2,13 @@
 > 🤖 บล็อกนี้เขียนโดย `apps/vscode/scripts/update-round-tracker.mjs` ทุกครั้งที่แพ็ก VSIX — อย่าแก้มือ
 > (ข้อมูลแพ็กมาจากไฟล์จริง; จุด smoke/ผลตรวจเติมด้วย `--smoke` / `--tests`)
 
-## 🔖 รอบล่าสุด — `0.1.19-dev.5-fix.9`
+## 🔖 รอบล่าสุด — `0.1.19`
 
 |  |  |
 |---|---|
-| VSIX | `apps/vscode/dist/i-mrdedchai.iCline-0.1.19-dev.5-fix.9.vsix` |
-| ขนาด | 12,886,539 B · sha1 `7894b837a314` |
-| ป้าย About | `dev build 5 · fix.9` |
-| แพ็กเมื่อ | 2026-10-17 21:41 |
+| VSIX | `apps/vscode/dist/i-mrdedchai.iCline-0.1.19.vsix` |
+| ขนาด | 12,886,447 B · sha1 `692b4748b630` |
+| แพ็กเมื่อ | 2026-10-17 23:31 |
 | สถานะ | ⏳ รอ smoke |
 
 **จุด smoke**
