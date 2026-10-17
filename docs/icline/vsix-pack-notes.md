@@ -97,6 +97,30 @@ markers (`reasoning-effort-trigger` ×1, `modelAvailableCount` ×5),
 ไม่ได้อัปโหลดรูปขึ้น marketplace ⇒ ถ้า push ไม่ทัน หน้า Marketplace จะแสดงรูปแตกชุดเดียวกัน
 วิธีเช็คเร็ว: แตก VSIX แล้ว `grep -o '!\[[^]]*\]([^)]*)' extension/readme.md` แล้วยิง HTTP กับทุก URL
 
+## ดูรูปในหน้า Details โดยไม่ต้อง push (VSIX รุ่น `-local`)
+
+สาเหตุที่ Details แตกทั้งที่รูปอยู่ใน VSIX: README รุ่น store ถูก rewrite เป็น absolute
+GitHub URL หมด (`--baseImagesUrl`) absolute URL จึงชนะไฟล์ในเครื่องเสมอ — รูปที่ยังไม่ push
+เลย 404 แม้ `extension/assets/docs/` จะครบ
+
+ทางแก้แบบไม่ push: แพ็ก VSIX อีกลูกที่คงลิงก์ relative ไว้ (`--no-rewrite-relative-links`)
+หน้า Details ของตัวที่ติดตั้งจากไฟล์จะ resolve `assets/docs/...` จากโฟลเดอร์ extension
+ในเครื่องเอง รูปจึงขึ้นครบโดยไม่ต้องแตะ `main`
+
+```bash
+export PATH="/c/Users/dedch/.bun/bin:$PATH"
+cd apps/vscode
+npm run package:vsix:local   # = node scripts/package-vsix.mjs --local-images
+```
+
+- ได้ไฟล์ `dist/<extensionId>-<version>-local.vsix` (ตรวจแล้วรุ่น fix.9: readme มี relative 5/5,
+  absolute 0, `extension/assets/docs/` ครบ 7 ไฟล์)
+- ติดตั้งด้วย **Extensions → … → Install from VSIX** แล้ว **Reload Window** เปิดหน้า Details
+- ข้อห้าม: **ห้าม publish ไฟล์ `-local` ขึ้น Marketplace/Open VSX** — Open VSX เสิร์ฟ relative
+  assets ไม่ได้ หน้าร้านจะแตก ไฟล์นี้มีไว้ดูในเครื่องเท่านั้น; รุ่น publish ยังใช้ `package:vsix`
+  ตามเดิม และก่อน publish จริงยังต้อง push ให้รูปขึ้น `main` ครบก่อน
+- รุ่น `-local` ข้าม `update-round-tracker` (ไม่เขียนทับบล็อกรอบ) และไม่แตะ pipeline store
+
 ## บันทึกรอบลง tracker อัตโนมัติ (ตั้งแต่ dev.5-fix.7)
 
 `package-vsix.mjs` เรียก `scripts/update-round-tracker.mjs` หลังแพ็กสำเร็จ ทุกครั้ง:

@@ -469,6 +469,7 @@
 		"eval:smoke:run": "bun evals/smoke-tests/run-smoke-tests.ts",
 		"sync:docs": "node scripts/sync-icline-docs.mjs",
 		"package:vsix": "node scripts/sync-icline-docs.mjs && npm run package && node scripts/package-vsix.mjs",
+		"package:vsix:local": "node scripts/package-vsix.mjs --local-images",
 		"prepare": "npx husky"
 	},
 	"lint-staged": {

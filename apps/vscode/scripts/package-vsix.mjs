@@ -12,7 +12,16 @@ const extRoot = path.join(__dirname, "..")
 const pkg = JSON.parse(fs.readFileSync(path.join(extRoot, "package.json"), "utf-8"))
 const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, "icline-docs.manifest.json"), "utf-8"))
 const base = manifest.vsixFileName || manifest.extensionId || "i-mrdedchai.iCline"
-const out = path.join(extRoot, "dist", `${base}-${pkg.version}.vsix`)
+// --local-images: keep README image links relative (assets/docs/...) so the
+// Details page of a locally-installed VSIX loads pictures from inside the
+// package instead of from GitHub main. For unpushed screenshots this is the
+// only way to preview without pushing: the default store build rewrites them
+// to https://github.com/.../raw/main/... which 404s until `git push`.
+// Open VSX cannot serve relative assets, so NEVER publish a -local.vsix.
+const localImages = process.argv.includes("--local-images")
+const out = localImages
+	? path.join(extRoot, "dist", `${base}-${pkg.version}-local.vsix`)
+	: path.join(extRoot, "dist", `${base}-${pkg.version}.vsix`)
 
 // Run the project's own @vscode/vsce through Node. Resolving the package by name works
 // whether bun hoisted it to the repo root or kept it under apps/vscode, and avoids the
@@ -28,18 +37,21 @@ try {
 	process.exit(1)
 }
 
+const imageArgs = localImages ? ["--no-rewrite-relative-links"] : getVsceImageRewriteArgs(manifest)
+if (localImages) {
+	console.log(
+		"package-vsix: --local-images → keeping relative assets/docs/ links (local Details preview only, do NOT publish this VSIX)",
+	)
+}
+
 const swapResult = swapIn()
 let exitCode = 1
 try {
-	const result = spawnSync(
-		process.execPath,
-		[vsceEntry, "package", "--no-dependencies", ...getVsceImageRewriteArgs(manifest), "--out", out],
-		{
-			stdio: "inherit",
-			shell: false,
-			cwd: extRoot,
-		},
-	)
+	const result = spawnSync(process.execPath, [vsceEntry, "package", "--no-dependencies", ...imageArgs, "--out", out], {
+		stdio: "inherit",
+		shell: false,
+		cwd: extRoot,
+	})
 	exitCode = result.status ?? 1
 } finally {
 	if (!swapResult.skipped) {
@@ -50,7 +62,7 @@ try {
 // Record the round in the smoke-test tracker while the artifact is fresh, so the
 // documentation cannot trail the pack (the tracker used to lag a round behind).
 // A tracker failure must not fail a pack that already produced a valid VSIX.
-if (exitCode === 0) {
+if (exitCode === 0 && !localImages) {
 	const recorded = spawnSync(process.execPath, [path.join(__dirname, "update-round-tracker.mjs"), "--vsix", out], {
 		stdio: "inherit",
 		cwd: extRoot,
